@@ -1,0 +1,29 @@
+symbols adec/2, aenc/2, pk/1, fst/1, snd/1, pair/2, a/0, b/0, d/0, kd/0, ok/0, kk/0;
+
+private ka, kb;
+
+channels C;
+
+var y, z, xx, yy, x0, y0, z0, s1, s2;
+
+rewrite adec(aenc(xx, pk(yy)), yy) -> xx;
+rewrite fst(pair(xx, yy)) -> xx;
+rewrite snd(pair(xx, yy)) -> yy;
+
+// No attack found by Akiss
+BtoA1 = in(C, y0).out(C, aenc(pair(adec(y0,kb),s1), pk(ka))).0;
+BtoA2 = in(C, y0).out(C, aenc(pair(adec(y0,kb),s2), pk(ka))).0;
+
+Setup = in(C,s1).in(C,s2).out(C,pk(ka)).out(C,pk(kb)).0;
+
+// Attack found by akiss
+/*
+BtoA1 = in(C, y0).out(C, aenc(pair(y0,s1), pk(ka))).0;
+BtoA2 = in(C, y0).out(C, aenc(pair(y0,s2), pk(ka))).0;
+*/
+
+
+PP = sequence Setup, BtoA1;
+QQ = sequence Setup, BtoA2;
+
+equivalentct? PP and QQ;

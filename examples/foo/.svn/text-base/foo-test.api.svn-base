@@ -1,0 +1,60 @@
+symbols open/2, commit/2, check/2, sign/2, pk/1, unblind/2, blind/2,
+ yes/0, no/0, kAuth/0;
+
+private rAyes, bAyes, rAno, bAno, kA, kB, rBno, bBno, rByes, bByes;
+
+channels A, B, C;
+
+var x, y, z, xAyes, xBno, xByes, xAno;
+
+rewrite open(commit(x, y), y) -> x;
+rewrite check(sign(x, y), pk(y)) -> x;
+rewrite unblind(sign(blind(x, y), z), y) -> sign(x, z);
+
+
+AyesP1 = out(A, sign(blind(commit(yes, rAyes), bAyes), kA)).in(A, xAyes).0; 
+Ayeschecks=[check(xAyes, pk(kAuth)) = blind(commit(yes, rAyes), bAyes)].0;
+AyesP2 = out(C, unblind(xAyes, bAyes)).0;
+AyesP3 = out(C, rAyes).0;
+
+AnoP1 = out(A, sign(blind(commit(no, rAno), bAno), kA)).in(A, xAno).0;
+Anochecks=[check(xAno, pk(kAuth)) = blind(commit(no, rAno), bAno)].0;
+AnoP2 = out(C, unblind(xAno, bAno)).0;
+AnoP3 = out(C, rAno).0;
+
+
+ByesP1 = out(B, sign(blind(commit(yes, rByes), bByes), kB)).in(B, xByes).0;
+Byeschecks=[check(xByes, pk(kAuth)) = blind(commit(yes, rByes), bByes)].0;
+ByesP2 = out(C, unblind(xByes, bByes)).0;
+ByesP3 = out(C, rByes).0;
+
+BnoP1 = out(B, sign(blind(commit(no, rBno), bBno), kB)).in(B, xBno).0;
+Bnochecks=[check(xBno, pk(kAuth)) = blind(commit(no, rBno), bBno)].0;
+BnoP2 = out(C, unblind(xBno, bBno)).0;
+BnoP3 = out(C, rBno).0;
+
+
+Phase1AyesBno = interleave AyesP1, BnoP1;
+Phase2AyesBno = interleave AyesP2, BnoP2;
+Phase3AyesBno = interleave AyesP3, BnoP3;
+
+AyesBno1 = sequence Phase1AyesBno, Ayeschecks, Bnochecks, Phase2AyesBno, Phase3AyesBno;
+AyesBno2 = sequence Phase1AyesBno, Bnochecks, Ayeschecks, Phase2AyesBno, Phase3AyesBno;
+
+
+Phase1AnoByes = interleave AnoP1, ByesP1;
+Phase2AnoByes = interleave AnoP2, ByesP2;
+Phase3AnoByes = interleave AnoP3, ByesP3;
+
+AnoByes1 = sequence Phase1AnoByes, Anochecks, Byeschecks, Phase2AnoByes, Phase3AnoByes;
+AnoByes2 = sequence Phase1AnoByes, Byeschecks, Anochecks, Phase2AnoByes, Phase3AnoByes;
+
+Setup = out(C, pk(kA)).out(C, pk(kB)).0;
+
+P1 = sequence Setup, AyesBno1;
+P2 = sequence Setup, AyesBno2;
+
+Q1 = sequence Setup, AnoByes1;
+Q2 = sequence Setup, AnoByes2;
+
+equivalentft? P1, P2 and Q1, Q2;

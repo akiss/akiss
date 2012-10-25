@@ -1,0 +1,74 @@
+// This is a modeling of the Fujioka et al. (FOO) protocol.
+// Vote-privacy is proven.
+// 
+// Informal description of the voter role is as follows:
+//
+// Phase 1: 
+// V -> Admin: sign(blind(commit(vote, r), b), kV))
+// Admin -> V: sign(blind(commit(vote, r), b), kAdmin))
+// Phase 2: 
+// V -> Collector: sign(commit(vote, r), kAdmin)
+// Phase 3: 
+// V -> Collector: r
+//
+// Note that Admin and Collector are not supposed to be trusted and hence not modeled, i.e. they are part of the attacker
+//
+
+symbols open/2, commit/2, check/2, sign/2, pk/1, unblind/2, blind/2, yes/0, no/0, kAuth/0;
+
+private rAyes, bAyes, rAno, bAno, kA, kB, rBno, bBno, rByes, bByes;
+
+channels A, B, C;
+
+var x, y, z, xAyes, xBno, xByes, xAno;
+
+
+// Rewrite rules for commitment and blind signatures
+rewrite open(commit(x, y), y) -> x;
+rewrite check(sign(x, y), pk(y)) -> x;
+rewrite unblind(sign(blind(x, y), z), y) -> sign(x, z);
+
+// Phases 1-3 for voter A voting 'yes'
+AyesP1 = out(A, sign(blind(commit(yes, rAyes), bAyes), kA)).in(A, xAyes). [check(xAyes, pk(kAuth)) = blind(commit(yes, rAyes), bAyes)].0;
+AyesP2 = out(C, unblind(xAyes, bAyes)).0;
+AyesP3 = out(C, rAyes).0;
+
+
+// Phases 1-3 for voter A voting 'no'
+AnoP1 = out(A, sign(blind(commit(no, rAno), bAno), kA)).in(A, xAno). [check(xAno, pk(kAuth)) = blind(commit(no, rAno), bAno)].0;
+AnoP2 = out(C, unblind(xAno, bAno)).0;
+AnoP3 = out(C, rAno).0;
+
+// Phases 1-3 for voter B voting 'yes'
+ByesP1 = out(B, sign(blind(commit(yes, rByes), bByes), kB)).in(B, xByes).[check(xByes, pk(kAuth)) = blind(commit(yes, rByes), bByes)].0;
+ByesP2 = out(C, unblind(xByes, bByes)).0;
+ByesP3 = out(C, rByes).0;
+
+// Phases 1-3 for voter B voting 'no'
+BnoP1 = out(B, sign(blind(commit(no, rBno), bBno), kB)).in(B, xBno).[check(xBno, pk(kAuth)) = blind(commit(no, rBno), bBno)].0;
+BnoP2 = out(C, unblind(xBno, bBno)).0;
+BnoP3 = out(C, rBno).0;
+
+// Interleaving each of the phases separately
+Phase1AyesBno = AyesP1 || BnoP1;
+Phase2AyesBno = AyesP2 || BnoP2;
+Phase3AyesBno = AyesP3 || BnoP3;
+
+// protocol for A voting 'yes' and B voting 'no'
+AyesBno = sequence Phase1AyesBno, Phase2AyesBno, Phase3AyesBno;
+
+// Interleaving each of the phases separately
+Phase1AnoByes = interleave_opt AnoP1, ByesP1;
+Phase2AnoByes = interleave_opt AnoP2, ByesP2;
+Phase3AnoByes = interleave_opt AnoP3, ByesP3;
+
+// protocol for A voting 'no' and B voting 'yes'
+AnoByes = sequence Phase1AnoByes, Phase2AnoByes, Phase3AnoByes;
+
+// publishing public keys
+Setup = out(C, pk(kA)).out(C, pk(kB)).0;
+
+P = Setup :: AyesBno;
+Q = Setup :: AnoByes;
+
+equivalentft? P and Q;

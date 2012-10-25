@@ -1,0 +1,11 @@
+symbols adec/2, aenc/2, pk/1, a/0, kd/0, ok/0;
+
+private na, nb, ka, kb;
+
+var x, y, z, xx, yy;
+
+rewrite adec(aenc(xx, pk(yy)), yy) -> xx;
+
+Att = in(y).out(aenc(adec(y, kb), pk(ka))).in(z).out(aenc(adec(z, ka), pk(kd))).0;
+
+kb Att;

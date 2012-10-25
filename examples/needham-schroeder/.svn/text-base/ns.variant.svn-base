@@ -1,0 +1,17 @@
+var x, y, z, xx, yy;
+
+rewrite adec(aenc(xx, pk(yy)), yy) -> xx;
+rewrite fst(pair(xx, yy)) -> xx;
+rewrite snd(pair(xx, yy)) -> yy;
+
+rewrite dec(enc(xx, yy), yy) -> xx;
+
+unify dec(y, kb) and dec(enc(xx, yy), yy);
+
+variants aenc(pair(fst(adec(y, kb)),nb), pk(ka));
+
+variants enc(pair(fst(dec(y, kb)),nb), pk(ka));
+
+variants fst(dec(y, kb));
+
+variants dec(y, kb);

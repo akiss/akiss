@@ -1,0 +1,62 @@
+symbols open/2, commit/2, check/2, sign/2, pk/1, unblind/2, blind/2,
+pair/2, fst/1, snd/1, yes/0, no/0, A/0, B/0, kAuth/0;
+
+private rAyes, bAyes, kA, rBno, bBno;
+
+var x, y, z, xAyes, xBno;
+
+rewrite open(commit(x, y), y) -> x;
+rewrite check(sign(x, y), pk(y)) -> x;
+rewrite check(unblind(sign(blind(x, y), z), y), pk(z)) -> x;
+rewrite fst(pair(x, y)) -> x;
+rewrite snd(pair(x, y)) -> y;
+
+AyesP1 = out(pair(A, sign(blind(commit(yes, rAyes), bAyes), kA))).
+         in(xAyes).0;
+AyesP2 = out(unblind(xAyes, bAyes)).0;
+AyesP3 = out(rAyes).0;
+
+BnoP1 = out(pair(B, sign(blind(commit(no, rBno), bBno), kB))).
+         in(xBno).0;
+BnoP2 = out(unblind(xBno, bBno)).0;
+BnoP3 = out(rBno).0;
+
+AnoP1 = out(pair(A, sign(blind(commit(no, rAno), bAno), kA))).
+         in(xAno).0;
+AnoP2 = out(unblind(xAno, bAno)).0;
+AnoP3 = out(rAno).0;
+
+ByesP1 = out(pair(B, sign(blind(commit(yes, rByes), bByes), kB))).
+         in(xByes).0;
+ByesP2 = out(unblind(xByes, bByes)).0;
+ByesP3 = out(rByes).0;
+
+Setup = out(pk(kA)).out(pk(kB)).0;
+
+P1 = interleave AyesP1, BnoP1;
+P2 = interleave AyesP2, BnoP2;
+P3 = interleave AyesP3, BnoP3;
+
+Q1 = interleave AnoP1, ByesP1;
+Q2 = interleave ByesP2, AnoP2;
+Q3 = interleave AnoP3, ByesP3;
+
+P = sequence Setup, P1, P2, P3;
+
+Q = sequence Setup, Q1, Q2, Q3;
+
+T1 = out(pk(kA)).out(pk(kB)).out(pair(B, sign(blind(commit(no, rBno),
+bBno), kB))).in(xBno).[check(xBno, pk(kAuth))=blind(commit(no, rBno),
+bBno)].out(pair(A, sign(blind(commit(yes, rAyes), bAyes),
+kA))).in(xAyes).[check(xAyes, pk(kAuth))=blind(commit(yes, rAyes),
+bAyes)].out(unblind(xAyes, bAyes)).out(unblind(xBno,
+bBno)).out(rBno).out(rAyes).0;
+
+T2 = out(pk(kA)).out(pk(kB)).out(pair(B,
+sign(blind(commit(yes, rByes), bByes), kB))).in(xByes).[check(xByes,
+pk(kAuth))=blind(commit(yes, rByes), bByes)].out(pair(A,
+sign(blind(commit(no, rAno), bAno), kA))).in(xAno).[check(xAno,
+pk(kAuth))=blind(commit(no, rAno), bAno)].out(unblind(xAno,
+bAno)).out(unblind(xByes, bByes)).out(rByes).out(rAno).0;
+
+kb T1;

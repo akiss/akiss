@@ -1,0 +1,40 @@
+symbols open/2, commit/2, check/2, sign/2, pk/1, unblind/2, blind/2,
+ yes/0, no/0, kAuth/0;
+
+channels A, B, C;
+
+private rAyes, bAyes, rAno, bAno, kA, kB, rBno, bBno, rByes, bByes;
+
+var x, y, z, xAyes, xBno, xByes, xAno;
+
+rewrite open(commit(x, y), y) -> x;
+rewrite check(sign(x, y), pk(y)) -> x;
+rewrite unblind(sign(blind(x, y), z), y) -> sign(x, z);
+
+AyesP1 = out(A, sign(blind(commit(yes, rAyes), bAyes), kA)).0;
+AyesP2 = in(A, xAyes).[check(xAyes, pk(kAuth)) = blind(commit(yes, rAyes), bAyes)].0;
+AyesP3 = out(A, unblind(xAyes, bAyes)).0;
+AyesP4 = out(A, rAyes).0;
+
+AnoP1 = out(A, sign(blind(commit(no, rAno), bAno), kA)).0;
+AnoP2 = in(A, xAno).[check(xAno, pk(kAuth)) = blind(commit(no, rAno), bAno)].0;
+AnoP3 = out(A, unblind(xAno, bAno)).0;
+AnoP4 = out(A, rAno).0;
+
+BnoP1 = out(B, sign(blind(commit(no, rBno), bBno), kB)).0;
+BnoP2 = in(B, xBno).[check(xBno, pk(kAuth)) = blind(commit(no, rBno), bBno)].0;
+BnoP3 = out(B, unblind(xBno, bBno)).0;
+BnoP4 = out(B, rBno).0;
+
+ByesP1 = out(B, sign(blind(commit(yes, rByes), bByes), kB)).0;
+ByesP2 = in(B, xByes).[check(xByes, pk(kAuth)) = blind(commit(yes, rByes), bByes)].0;
+ByesP3 = out(B, unblind(xByes, bByes)).0;
+ByesP4 = out(B, rByes).0;
+
+Setup = out(C, pk(kA)).out(C, pk(kB)).0;
+
+P = sequence Setup, AyesP1, AyesP2, BnoP1, BnoP2, AyesP3, AyesP4, BnoP3, BnoP4;
+
+Q = sequence Setup, AnoP1, AnoP2, ByesP1, ByesP2, ByesP3, ByesP4, AnoP3, AnoP4;
+
+equivalentct? P and Q;

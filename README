@@ -1,0 +1,13 @@
+To compile akiss you should have a recent version of ocaml installed.
+
+The executable can be built by typing 'make'.
+
+Usage: akiss [-verbose] [-debug] < specification-file.api
+  -verbose Enable verbose output
+  -debug Enable debug output
+  -help  Display this list of options
+  --help  Display this list of options
+
+For example:
+
+./akiss -verbose < examples/strong-secrecy/blanchet.api 

@@ -1,0 +1,40 @@
+// This is a fix of the Needham-Schroeder public-key protocol introduced by Gavin Lowe
+// in his paper `Breaking and Fixing the Needham-Schroeder Public-Key Protocol Using FDR.'
+//
+// Informal description of the protocol :
+//
+//      1. A -> B : {na,A}_pk(B)   (na fresh)
+//      2. B -> A : {nb,na,B}_pk(A)  (nb fresh)
+//      3. A -> B : {nb}_{pk(B)}     
+//
+// The protocol does  respects strong secrecy of nb if probabilistic encryption is used.
+//
+
+symbols adec/2, aenc/3, pk/1, fst/1, snd/1, pair/2, a/0, b/0, d/0, kd/0, ok/0;
+
+private na, nb, ka, kb, fk,r1,r2,r3;
+
+channels C;
+
+var x, y, z, xx, yy, zz, x0, y0, z0, s1, s2;
+
+rewrite adec(aenc(xx, pk(yy), zz), yy) -> xx;
+rewrite fst(pair(xx, yy)) -> xx;
+rewrite snd(pair(xx, yy)) -> yy;
+
+AtoD = out(C, aenc(pair(na, a), pk(kd), r1)).in(C, y).[snd(snd(adec(y,ka)))=d].out(C, aenc(fst(snd(adec(y,ka))), pk(kd), r2)).0;
+
+BtoA1 = in(C, y0).[snd(adec(y0, kb)) = a].out(C, aenc(pair(fst(adec(y0, kb)), pair(s1, b)), pk(ka), r3)).0;
+BtoA2 = in(C, y0).[snd(adec(y0, kb)) = a].out(C, aenc(pair(fst(adec(y0, kb)), pair(s2, b)), pk(ka), r3)).0;
+
+Setup = out(C,pk(ka)).out(C,pk(kb)).in(C,s1).in(C,s2).0;
+
+P = interleave AtoD, BtoA1;
+Q = interleave AtoD, BtoA2;
+
+PP = sequence Setup, P;
+
+QQ = sequence Setup, Q;
+
+equivalentft? PP and QQ;
+

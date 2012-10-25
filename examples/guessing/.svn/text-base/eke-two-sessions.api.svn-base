@@ -1,0 +1,51 @@
+symbols enc/2, dec/2, aenc/3, adec/2, pk/1, h/1, pair/2, fst/1, snd/1;
+
+channels c;
+
+private w, v, k, r, rb, na, nb, kp, rp, rbp, nap, nbp;
+
+var X, Y, Z, x1, x2, y1, y2, x1p, x2p, y1p, y2p;
+
+rewrite dec(enc(X, Y), Y) -> X;
+rewrite enc(dec(X, Y), Y) -> X;
+rewrite adec(aenc(X, pk(Y), Z), Y) -> X;
+rewrite fst(pair(X,Y)) -> X;
+rewrite snd(pair(X,Y)) -> Y;
+
+A = out(c, enc(pk(k), w)).
+    in(c,x1).
+    out(c,enc(na, adec(dec(x1,w),k))).
+    in(c,x2).
+    [fst(dec(x2, adec(dec(x1,w),k)))=na].
+    out(c,snd(dec(x2,adec(dec(x1,w),k)))).
+    0;
+
+B = in(c, y1).
+    out(c, enc(aenc(r, dec(y1, w), rb), w)).
+    in(c, y2).
+    out(c, enc(pair(dec(y2,r),nb) ,r)).
+    0;
+
+AP = out(c, enc(pk(kp), w)).
+    in(c,x1p).
+    out(c,enc(nap, adec(dec(x1p,w),kp))).
+    in(c,x2p).
+    [fst(dec(x2p, adec(dec(x1p,w),kp)))=nap].
+    out(c,snd(dec(x2p,adec(dec(x1p,w),kp)))).
+    0;
+
+BP = in(c, y1p).
+    out(c, enc(aenc(rp, dec(y1p, w), rbp), w)).
+    in(c, y2p).
+    out(c, enc(pair(dec(y2p,rp),nbp), rp)).
+    0;
+
+P = interleave_opt A, B, AP, BP;
+
+revealW = out(c, w).0;
+revealV = out(c, v).0;
+
+P1 = sequence P, revealW;
+P2 = sequence P, revealV;
+
+equivalentft? P1 and P2;

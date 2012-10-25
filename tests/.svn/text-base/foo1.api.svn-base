@@ -1,0 +1,21 @@
+symbols open/2, commit/2, check/2, sign/2, pk/1, unblind/2, blind/2,
+pair/2, fst/1, snd/1, yes/0, no/0, A/0, B/0;
+
+private rAyes, bAyes, kA, rBno, bBno;
+
+var x, y, z, xAyes, xBno;
+
+rewrite open(commit(x, y), y) -> x;
+rewrite check(sign(x, y), pk(y)) -> x;
+rewrite check(unblind(sign(blind(x, y), z), y), pk(z)) -> x;
+rewrite fst(pair(x, y)) -> x;
+rewrite snd(pair(x, y)) -> y;
+
+AyesP1 = out(pair(A, sign(blind(commit(yes, rAyes), bAyes),
+kA))).in(xAyes).out(pair(B, sign(blind(commit(no, rBno), bBno),
+kB))).in(xBno).out(unblind(xAyes, bAyes)).out(unblind(xBno,
+bBno)).out(rAyes).out(rBno).0;
+
+kb AyesP1;
+
+equivalent? none and none;

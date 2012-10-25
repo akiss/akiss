@@ -1,0 +1,15 @@
+symbols enc/2, dec/2;
+
+private a, b, k, ok;
+
+var X, Y, Z;
+
+rewrite dec(enc(X, Y), Y) -> X;
+
+s = out(enc(a, k)).out(enc(b, k)).in(X).[enc(dec(X, k), k) = X].out(ok).0;
+
+r1 = out(enc(a, k)).out(enc(b, k)).in(X).[X = enc(a, k)].out(ok).0;
+
+r2 = out(enc(a, k)).out(enc(b, k)).in(X).[X = enc(b, k)].out(ok).0;
+
+equivalent? s and r2;

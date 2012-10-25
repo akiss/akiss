@@ -1,0 +1,70 @@
+// helios with identites and pederson commitments; vote privacy and forward indistinguishable
+
+symbols aenc/3, adec/2, break/1, pk/1, pair/2, fst/1, snd/1, sign/2, getmsg/1, check/2, pok/4, checkpok/2, ped/2, forge1/2, forge2/2, ok/0, no/0, yes/0, a/0, b/0, c/0, kc/0;
+
+private ka, kb, skE, ra, ra2, ra3, rb, rb2, rb3;
+
+
+channels auth3, ch;
+evchannels bb;
+
+var v, va, vb, id, r, r2, r3, x, y, z;
+
+
+// Rewrite rules for  asymmetric encryption and pairing
+
+rewrite adec(x, aenc(pk(x),y,z)) -> z;
+rewrite fst(pair(x, y)) -> x;
+rewrite snd(pair(x, y)) -> y;
+
+rewrite check(pk(x),sign(x,y)) -> ok;
+rewrite getmsg(sign(x,y)) -> y;
+
+// Everlasting rewrite rules
+
+evrewrite adec(aenc(pk(x),y,z),x) -> z;
+evrewrite break(aenc(pk(x),y,z)) -> z;
+
+evrewrite fst(pair(x, y)) -> x;
+evrewrite snd(pair(x, y)) -> y;
+
+evrewrite check(pk(x),sign(x,y)) -> ok;
+evrewrite getmsg(sign(x,y)) -> y;
+
+evrewrite ped(y, forge2(ped(x,r),y)) -> ped(x,r);
+evrewrite forge2(ped(x,r),x) -> r;
+
+evrewrite ped(forge1(ped(x,r),y), y) -> ped(x,r);
+evrewrite forge1(ped(x,r),r) -> x;
+
+evrewrite forge2(ped(x,r),forge1(ped(x,r),y)) -> y;
+evrewrite forge1(ped(x,r),forge2(ped(x,r),y)) -> y;
+
+
+
+V = out(ch, pair(id, pair(ped(v,r), pair(aenc(pk(skE),r2,v), aenc(pk(skE), r3, r))))).
+    out(bb, pair(id, ped(v,r)));
+
+
+Ayes = let v = yes in let id = a in let r = ra in let r2 = ra2 in let r3 = ra3 in V;
+Ano  = let v = no  in let id = a in let r = ra in let r2 = ra2 in let r3 = ra3 in V;
+
+Byes = let v = yes in let id = b in let r = rb in let r2 = rb2 in let r3 = rb3 in V;
+Bno  = let v = no  in let id = b in let r = rb in let r2 = rb2 in let r3 = rb3 in V;
+
+
+AyBn = Ayes :: Bno;
+AnBy = Ano  :: Byes;
+
+
+Tally1 = out(bb,va);
+Tally2 = out(bb,vb);
+
+T = Tally1 || Tally2;
+
+P =  out(bb,pk(skE)) :: AyBn :: let va = yes in let vb = no in T;
+Q =  out(bb,pk(skE)) :: AnBy :: let va = no in let vb = yes in T;
+
+equivalentft? P and Q; //trace equivalent
+fwdequivalentft?  P and Q; //forward indistinguishable
+

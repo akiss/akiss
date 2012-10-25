@@ -1,0 +1,24 @@
+symbols adec/2, aenc/2, pk/1, fst/1, snd/1, pair/2, a/0, kd/0, ok/0;
+
+private na, nb, ka, kb;
+
+var x, y, z, xx, yy;
+
+rewrite adec(aenc(xx, pk(yy)), yy) -> xx;
+rewrite fst(pair(xx, yy)) -> xx;
+rewrite snd(pair(xx, yy)) -> yy;
+
+Att = out(aenc(pair(na, a),
+pk(kd))).in(y).out(aenc(pair(fst(adec(y, kb)), nb),
+pk(ka))).in(z).out(aenc(snd(adec(z, ka)), pk(kd))).0;
+
+AttO = out(aenc(pair(na, a), pk(kd))).in(y).out(aenc(pair(fst(adec(y,
+kb)), ok), pk(ka))).in(z).out(aenc(snd(adec(z, ka)), pk(kd))).0;
+
+Setup = out(pk(ka)).out(pk(kb)).0;
+
+SAtt = sequence Setup, Att;
+
+SAttO = sequence Setup, AttO;
+
+kb SAtt;

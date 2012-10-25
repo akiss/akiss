@@ -1,0 +1,43 @@
+// This is the Needham-Schroeder public-key protocol introduced by Needham an
+// Schroeder in their paper `Using encryption for authentication in large
+// networks of computers.'
+//
+// Informal description of the protocol :
+//
+//      1. A -> B : {na,A}_pk(B)   (na fresh)
+//      2. B -> A : {nb,na}_pk(A)  (nb fresh)
+//      3. A -> B : {nb}_{pk(B)}
+//
+// The protocol does not respect strong secrecy or even real-or-random secrecy of nb. 
+//
+symbols adec/2, aenc/3, pk/1, fst/1, snd/1, pair/2, a/0, b/0, d/0, kd/0, ok/0;
+
+private na, nb, ka, kb, fk, r1, r2, r3;
+
+channels C;
+
+var x, y, z, xx, yy, zz, x0, y0, z0;
+
+rewrite adec(aenc(xx, pk(yy), zz), yy) -> xx;
+rewrite fst(pair(xx, yy)) -> xx;
+rewrite snd(pair(xx, yy)) -> yy;
+
+AtoD = out(C, aenc(pair(na, a), pk(kd), r1)).in(C, y).[fst(adec(y,ka))=na].out(C, aenc(snd(adec(y,ka)), pk(kd),r2)).0;
+
+
+BtoA = in(C, y0).[snd(adec(y0, kb)) = a].out(C, aenc(pair(fst(adec(y0, kb)), nb), pk(ka),r3)).0;
+
+Setup = out(C,pk(ka)).out(C,pk(kb)).0;
+
+P= interleave_opt AtoD, BtoA;
+
+TeardownReal = out(C,nb).0;
+
+TeardownFake = out(C,fk).0;
+
+
+PP = sequence Setup, P, TeardownReal;
+
+QQ = sequence Setup, P, TeardownFake;
+
+equivalentct? PP and QQ;

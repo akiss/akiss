@@ -1,0 +1,115 @@
+// helios with identites and pederson commitments; uses proofs of knowledge (pok) to avoid replay; vote privacy and  forward indistinguishable expected
+// protocol too complex for akiss -> out of memory
+
+symbols aenc/3, adec/2, break/1, pk/1, pair/2, fst/1, snd/1, sign/2, getmsg/1, check/2, pok/4, checkpok/2, ped/2, forge1/2, forge2/2, ok/0, no/0, yes/0, a/0, b/0, c/0, kc/0;
+
+private ka, kb, skE, ra, ra2, ra3, rb, rb2, rb3;
+
+
+channels auth3, ch;
+evchannels bb;
+
+var v, va, vb, id, r, r2, r3, k, sig3, pok3, x, x1, x2, x3, y, z, z2, sig, peder;
+
+
+// Rewrite rules for  asymmetric encryption and pairing
+
+rewrite adec(x, aenc(pk(x),y,z)) -> z;
+rewrite fst(pair(x, y)) -> x;
+rewrite snd(pair(x, y)) -> y;
+
+rewrite check(pk(x),sign(x,y)) -> ok;
+rewrite getmsg(sign(x,y)) -> y;
+
+rewrite checkpok(sign(k, pair(ped(v,r), pair(aenc(pk(x),r2,v), aenc(pk(x), r3, v)))), pok(sign(k, pair(ped(v,r), pair(aenc(pk(x),r2,v), aenc(pk(x), r3, v)))),r, r2, r3)) -> ok;
+
+// Everlasting rewrite rules
+
+evrewrite adec(aenc(pk(x),y,z),x) -> z;
+evrewrite break(aenc(pk(x),y,z)) -> z;
+
+evrewrite fst(pair(x, y)) -> x;
+evrewrite snd(pair(x, y)) -> y;
+
+evrewrite check(pk(x),sign(x,y)) -> ok;
+evrewrite getmsg(sign(x,y)) -> y;
+
+evrewrite ped(y, forge2(ped(x,r),y)) -> ped(x,r);
+evrewrite forge2(ped(x,r),x) -> r;
+
+evrewrite ped(forge1(ped(x,r),y), y) -> ped(x,r);
+evrewrite forge1(ped(x,r),r) -> x;
+
+evrewrite forge2(ped(x,r),forge1(ped(x,r),y)) -> y;
+evrewrite forge1(ped(x,r),forge2(ped(x,r),y)) -> y;
+
+
+// Rewrite rule for proof of knowledge
+evrewrite checkpok(sign(k, pair(ped(v,r), pair(aenc(pk(x),r2,v), aenc(pk(x), r3, v)))), pok(sign(k, pair(ped(v,r), pair(aenc(pk(x),r2,v), aenc(pk(x), r3, v)))),r, r2, r3)) -> ok;
+
+
+V = out(ch, pair(id, pair(sign(k, pair(ped(v,r), pair(aenc(pk(skE),r2,v), aenc(pk(skE), r3, r)))), pok(sign(k, pair(ped(v,r), pair(aenc(pk(skE),r2,v), aenc(pk(skE), r3, r)))),r, r2, r3)))).
+    out(bb, pair(id, ped(v,r)));
+
+
+Ayes = let v = yes in let id = a in let k = ka in let r = ra in let r2 = ra2 in let r3 = ra3 in V;
+Ano  = let v = no  in let id = a in let k = ka in let r = ra in let r2 = ra2 in let r3 = ra3 in V;
+
+Byes = let v = yes in let id = b in let k = kb in let r = rb in let r2 = rb2 in let r3 = rb3 in V;
+Bno  = let v = no  in let id = b in let k = kb in let r = rb in let r2 = rb2 in let r3 = rb3 in V;
+
+
+AyBn = Ayes :: Bno;
+AnBy = Ano  :: Byes;
+
+// ballot z is expected to be of the form 
+// pair(c, pair(sign(kc, pair(ped(v,r), pair(aenc(pk(skE),r2,v), aenc(pk(skE), r3, r)))), pok(sign(kc, pair(ped(v,r), pair(aenc(pk(skE),r2,v), aenc(pk(skE), r3, r),r, r2, r3))))))
+
+BB = in(auth3,z). 
+     let sig3 = fst(snd(z)) in 
+     let peder = fst(getmsg(sig3)) in 
+     let v = adec(skE, fst(snd(getmsg(sig3)))) in 
+     let r = adec(skE, snd(snd(getmsg(sig3)))) in 
+     let pok3 = snd(snd(snd(z))) in 
+     [peder = ped(v,r)].[check(pk(kc),sig3) = ok].[checkpok(pok3,sig3)=ok].
+     out(bb, pair(fst(z), ped(v,r)));
+
+Tally1 = out(bb,va);
+Tally2 = out(bb,vb);
+Tally3 = out(bb,adec(skE,fst(snd(getmsg(fst(snd(z)))))));
+
+T = Tally1 || Tally2;// || Tally3;
+
+//P =  out(bb,pk(skE)) :: AyBn :: BB :: let va = yes in let vb = no in T;
+//Q =  out(bb,pk(skE)) :: AnBy :: BB :: let va = no in let vb = yes in T;
+
+P1  =  out(bb,pk(skE)) :: Ayes :: Bno :: BB :: let va = yes in let vb = no in T;
+P2  =  out(bb,pk(skE)) :: Ayes :: BB :: Bno :: let va = yes in let vb = no in T;
+P3  =  out(bb,pk(skE)) :: Bno :: Ayes :: BB :: let va = yes in let vb = no in T;
+P4  =  out(bb,pk(skE)) :: Bno :: BB :: Ayes :: let va = yes in let vb = no in T;
+P5  =  out(bb,pk(skE)) :: BB :: Ayes :: Bno :: let va = yes in let vb = no in T;
+P6  =  out(bb,pk(skE)) :: BB :: Bno :: Ayes :: let va = yes in let vb = no in T;
+
+Q1  =  out(bb,pk(skE)) :: Ano :: Byes :: BB :: let va = no in let vb = yes in T;
+Q2  =  out(bb,pk(skE)) :: Ano :: BB :: Byes :: let va = no in let vb = yes in T;
+Q3  =  out(bb,pk(skE)) :: Byes :: Ano :: BB :: let va = no in let vb = yes in T;
+Q4  =  out(bb,pk(skE)) :: Byes :: BB :: Ano :: let va = no in let vb = yes in T;
+Q5  =  out(bb,pk(skE)) :: BB :: Ano :: Byes :: let va = no in let vb = yes in T;
+Q6  =  out(bb,pk(skE)) :: BB :: Byes :: Ano :: let va = no in let vb = yes in T;
+
+//P = P1, P2, P3, P4, P5, P6;
+
+//Q = Q1, Q2, Q3, Q4, Q5, Q6;
+
+P =  out(bb,pk(skE)) :: AyBn :: let va = yes in let vb = no in T;
+Q =  out(bb,pk(skE)) :: AnBy :: let va = no in let vb = yes in T;
+
+
+//equivalentft? P1 and Q1; //trace equivalent
+//fwdequivalentft?  P1, P2, P3, P4, P5, P6 and Q1, Q2, Q3, Q4, Q5, Q6; //not forward indistinguishable
+
+
+
+equivalentft? P and Q; //trace equivalent
+fwdequivalentft?  P and Q; //not forward indistinguishable
+

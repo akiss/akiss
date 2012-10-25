@@ -1,0 +1,114 @@
+Declaring function symbol list
+17 symbols total
+Declaring private names
+15 private names total
+Declaring channels
+5 channels total
+Declaring variables
+11 variables total
+Declaring rewrite rule
+1 rewrite rules total
+Declaring rewrite rule
+2 rewrite rules total
+Declaring rewrite rule
+3 rewrite rules total
+Declaring rewrite rule
+4 rewrite rules total
+Declaring rewrite rule
+5 rewrite rules total
+Declaring rewrite rule
+6 rewrite rules total
+Declaring rewrite rule
+7 rewrite rules total
+Declaring rewrite rule
+8 rewrite rules total
+Declaring rewrite rule
+9 rewrite rules total
+Declaring trace AchcyesP1
+Declaring trace AchcyesP2
+Declaring trace AfakenoP1
+Declaring trace AfakenoP2
+Declaring trace ByesP1
+Declaring trace ByesP2
+Declaring trace BnoP1
+Declaring trace BnoP2
+Declaring trace T1P2
+Declaring trace T1P3
+Declaring trace T2P2
+Declaring trace T2P3
+Declaring Phase1AyesBno to be the optimal interleaving of AchcyesP1, BnoP1
+Declaring Phase2AyesBno to be the optimal interleaving of AchcyesP2, BnoP2, T1P2, T2P2
+Declaring Phase3AyesBno to be the optimal interleaving of T1P3, T2P3
+Declaring AyesBno to be a sequencing of Phase1AyesBno, Phase2AyesBno, Phase3AyesBno
+Declaring Phase1AnoByes to be the optimal interleaving of AfakenoP1, ByesP1
+Declaring Phase2AnoByes to be the optimal interleaving of AfakenoP2, ByesP2, T1P2, T2P2
+Declaring Phase3AnoByes to be the optimal interleaving of T1P3, T2P3
+Declaring AnoByes to be a sequencing of Phase1AnoByes, Phase2AnoByes, Phase3AnoByes
+Declaring trace Setup
+Declaring P to be a sequencing of Setup, AyesBno
+Declaring Q to be a sequencing of Setup, AnoByes
+Checking equivalence of P and Q
+On the 1-th saturation out of 47040
+Constructing seed statements
+Constructing initial kb
+Saturating knowledge base
+On the 2-th saturation out of 47040
+Constructing seed statements
+Constructing initial kb
+Saturating knowledge base
+On the 3-th saturation out of 47040
+Constructing seed statements
+Constructing initial kb
+Saturating knowledge base
+On the 4-th saturation out of 47040
+Constructing seed statements
+Constructing initial kb
+Saturating knowledge base
+On the 5-th saturation out of 47040
+Constructing seed statements
+Constructing initial kb
+Saturating knowledge base
+On the 6-th saturation out of 47040
+Constructing seed statements
+Constructing initial kb
+Saturating knowledge base
+On the 7-th saturation out of 47040
+Constructing seed statements
+Constructing initial kb
+Saturating knowledge base
+On the 8-th saturation out of 47040
+Constructing seed statements
+Constructing initial kb
+Saturating knowledge base
+On the 9-th saturation out of 47040
+Constructing seed statements
+Constructing initial kb
+Saturating knowledge base
+On the 10-th saturation out of 47040
+Constructing seed statements
+Constructing initial kb
+Saturating knowledge base
+On the 11-th saturation out of 47040
+Constructing seed statements
+Constructing initial kb
+Saturating knowledge base
+On the 12-th saturation out of 47040
+Constructing seed statements
+Constructing initial kb
+Saturating knowledge base
+On the 13-th saturation out of 47040
+Constructing seed statements
+Constructing initial kb
+Saturating knowledge base
+On the 14-th saturation out of 47040
+Constructing seed statements
+Constructing initial kb
+Saturating knowledge base
+On the 15-th saturation out of 47040
+Constructing seed statements
+Constructing initial kb
+Saturating knowledge base
+On the 16-th saturation out of 47040
+Constructing seed statements
+Constructing initial kb
+Saturating knowledge base
