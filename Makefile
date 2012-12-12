@@ -37,7 +37,7 @@ clean:
 	rm -rf *.cmo
 	rm -rf *.o
 
-TESTS = tests/testac.api
+TESTS = examples/tests/ac.api
 RUN = ./akiss -verbose
 
 test: akiss $(TESTS)
