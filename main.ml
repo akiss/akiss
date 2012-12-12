@@ -520,8 +520,6 @@ let processCommand (c : cmd) =
   | QueryPrintTraces traceList ->
     Printf.printf "Printing trace list of %s\n%!" (show_string_list traceList);
     print_traces traceList
-  | _ ->
-    Printf.printf "Internal error: don't know how to process command.\n%!";
 ;;
 
 let process (cmdlist : cmd list) = 
@@ -538,4 +536,4 @@ let _ =
     let curr = lexbuf.Lexing.lex_curr_p in
     let line = curr.Lexing.pos_lnum in
     let cnum = curr.Lexing.pos_cnum - curr.Lexing.pos_bol in
-    Printf.printf "Syntax error at line %d, column %d!" line cnum;
+    Printf.printf "Syntax error at line %d, column %d!\n" line cnum;

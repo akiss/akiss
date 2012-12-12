@@ -1,35 +1,29 @@
-akiss: lexer.o parser.o util.o term.o variants.o horn.o process.o main.o 
-	ocamlopt -o akiss lexer.cmx parser.cmx util.cmx term.cmx variants.cmx horn.cmx process.cmx main.cmx 
+ML = lexer.ml parser.ml util.ml term.ml variants.ml horn.ml process.ml main.ml 
+MLI = $(wildcard $(ML:.ml=.mli))
+OCAMLC = ocamlopt
+CMA = cmxa
+CMO = cmx
+OBJS = $(ML:.ml=.$(CMO))
 
-process.o: process.ml
-	ocamlopt -c process.ml
+akiss: $(OBJS)
+	$(OCAMLC) -o akiss unix.$(CMA) $(OBJS)
 
-horn.o: horn.ml
-	ocamlopt -c horn.ml
+%.$(CMO): %.ml
+	$(OCAMLC) -c $<
 
-variants.o: variants.ml
-	ocamlopt -c variants.ml
+%.cmi: %.mli
+	$(OCAMLC) -c $<
 
-term.o: term.ml
-	ocamlopt -c term.ml
+%.ml: %.mly
+	ocamlyacc $< && $(OCAMLC) -c -i $@ > $(@:.ml=.mli)
 
-util.o: util.ml
-	ocamlopt -c util.ml
+%.ml: %.mll
+	ocamllex $<
 
-main.o: main.ml
-	ocamlopt -c main.ml
+.depend: $(ML) $(MLI)
+	ocamldep $(ML) $(MLI) > .depend
 
-lexer.o: lexer.ml parser.ml
-	ocamlopt -c lexer.ml
-
-parser.o: parser.ml
-	ocamlopt -c parser.ml
-
-parser.ml: parser.mly
-	ocamlyacc parser.mly && ocamlopt -i parser.ml > parser.mli && ocamlopt -c parser.mli
-
-lexer.ml: lexer.mll
-	ocamllex lexer.mll
+-include .depend
 
 clean:
 	rm -rf *.o
@@ -40,4 +34,14 @@ clean:
 	rm -rf akiss
 	rm -rf *.cmi
 	rm -rf *.cmx
+	rm -rf *.cmo
 	rm -rf *.o
+
+TESTS = tests/testac.api
+RUN = ./akiss -verbose
+
+test: akiss $(TESTS)
+	@for i in $(TESTS) ; do \
+	  echo '>>' Running $$i... ; \
+	  $(RUN) < $$i || exit 1 ; \
+	done

@@ -523,7 +523,7 @@ let check_ridentical process test_ridentical rules = match test_ridentical with
 	let frame = execute process [] w rules in
 	let t1 = normalize (apply_frame r frame) rules in
 	let t2 = normalize (apply_frame rp frame) rules in
-	t1 = t2
+	  Cime.equals t1 t2
       with 
 	| Process_blocked -> false
 	| Too_many_instructions -> false

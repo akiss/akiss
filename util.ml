@@ -16,6 +16,10 @@ let debugOutput a =
     Printf.ifprintf stdout a
 ;;
 
+(* TODO use the standard library:
+ *  - List.rev is already tailrec
+ *  - trmap_aux is List.rev (List.rev_map ..) *)
+
 let rec trmap_aux f l a =
   match l with
     | [] -> List.rev a
