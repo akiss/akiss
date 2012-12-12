@@ -1,6 +1,21 @@
-open Util;;
-open Term;;
-open Variants;;
+open Util
+open Term
+open Variants
+
+module Term = struct
+  include Term
+  let mgu = Cime.mgu
+  let csu = Cime.csu
+  let csu u v =
+    let sols = csu u v in
+    let n = List.length sols in
+      if n > 0 then debugOutput "Found %d solution(s)\n" n ;
+      sols
+end
+
+(* TODO using a string for predicate names isn't so great (no check
+ * on typos, uselessly costly comparison); a fixed set of variants seems
+ * appropriate, and would solve those issues *)
 
 type predicateName = id;;
 
@@ -100,9 +115,8 @@ let term_from_atom (Predicate(name, al)) =
   Fun(name, al)
 ;;
 
-let mgu_atom a1 a2 = 
-  mgu (term_from_atom a1) (term_from_atom a2)
-;;
+let csu_atom a1 a2 = 
+  Term.csu (term_from_atom a1) (term_from_atom a2)
 
 let apply_subst_atom atom sigma = match atom with
   | Predicate(name, term_list) ->
@@ -217,7 +231,7 @@ let canonical_form statement =
 
 let is_same_t_smaller_w atom1 atom2 = match (atom1, atom2) with
   | (Predicate("knows", [w; _; t]), Predicate("knows", [wp; _; tp])) ->
-      (is_prefix_world wp w) && (t = tp)
+      (is_prefix_world wp w) && (t = tp) (* TODO term equality *)
   | _ -> invalid_arg("is_same_t_smaller_w")
 ;;
 
@@ -438,10 +452,15 @@ let initial_kb (seed : statement list) : statement list =
 (*     | _ -> invalid_arg("shrink_atom") *)
 (* ;; *)
 
+(** [resolution d_kb master slave] attempts to perform a resolution step
+  * between clauses [master] and [slave] by matching the head of [slave]
+  * against the first premise of [master] that is of the form (knows _ _ t)
+  * where t is not a variable.
+  * Return the list of newly generated clauses, of length at most 1.
+  * The parameter [d_kb] is useless. *)
 let resolution d_kb ((master_head, master_body), (slave_head, slave_body)) =
   match (List.filter (fun x -> not (is_var (get_term x))) master_body) with
   | atom :: _ ->
-      (
 	(* if is_ground_w_t atom then *)
 	(*   try *)
 	(*     let recipe = consequence (atom, []) d_kb in *)
@@ -453,45 +472,51 @@ let resolution d_kb ((master_head, master_body), (slave_head, slave_body)) =
 	(*   with *)
 	(*     | Not_a_consequence -> [] *)
 	(* else *)
-	try
-	  let sigma = mgu_atom atom slave_head in
-	  let result = apply_subst_st
-	    (master_head,
-	     List.append
-	       (List.filter (fun x -> (x <> atom)) master_body)
-	       slave_body
-	      ) sigma in
-	  (
-	    (* debugOutput "FROM: %s\nAND : %s\nRESO: %s\n\n%!" *)
-	    (*   (show_statement (master_head, master_body)) *)
-	    (*   (show_statement (slave_head, slave_body)) *)
-	    (*   (show_statement result); *)
-	    [result]
-	  )
-	with 
-	  | Not_unifiable -> []
-      )
+    let sigmas = csu_atom atom slave_head in
+      List.map
+        (fun sigma ->
+           let result =
+             apply_subst_st
+               (master_head,
+                List.append
+                  (List.filter (fun x -> (x <> atom)) master_body)
+                  slave_body)
+               sigma
+           in
+             debugOutput "Resolution:\n FROM: %s\n AND : %s\n RESO: %s\n\n%!"
+               (show_statement (master_head, master_body))
+               (show_statement (slave_head, slave_body))
+               (show_statement result);
+             result)
+        sigmas
   | [] -> []
 ;;
 
+(** [equation (fa,fb)] takes two clauses and, when they are solved clauses
+  * concluding "knows", attempts to combine them: if the terms and worlds can be
+  * unified, generate a clause concluding that the recipes are "identical".
+  * TODO in my example this runs on knows(...,w1,plus(...)); plus isn't a var?!
+  * TODO that function seems to be ran on twice the same clause, and also ran on
+  *   both (a,b) and (b,a); there might be faster ways of getting a reflexive
+  *   symmetric "identical" predicate
+  * It returns [] if it fails to produce any new clause. *)
 let equation (fa, fb) =
   (
     if (is_solved fa) && (is_solved fb) &&
       (is_deduction_st fa) && (is_deduction_st fb) then (
-	(* debugOutput "Equation: %s\n%s\n\n%!" (show_statement fa) (show_statement fb); *)
+	debugOutput "Equation:\n %s\n %s\n%!" (show_statement fa) (show_statement fb);
 	match ((get_head fa), (get_head fb)) with
   	  | (Predicate("knows", [ul; r; t]),
   	     Predicate("knows", [upl; rp; tp])) ->
-  	      (
   		let t1 = Fun("!tuple!", [t; ul]) in
   		let t2 = Fun("!tuple!", [tp; upl]) in
-  		try
-  		  let sigma = mgu t1 t2 in
-   		  let newhead = Predicate("identical", [ul; r; rp]) in
-  		  let newbody = List.append (get_body fa) (get_body fb) in
-  		  [apply_subst_st (newhead, newbody) sigma]
-  		with Not_unifiable -> []
-  	      )
+        let sigmas = Term.csu t1 t2 in
+          List.map
+            (fun sigma ->
+               let newhead = Predicate("identical", [ul; r; rp]) in
+               let newbody = List.append (get_body fa) (get_body fb) in
+                 apply_subst_st (newhead, newbody) sigma)
+            sigmas
   	  | _ -> invalid_arg("equation")
       )
     else
@@ -499,29 +524,33 @@ let equation (fa, fb) =
   )
 ;;
 
+(** [ridentical (fa,fb)] attempts to combine the two clauses when [fa]
+  * concludes "identical" and [fb] concludes "reach" and their world params
+  * match. *)
 let ridentical (fa, fb) =
   (
-    debugOutput "entering ridentical\n%!"; 
+    (* debugOutput "entering ridentical\n%!";  *)
   if (is_solved fa) && (is_solved fb) then
     match ((get_head fa), (get_head fb)) with
       | (Predicate("identical", [u; r; rp]),
   	 Predicate("reach", [up])) ->
   	(
-	  debugOutput "trying to combine %s with %s\n%!" (show_statement fa) (show_statement fb);
-  	  try
-  	    let sigma = mgu u up in
-  	    let newhead = Predicate("ridentical", [u; r; rp]) in
-  	    let newbody = List.append (get_body fa) (get_body fb) in
-	    let result = apply_subst_st (newhead, newbody) sigma in
-	    (
-	      debugOutput "\n\nRID FROM: %s\nRID AND : %s\nRID GOT: %s\n\n%!" 
-	       	(show_statement fa) 
-	       	(show_statement fb) 
-	       	(show_statement result); 
-  	      [result]
-	    )
-  	  with Not_unifiable -> []
-  	)
+	  debugOutput
+        "ridentical trying to combine %s with %s\n%!"
+        (show_statement fa) (show_statement fb);
+      let sigmas = Term.csu u up in
+        List.map
+          (fun sigma ->
+             let newhead = Predicate("ridentical", [u; r; rp]) in
+             let newbody = List.append (get_body fa) (get_body fb) in
+             let result = apply_subst_st (newhead, newbody) sigma in
+               debugOutput "\n\nRID FROM: %s\nRID AND : %s\nRID GOT: %s\n\n%!" 
+                 (show_statement fa)
+                 (show_statement fb)
+                 (show_statement result);
+               result)
+          sigmas
+    )
       | _ -> []
   else
     []
@@ -554,7 +583,7 @@ let empty_list = function
 (*       (List.rev_append o_kb n_o_kb) *)
 (* ;; *)
 
-let useful (head, body) rules =
+let useful (head, body) rules = (* TODO normalize and equality *)
   match head with
     | Predicate("knows", _) -> true
     | Predicate("reach", _) -> true
