@@ -1,7 +1,10 @@
+(** Manipulating clauses and saturating knowledge base *)
+
 open Util
 open Term
 open Variants
 
+(** Wrapper around Term to perform unification through Cime *)
 module Term = struct
   include Term
   let mgu = Cime.mgu
@@ -13,107 +16,114 @@ module Term = struct
       sols
 end
 
+(** {2 Predicates and clauses, conversions and printing} *)
+
 (* TODO using a string for predicate names isn't so great (no check
  * on typos, uselessly costly comparison); a fixed set of variants seems
  * appropriate, and would solve those issues *)
 
-type predicateName = id;;
+type predicateName = id
 
 type atom = 
   | Predicate of predicateName * term list
-;;
 
 type hornClause =
     atom * atom list
-;;
 
-type statement = hornClause;;
+type statement = hornClause
 
 let is_deduction_st (head, _) = match head with
   | Predicate("knows", _) -> true
   | _ -> false
-;;
 
 let is_equation_st (head, _) = match head with
   | Predicate("identical", _) -> true
   | _ -> false
-;;
 
 let is_reach_st (head, _) = match head with
   | Predicate("reach", _) -> true
   | _ -> false
-;;
 
 let is_ridentical_st (head, _) = match head with
   | Predicate("ridentical", _) -> true
   | _ -> false
-;;
+
+(** A statement is solved if all its premises have a variable as their last
+  * argument. *)
+let is_solved (_, body) =
+  List.for_all (fun atom ->
+		  match atom with
+		    | Predicate(_, [_; _; x]) -> is_var x
+		    | _ -> invalid_arg("is_solved")) body
+
+let only_knows kb =
+  List.filter is_deduction_st kb
+
+let only_solved kb =
+  List.filter is_solved kb
 
 let rec vars_of_atom = function
   | Predicate(_, term_list) -> vars_of_term_list term_list
-;;
 
 let rec vars_of_horn_clause (head, body) =
   unique (List.append
 	    (trconcat (trmap vars_of_atom body))
-	    (vars_of_atom head))
-;;
+            (vars_of_atom head))
+
+let get_world atom = match atom with
+  | Predicate("knows", [w; _; _]) -> w
+  | _ -> invalid_arg("get_world")
+
+let get_recipe atom = match atom with
+  | Predicate("knows", [_; r; _]) -> r
+  | _ -> invalid_arg("get_recipe")
+
+let get_term atom = match atom with
+  | Predicate("knows", [_; _; t]) -> t
+  | _ -> invalid_arg("get_term")
+
+let size (_,body) = List.length body
+
+let get_head ((head, body) : statement) : atom =
+  head
+
+let get_body ((head, body) : statement) : atom list =
+  body
+
+(** {3 Conversions to and from terms} *)
+
+let atom_from_term term = match term with
+  | Fun(symbol, termlist) ->
+      Predicate(symbol, termlist)
+  | _ -> invalid_arg("atom_from_term")
+
+let statement_from_term term = match term with 
+  | Fun("implies", head :: body) ->
+      (atom_from_term head, trmap atom_from_term body)
+  | _ -> invalid_arg("statement_from_term")
+
+let term_from_atom (Predicate(name, al)) =
+  Fun(name, al)
+
+let term_from_statement (head, body) =
+  Fun("implies",  (term_from_atom head) :: (trmap term_from_atom body))
+
+(** {3 Printing} *)
 
 let rec show_atom = function
   | Predicate("!equals!", [s;t]) ->
       (show_term s) ^ " = " ^ (show_term t)
   | Predicate(name, term_list) ->
       name ^ "(" ^ (show_term_list term_list) ^ ")"
-;;
 
 let show_statement ((head, body) : hornClause) =
 (*  debugOutput "Statement of length %d\n%!" (List.length body); *)
   (show_atom head) ^ "  <==  " ^ (String.concat ", " (trmap show_atom body))
-;;
-
-let atom_from_term term = match term with
-  | Fun(symbol, termlist) ->
-      Predicate(symbol, termlist)
-  | _ -> invalid_arg("atom_from_term")
-;;
-
-let statement_from_term term = match term with 
-  | Fun("implies", head :: body) ->
-      (atom_from_term head, trmap atom_from_term body)
-  | _ -> invalid_arg("statement_from_term")
-;;
 
 let show_kb kb =
   String.concat "\n" (trmap show_statement kb)
-;;
 
-let context_statements symbol arity rules =
-  let w = Var(fresh_variable ()) in
-  let vYs = trmap fresh_variable (create_list () arity) in
-  let vZs = trmap fresh_variable (create_list () arity) in
-  let add_knows x y = Predicate("knows", [w; x; y]) in
-  let box_vars names = trmap (function x -> Var(x)) names in
-  let body sigma = List.map2 
-    (add_knows) 
-    (box_vars vYs) 
-    (trmap (function x -> apply_subst x sigma) (box_vars vZs))
-  in
-  let t = Fun(symbol, box_vars vZs) in
-  let v = variants t rules in
-  trmap
-    (function (x,y,_) ->
-       (Predicate("knows", 
-		  [w;
-		   Fun(symbol, box_vars vYs);
-		   x
-		  ]),
-	body y))
-    v
-;;
-
-let term_from_atom (Predicate(name, al)) =
-  Fun(name, al)
-;;
+(** {3 Unification and substitutions} *)
 
 let csu_atom a1 a2 = 
   Term.csu (term_from_atom a1) (term_from_atom a2)
@@ -121,27 +131,50 @@ let csu_atom a1 a2 =
 let apply_subst_atom atom sigma = match atom with
   | Predicate(name, term_list) ->
       Predicate(name, trmap (fun x -> apply_subst x sigma) term_list)
-;;
 
 let apply_subst_st (head, body) sigma =
   (apply_subst_atom head sigma, trmap (fun x -> apply_subst_atom x sigma) body)
-;;
 
+(** {3 Misc} *)
+
+(** Statement equality, modulo alpha renaming and TODO AC *)
+let same_statement s t = 
+  let ts = term_from_statement s in
+  let tt = term_from_statement t in
+  try
+    let _ = mgm ts tt in
+    let _ = mgm tt ts in
+    true
+  with Not_matchable -> false
+
+let fresh_statement f =
+  let allv = vars_of_horn_clause f in
+  let newv = trmap (fun _ -> (Var(fresh_variable ()))) allv in
+  let sigma = List.combine allv newv in
+    apply_subst_st f sigma
+
+(** [is_prefix_world w w'] checks whether [w] is a prefix of [w'],
+  * assuming that worlds are compatible.
+  * TODO use assert rather than invalid_arg to allow optimizations *)
 let rec is_prefix_world small_world big_world = 
- (* Printf.printf "Check whether \n%s\n is a prefix of \n%s\n\n" (show_term small_world) (show_term big_world); *)
   match (small_world, big_world) with
   | (Fun("empty", []), _) -> true
-  | (Fun("world", [h; t]), Fun("world", [hp; tp])) when h = hp ->
-      is_prefix_world t tp
-  | (Fun("world", [h; t]), Fun("world", [hp; tp])) when h <> hp -> 
-      invalid_arg("assertion failure is_prefix_world")
+  | (Fun("world", [h; t]), Fun("world", [hp; tp])) ->
+      if h = hp then
+        is_prefix_world t tp
+      else
+        invalid_arg "assertion failure is_prefix_world"
   | (Fun("world", [_; _]), Fun("empty", [])) -> false
-  | (Var(x), Var(y)) when x = y -> true 
-  | (Var(x), Var(y)) when x <> y ->  invalid_arg("assertion failure is_prefix_world")
-  | _ -> invalid_arg(Printf.sprintf "is_prefix_world %s %s" (show_term small_world) (show_term big_world))
-;;
+  | (Var(x), Var(y)) ->
+      if x = y then true else
+        invalid_arg "assertion failure is_prefix_world"
+  | _ ->
+      invalid_arg
+        (Printf.sprintf
+           "is_prefix_world %s %s"
+           (show_term small_world) (show_term big_world))
 
-
+(* DB this is dead code, all its uses are commented out *)
 (******************************)
 (* testing some optimization *)
 let solved_reach_subsumes r1 r2 =
@@ -155,8 +188,9 @@ let solved_reach_subsumes r1 r2 =
       | _ -> false
     )
   | _ -> false
-;;
 (******************************)
+
+(** {2 Knowledge base update} *)
 
 let rule_rename statement = match statement with
   | (Predicate("knows", _) as head, body) ->
@@ -187,7 +221,6 @@ let rule_rename statement = match statement with
 	  | _ -> statement
       )
   | _ -> statement
-;;
 
 let rule_remove statement = match statement with
   | (Predicate("knows", _) as head, body) ->
@@ -200,57 +233,19 @@ let rule_remove statement = match statement with
 	    | _ -> invalid_arg("rule_remove"))
 	 body)
   | _ -> statement
-;;
-
-let is_solved (_, body) =
-  List.for_all (fun atom ->
-		  match atom with
-		    | Predicate(_, [_; _; x]) -> is_var x
-		    | _ -> invalid_arg("is_solved")) body
-;;
-
-let only_solved kb =
-  List.filter is_solved kb
-;;
-
-let only_knows kb =
-  List.filter
-    (fun x -> 
-       match x with
-	 | (Predicate("knows", _), _) -> true
-	 | _ -> false)
-    kb
-;;
 
 let canonical_form statement = 
   if is_solved statement then
     iterate rule_remove (iterate rule_rename statement)
   else
     statement
-;;
 
 let is_same_t_smaller_w atom1 atom2 = match (atom1, atom2) with
   | (Predicate("knows", [w; _; t]), Predicate("knows", [wp; _; tp])) ->
       (is_prefix_world wp w) && (t = tp) (* TODO term equality *)
   | _ -> invalid_arg("is_same_t_smaller_w")
-;;
 
-let get_world atom = match atom with
-  | Predicate("knows", [w; _; _]) -> w
-  | _ -> invalid_arg("get_world")
-;;
-
-let get_recipe atom = match atom with
-  | Predicate("knows", [_; r; _]) -> r
-  | _ -> invalid_arg("get_recipe")
-;;
-
-let get_term atom = match atom with
-  | Predicate("knows", [_; _; t]) -> t
-  | _ -> invalid_arg("get_term")
-;;
-
-exception Not_a_consequence;;
+exception Not_a_consequence
 
 let rec first f l e =
   match l with 
@@ -260,15 +255,6 @@ let rec first f l e =
 	  f h
 	with e -> first f t e
       )
-;;
-
-let get_head ((head, body) : statement) : atom =
-  head
-;;
-
-let get_body ((head, body) : statement) : atom list =
-  body
-;;
 
 let inst_w_t my_head head_kb exc =
   match (my_head, head_kb) with
@@ -287,14 +273,12 @@ let inst_w_t my_head head_kb exc =
 	with Not_matchable -> raise exc
       )
     | _ -> invalid_arg("inst_w_t")
-;;
 
 let startswith string what =
   if String.length string < String.length what then
     false
   else
     (String.sub string 0 (String.length what)) = what
-;;
 
 let rec consequence_h (head, body) kb = 
   (
@@ -331,53 +315,9 @@ let rec consequence_h (head, body) kb =
 	)
       | _ -> invalid_arg("consequence")
   )
-;;
-
-let only_solved_st kb =
-  List.filter is_solved kb
-;;
-
-let only_knows_st kb =
-  List.filter is_deduction_st kb
-;;
 
 let consequence st kb =
-  consequence_h st (only_knows_st (only_solved kb))
-;;
-
-let is_rechability_st (head, _) = match head with
-  | Predicate("reach", _) -> true
-  | _ -> false
-;;
-
-let size (_,body) = 
-  List.length body
-;;
-
-let term_from_statement (head, body) =
-  Fun("implies",  (term_from_atom head) :: (trmap term_from_atom body))
-;;
-
-let same_statement s t = 
-  let ts = term_from_statement s in
-  let tt = term_from_statement t in
-  try
-    let _ = mgm ts tt in
-    let _ = mgm tt ts in
-    true
-  with Not_matchable -> false
-;;
-
-let vars_of_st (head, body) =
-  unique (List.append (vars_of_atom head) (trconcat (trmap vars_of_atom body)))
-;;
-
-let fresh_statement f =
-  let allv = vars_of_st f in
-  let newv = trmap (fun _ -> (Var(fresh_variable ()))) allv in
-  let sigma = List.combine allv newv in
-    apply_subst_st f sigma
-;;
+  consequence_h st (only_knows (only_solved kb))
 
 let set_insert f kb =
   if (List.exists (fun x -> same_statement f x) kb) then
@@ -387,7 +327,6 @@ let set_insert f kb =
       (* debugOutput "Adding %s\n%!" (show_statement f); *)
       [fresh_statement f]
     )
-;;
 
 let update (kb : statement list) (f : statement) : statement list =
   let (head, body) as fc = canonical_form f in
@@ -415,7 +354,9 @@ let update (kb : statement list) (f : statement) : statement list =
       (set_insert fc (List.filter (fun x ->  (not (is_reach_st fc)) || (solved_reach_subsumes fc x)) kb)) *)
   else
     set_insert fc kb
-;;
+
+(** {2 Initial knowledge base}
+  * TODO seed stuff should be here *)
 
 let initial_kb (seed : statement list) : statement list =
   snd(
@@ -428,39 +369,23 @@ let initial_kb (seed : statement list) : statement list =
       )
       (seed, [])
   )
-;;
 
-(* let is_ground_w_t atom = *)
-(*   match atom with *)
-(*     | Predicate(_, [w; _; t]) -> ((is_ground w) && (is_ground t)) *)
-(*     | _ -> invalid_arg("is_ground_w_t") *)
-(* ;; *)
-
-(* exception Not_shrinkable;; *)
-
-(* let shrink_world (world : term) (to_what : term) : term = *)
-(*   match (world, to_what) with *)
-(*     | (Fun("world", tl), Fun("world", tlp)) -> *)
-(* 	Fun("world", take (List.length tlp) tl) *)
-(*     | _ -> raise Not_shrinkable *)
-(* ;; *)
-
-(* let shrink_atom a to_what = *)
-(*   match (a, to_what) with *)
-(*     | (Predicate(na, [w; r; t]), Predicate(_, [wp; _; _])) ->  *)
-(* 	Predicate(na, [(shrink_world w wp); r; t]) *)
-(*     | _ -> invalid_arg("shrink_atom") *)
-(* ;; *)
+(** {2 Resolution steps} *)
 
 (** [resolution d_kb master slave] attempts to perform a resolution step
   * between clauses [master] and [slave] by matching the head of [slave]
   * against the first premise of [master] that is of the form (knows _ _ t)
   * where t is not a variable.
+  * This corresponds to the "Resolution" rule in the paper.
   * Return the list of newly generated clauses, of length at most 1.
   * The parameter [d_kb] is useless. *)
 let resolution d_kb ((master_head, master_body), (slave_head, slave_body)) =
   match (List.filter (fun x -> not (is_var (get_term x))) master_body) with
   | atom :: _ ->
+        (* let is_ground_w_t atom = *)
+        (*   match atom with *)
+        (*     | Predicate(_, [w; _; t]) -> ((is_ground w) && (is_ground t)) *)
+        (*     | _ -> invalid_arg("is_ground_w_t") *)
 	(* if is_ground_w_t atom then *)
 	(*   try *)
 	(*     let recipe = consequence (atom, []) d_kb in *)
@@ -490,11 +415,11 @@ let resolution d_kb ((master_head, master_body), (slave_head, slave_body)) =
              result)
         sigmas
   | [] -> []
-;;
 
 (** [equation (fa,fb)] takes two clauses and, when they are solved clauses
   * concluding "knows", attempts to combine them: if the terms and worlds can be
   * unified, generate a clause concluding that the recipes are "identical".
+  * This corresponds to the "Equation" rule in the paper.
   * TODO in my example this runs on knows(...,w1,plus(...)); plus isn't a var?!
   * TODO that function seems to be ran on twice the same clause, and also ran on
   *   both (a,b) and (b,a); there might be faster ways of getting a reflexive
@@ -504,12 +429,12 @@ let equation (fa, fb) =
   (
     if (is_solved fa) && (is_solved fb) &&
       (is_deduction_st fa) && (is_deduction_st fb) then (
-	debugOutput "Equation:\n %s\n %s\n%!" (show_statement fa) (show_statement fb);
-	match ((get_head fa), (get_head fb)) with
-  	  | (Predicate("knows", [ul; r; t]),
-  	     Predicate("knows", [upl; rp; tp])) ->
-  		let t1 = Fun("!tuple!", [t; ul]) in
-  		let t2 = Fun("!tuple!", [tp; upl]) in
+        debugOutput "Equation:\n %s\n %s\n%!" (show_statement fa) (show_statement fb);
+        match ((get_head fa), (get_head fb)) with
+          | (Predicate("knows", [ul; r; t]),
+             Predicate("knows", [upl; rp; tp])) ->
+              let t1 = Fun("!tuple!", [t; ul]) in
+              let t2 = Fun("!tuple!", [tp; upl]) in
         let sigmas = Term.csu t1 t2 in
           List.map
             (fun sigma ->
@@ -517,45 +442,39 @@ let equation (fa, fb) =
                let newbody = List.append (get_body fa) (get_body fb) in
                  apply_subst_st (newhead, newbody) sigma)
             sigmas
-  	  | _ -> invalid_arg("equation")
+          | _ -> invalid_arg("equation")
       )
     else
       []
   )
-;;
 
 (** [ridentical (fa,fb)] attempts to combine the two clauses when [fa]
   * concludes "identical" and [fb] concludes "reach" and their world params
-  * match. *)
+  * match. This corresponds to the "Test" rule in the paper. *)
 let ridentical (fa, fb) =
-  (
-    (* debugOutput "entering ridentical\n%!";  *)
-  if (is_solved fa) && (is_solved fb) then
+  (* debugOutput "entering ridentical\n%!";  *)
+  if not (is_solved fa && is_solved fb) then [] else
     match ((get_head fa), (get_head fb)) with
       | (Predicate("identical", [u; r; rp]),
-  	 Predicate("reach", [up])) ->
-  	(
-	  debugOutput
-        "ridentical trying to combine %s with %s\n%!"
-        (show_statement fa) (show_statement fb);
-      let sigmas = Term.csu u up in
-        List.map
-          (fun sigma ->
-             let newhead = Predicate("ridentical", [u; r; rp]) in
-             let newbody = List.append (get_body fa) (get_body fb) in
-             let result = apply_subst_st (newhead, newbody) sigma in
-               debugOutput "\n\nRID FROM: %s\nRID AND : %s\nRID GOT: %s\n\n%!" 
-                 (show_statement fa)
-                 (show_statement fb)
-                 (show_statement result);
-               result)
-          sigmas
-    )
+         Predicate("reach", [up])) ->
+          debugOutput
+            "ridentical trying to combine %s with %s\n%!"
+            (show_statement fa) (show_statement fb);
+          let sigmas = Term.csu u up in
+            List.map
+              (fun sigma ->
+                 let newhead = Predicate("ridentical", [u; r; rp]) in
+                 let newbody = List.append (get_body fa) (get_body fb) in
+                 let result = apply_subst_st (newhead, newbody) sigma in
+                   debugOutput "\n\nRID FROM: %s\nRID AND : %s\nRID GOT: %s\n\n%!" 
+                     (show_statement fa)
+                     (show_statement fb)
+                     (show_statement result);
+                   result)
+              sigmas
       | _ -> []
-  else
-    []
-  )
-;;
+
+(** {2 Saturation procedure} *)
 
 (* let resolution_step d_un d_so o_kb = *)
 (*   debugOutput "Performing resolution step\n%!"; *)
@@ -566,13 +485,10 @@ let ridentical (fa, fb) =
 (*   let n_d_un = trconcat (trmap (fun x -> update d_un x) n_d_un_aux) in *)
 (*   let n_o_kb = trconcat (trmap (fun x -> update o_kb x) n_o_kb_aux) in *)
 (*   (n_d_so, n_d_un, n_o_kb) *)
-(* ;; *)
 
-let empty_list = function
-  | [] -> true
-  | _ -> false
-;;
-
+(* let empty_list = function *)
+(*  | [] -> true *)
+(*  | _ -> false *)
 (* let rec saturate_aux d_un d_so o_kb = *)
 (*   let (n_d_so, n_d_un, n_o_kb) = resolution_step d_un d_so o_kb in *)
 (*   if empty_list n_d_so && empty_list n_d_un && empty_list n_o_kb then *)
@@ -581,28 +497,15 @@ let empty_list = function
 (*     saturate_aux (List.rev_append d_un n_d_un) *)
 (*       (List.rev_append d_so n_d_so) *)
 (*       (List.rev_append o_kb n_o_kb) *)
-(* ;; *)
 
 let useful (head, body) rules = (* TODO normalize and equality *)
   match head with
     | Predicate("knows", _) -> true
     | Predicate("reach", _) -> true
-    | Predicate("identical", [_; r; rp]) ->
-  	(
-  	  if normalize r rules = normalize rp rules then
-  	    false
-  	  else
-  	    true
-  	)
+    | Predicate("identical", [_; r; rp])
     | Predicate("ridentical", [_; r; rp]) ->
-  	(
-  	  if normalize r rules = normalize rp rules then
-  	    false
-  	  else
-  	    true
-  	)
+        normalize r rules <> normalize rp rules
     | _ -> invalid_arg("useful")
-;;
 
 (* let rec second_step_aux er_kb_any d_so a rules =  *)
 (*   let er_kb = List.filter (fun x -> useful x rules) er_kb_any in *)
@@ -620,29 +523,24 @@ let useful (head, body) rules = (* TODO normalize and equality *)
 (* 	second_step_aux new_generation d_so (List.rev_append new_generation a) rules *)
 (*     ) *)
 (*   ) *)
-(* ;; *)
 
 let resolution_step_new unsolved_s solved_ks =
   trconcat (trmap (fun x -> resolution solved_ks x) (combine unsolved_s solved_ks))
-;;
 
 let saturate_class_one_step kb ff =
   let solved_ks = only_solved (only_knows kb) in
   let to_solve = List.filter ff kb in
   let new_statements = resolution_step_new to_solve solved_ks in
   List.append kb (trconcat (trmap (fun x -> update kb x) new_statements))
-;;
 
 let saturate_class kb ff =
   iterate (fun x -> saturate_class_one_step x ff) kb
-;;
 
 let saturate_equation_one_step kb =
   let solved_ks = only_solved (only_knows kb) in
   let other = List.filter (fun x -> is_equation_st x) kb in
   let new_statements = resolution_step_new other solved_ks in
   List.append kb (trconcat (trmap (fun x -> update kb x) new_statements))
-;;
 
 let saturate kb rules =
   let kb_p = saturate_class kb is_deduction_st in
@@ -656,7 +554,6 @@ let saturate kb rules =
   let new_ri = trconcat (trmap ridentical (combine solved_es solved_rs)) in
   let kb_s = List.append kb_r new_ri in
   saturate_class kb_s is_ridentical_st
-;;
 
 (* let saturate_old kb rules = *)
 (*   debugOutput "Equational statements already in initial kb: %s\n%!" (show_kb (List.filter is_equation_st kb)); *)
@@ -679,24 +576,23 @@ let saturate kb rules =
 (*     trconcat [d_so; d_un; er_kb; ri_kb] *)
 (*   ) *)
 (*   ) *)
-(* ;; *)
+
+(** {2 Recipe stuff} *)
 
 let namify_subst t =
   let vars = vars_of_term t in
   let names = trmap (fun _ -> Fun(fresh_string "!n!", [])) vars in
   let sigma = List.combine vars names in
   sigma
-;;
 
 let namify t =
   let sigma = namify_subst t in
   apply_subst t sigma
-;;
 
-exception Algorithm_error;;
-exception Find_recipe_h_error;;
+exception Algorithm_error
+exception Find_recipe_h_error
 
-exception No_recipe_found;;
+exception No_recipe_found
 
 let rec find_recipe_h atom kbs all = 
   match atom with
@@ -730,10 +626,9 @@ let rec find_recipe_h atom kbs all =
 	    | [] -> raise No_recipe_found;
 	    | _ -> raise Find_recipe_h_error;
 	)
-;;
 
 let find_recipe atom kb =
-  let kbsolved = (only_knows_st (only_solved kb)) in
+  let kbsolved = (only_knows (only_solved kb)) in
   try
     find_recipe_h atom kbsolved kbsolved
   with No_recipe_found -> (
@@ -742,7 +637,6 @@ let find_recipe atom kb =
       (show_kb kbsolved);
     raise Algorithm_error
   )
-;;
 
 let rec revworld_h (w : term) (a : term) : term =
   match w with
@@ -750,11 +644,9 @@ let rec revworld_h (w : term) (a : term) : term =
     | Var(_) -> Fun("world", [w; a])
     | Fun("world", [h; t]) -> revworld_h t (Fun("world", [h; a]))
     | _ -> invalid_arg("rev_worldh")
-;;
 
 let revworld w =
   revworld_h w (Fun("empty", []))
-;;
 
 let rec recipize_h (tl : term) kb =
   match tl with
@@ -776,7 +668,6 @@ let rec recipize_h (tl : term) kb =
 	)
     | Var(_) -> invalid_arg("recipize_h with var")
     | _ -> invalid_arg("recipize_h")
-;;
 
 let recipize tl kb = 
   debugOutput "Recipizing %s\n" (show_term tl);
@@ -785,7 +676,6 @@ let recipize tl kb =
   debugOutput "Result %s\n" (show_term (revworld result));
     result
   )
-;;
 
 let checks_reach kb = 
   trconcat (
@@ -798,7 +688,6 @@ let checks_reach kb =
   	      [Fun("check_run", [revworld (recipize (namify w) kb)])]
   	    | _ -> []))
       kb)
-;;
 
 let checks_ridentical kb =
   trconcat (
@@ -824,17 +713,14 @@ let checks_ridentical kb =
 		)
   	    | _ -> []))
       kb)
-;;
 
 
 let checks kb  =
   let kb_solved = List.filter is_solved kb in
   List.append (checks_reach kb_solved) (checks_ridentical kb_solved)
-;;
 
 let show_tests tests =
   String.concat "\n\n" (trmap show_term tests)
-;;
 
 
 let show_rew_rules rules =
@@ -845,4 +731,3 @@ let show_rew_rules rules =
 	| (l, r) -> (show_term l)^" -> "^(show_term r);
     ) 
     rules)
-;;

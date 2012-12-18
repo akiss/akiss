@@ -37,6 +37,10 @@ clean:
 	rm -rf *.cmo
 	rm -rf *.o
 
+doc: $(ML)
+	mkdir -p doc
+	ocamldoc -stars $(ML) -html -d doc
+
 TESTS = examples/tests/ac.api
 RUN = ./akiss -verbose
 

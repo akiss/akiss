@@ -73,6 +73,30 @@ let rec declare_process name process =
   addto processes (name, parse_process process !processes)
 ;;
 
+let context_statements symbol arity rules =
+  let w = Var(fresh_variable ()) in
+  let vYs = trmap fresh_variable (create_list () arity) in
+  let vZs = trmap fresh_variable (create_list () arity) in
+  let add_knows x y = Predicate("knows", [w; x; y]) in
+  let box_vars names = trmap (function x -> Var(x)) names in
+  let body sigma = List.map2 
+    (add_knows) 
+    (box_vars vYs) 
+    (trmap (function x -> apply_subst x sigma) (box_vars vZs))
+  in
+  let t = Fun(symbol, box_vars vZs) in
+  let v = Variants.variants t rules in
+  trmap
+    (function (x,y,_) ->
+       (Predicate("knows", 
+		  [w;
+		   Fun(symbol, box_vars vYs);
+		   x
+		  ]),
+	body y))
+    v
+;;
+
 let seed_statements trace rew =
   let (l1, l2) = List.split !fsymbols in
   let context_clauses = trconcat
