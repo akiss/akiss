@@ -104,3 +104,14 @@ let rec all_prefixes = function
 
 let show_string_list list =
   String.concat ", " list
+
+let startswith s ~prefix =
+  if String.length s < String.length prefix then
+    false
+  else
+    try
+      for i = 0 to String.length prefix - 1 do
+        if s.[i] <> prefix.[i] then raise Not_found
+      done ;
+      true
+    with Not_found -> false

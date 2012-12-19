@@ -18,12 +18,19 @@ end
 
 (** {2 Predicates and clauses, conversions and printing} *)
 
-(* TODO using a string for predicate names isn't so great (no check
- * on typos, uselessly costly comparison); a fixed set of variants seems
- * appropriate, and would solve those issues *)
+(* TODO
+ * - lists as sets is bad, at least stop caring about their order
+ * - using a string for predicate names isn't so great (no check
+ *   on typos, uselessly costly comparison); a fixed set of variants seems
+ *   appropriate, and would solve those issues
+ * - the use of startswith x "!n!" to check term types is fragile *)
 
 type predicateName = id
 
+(** Possible predicates are
+  *   "knows" of arity 3 (world, recipe, term);
+  *   "identical" and "ridentical" of arity 3 (world, recipe, recipe);
+  *   "reach" of arity 1 (world). *)
 type atom = 
   | Predicate of predicateName * term list
 
@@ -49,7 +56,10 @@ let is_ridentical_st (head, _) = match head with
   | _ -> false
 
 (** A statement is solved if all its premises have a variable as their last
-  * argument. *)
+  * argument.
+  * TODO there seems to be an assumption that this is never called
+  *   on a "reach" statement, which also seems invalid in the [ridentical]
+  *   step *)
 let is_solved (_, body) =
   List.for_all (fun atom ->
 		  match atom with
@@ -247,77 +257,78 @@ let is_same_t_smaller_w atom1 atom2 = match (atom1, atom2) with
 
 exception Not_a_consequence
 
+(** [first f l e] attempts to call [f] on each element of the list,
+  * in order, and returns the result of the first call that succeeds.
+  * If all calls fail, re-raise the exception raised by the last call. *)
 let rec first f l e =
   match l with 
     | [] -> raise e
-    | h :: t -> (
+    | h :: t ->
 	try
 	  f h
 	with e -> first f t e
-      )
 
+(** [inst_w_t my_head head_kb exc] attempts to match the world and term
+  * arguments of two predicates of arity three, and raises [exc] upon
+  * failure.
+  * TODO mgm inside: update for AC *)
 let inst_w_t my_head head_kb exc =
   match (my_head, head_kb) with
     | (Predicate(_, [myw; _; myt]), Predicate(_, [wkb; _; tkb])) -> (
 	let t1 = Fun("!tuple!", [myw; myt]) in
 	let t2 = Fun("!tuple!", [wkb; tkb]) in
 	try
-	  (
-	    (* debugOutput "Maching %s against %s\n%!" (show_term t1) (show_term t2); *)
-	    let sigma = mgm t2 t1 in
-	      (
-		(* debugOutput "Result %s\n%!" (show_subst sigma); *)
-		sigma
-	      )
-	  )
+          (* debugOutput "Maching %s against %s\n%!" (show_term t1) (show_term t2); *)
+          let sigma = mgm t2 t1 in
+            (* debugOutput "Result %s\n%!" (show_subst sigma); *)
+            sigma
 	with Not_matchable -> raise exc
       )
     | _ -> invalid_arg("inst_w_t")
 
-let startswith string what =
-  if String.length string < String.length what then
-    false
-  else
-    (String.sub string 0 (String.length what)) = what
-
-let rec consequence_h (head, body) kb = 
-  (
-    if (not (is_solved (head, body))) then invalid_arg("consequence_h") else
+(** Check whether a statement is a consequence of a knowledge base, ie.
+  * try to find a statement deriving the same "knows" atoms up to the recipe
+  * from the same "knows" assumptions, among the solved statements of the base.
+  * Raise [Not_a_consequence] if there is no such statement. If there is one,
+  * return the associated recipe.
+  * See Definition 14 and Lemma 2 in the paper. *)
+let consequence st kb =
+  assert (is_solved st) ;
+  let rec aux (head, body) kb = 
     match head with
       | Predicate("knows", [_; _; Fun(name, [])]) when (startswith name "!n!") ->
-	Fun(name, [])
-      | Predicate("knows", [w; _; t]) -> (
-	  match (List.filter (fun x -> is_same_t_smaller_w head x) body) with
-	    | r :: _ -> get_recipe r (* base case *) 
-	    | _ -> (* inductive case *)
-		first (fun x ->
-			 (
-			   (* debugOutput "Checking %s\n%!" *)
-			   (*   (show_statement (head, body)); *)
-			   (* debugOutput "Against %s\n%!" *)
-			   (*   (show_statement x); *)
-			 let sigma = inst_w_t head (get_head x) Not_a_consequence in
-			 (
-			   (* debugOutput "Sigma: %s\n\n%!" (show_subst sigma); *)
-			 apply_subst 
-			   (get_recipe (get_head x))
-			   (List.combine
-			      (trmap 
-				 (fun y -> unbox_var (get_recipe y)) 
-				 (get_body x))
-			      (trmap 
-				 (fun y -> consequence_h
-				    (apply_subst_atom y sigma, body) kb)
-				 (get_body x)))
-			 )
-			 )
-		      ) kb Not_a_consequence
-	)
+          Fun(name, [])
+      | Predicate("knows", [w; _; t]) ->
+          begin try
+            (* Base case: Axiom rule of conseq *)
+            get_recipe (List.find (is_same_t_smaller_w head) body)
+          with
+            | Not_found ->
+                (* Inductive case: Res rule
+                 * Find a (solved, well-formed) statement [x]
+                 * whose head is matched by [head] and such that
+                 * [aux] succeeds on [y<-body] for each [y] in the
+                 * body of [x]. *)
+                first
+                  (fun x ->
+                     (* debugOutput "Checking %s\n%!" *)
+                     (*   (show_statement (head, body)); *)
+                     (* debugOutput "Against %s\n%!" *)
+                     (*   (show_statement x); *)
+                     let sigma = inst_w_t head (get_head x) Not_a_consequence in
+                       (* debugOutput "Sigma: %s\n\n%!" (show_subst sigma); *)
+                       apply_subst 
+                         (get_recipe (get_head x))
+                         (List.map
+                            (fun y ->
+                               unbox_var (get_recipe y),
+                               aux (apply_subst_atom y sigma, body) kb)
+                            (get_body x)))
+                  kb Not_a_consequence
+          end
       | _ -> invalid_arg("consequence")
-  )
-
-let consequence st kb =
-  consequence_h st (only_knows (only_solved kb))
+  in
+    aux st (only_knows (only_solved kb))
 
 let set_insert f kb =
   if (List.exists (fun x -> same_statement f x) kb) then
@@ -328,6 +339,9 @@ let set_insert f kb =
       [fresh_statement f]
     )
 
+(** Update a knowledge base with a new statement. This involves canonizing
+  * the statement, checking whether it already belongs to the consequences
+  * of the base, and actually inserting the statement or a variant of it. *)
 let update (kb : statement list) (f : statement) : statement list =
   let (head, body) as fc = canonical_form f in
   if ((is_deduction_st f) && (is_solved f)) then
@@ -358,6 +372,8 @@ let update (kb : statement list) (f : statement) : statement list =
 (** {2 Initial knowledge base}
   * TODO seed stuff should be here *)
 
+(** Compute the initial knowledge base K_i(S) associated to the
+  * seed statements S of a ground trace T. *)
 let initial_kb (seed : statement list) : statement list =
   snd(
     iterate
