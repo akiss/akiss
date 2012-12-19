@@ -434,7 +434,7 @@ let rec execute_h process frame instructions rules =
 	  else
 	    raise Invalid_instruction
       | (Trace(Test(x, y), pr), Fun("world", _)) ->
-	  if normalize x rules = normalize y rules then
+	  if Cime.equals (normalize x rules) (normalize y rules) then
 	    execute_h pr frame instructions rules
 	  else
 	    raise Process_blocked

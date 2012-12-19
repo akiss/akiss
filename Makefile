@@ -41,11 +41,16 @@ doc: $(ML)
 	mkdir -p doc
 	ocamldoc -stars $(ML) -html -d doc
 
-TESTS = examples/tests/ac.api
-RUN = ./akiss -verbose
+TESTS = examples/tests/ac.api examples/tests/ac2.api
+NOTESTS = examples/tests/nac.api
+RUN = OCAMLRUNPARAM=b ./akiss -verbose
 
 test: akiss $(TESTS)
 	@for i in $(TESTS) ; do \
-	  echo '>>' Running $$i... ; \
+	  echo '>>' Checking $$i... ; \
+	  $(RUN) < $$i || exit 1 ; \
+	done
+	@for i in $(NOTESTS) ; do \
+	  echo '>>' Checking not $$i... ; \
 	  $(RUN) < $$i || exit 1 ; \
 	done

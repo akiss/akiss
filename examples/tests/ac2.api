@@ -1,0 +1,10 @@
+symbols plus/2;
+
+private a, b, k, ok;
+channels C;
+var X, Y, Z;
+
+r = [plus(a,b)=plus(b,a)].out(C,ok).0;
+s = [a=a].out(C,ok).0;
+
+equivalentct? r and s;
