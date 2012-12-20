@@ -246,10 +246,11 @@ let cime_parse tokens =
 (** Run CiME to perform unification and parse its output.
   * TODO path to executable shouldn't be hardcoded... *)
 let run_cime ?op outchan s t =
+  let home = Sys.getenv "HOME" in
   let chan_out,chan_in =
     Unix.open_process
-      "/import/baelde/soft/cime-out/src/main.native \
-      -icime /dev/stdin -ocime /dev/stdout"
+      (home ^ "/soft/cime-out/src/main.native \
+       -icime /dev/stdin -ocime /dev/stdout")
   in
     print_script ?op (Format.formatter_of_out_channel chan_in) s t ;
     close_out chan_in ;
