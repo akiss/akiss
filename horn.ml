@@ -2,12 +2,12 @@
 
 open Util
 open Term
-open Variants
 
 (** Wrapper around Term to perform unification through Cime *)
 module Term = struct
   include Term
   let mgu = Cime.mgu
+  let mgm = Cime.mgm
   let csu = Cime.csu
   let csu u v =
     let sols = csu u v in
@@ -147,7 +147,9 @@ let apply_subst_st (head, body) sigma =
 
 (** {3 Misc} *)
 
-(** Statement equality, modulo alpha renaming and TODO AC *)
+(** Statement equality for set updates
+  * This is currently modulo alpha renaming and it may or may not be
+  * updated to also include AC TODO *)
 let same_statement s t = 
   let ts = term_from_statement s in
   let tt = term_from_statement t in
@@ -250,9 +252,11 @@ let canonical_form statement =
   else
     statement
 
+(* TODO AC term equality, or not if we manage to keep the worlds identical
+ *   in a statements. Only used in Conseq so far, which is syntactic in draft. *)
 let is_same_t_smaller_w atom1 atom2 = match (atom1, atom2) with
   | (Predicate("knows", [w; _; t]), Predicate("knows", [wp; _; tp])) ->
-      (is_prefix_world wp w) && (t = tp) (* TODO term equality *)
+      (is_prefix_world wp w) && (t = tp)
   | _ -> invalid_arg("is_same_t_smaller_w")
 
 exception Not_a_consequence
@@ -271,15 +275,17 @@ let rec first f l e =
 (** [inst_w_t my_head head_kb exc] attempts to match the world and term
   * arguments of two predicates of arity three, and raises [exc] upon
   * failure.
-  * TODO mgm inside: update for AC *)
-let inst_w_t my_head head_kb exc =
+  * This is used for checking if a clause is in conseq, which is done
+  * in kb updates and when recipizing tests. In the first case we may
+  * or may not want AC (TODO). In the second case we need AC. *)
+let inst_w_t ?(ac=false) my_head head_kb exc =
   match (my_head, head_kb) with
     | (Predicate(_, [myw; _; myt]), Predicate(_, [wkb; _; tkb])) -> (
 	let t1 = Fun("!tuple!", [myw; myt]) in
 	let t2 = Fun("!tuple!", [wkb; tkb]) in
 	try
           (* debugOutput "Maching %s against %s\n%!" (show_term t1) (show_term t2); *)
-          let sigma = mgm t2 t1 in
+          let sigma = (if ac then Term.mgm else mgm) t2 t1 in
             (* debugOutput "Result %s\n%!" (show_subst sigma); *)
             sigma
 	with Not_matchable -> raise exc
@@ -514,7 +520,7 @@ let ridentical (fa, fb) =
 (*       (List.rev_append d_so n_d_so) *)
 (*       (List.rev_append o_kb n_o_kb) *)
 
-let useful (head, body) rules = (* TODO normalize and equality *)
+let useful (head, body) rules = (* TODO AC normalize and equality *)
   match head with
     | Predicate("knows", _) -> true
     | Predicate("reach", _) -> true
@@ -620,7 +626,7 @@ let rec find_recipe_h atom kbs all =
 	    | (((Predicate("knows", [wp; rp; tp])) as head), body) :: rest -> 
 		(
 		  try
-		    let sigma = inst_w_t atom head No_recipe_found in
+		    let sigma = inst_w_t ~ac:true atom head No_recipe_found in
 		    (
 		      (* debugOutput "Sigma: %s\n\n%!" (show_subst sigma); *)
 		      apply_subst 
@@ -693,6 +699,7 @@ let recipize tl kb =
     result
   )
 
+(** Extract all successful reachability tests from a knowledge base. *)
 let checks_reach kb = 
   trconcat (
     trmap
@@ -705,6 +712,7 @@ let checks_reach kb =
   	    | _ -> []))
       kb)
 
+(** Extract all successful identity tests from a knowledge base. *)
 let checks_ridentical kb =
   trconcat (
     trmap
@@ -730,14 +738,13 @@ let checks_ridentical kb =
   	    | _ -> []))
       kb)
 
-
+(** Extract all successful tests from a (saturated) knowledge base. *)
 let checks kb  =
   let kb_solved = List.filter is_solved kb in
   List.append (checks_reach kb_solved) (checks_ridentical kb_solved)
 
 let show_tests tests =
   String.concat "\n\n" (trmap show_term tests)
-
 
 let show_rew_rules rules =
   String.concat "\n" (trmap 
