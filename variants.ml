@@ -1,5 +1,16 @@
+(** Variants and unification modulo R
+  *
+  * Variants modulo AC are not computed. This will eventually be done by Maude.
+  *
+  * Unification modulo R is also provided in this module and used when
+  * building seed statements. We need this even for basic tests so it has been
+  * adapted in a naive (maybe incomplete) way by replacing syntactic unification
+  * with AC unification everywhere. *)
+
 open Util;;
 open Term;;
+
+let mgu = Cime.mgu;;
 
 type position = int list;;
 
