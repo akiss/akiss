@@ -124,13 +124,6 @@ let print_script ?(op=`Unification) chan s t =
               Format.fprintf chan "%s:constant" v)
            "; "
            chan
-           !vars ;
-         output_string chan "; " ;
-         pp_list
-           (fun chan v ->
-              Format.fprintf chan "%s:constant" v)
-           "; "
-           chan
            !private_names) ;
     declare "X" "variables"
       (fun () ->
