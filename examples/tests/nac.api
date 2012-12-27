@@ -4,7 +4,7 @@ private a, b, k, ok;
 channels C;
 var X, Y, Z;
 
-r = out(C,plus(a,b)).in(C,X).[X=plus(b,a)].out(C,X).0;
+r = out(C,plus(a,b)).in(C,X).[X=plus(b,a)].out(C,a).0;
 s = out(C,plus(a,b)).in(C,X).0;
 
 equivalentct? r and s;

@@ -1,0 +1,10 @@
+
+Trole = in(C,X).out(C,pair(plus(id,r2), plus(h(pair(X,k)),r2))).0;
+Treader = out(C,r1).in(C,Y).[plus(plus(id,fst(Y)),snd(Y))=h(pair(r1,k))].0;
+
+I = Trole || Treader;
+
+equivalent? (let id = a in let k = ka in I) (let id = b in let k = kb in I);
+
+Same = (Trole || let r2 = r22 in Trole);
+Diff = (Trole || let id = id2 in let r2 = r22 in let k = k2 in Trole);

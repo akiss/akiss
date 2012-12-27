@@ -5,24 +5,6 @@ private a, b, k, ok;
 channels C;
 var X, Y, Z;
 
-// rewrite dec(enc(X, Y), Y) -> X;
-
-// The AC theory for plus does not admit finite variants
-// rewrite plus(X,Y) -> plus(Y,X);
-// rewrite plus(X,plus(Y,Z)) -> plus(plus(X,Y),Z);
-// rewrite plus(plus(X,Y),Z) -> plus(X,plus(Y,Z));
-
-// rewrite fst(plus(X,Y)) -> X;
-// rewrite snd(plus(X,Y)) -> Y;
-
-// rewrite plus(true,X) -> X;
-// rewrite plus(false,X) -> op(X);
-
-// rewrite plus(X,plus(X,Y)) -> Y;
-
-// rewrite plus(X,op(X)) -> unit;
-// rewrite op(op(X)) -> X;
-
 r = out(C,plus(a,b)).out(C,plus(a,b)).0;
 s = out(C,plus(b,a)).out(C,plus(a,b)).0;
 

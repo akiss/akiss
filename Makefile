@@ -1,8 +1,8 @@
 ML = lexer.ml parser.ml util.ml term.ml cime.ml variants.ml horn.ml process.ml main.ml 
 MLI = $(wildcard $(ML:.ml=.mli))
-OCAMLC = ocamlopt
-CMA = cmxa
-CMO = cmx
+OCAMLC = ocamlc -g
+CMA = cma
+CMO = cmo
 OBJS = $(ML:.ml=.$(CMO))
 
 akiss: $(OBJS)
@@ -41,16 +41,18 @@ doc: $(ML)
 	mkdir -p doc
 	ocamldoc -stars $(ML) -html -d doc
 
-TESTS = examples/tests/ac.api examples/tests/ac2.api
-NOTESTS = examples/tests/nac.api
+TESTS = examples/tests/ac.api examples/tests/ac2.api examples/tests/ac3.api
+NOTESTS = examples/tests/nac.api examples/tests/nac2.api examples/tests/nac3.api
 RUN = OCAMLRUNPARAM=b ./akiss -verbose
 
 test: akiss $(TESTS)
 	@for i in $(TESTS) ; do \
+	  echo ; \
 	  echo '>>' Checking $$i... ; \
 	  $(RUN) < $$i || exit 1 ; \
 	done
 	@for i in $(NOTESTS) ; do \
-	  echo '>>' Checking not $$i... ; \
+	  echo ; \
+	  echo '>>' Checking NOT $$i... ; \
 	  $(RUN) < $$i || exit 1 ; \
 	done
