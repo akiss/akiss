@@ -55,15 +55,12 @@ let is_ridentical_st (head, _) = match head with
   | Predicate("ridentical", _) -> true
   | _ -> false
 
-(** A statement is solved if all its premises have a variable as their last
-  * argument.
-  * TODO there seems to be an assumption that this is never called
-  *   on a "reach" statement, which also seems invalid in the [ridentical]
-  *   step *)
+(** A statement is solved if all its premises (which are knows atoms)
+  * have a variable as their last argument. *)
 let is_solved (_, body) =
   List.for_all (fun atom ->
 		  match atom with
-		    | Predicate(_, [_; _; x]) -> is_var x
+		    | Predicate(_, [_; rx; x]) -> is_var x && is_var rx
 		    | _ -> invalid_arg("is_solved")) body
 
 let only_knows kb =
@@ -394,6 +391,25 @@ let initial_kb (seed : statement list) : statement list =
 
 (** {2 Resolution steps} *)
 
+let rec is_acvar = function
+  | Var _ -> true
+  | Fun ("plus",l) -> List.for_all is_acvar l
+  | _ -> false
+
+let is_plus = function
+  | Fun ("plus",_) -> true
+  | _ -> false
+
+let good_subst vars sigma =
+  let rec aux all_var = function
+    | [] -> all_var
+    | (_,t)::l ->
+        if is_var t then aux all_var l else
+          if is_plus t then aux false l else
+            true
+  in
+    aux true (List.filter (fun (x,_) -> List.mem x vars) sigma)
+
 (** [resolution d_kb master slave] attempts to perform a resolution step
   * between clauses [master] and [slave] by matching the head of [slave]
   * against the first premise of [master] that is of the form (knows _ _ t)
@@ -420,6 +436,14 @@ let resolution d_kb ((master_head, master_body), (slave_head, slave_body)) =
 	(*     | Not_a_consequence -> [] *)
 	(* else *)
     let sigmas = csu_atom atom slave_head in
+    let sigmas =
+      let vars = vars_of_term (get_term atom) in
+        List.filter (good_subst vars) sigmas
+    in
+      if sigmas <> [] then
+        debugOutput "Resolution:\n FROM: %s\n AND : %s\n"
+          (show_statement (master_head, master_body))
+          (show_statement (slave_head, slave_body)) ;
       List.map
         (fun sigma ->
            let result =
@@ -430,10 +454,7 @@ let resolution d_kb ((master_head, master_body), (slave_head, slave_body)) =
                   slave_body)
                sigma
            in
-             debugOutput "Resolution:\n FROM: %s\n AND : %s\n RESO: %s\n\n%!"
-               (show_statement (master_head, master_body))
-               (show_statement (slave_head, slave_body))
-               (show_statement result);
+             debugOutput " RESO: %s\n" (show_statement result);
              result)
         sigmas
   | [] -> []
