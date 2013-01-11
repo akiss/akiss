@@ -12,7 +12,7 @@ module Term = struct
   let csu u v =
     let sols = csu u v in
     let n = List.length sols in
-      if n > 0 then debugOutput "Found %d solution(s)\n" n ;
+      debugOutput "Found %d solution(s)\n" n ;
       sols
 end
 
@@ -35,23 +35,23 @@ type atom =
   | Predicate of predicateName * term list
 
 type hornClause =
-    atom * atom list
+    int * atom * atom list
 
 type statement = hornClause
 
-let is_deduction_st (head, _) = match head with
+let is_deduction_st (_, head, _) = match head with
   | Predicate("knows", _) -> true
   | _ -> false
 
-let is_equation_st (head, _) = match head with
+let is_equation_st (_, head, _) = match head with
   | Predicate("identical", _) -> true
   | _ -> false
 
-let is_reach_st (head, _) = match head with
+let is_reach_st (_, head, _) = match head with
   | Predicate("reach", _) -> true
   | _ -> false
 
-let is_ridentical_st (head, _) = match head with
+let is_ridentical_st (_, head, _) = match head with
   | Predicate("ridentical", _) -> true
   | _ -> false
 
@@ -60,11 +60,14 @@ let is_ridentical_st (head, _) = match head with
   * TODO there seems to be an assumption that this is never called
   *   on a "reach" statement, which also seems invalid in the [ridentical]
   *   step *)
-let is_solved (_, body) =
-  List.for_all (fun atom ->
-		  match atom with
-		    | Predicate(_, [_; _; x]) -> is_var x
-		    | _ -> invalid_arg("is_solved")) body
+let is_solved ((_,_,body) as st) =
+  List.for_all
+    (function
+       | Predicate(_, [_; rx; x]) ->
+           assert (is_var rx) ;
+           is_var x
+       | _ -> invalid_arg("is_solved"))
+    body
 
 let only_knows kb =
   List.filter is_deduction_st kb
@@ -75,7 +78,7 @@ let only_solved kb =
 let rec vars_of_atom = function
   | Predicate(_, term_list) -> vars_of_term_list term_list
 
-let rec vars_of_horn_clause (head, body) =
+let rec vars_of_horn_clause (_, head, body) =
   unique (List.append
 	    (trconcat (trmap vars_of_atom body))
             (vars_of_atom head))
@@ -92,12 +95,12 @@ let get_term atom = match atom with
   | Predicate("knows", [_; _; t]) -> t
   | _ -> invalid_arg("get_term")
 
-let size (_,body) = List.length body
+let size (_,_,body) = List.length body
 
-let get_head ((head, body) : statement) : atom =
+let get_head ((_, head, body) : statement) : atom =
   head
 
-let get_body ((head, body) : statement) : atom list =
+let get_body ((_, head, body) : statement) : atom list =
   body
 
 (** {3 Conversions to and from terms} *)
@@ -115,7 +118,7 @@ let statement_from_term term = match term with
 let term_from_atom (Predicate(name, al)) =
   Fun(name, al)
 
-let term_from_statement (head, body) =
+let term_from_statement (_, head, body) =
   Fun("implies",  (term_from_atom head) :: (trmap term_from_atom body))
 
 (** {3 Printing} *)
@@ -126,9 +129,30 @@ let rec show_atom = function
   | Predicate(name, term_list) ->
       name ^ "(" ^ (show_term_list term_list) ^ ")"
 
-let show_statement ((head, body) : hornClause) =
-(*  debugOutput "Statement of length %d\n%!" (List.length body); *)
-  (show_atom head) ^ "  <==  " ^ (String.concat ", " (trmap show_atom body))
+let rec show_atom_body = function
+  | Predicate("!equals!", [s;t]) ->
+      (show_term s) ^ " = " ^ (show_term t)
+  | Predicate(name,[]) -> name ^ "()"
+  | Predicate(name, w::term_list) ->
+      let rec wlen = function
+        | Fun ("world",[_;w]) -> 1 + wlen w
+        | Fun ("empty",[]) -> 0
+        | _ -> raise Not_found
+      in
+        try
+          name ^ "(" ^ (string_of_int (wlen w) ^ "," ^
+                        show_term_list term_list) ^ ")"
+        with
+          | Not_found ->
+              name ^ "(" ^ (show_term_list (w::term_list)) ^ ")"
+
+let show_statement ((id, head, body) : hornClause) =
+  Printf.sprintf
+    "#%d(len=%d): %s <== %s"
+    id
+    (List.length body)
+    (show_atom head)
+    (String.concat ", " (trmap show_atom_body body))
 
 let show_kb kb =
   String.concat "\n" (trmap show_statement kb)
@@ -142,8 +166,60 @@ let apply_subst_atom atom sigma = match atom with
   | Predicate(name, term_list) ->
       Predicate(name, trmap (fun x -> apply_subst x sigma) term_list)
 
-let apply_subst_st (head, body) sigma =
-  (apply_subst_atom head sigma, trmap (fun x -> apply_subst_atom x sigma) body)
+let apply_subst_st (id, head, body) sigma =
+  (id,
+   apply_subst_atom head sigma,
+   trmap (fun x -> apply_subst_atom x sigma) body)
+
+let fresh_statement f =
+  let allv = vars_of_horn_clause f in
+  let newv = trmap (fun v ->
+                     if v.[0] = 'P' then Var (fresh_string "P") else
+                       Var (fresh_variable ())) allv in
+  let sigma = List.combine allv newv in
+    apply_subst_st f sigma
+
+let dotfile =
+  let dotfile = open_out "akiss.dot" in
+    Printf.fprintf dotfile "digraph G {\n" ;
+    at_exit (fun () -> Printf.fprintf dotfile "}\n") ;
+    dotfile
+
+(** Create a new clause with unique clause identifier.
+  * The clause will be registerd in the DOT output.
+  * It would be tempting to automatically refresh the new clause,
+  * although it might make logs less readable. *)
+let new_clause =
+  let c = ref 0 in
+    fun ?(label="") ?(parents=([]:statement list)) (head,body) ->
+      (* TODO understand why refreshing here causes recipization failures *)
+      (* TODO in equation it's clear (as coded currenly) do not refresh before
+       * a substitution is applied *)
+      (* let _,head,body = fresh_statement (-1,head,body) in *)
+        incr c ;
+        Printf.fprintf dotfile
+          "n%d [label=\"%s%d\" parents=%S clause=%S];\n"
+          !c
+          (match head with
+             | Predicate ("knows",_) -> "k"
+             | Predicate ("reach",_) -> "r"
+             | Predicate ("identical",_) -> "i"
+             | Predicate ("ridentical",_) -> "ri"
+             | _ -> assert false)
+          !c
+          (String.concat ","
+             (List.map (fun (i,_,_) -> "#" ^ string_of_int i) parents))
+          (show_statement (!c,head,body)) ;
+        let parents = match parents with
+          | [a;b] -> [max a b]
+          | _ -> parents
+        in
+        List.iter
+          (fun (id,_,_) ->
+             Printf.fprintf dotfile "n%d -> n%d [color=%s];\n" id !c
+               (match label with "ri" -> "red" | "eq" -> "blue" | _ -> "black"))
+          parents ;
+        !c,head,body
 
 (** {3 Misc} *)
 
@@ -158,12 +234,6 @@ let same_statement s t =
     let _ = mgm tt ts in
     true
   with Not_matchable -> false
-
-let fresh_statement f =
-  let allv = vars_of_horn_clause f in
-  let newv = trmap (fun _ -> (Var(fresh_variable ()))) allv in
-  let sigma = List.combine allv newv in
-    apply_subst_st f sigma
 
 (** [is_prefix_world w w'] checks whether [w] is a prefix of [w'],
   * assuming that worlds are compatible.
@@ -205,7 +275,7 @@ let solved_reach_subsumes r1 r2 =
 (** {2 Knowledge base update} *)
 
 let rule_rename statement = match statement with
-  | (Predicate("knows", _) as head, body) ->
+  | (id, (Predicate("knows", _) as head), body) ->
       let options = trconcat (
 	trmap 
 	  (fun (atom1, atom2) -> match (atom1, atom2) with
@@ -223,7 +293,7 @@ let rule_rename statement = match statement with
 	match options with
 	  | (by, tbx) :: _ -> 
 	      apply_subst_st 
-		(head, 
+		(id, head, 
 		 (List.filter
 		    (fun atom -> match atom with
 		       | Predicate("knows", [_; testy; _]) -> (unbox_var testy) <> by
@@ -235,9 +305,9 @@ let rule_rename statement = match statement with
   | _ -> statement
 
 let rule_remove statement = match statement with
-  | (Predicate("knows", _) as head, body) ->
+  | (id, (Predicate("knows", _) as head), body) ->
       let vars_to_keep = vars_of_atom head in
-      (head, List.filter 
+      (id, head, List.filter 
 	 (fun atom -> match atom with
 	    | Predicate(_, [_; _; x]) -> 
 		(not (is_var x)) || 
@@ -300,7 +370,7 @@ let inst_w_t ?(ac=false) my_head head_kb exc =
   * See Definition 14 and Lemma 2 in the paper. *)
 let consequence st kb =
   assert (is_solved st) ;
-  let rec aux (head, body) kb = 
+  let rec aux (_, head, body) kb = 
     match head with
       | Predicate("knows", [_; _; Fun(name, [])]) when (startswith name "!n!") ->
           Fun(name, [])
@@ -328,7 +398,7 @@ let consequence st kb =
                          (List.map
                             (fun y ->
                                unbox_var (get_recipe y),
-                               aux (apply_subst_atom y sigma, body) kb)
+                               aux (-1, apply_subst_atom y sigma, body) kb)
                             (get_body x)))
                   kb Not_a_consequence
           end
@@ -339,31 +409,28 @@ let consequence st kb =
 let set_insert f kb =
   if (List.exists (fun x -> same_statement f x) kb) then
     []
-  else
-    (
-      (* debugOutput "Adding %s\n%!" (show_statement f); *)
-      [fresh_statement f]
-    )
+  else begin
+    debugOutput "Adding clause #%d.\n" (let (i,_,_) = f in i) ;
+    [fresh_statement f]
+  end
 
 (** Update a knowledge base with a new statement. This involves canonizing
   * the statement, checking whether it already belongs to the consequences
   * of the base, and actually inserting the statement or a variant of it. *)
 let update (kb : statement list) (f : statement) : statement list =
-  let (head, body) as fc = canonical_form f in
+  let (id, head, body) as fc = canonical_form f in
   if ((is_deduction_st f) && (is_solved f)) then
     try
       let recipe = consequence fc kb in
       let world = get_world head in
       let newhead = Predicate("identical", [world; get_recipe head; recipe]) in
-      (
-	debugOutput "USELESS: %s\nCF:%s\nINSTEAD:%s\n\n%!" (show_statement f) (show_statement fc)
-	  (show_statement (newhead, body)); 
-	let result = set_insert (newhead, body) kb in
-	(
-	  debugOutput "STATEMENTS INSERTED: %d\n%!" (List.length result);
-	  result
-	)
-      )
+        debugOutput
+          "USELESS: %s\nCF:%s\nINSTEAD:%s\n\n%!"
+          (show_statement f) (show_statement fc)
+          (show_statement (id, newhead, body)); 
+        let result = set_insert (id, newhead, body) kb in
+          debugOutput "STATEMENTS INSERTED: %d\n%!" (List.length result);
+          result
     with Not_a_consequence -> 
       set_insert fc kb
 (*  else if ( (is_reach_st fc) && (is_solved fc) ) then
@@ -394,45 +461,158 @@ let initial_kb (seed : statement list) : statement list =
 
 (** {2 Resolution steps} *)
 
-(** [resolution d_kb master slave] attempts to perform a resolution step
+(** Restrict a csu based on plus-constraints *)
+let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
+
+  (* Avoid solutions that instantiate P (non-plus) variables *)
+  let sigmas =
+    List.filter
+      (fun sigma ->
+         List.for_all
+           (fun (v,t) -> not (v.[0] = 'P' &&
+                              match t with
+                                | Fun ("plus",_) -> true | _ -> false))
+           sigma)
+      sigmas
+  in
+
+  (* Find the leftmost rigid (non-plus,non-var) subterm *)
+  let rec extract_rigid = function
+    | Fun ("plus",[x;y])::l -> extract_rigid (x::y::l)
+    | Fun (_,_) as t :: _ -> Some t
+    | Var _ :: l -> extract_rigid l
+    | [] -> None
+  in
+
+  (* Adapt a substitution to mark one recipe variable as not being a plus.
+   * In the case of equation, the recipe variables are not in the substitution. *)
+  let update r sigma =
+    let sigma =
+      if List.mem_assoc r sigma then begin
+        assert (Var r = List.assoc r sigma) ;
+        sigma
+      end else
+        (r, Var r) :: sigma
+    in
+    let r' = Var (fresh_string "P") in
+      List.map (fun (x,t) -> x, apply_subst t [r,r']) sigma
+  in
+
+  let sigmas =
+    (* Recipe renaming strategy *)
+
+    (* Can we choose which variable to mark in all cases, even
+     * when no rigid subterm of master is found on either side?
+     * TODO test ac3 seems to require norigid, and cime fails when assigning
+     *   false,true *)
+    let dynamic_norigid = true in
+    let dynamic_nooccur = false in
+
+    match extract_rigid [t] with
+      | None ->
+          debugOutput "rigid subterm: none (%s)\n" (show_term t) ;
+          List.map
+            (fun sigma ->
+               if dynamic_norigid && is_var (List.assoc x sigma) then
+                 update ry sigma
+               else
+                 update rx sigma)
+            sigmas
+      | Some t ->
+          debugOutput "rigid subterm: %s\n" (show_term t) ;
+          let rec occurs = function
+            | Var _ :: l -> occurs l
+            | Fun (s,args) as t' :: l ->
+                t = t' || occurs (List.rev_append args l)
+            | [] -> false
+          in
+          let update_sigma sigma =
+            let ox = occurs [List.assoc x sigma] in
+            let oy = occurs [List.assoc y sigma] in
+              if (ox && oy) || not (ox || oy) then
+                if dynamic_nooccur && is_var (List.assoc x sigma) then update ry sigma else
+                  update rx sigma
+              else
+                if ox then update rx sigma else update ry sigma
+          in
+            List.map update_sigma sigmas
+  in
+
+    if !debug_output then begin
+      Printf.printf
+        "final csu of size %d:\n"
+        (List.length sigmas) ;
+      List.iter
+        (fun s -> Printf.printf "* %s\n" (show_subst s))
+        sigmas
+    end ;
+    sigmas
+
+let plus_restrict ~t (slave_head,slave_body) sigmas =
+  match slave_head,slave_body with
+    | _ when sigmas = [] -> sigmas
+    | Predicate ("knows",
+                 [Var w;
+                  Fun ("plus",[Var rx; Var ry]);
+                  Fun ("plus",[Var x; Var y])]),
+      [ Predicate("knows",[Var w'; Var r'; Var x']) ;
+        Predicate("knows",[Var w''; Var r''; Var y'']) ]
+        when (rx,x,ry,y) = (r',x',r'',y'') && w = w' && w = w''
+      ->
+        plus_restrict sigmas ~t ~rx ~x ~ry ~y
+  | _ -> sigmas
+
+(** [resolution d_kb (master,slave)] attempts to perform a resolution step
   * between clauses [master] and [slave] by matching the head of [slave]
   * against the first premise of [master] that is of the form (knows _ _ t)
   * where t is not a variable.
   * This corresponds to the "Resolution" rule in the paper.
   * Return the list of newly generated clauses, of length at most 1.
   * The parameter [d_kb] is useless. *)
-let resolution d_kb ((master_head, master_body), (slave_head, slave_body)) =
+let resolution d_kb (master,slave) =
+  let (mid, master_head, master_body) = master in
+  let (sid, slave_head, slave_body) = slave in
   match (List.filter (fun x -> not (is_var (get_term x))) master_body) with
   | atom :: _ ->
-        (* let is_ground_w_t atom = *)
-        (*   match atom with *)
-        (*     | Predicate(_, [w; _; t]) -> ((is_ground w) && (is_ground t)) *)
-        (*     | _ -> invalid_arg("is_ground_w_t") *)
-	(* if is_ground_w_t atom then *)
-	(*   try *)
-	(*     let recipe = consequence (atom, []) d_kb in *)
-	(*     let sigma = [(unbox_var (get_recipe atom), recipe)] in *)
-	(*     let result = apply_subst_st  *)
-	(*       (master_head, (List.filter (fun x -> (x <> atom)) master_body)) *)
-	(*       sigma in *)
-	(*     [result] *)
-	(*   with *)
-	(*     | Not_a_consequence -> [] *)
-	(* else *)
+
+    debugOutput "Resolution?\n FROM: %s\n AND : %s\n\n"
+      (show_statement (mid, master_head, master_body))
+      (show_statement (sid, slave_head, slave_body)) ;
     let sigmas = csu_atom atom slave_head in
+    let length = List.length sigmas in
+    if !debug_output && length > 0 then begin
+      Printf.printf "csu of size %d:\n" length ;
+      List.iter
+        (fun s -> Printf.printf "> %s\n" (show_subst s))
+        sigmas
+    end ;
+    let sigmas =
+      plus_restrict ~t:(get_term atom) (slave_head,slave_body) sigmas
+    in
+    let () =
+      if !debug_output && List.length sigmas < length then begin
+        Printf.printf "filtered csu of size %d:\n" (List.length sigmas) ;
+        List.iter
+          (fun s -> Printf.printf "+ %s\n" (show_subst s))
+          sigmas
+      end
+    in
+
+      (* Create results *)
       List.map
         (fun sigma ->
            let result =
-             apply_subst_st
-               (master_head,
-                List.append
-                  (List.filter (fun x -> (x <> atom)) master_body)
-                  slave_body)
-               sigma
+             let head = apply_subst_atom master_head sigma in
+             let body =
+               List.map (fun x -> apply_subst_atom x sigma)
+                 (List.append
+                    slave_body
+                    (List.filter (fun x -> (x <> atom)) master_body))
+             in
+               new_clause ~label:"res"
+                 ~parents:[master;slave] (head,body)
            in
-             debugOutput "Resolution:\n FROM: %s\n AND : %s\n RESO: %s\n\n%!"
-               (show_statement (master_head, master_body))
-               (show_statement (slave_head, slave_body))
+             debugOutput "RESO: %s\n\n"
                (show_statement result);
              result)
         sigmas
@@ -448,7 +628,10 @@ let resolution d_kb ((master_head, master_body), (slave_head, slave_body)) =
   *   symmetric "identical" predicate
   * It returns [] if it fails to produce any new clause. *)
 let equation (fa, fb) =
-  (
+  let (a,_,_),(b,_,_) = fa,fb in
+    (* Avoid reflexivity and symmetry, and order so that the plus context
+     * statement will be second (the latter needs to be made more solid). *)
+    if a<=b then [] else
     if (is_solved fa) && (is_solved fb) &&
       (is_deduction_st fa) && (is_deduction_st fb) then (
         debugOutput "Equation:\n %s\n %s\n%!" (show_statement fa) (show_statement fb);
@@ -457,18 +640,30 @@ let equation (fa, fb) =
              Predicate("knows", [upl; rp; tp])) ->
               let t1 = Fun("!tuple!", [t; ul]) in
               let t2 = Fun("!tuple!", [tp; upl]) in
-        let sigmas = Term.csu t1 t2 in
-          List.map
-            (fun sigma ->
-               let newhead = Predicate("identical", [ul; r; rp]) in
-               let newbody = List.append (get_body fa) (get_body fb) in
-                 apply_subst_st (newhead, newbody) sigma)
-            sigmas
+              let sigmas = Term.csu t1 t2 in
+              let sigmas = plus_restrict ~t (get_head fb, get_body fb) sigmas in
+              let newhead = Predicate("identical", [ul; r; rp]) in
+              let newbody = List.append (get_body fa) (get_body fb) in
+              let clauses =
+                List.map
+                  (fun sigma ->
+                     let st =
+                       apply_subst_atom newhead sigma,
+                       List.map (fun x -> apply_subst_atom x sigma) newbody
+                     in
+                       new_clause ~label:"eq" ~parents:[fa;fb] st)
+                  sigmas
+              in
+              let clauses = List.map fresh_statement clauses in
+                if sigmas <> [] then
+                  debugOutput "Generated clauses %s.\n"
+                    (String.concat ","
+                       (List.map (fun (id,_,_) -> "#"^string_of_int id) clauses)) ;
+                clauses
           | _ -> invalid_arg("equation")
       )
     else
       []
-  )
 
 (** [ridentical (fa,fb)] attempts to combine the two clauses when [fa]
   * concludes "identical" and [fb] concludes "reach" and their world params
@@ -487,7 +682,12 @@ let ridentical (fa, fb) =
               (fun sigma ->
                  let newhead = Predicate("ridentical", [u; r; rp]) in
                  let newbody = List.append (get_body fa) (get_body fb) in
-                 let result = apply_subst_st (newhead, newbody) sigma in
+                 let result =
+                   apply_subst_atom newhead sigma,
+                   List.map (fun x -> apply_subst_atom x sigma) newbody
+                 in
+                 let result = new_clause ~label:"ri" ~parents:[fa;fb] result in
+                 let result = fresh_statement result in
                    debugOutput "\n\nRID FROM: %s\nRID AND : %s\nRID GOT: %s\n\n%!" 
                      (show_statement fa)
                      (show_statement fb)
@@ -520,7 +720,7 @@ let ridentical (fa, fb) =
 (*       (List.rev_append d_so n_d_so) *)
 (*       (List.rev_append o_kb n_o_kb) *)
 
-let useful (head, body) rules = (* TODO AC normalize and equality *)
+let useful (_, head, body) rules = (* TODO AC normalize and equality *)
   match head with
     | Predicate("knows", _) -> true
     | Predicate("reach", _) -> true
@@ -623,7 +823,7 @@ let rec find_recipe_h atom kbs all =
     | _ ->
 	(
 	  match kbs with
-	    | (((Predicate("knows", [wp; rp; tp])) as head), body) :: rest -> 
+	    | (_, ((Predicate("knows", [wp; rp; tp])) as head), body) :: rest -> 
 		(
 		  try
 		    let sigma = inst_w_t ~ac:true atom head No_recipe_found in

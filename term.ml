@@ -71,7 +71,7 @@ let rec show_term = function
   | Var(v) -> v
 and show_term_list = function
   | [x] -> show_term x
-  | x :: l -> ( (show_term x) ^ ", " ^ (show_term_list l) )
+  | x :: l -> ( (show_term x) ^ "," ^ (show_term_list l) )
   | [] -> "";
 ;;
 

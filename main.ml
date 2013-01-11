@@ -88,12 +88,13 @@ let context_statements symbol arity rules =
   let v = Variants.variants t rules in
   trmap
     (function (x,y,_) ->
-       (Predicate("knows", 
-		  [w;
-		   Fun(symbol, box_vars vYs);
-		   x
-		  ]),
-	body y))
+       new_clause
+         (Predicate("knows", 
+                    [w;
+                     Fun(symbol, box_vars vYs);
+                     x
+                    ]),
+          body y))
     v
 ;;
 
