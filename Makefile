@@ -1,8 +1,8 @@
 ML = lexer.ml parser.ml util.ml term.ml cime.ml variants.ml horn.ml process.ml main.ml 
 MLI = $(wildcard $(ML:.ml=.mli))
-OCAMLC = ocamlc -g
-CMA = cma
-CMO = cmo
+OCAMLC = ocamlopt
+CMA = cmxa
+CMO = cmx
 OBJS = $(ML:.ml=.$(CMO))
 
 akiss: $(OBJS)
@@ -41,8 +41,10 @@ doc: $(ML)
 	mkdir -p doc
 	ocamldoc -stars $(ML) -html -d doc
 
-TESTS = examples/tests/ac.api examples/tests/ac2.api examples/tests/ac3.api
-NOTESTS = examples/tests/nac.api examples/tests/nac2.api examples/tests/nac3.api
+TESTS = examples/tests/stat.api \
+		examples/tests/ac.api examples/tests/ac2.api examples/tests/ac3.api
+NOTESTS = examples/tests/nstat.api \
+		  examples/tests/nac.api examples/tests/nac2.api examples/tests/nac3.api
 RUN = OCAMLRUNPARAM=b ./akiss -verbose
 
 test: akiss $(TESTS)
@@ -56,3 +58,7 @@ test: akiss $(TESTS)
 	  echo '>>' Checking NOT $$i... ; \
 	  $(RUN) < $$i || exit 1 ; \
 	done
+
+BFILES = log akiss.dot akiss.lbl NOTES
+backup:
+	date=`date +%y%m%d%H%M` ; mkdir test-$$date ; cp $(BFILES) test-$$date

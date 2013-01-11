@@ -1,0 +1,19 @@
+symbols plus/2, h/1;
+
+private a, b, c, d;
+channels C;
+
+r0 = out(C,plus(a,b)).out(C,plus(b,c)).out(C,h(plus(d,plus(a,plus(b,plus(b,c)))))).0;
+s0 = out(C,a).out(C,b).out(C,h(plus(d,a))).0;
+
+equivalentct? r0 and s0;
+
+r1 = out(C,plus(a,b)).out(C,plus(b,c)).out(C,h(plus(a,plus(b,plus(b,c))))).0;
+s1 = out(C,a).out(C,b).out(C,h(plus(a,b))).0;
+
+equivalentct? r1 and s1;
+
+r2 = out(C,plus(a,b)).out(C,plus(b,c)).out(C,plus(a,plus(b,plus(b,c)))).0;
+s2 = out(C,a).out(C,b).out(C,plus(a,b)).0;
+
+equivalentct? r2 and s2;
