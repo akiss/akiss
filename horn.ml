@@ -56,14 +56,11 @@ let is_ridentical_st (_, head, _) = match head with
   | _ -> false
 
 (** A statement is solved if all its premises have a variable as their last
-  * argument.
-  * TODO there seems to be an assumption that this is never called
-  *   on a "reach" statement, which also seems invalid in the [ridentical]
-  *   step *)
-let is_solved ((_,_,body) as st) =
+  * argument. *)
+let is_solved (_,_,body) =
   List.for_all
     (function
-       | Predicate(_, [_; rx; x]) ->
+       | Predicate("knows", [_; rx; x]) ->
            assert (is_var rx) ;
            is_var x
        | _ -> invalid_arg("is_solved"))
@@ -256,22 +253,6 @@ let rec is_prefix_world small_world big_world =
            "is_prefix_world %s %s"
            (show_term small_world) (show_term big_world))
 
-(* DB this is dead code, all its uses are commented out *)
-(******************************)
-(* testing some optimization *)
-let solved_reach_subsumes r1 r2 =
-  (* does r1 subsume r2? *)
-  match r1 with 
-  | (Predicate("reach", [w1]), _) ->
-    (
-      match r2 with 
-      | (Predicate("reach", [w2]),_) -> is_prefix_world w2 w1
-(*	let res = is_prefix_world w2 w1 in if res then (Printf.printf "\n %s \n subsumes \n %s \n" (show_statement r1) (show_statement r2); res) else res *)
-      | _ -> false
-    )
-  | _ -> false
-(******************************)
-
 (** {2 Knowledge base update} *)
 
 let rule_rename statement = match statement with
@@ -433,12 +414,6 @@ let update (kb : statement list) (f : statement) : statement list =
           result
     with Not_a_consequence -> 
       set_insert fc kb
-(*  else if ( (is_reach_st fc) && (is_solved fc) ) then
-    
-    if (List.exists (fun x -> (solved_reach_subsumes x fc)) kb) then
-      kb
-    else (* set_insert fc kb *)
-      (set_insert fc (List.filter (fun x ->  (not (is_reach_st fc)) || (solved_reach_subsumes fc x)) kb)) *)
   else
     set_insert fc kb
 
@@ -622,10 +597,6 @@ let resolution d_kb (master,slave) =
   * concluding "knows", attempts to combine them: if the terms and worlds can be
   * unified, generate a clause concluding that the recipes are "identical".
   * This corresponds to the "Equation" rule in the paper.
-  * TODO in my example this runs on knows(...,w1,plus(...)); plus isn't a var?!
-  * TODO that function seems to be ran on twice the same clause, and also ran on
-  *   both (a,b) and (b,a); there might be faster ways of getting a reflexive
-  *   symmetric "identical" predicate
   * It returns [] if it fails to produce any new clause. *)
 let equation (fa, fb) =
   let (a,_,_),(b,_,_) = fa,fb in
@@ -764,6 +735,13 @@ let saturate_equation_one_step kb =
   let new_statements = resolution_step_new other solved_ks in
   List.append kb (trconcat (trmap (fun x -> update kb x) new_statements))
 
+(** Saturation strategy:
+  * (1) saturate deduction statements by resolution;
+  * (2) apply the equation rule to resulting solved statements, keep only
+  * useful equation statements, saturate them by resolution against
+  * solved knows statements;
+  * (3) saturate reach statements by resolution, create all possible
+  * ridentical statements, saturate by applying resolution on them. *)
 let saturate kb rules =
   let kb_p = saturate_class kb is_deduction_st in
   let solved_ks = only_knows (only_solved kb_p) in
@@ -771,9 +749,9 @@ let saturate kb rules =
   let new_es_useful = List.filter (fun x -> useful x rules) new_es in
   let kb_q = saturate_class (List.append kb_p new_es_useful) is_equation_st in
   let kb_r = saturate_class kb_q is_reach_st in
-  let solved_es = List.filter is_equation_st kb_r in
-  let solved_rs = List.filter is_reach_st kb_r in
-  let new_ri = trconcat (trmap ridentical (combine solved_es solved_rs)) in
+  let eq_sts = List.filter is_equation_st kb_r in
+  let reach_sts = List.filter is_reach_st kb_r in
+  let new_ri = trconcat (trmap ridentical (combine eq_sts reach_sts)) in
   let kb_s = List.append kb_r new_ri in
   saturate_class kb_s is_ridentical_st
 
