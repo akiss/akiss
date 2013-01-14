@@ -472,16 +472,26 @@ let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
   let sigmas =
     (* Recipe renaming strategy *)
 
-    (* Can we choose which variable to mark in all cases, even
-     * when no rigid subterm of master is found on either side?
-     * TODO test ac3 seems to require norigid, and cime fails when assigning
-     *   false,true *)
-    let dynamic_norigid = true in
+    (* When there is a rigid (non-plus) subterm a in t:
+     * do nothing unless [static_rigid];
+     * if it occurs in a single subterm on the other side, mark the corresponding
+     * recipe;
+     * if it does not occur in a single subterm, always mark on the left, unless
+     * [dynamic_nooccur] in which case the most convenient choice is made for
+     * each solution. *)
+    let static_rigid = true in
     let dynamic_nooccur = false in
+
+    (* When there is no rigid subterm: do nothing unless [static_norigid];
+     * mark the left recipe, unless [dynamic_norigid] in which case the most
+     * convenient marking is made for each solution. *)
+    let static_norigid = false in
+    let dynamic_norigid = false in
 
     match extract_rigid [t] with
       | None ->
           debugOutput "rigid subterm: none (%s)\n" (show_term t) ;
+          if not static_norigid then sigmas else
           List.map
             (fun sigma ->
                if dynamic_norigid && is_var (List.assoc x sigma) then
@@ -506,7 +516,8 @@ let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
               else
                 if ox then update rx sigma else update ry sigma
           in
-            List.map update_sigma sigmas
+            if not static_rigid then sigmas else
+              List.map update_sigma sigmas
   in
 
     if !debug_output then begin
@@ -610,7 +621,7 @@ let equation (fa, fb) =
               let sigmas = Term.csu t1 t2 in
               let sigmas = plus_restrict ~t (get_head fb, get_body fb) sigmas in
               let newhead = Predicate("identical", [ul; r; rp]) in
-              let newbody = List.append (get_body fa) (get_body fb) in
+              let newbody = List.append (get_body fb) (get_body fa) in
               let clauses =
                 List.map
                   (fun sigma ->
