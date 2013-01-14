@@ -233,25 +233,20 @@ let same_statement s t =
   with Not_matchable -> false
 
 (** [is_prefix_world w w'] checks whether [w] is a prefix of [w'],
-  * assuming that worlds are compatible.
-  * TODO use assert rather than invalid_arg to allow optimizations *)
+  * assuming the two worlds come from the same statement, so that one
+  * is necessarily a prefix of the other. *)
 let rec is_prefix_world small_world big_world = 
   match (small_world, big_world) with
   | (Fun("empty", []), _) -> true
   | (Fun("world", [h; t]), Fun("world", [hp; tp])) ->
-      if h = hp then
-        is_prefix_world t tp
-      else
-        invalid_arg "assertion failure is_prefix_world"
+      assert (h = hp) ;
+      is_prefix_world t tp
   | (Fun("world", [_; _]), Fun("empty", [])) -> false
   | (Var(x), Var(y)) ->
-      if x = y then true else
-        invalid_arg "assertion failure is_prefix_world"
+      assert (x = y) ;
+      true
   | _ ->
-      invalid_arg
-        (Printf.sprintf
-           "is_prefix_world %s %s"
-           (show_term small_world) (show_term big_world))
+      assert false
 
 (** {2 Knowledge base update} *)
 
@@ -328,7 +323,8 @@ let rec first f l e =
   * failure.
   * This is used for checking if a clause is in conseq, which is done
   * in kb updates and when recipizing tests. In the first case we may
-  * or may not want AC (TODO). In the second case we need AC. *)
+  * or may not want AC (TODO). In the second case we need AC.
+  * TODO check that instantiations respect annotations regarding + *)
 let inst_w_t ?(ac=false) my_head head_kb exc =
   match (my_head, head_kb) with
     | (Predicate(_, [myw; _; myt]), Predicate(_, [wkb; _; tkb])) -> (
@@ -480,7 +476,7 @@ let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
      * when no rigid subterm of master is found on either side?
      * TODO test ac3 seems to require norigid, and cime fails when assigning
      *   false,true *)
-    let dynamic_norigid = true in
+    let dynamic_norigid = false in
     let dynamic_nooccur = false in
 
     match extract_rigid [t] with
@@ -669,28 +665,6 @@ let ridentical (fa, fb) =
 
 (** {2 Saturation procedure} *)
 
-(* let resolution_step d_un d_so o_kb = *)
-(*   debugOutput "Performing resolution step\n%!"; *)
-(*   let n_kb = trconcat (trmap (fun x -> resolution d_so x) (combine d_un d_so)) in *)
-(*   let (n_d_kb, n_o_kb_aux) = List.partition is_deduction_st n_kb in *)
-(*   let (n_d_so_aux, n_d_un_aux) = List.partition is_solved n_d_kb in *)
-(*   let n_d_so = trconcat (trmap (fun x -> update d_so x) n_d_so_aux) in *)
-(*   let n_d_un = trconcat (trmap (fun x -> update d_un x) n_d_un_aux) in *)
-(*   let n_o_kb = trconcat (trmap (fun x -> update o_kb x) n_o_kb_aux) in *)
-(*   (n_d_so, n_d_un, n_o_kb) *)
-
-(* let empty_list = function *)
-(*  | [] -> true *)
-(*  | _ -> false *)
-(* let rec saturate_aux d_un d_so o_kb = *)
-(*   let (n_d_so, n_d_un, n_o_kb) = resolution_step d_un d_so o_kb in *)
-(*   if empty_list n_d_so && empty_list n_d_un && empty_list n_o_kb then *)
-(*     (d_un, d_so, o_kb) *)
-(*   else *)
-(*     saturate_aux (List.rev_append d_un n_d_un) *)
-(*       (List.rev_append d_so n_d_so) *)
-(*       (List.rev_append o_kb n_o_kb) *)
-
 let useful (_, head, body) rules = (* TODO AC normalize and equality *)
   match head with
     | Predicate("knows", _) -> true
@@ -699,23 +673,6 @@ let useful (_, head, body) rules = (* TODO AC normalize and equality *)
     | Predicate("ridentical", [_; r; rp]) ->
         normalize r rules <> normalize rp rules
     | _ -> invalid_arg("useful")
-
-(* let rec second_step_aux er_kb_any d_so a rules =  *)
-(*   let er_kb = List.filter (fun x -> useful x rules) er_kb_any in *)
-(*   let new_generation_aux = trconcat (trmap (fun x -> resolution d_so x) *)
-(* 				       (combine er_kb d_so)) in *)
-(*   ( *)
-(*     debugOutput "Updating by new generation of %d statements... %!"  *)
-(*       (List.length new_generation_aux); *)
-(*     let new_generation = trconcat (trmap (fun x -> update a x) new_generation_aux) in *)
-(*     ( *)
-(*       debugOutput "added %d statements\n%!" (List.length new_generation); *)
-(*       if List.length new_generation = 0 then *)
-(* 	a *)
-(*       else *)
-(* 	second_step_aux new_generation d_so (List.rev_append new_generation a) rules *)
-(*     ) *)
-(*   ) *)
 
 let resolution_step_new unsolved_s solved_ks =
   trconcat (trmap (fun x -> resolution solved_ks x) (combine unsolved_s solved_ks))
@@ -728,12 +685,6 @@ let saturate_class_one_step kb ff =
 
 let saturate_class kb ff =
   iterate (fun x -> saturate_class_one_step x ff) kb
-
-let saturate_equation_one_step kb =
-  let solved_ks = only_solved (only_knows kb) in
-  let other = List.filter (fun x -> is_equation_st x) kb in
-  let new_statements = resolution_step_new other solved_ks in
-  List.append kb (trconcat (trmap (fun x -> update kb x) new_statements))
 
 (** Saturation strategy:
   * (1) saturate deduction statements by resolution;
@@ -755,28 +706,6 @@ let saturate kb rules =
   let kb_s = List.append kb_r new_ri in
   saturate_class kb_s is_ridentical_st
 
-(* let saturate_old kb rules = *)
-(*   debugOutput "Equational statements already in initial kb: %s\n%!" (show_kb (List.filter is_equation_st kb)); *)
-(*   let (d_kb, o_kb) = List.partition is_deduction_st kb in *)
-(*   let (d_so, d_un) = List.partition is_solved d_kb in *)
-(*   let (d_un, d_so, o_kb) = saturate_aux d_un d_so o_kb in *)
-(*   ( *)
-(*     debugOutput "The equational statements added during first phase: %s\n%!" (show_kb o_kb); *)
-(*   let e_kb = trconcat (trmap equation (combine d_so d_so)) in *)
-(*   let temp = List.append (List.append o_kb e_kb) (List.filter is_equation_st kb) in *)
-(*   let er_kb = second_step_aux temp d_so temp rules in *)
-(*   let er_so = List.filter is_solved er_kb in *)
-(*   let e_so = List.filter is_equation_st er_so in *)
-(*   let r_so = List.filter is_reach_st er_so in *)
-(*   ( *)
-(*     let e_so_useful = (List.filter (fun x -> useful x rules) e_so) in *)
-(*     debugOutput "I have %d (%d) solved equational statements and %d solved reach statements" (List.length e_so) (List.length e_so_useful) (List.length r_so); *)
-(*     let temp2 = trconcat (trmap ridentical (combine e_so_useful r_so)) in *)
-(*     let ri_kb = second_step_aux temp2 d_so temp2 rules in *)
-(*     trconcat [d_so; d_un; er_kb; ri_kb] *)
-(*   ) *)
-(*   ) *)
-
 (** {2 Recipe stuff} *)
 
 let namify_subst t =
@@ -796,8 +725,8 @@ exception No_recipe_found
 
 let rec find_recipe_h atom kbs all = 
   match atom with
-  | Predicate("knows", [_; _; Fun(name, [])]) when (startswith name "!n!") ->
-	Fun(name, [])
+    | Predicate("knows", [_; _; Fun(name, [])]) when (startswith name "!n!") ->
+        Fun(name, [])
     | _ ->
 	(
 	  match kbs with
