@@ -476,7 +476,7 @@ let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
      * when no rigid subterm of master is found on either side?
      * TODO test ac3 seems to require norigid, and cime fails when assigning
      *   false,true *)
-    let dynamic_norigid = false in
+    let dynamic_norigid = true in
     let dynamic_nooccur = false in
 
     match extract_rigid [t] with
