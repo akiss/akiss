@@ -134,6 +134,7 @@ let rec show_atom_body = function
       let rec wlen = function
         | Fun ("world",[_;w]) -> 1 + wlen w
         | Fun ("empty",[]) -> 0
+        | Var _ -> 0
         | _ -> raise Not_found
       in
         try
