@@ -2,7 +2,8 @@ open Parser;;
 open Util;;
 open Term;;
 open Horn;;
-open Variants;;
+
+(** {2 Processes} *)
 
 type action = 
   | Input of id * id
@@ -23,6 +24,17 @@ let rec trace_size = function
 
 type process = trace list;;
 
+(** {3 Printing} *)
+
+let str_of_tr tr = match tr with
+  | Some(t) -> show_term t
+  | None -> "ok"
+;;
+
+let show_frame fr = 
+  show_string_list (trmap show_term fr)
+;;
+
 let show_action = function
   | Input(ch, x) -> Printf.sprintf "in(%s,%s)" ch x
   | Output(ch, t) -> Printf.sprintf "out(%s,%s)" ch (show_term t)
@@ -37,6 +49,8 @@ let rec show_trace = function
 let rec show_process process =
   String.concat "\n\n" (trmap show_trace process)
 ;;
+
+(** {3 Parsing} *)
 
 let rec parse_action = function
   | TempActionOut(ch, t) -> Output(ch, parse_term t)
@@ -189,14 +203,13 @@ let rec parse_process (process : tempProcess)
     List.assoc name processes
 ;;
 
-let rec current_parameter oc = 
-  "w" ^ (string_of_int oc) 
-;;
+(** {1 Seed statements}
+  * We are concerned only with the part of seed statements that comes
+  * from the process. The part coming from the signature is computed
+  * in Main. *)
 
-let change_world atom new_world = match atom with
-  | Predicate(x, [Fun("world", _); y; z]) -> 
-      Predicate(x, [Fun("world", new_world); y; z]) 
-  | _ -> invalid_arg "change_world"
+let current_parameter oc = 
+  "w" ^ (string_of_int oc) 
 ;;
 
 let worldadd w t =
@@ -211,6 +224,9 @@ let rec worldreplempty w wp =
     | _ -> invalid_arg("worldreplempty")
 ;;
 
+(** {2 Compute knows statements from a trace} *)
+
+(** Core statements without variant computations *)
 let rec knows_statements_h oc tr antecedents world clauses =
   match tr with 
     | NullTrace -> clauses
@@ -273,7 +289,7 @@ let apply_subst_msg_st (head, body) sigma =
 let knows_variantize (head, body) rules =
   match head with
     | Predicate("knows", [world; recipe; t]) ->
-	let v = variants t rules in
+	let v = Variants.variants t rules in
 	let new_clause (_, sigma, _) = 
 	  Horn.new_clause (normalize_msg_st (apply_subst_msg_st (head, body) sigma) rules)
 	in
@@ -285,6 +301,8 @@ let knows_statements tr rules =
   let kstatements = knows_statements_h 0 tr [] (Fun("empty", [])) [] in
   trconcat (trmap (function x -> knows_variantize x rules) kstatements)
 ;;
+
+(** {3 Computing reach statements from a trace} *)
 
 let rec reach_statements_h tr antecedents world result =
   match tr with
@@ -331,7 +349,7 @@ let reach_equationalize (head, body) rules =
 			   | _ -> invalid_arg("rights")) eqns in
   let t1 = Fun("!tuple!", lefts) in
   let t2 = Fun("!tuple!", rights) in
-  let sigmas = unifiers t1 t2 rules in
+  let sigmas = Variants.unifiers t1 t2 rules in
   let newbody = List.filter (function (Predicate(x, _)) -> x <> "!equals!") body in
   let newatom sigma = function
     | (Predicate(x, [y; z; t])) -> 
@@ -348,7 +366,7 @@ let reach_equationalize (head, body) rules =
 let reach_variantize (head, body) rules =
   match head with
     | Predicate("reach", [w]) ->
-	let v = variants w rules in
+	let v = Variants.variants w rules in
 	let newhead sigma = Predicate("reach", 
 				[normalize (apply_subst w sigma) rules]) in
 	let newbody sigma = trmap
@@ -367,6 +385,8 @@ let reach_statements tr rules =
   trconcat (trmap (fun x -> reach_variantize x rules)
 	      (trconcat (trmap (fun x -> reach_equationalize x rules) statements)))
 ;;
+
+(** {2 Executing and testing processes} *)
 
 exception Process_blocked;;
 exception Not_a_recipe;;    
@@ -585,13 +605,4 @@ let rec check_ridentical_tests trace ridentical_tests rules =
 	    check_ridentical_tests trace t rules
 	)
     | [] -> None
-;;
-
-let str_of_tr tr = match tr with
-  | Some(t) -> show_term t
-  | None -> "ok"
-;;
-
-let show_frame fr = 
-  show_string_list (trmap show_term fr)
 ;;

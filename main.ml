@@ -4,7 +4,6 @@ open Util
 open Term
 open Process
 open Horn
-open Arg;;
 
 let usage = Printf.sprintf
   "Usage: %s [-verbose] [-debug] < specification-file.api"
@@ -73,6 +72,7 @@ let rec declare_process name process =
   addto processes (name, parse_process process !processes)
 ;;
 
+(** Compute the part of seed statements that comes from the theory. *)
 let context_statements symbol arity rules =
   let w = Var(fresh_variable ()) in
   let vYs = trmap fresh_variable (create_list () arity) in
