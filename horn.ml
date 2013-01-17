@@ -299,8 +299,8 @@ let canonical_form statement =
   else
     statement
 
-(* TODO AC term equality, or not if we manage to keep the worlds identical
- *   in a statements. Only used in Conseq so far, which is syntactic in draft. *)
+(* TODO AC term equality for t and tp? not if conseq stays syntactic in draft
+ * not needed for worlds because we don't even need to look at their terms *)
 let is_same_t_smaller_w atom1 atom2 = match (atom1, atom2) with
   | (Predicate("knows", [w; _; t]), Predicate("knows", [wp; _; tp])) ->
       (is_prefix_world wp w) && (t = tp)
