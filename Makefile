@@ -41,7 +41,7 @@ doc: $(ML)
 	mkdir -p doc
 	ocamldoc -stars $(ML) -html -d doc
 
-TESTS = examples/tests/stat.api \
+TESTS = examples/tests/xor.api examples/tests/stat.api \
 		examples/tests/ac.api examples/tests/ac2.api examples/tests/ac3.api
 NOTESTS = examples/tests/nstat.api \
 		  examples/tests/nac.api examples/tests/nac2.api examples/tests/nac3.api

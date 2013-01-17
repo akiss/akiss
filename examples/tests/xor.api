@@ -1,0 +1,18 @@
+symbols plus/2, zero/0;
+
+private a, ok;
+channels C;
+var X, Y, Z;
+
+rewrite plus(zero,X) -> X;
+rewrite plus(X,X) -> zero;
+
+r1 = 0;
+s1 = 0;
+
+equivalentct? r1 and s1;
+
+r2 = in(C,X).in(C,Y).0;
+s2 = in(C,X).in(C,Y).[plus(X,a)=Y].out(C,ok);
+
+equivalentct? r2 and s2;

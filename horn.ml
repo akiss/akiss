@@ -433,20 +433,21 @@ let initial_kb (seed : statement list) : statement list =
 
 (** {2 Resolution steps} *)
 
+(** Avoid solutions that instantiate P (non-plus) variables *)
+let csu_enforce_nonplus sigmas =
+  List.filter
+    (fun sigma ->
+       List.for_all
+         (fun (v,t) -> not (v.[0] = 'P' &&
+                            match t with
+                              | Fun ("plus",_) -> true | _ -> false))
+         sigma)
+    sigmas
+
 (** Restrict a csu based on plus-constraints *)
 let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
 
-  (* Avoid solutions that instantiate P (non-plus) variables *)
-  let sigmas =
-    List.filter
-      (fun sigma ->
-         List.for_all
-           (fun (v,t) -> not (v.[0] = 'P' &&
-                              match t with
-                                | Fun ("plus",_) -> true | _ -> false))
-           sigma)
-      sigmas
-  in
+  let sigmas = csu_enforce_nonplus sigmas in
 
   (* Find the leftmost rigid (non-plus,non-var) subterm *)
   let rec extract_rigid = function
@@ -531,6 +532,54 @@ let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
     end ;
     sigmas
 
+let adapt_plus_plus_csu ~a ~b ~rx ~ry ~x ~y sigmas =
+
+  (* Adapt a substitution to mark one recipe variable as not being a plus.
+   * In the case of equation, the recipe variables are not in the substitution. *)
+  let update r sigma =
+    let sigma =
+      if List.mem_assoc r sigma then begin
+        assert (Var r = List.assoc r sigma) ;
+        sigma
+      end else
+        (r, Var r) :: sigma
+    in
+    let r' = Var (fresh_string "P") in
+      List.map (fun (x,t) -> x, apply_subst t [r,r']) sigma
+  in
+
+    assert (List.length sigmas <= 7) ;
+    List.map
+      (fun (sigma:subst) ->
+         let x' = List.assoc x sigma in
+         let y' = List.assoc y sigma in
+         let a' = List.assoc a sigma in
+         let b' = List.assoc b sigma in
+           if (x',y') = (a',b') || (x',y') = (b',a') then
+             sigma
+           else
+             match a',b' with
+               | Fun ("plus",[Var _;Var _]), Fun ("plus",[Var _; Var _]) ->
+                   update rx sigma
+               | Fun ("plus",[Var _; Var _]), Var w
+               | Var w, Fun ("plus",[Var _; Var _]) ->
+                   begin match x' with
+                     | Fun ("plus",[Var x'1; Var x'2]) ->
+                         assert (w = x'1 || w = x'2) ;
+                         assert (is_var y') ;
+                         update rx sigma
+                     | Var o ->
+                         begin match y' with
+                           | Fun ("plus",[Var y'1; Var y'2]) ->
+                               assert (w = y'1 || w = y'2) ;
+                               update ry sigma
+                           | _ -> assert false
+                         end
+                     | _ -> assert false
+                   end
+               | _ -> assert false)
+      sigmas
+
 let plus_restrict ~t (slave_head,slave_body) sigmas =
   match slave_head,slave_body with
     | _ when sigmas = [] -> sigmas
@@ -542,7 +591,24 @@ let plus_restrict ~t (slave_head,slave_body) sigmas =
         Predicate("knows",[Var w''; Var r''; Var y'']) ]
         when (rx,x,ry,y) = (r',x',r'',y'') && w = w' && w = w''
       ->
-        plus_restrict sigmas ~t ~rx ~x ~ry ~y
+        begin match t with
+          | Fun ("plus",[Var a; Var b]) ->
+              let sigmas = csu_enforce_nonplus sigmas in
+              let sigmas = adapt_plus_plus_csu ~a ~b ~rx ~ry ~x ~y sigmas in
+                debugOutput "flexible 2-2 equation, csu becomes:\n" ;
+                List.iter
+                  (fun s ->
+                     debugOutput "> %s/%s, %s/%s -- %s\n"
+                       (show_term (List.assoc rx s))
+                       (show_term (List.assoc x s))
+                       (show_term (List.assoc ry s))
+                       (show_term (List.assoc y s))
+                       (show_subst s))
+                  sigmas ;
+                sigmas
+          | _ ->
+              plus_restrict sigmas ~t ~rx ~x ~ry ~y
+        end
   | _ -> sigmas
 
 (** [resolution d_kb (master,slave)] attempts to perform a resolution step
