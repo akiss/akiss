@@ -19,19 +19,6 @@ let rec pp_list pp sep chan = function
       output_string chan sep ;
       pp_list pp sep chan tl
 
-(** Parameters w1,w2... are not globally declared, we must discover
-  * them as we print terms, and declare them to cime.
-  * TODO Names should be handled in the same way, though
-  *      efficiency is not really an issue. *)
-let add_param,reset_params,list_params =
-  let params = ref [] in
-  let reset () = params := [] in
-  let list_params chan =
-    List.iter (fun x -> Format.fprintf chan "akiss_%s:0; " x) !params
-  in
-  let add x = params := x :: !params in
-    add,reset,list_params
-
 (** Print out a term in cime notation, translating symbols as needed
   * and registering every parameter used. *)
 let rec print chan = function
@@ -55,7 +42,7 @@ let rec print chan = function
   | Fun (s,[]) | Var s ->
       begin try
         Scanf.sscanf s "w%d"
-          (fun _ -> add_param s ; Format.fprintf chan "akiss_%s" s)
+          (fun _ -> Format.fprintf chan "akiss_%s" s)
       with Scanf.Scan_failure _ ->
         begin try
           Scanf.sscanf s "!n!%d"
@@ -104,20 +91,6 @@ let arity_check s n =
     | "world" -> n=2
     | _ -> true
 
-let rec names_of_term_list = function
-  | [] -> []
-  | Var _ :: l -> names_of_term_list l
-  | Fun (s,[]) :: l when Util.startswith s "!n!" ->
-      s :: names_of_term_list l
-  | Fun (_,l) :: l' ->
-      names_of_term_list (List.rev_append l l')
-
-let names_of_term_list l =
-  let l = Util.unique (names_of_term_list l) in
-    List.map
-      (fun s -> "akiss_n" ^ String.sub s 3 (String.length s - 3))
-      l
-
 (** Print CiME script for unifying [s] and [t]. *)
 let print_script ?(op=`Unification) chan s t =
   let declare name kind f =
@@ -125,9 +98,7 @@ let print_script ?(op=`Unification) chan s t =
     f () ;
     Format.fprintf chan "\";\n"
   in
-  let () = reset_params () in
-  let st_vars = vars_of_term_list [s;t] in
-  let st_names = names_of_term_list [s;t] in
+  let stsig = sig_of_term_list [s;t] in
   let s = sprint s in
   let t = sprint t in
     declare "S" "signature"
@@ -138,7 +109,11 @@ let print_script ?(op=`Unification) chan s t =
            "world:2; empty:0; knows:3; reach:1; identical:3; ridentical:3;\n" ;
          (* TODO don't hardcode, requires moving channels out of Main *)
          output_string chan "akiss_chA:0; akiss_chB:0; akiss_chC:0; " ;
-         list_params chan ;
+         pp_list
+           (fun chan n -> Format.fprintf chan "akiss_w%d:constant; " n)
+           "; "
+           chan
+           stsig.params ;
          output_string chan "\n" ;
          pp_list
            (fun chan (f,n) ->
@@ -158,14 +133,14 @@ let print_script ?(op=`Unification) chan s t =
            !private_names ;
          output_string chan "; " ;
          pp_list
-           (fun chan v ->
-              Format.fprintf chan "%s:constant" v)
+           (fun chan n ->
+              Format.fprintf chan "akiss_n%d:constant" n)
            "; "
            chan
-           st_names) ;
+           stsig.names) ;
     declare "X" "variables"
       (fun () ->
-         pp_list output_string ", " chan st_vars) ;
+         pp_list output_string ", " chan stsig.vars) ;
     Format.fprintf chan "let A = algebra S;\n" ;
     declare "s" "term A" (fun () -> output_string chan s) ;
     declare "t" "term A" (fun () -> output_string chan t) ;

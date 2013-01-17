@@ -3,6 +3,8 @@ open Util;;
 open Term;;
 open Horn;;
 
+module Variants = Maude
+
 (** {2 Processes} *)
 
 type action = 
@@ -290,7 +292,7 @@ let knows_variantize (head, body) rules =
   match head with
     | Predicate("knows", [world; recipe; t]) ->
 	let v = Variants.variants t rules in
-	let new_clause (_, sigma, _) = 
+	let new_clause (_, sigma) = 
 	  Horn.new_clause (normalize_msg_st (apply_subst_msg_st (head, body) sigma) rules)
 	in
 	trmap new_clause v
@@ -376,7 +378,7 @@ let reach_variantize (head, body) rules =
 				     y; 
 				     normalize (apply_subst z sigma) rules])
 	     | _ -> invalid_arg("reach_variantize")) body in
-	trmap (fun (_, sigma, _) -> Horn.new_clause (newhead sigma, newbody sigma)) v
+	trmap (fun (_, sigma) -> Horn.new_clause (newhead sigma, newbody sigma)) v
     | _ -> invalid_arg("reach_variantize")
 ;;
 

@@ -1,16 +1,7 @@
-(** Variants and unification modulo R
-  *
-  * Variants modulo AC are not computed. This will eventually be done by Maude.
-  *
-  * Unification modulo R is also provided in this module and used when
-  * building seed statements. We need this even for basic tests so it has been
-  * adapted in a naive (maybe incomplete) way by replacing syntactic unification
-  * with AC unification everywhere. *)
+(** Variants and unification modulo R *)
 
 open Util;;
 open Term;;
-
-let mgu = Cime.mgu;;
 
 type position = int list;;
 
@@ -264,3 +255,6 @@ let unifiers s t rules =
   trconcat (trmap (fun ((x, y, _), (z, t, _)) ->
 			   one_unifier x y z t svars tvars) w)
 ;;
+
+let variants t rules =
+  List.map (fun (a,b,_) -> a,b) (variants t rules)

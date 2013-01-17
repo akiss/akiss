@@ -1,6 +1,6 @@
-ML = lexer.ml parser.ml util.ml term.ml cime.ml variants.ml horn.ml process.ml main.ml 
+ML = lexer.ml parser.ml util.ml term.ml cime.ml maude.ml horn.ml process.ml main.ml 
 MLI = $(wildcard $(ML:.ml=.mli))
-OCAMLC = ocamlopt
+OCAMLC = ocamlopt -g
 CMA = cmxa
 CMO = cmx
 OBJS = $(ML:.ml=.$(CMO))

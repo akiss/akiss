@@ -17,6 +17,9 @@ val is_var : term -> bool
 val unbox_var : term -> varName
 val vars_of_term_list : term list -> varName list
 val vars_of_term : term -> varName list
+type extrasig = { vars : string list ; names : int list ; params : int list }
+val sig_of_term_list : term list -> extrasig
+
 val is_ground : term -> bool
 val occurs : varName -> term -> bool
 

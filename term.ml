@@ -47,6 +47,44 @@ and vars_of_term = function
   | Var(x) -> [x]
 ;;
 
+(** Signature extension: symbols that may be used in terms
+  * in addition to the declared public symbols. *)
+type extrasig = {
+  vars : string list ;
+  names : int list ;
+  params : int list
+}
+
+let rec sig_of_term_list cur = function
+  | [] -> cur
+  | Var x :: l ->
+      sig_of_term_list { cur with vars = x :: cur.vars } l
+  | Fun (s,[]) :: l ->
+      begin try
+        Scanf.sscanf s "w%d"
+          (fun n ->
+             let cur = { cur with params = n::cur.params } in
+               sig_of_term_list cur l)
+      with Scanf.Scan_failure _ ->
+        begin try
+          Scanf.sscanf s "!n!%d"
+            (fun n ->
+               let cur = { cur with names = n::cur.names } in
+                 sig_of_term_list cur l)
+            with Scanf.Scan_failure _ ->
+              sig_of_term_list cur l
+        end
+      end
+  | Fun (_,l) :: l' ->
+      sig_of_term_list cur (List.rev_append l l')
+
+let sig_of_term_list l =
+  let { vars ; names ; params } =
+    sig_of_term_list { vars = [] ; names = [] ; params = [] } l
+  in
+    { vars = Util.unique vars ; names = Util.unique names ;
+      params = Util.unique params }
+
 let is_ground t =
   (List.length (vars_of_term t)) = 0
 ;;

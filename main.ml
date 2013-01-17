@@ -5,6 +5,8 @@ open Term
 open Process
 open Horn
 
+module Variants = Maude
+
 let usage = Printf.sprintf
   "Usage: %s [-verbose] [-debug] < specification-file.api"
   (Filename.basename Sys.argv.(0))
@@ -87,7 +89,7 @@ let context_statements symbol arity rules =
   let t = Fun(symbol, box_vars vZs) in
   let v = Variants.variants t rules in
   trmap
-    (function (x,y,_) ->
+    (function (x,y) ->
        new_clause
          (Predicate("knows", 
                     [w;
