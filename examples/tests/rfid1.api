@@ -14,7 +14,7 @@ rewrite snd(pair(X,Y)) -> Y;
 // We model RFID tags that authenticate with a reader
 // in the following way:
 //   reader sends a nonce r1
-//   tag A send <idA+r2, h(r1)+r2>
+//   tag A sends <idA+r2, h(r1)+r2>
 // (in the real protocol there is also a shared key, but it
 //  doesn't play an important role here)
 // The protocol does not ensure untraceability: a fake
