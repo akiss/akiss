@@ -374,3 +374,19 @@ let equals s t rules =
       Format.printf "equals %s %s: %b\n"
         (show_term s) (show_term t) b ;
     b
+
+let normalize t rules =
+  let esig = sig_of_term_list [t] in
+    run_maude
+      (fun chan ->
+         Format.fprintf chan "%a\n" (print_module rules esig) () ;
+         Format.fprintf chan "(red %a .)\n" print t)
+      (fun chan ->
+         while input_line chan <> "result Term :" do () done ;
+         parse_term (tokens chan))
+
+let normalize t rules =
+  let t' = normalize t rules in
+    if debug then
+      Format.printf "normalize %s -> %s\n" (show_term t) (show_term t') ;
+    t'
