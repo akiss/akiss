@@ -111,33 +111,23 @@ let print_script ?(op=`Unification) chan s t =
          output_string chan "akiss_chA:0; akiss_chB:0; akiss_chC:0; " ;
          pp_list
            (fun chan n -> Format.fprintf chan "akiss_w%d:constant; " n)
-           "; "
-           chan
-           stsig.params ;
+           "" chan stsig.params ;
          output_string chan "\n" ;
          pp_list
            (fun chan (f,n) ->
               if f = "plus" then
-                Format.fprintf chan "+ : AC"
+                Format.fprintf chan "+ : AC; "
               else
-                Format.fprintf chan "%s:%d" f n)
-           "; "
-           chan
-           !fsymbols ;
-         output_string chan "; " ;
+                Format.fprintf chan "%s:%d; " f n)
+           "" chan !fsymbols ;
          pp_list
            (fun chan v ->
-              Format.fprintf chan "%s:constant" v)
-           "; "
-           chan
-           !private_names ;
-         output_string chan "; " ;
+              Format.fprintf chan "%s:constant; " v)
+           "" chan !private_names ;
          pp_list
            (fun chan n ->
-              Format.fprintf chan "akiss_n%d:constant" n)
-           "; "
-           chan
-           stsig.names) ;
+              Format.fprintf chan "akiss_n%d:constant; " n)
+           "" chan stsig.names) ;
     declare "X" "variables"
       (fun () ->
          pp_list output_string ", " chan stsig.vars) ;
@@ -334,9 +324,3 @@ let mgu_checked s t =
     | Term.Not_unifiable ->
         ignore (mgu s t) ;
         assert false
-
-(** Equality modulo AC
-  * TODO this is
-  *   quick: this is inefficient
-  *   dirty: the substitution may be the identity without being [] *)
-let equals s t = csu s t = [[]]

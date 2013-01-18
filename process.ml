@@ -456,7 +456,7 @@ let rec execute_h process frame instructions rules =
 	  else
 	    raise Invalid_instruction
       | (Trace(Test(x, y), pr), Fun("world", _)) ->
-	  if Cime.equals (normalize x rules) (normalize y rules) then
+	  if Maude.equals x y rules then
 	    execute_h pr frame instructions rules
 	  else
 	    raise Process_blocked
@@ -543,9 +543,9 @@ let check_ridentical process test_ridentical rules = match test_ridentical with
     (
       try
 	let frame = execute process [] w rules in
-	let t1 = normalize (apply_frame r frame) rules in
-	let t2 = normalize (apply_frame rp frame) rules in
-	  Cime.equals t1 t2
+	let t1 = apply_frame r frame in
+	let t2 = apply_frame rp frame in
+	  Maude.equals t1 t2 rules
       with 
 	| Process_blocked -> false
 	| Too_many_instructions -> false

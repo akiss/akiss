@@ -2,8 +2,8 @@
 open Term
 
 let debug = true
-let sdebug = false (* show maude script *)
 let pdebug = false (* show parsing info *)
+let sdebug = pdebug || false (* show maude script *)
 
 let output_string = Cime.output_string
 
@@ -147,8 +147,7 @@ let is_var s =
 
 let arity f =
   if is_var f then 0 else
-    if f = "plus" then 2 else
-      List.assoc f !cursig
+    List.assoc f !cursig
 
 let parse_var tokens =
   match Stream.next tokens with
@@ -169,6 +168,23 @@ let string_of_peek t =
   match Stream.peek t with
     | None -> "$"
     | Some t -> string_of_token t
+
+(** Translating symbol names back to Akiss conventions *)
+let translate_symbol = function
+  | "akisstest" -> "!test!"
+  | "akissout" -> "!out!"
+  | "akissin" -> "!in!"
+  | "akiss0uple" | "akiss_1uple" | "akiss_2uple" -> "!tuple!"
+  | "akisschA" -> "A"
+  | "akisschB" -> "B"
+  | "akisschC" -> "C"
+  | s when Util.startswith ~prefix:"akiss" s ->
+      begin try
+        Scanf.sscanf s "akissw%d" (fun d -> "w" ^ string_of_int d)
+      with _ ->
+        Scanf.sscanf s "akissn%d" (fun d -> "!n!" ^ string_of_int d)
+      end
+  | s -> s
 
 exception Parse_error
 
@@ -195,6 +211,13 @@ let rec parse_term tokens =
               Var ("#" ^ string_of_int i)
           | _ -> assert false
         end
+    | Genlex.Ident "plus" ->
+        expect (Genlex.Kwd ("(")) ;
+        let l = parse_list tokens in
+          expect (Genlex.Kwd (")")) ;
+          List.fold_left
+            (fun a b -> Fun ("plus",[a;b]))
+            (List.hd l) (List.tl l)
     | Genlex.Ident s ->
         if is_var s then begin
           expect (Genlex.Kwd ":") ;
@@ -203,6 +226,7 @@ let rec parse_term tokens =
         end else begin
           if pdebug then Format.printf "pt> arity(%s) = %!" s ;
           let a = arity s in
+          let s = translate_symbol s in
           if pdebug then Format.printf "%d\n%!" a ;
           if a = 0 then Fun (s,[]) else begin
             expect (Genlex.Kwd "(") ;
@@ -218,6 +242,12 @@ and parse_terms n tokens =
     if n > 1 then expect tokens (Genlex.Kwd ",") ;
     let l = parse_terms (n-1) tokens in
       t :: l
+and parse_list tokens =
+  let t = parse_term tokens in
+    if Stream.peek tokens <> Some (Genlex.Kwd ",") then [t] else begin
+      Stream.junk tokens ;
+      t :: parse_list tokens
+    end
 
 let rec parse_substitution tokens =
   if Stream.peek tokens = Some (Genlex.Ident "empty") then begin
@@ -326,3 +356,21 @@ let unifiers s t rules =
       List.iter (fun s -> Format.printf " %s\n" (show_subst s)) v
     end ;
     v
+
+let equals s t rules =
+  if s = t then true else
+  let esig = sig_of_term_list [s;t] in
+    run_maude
+      (fun chan ->
+         Format.fprintf chan "%a\n" (print_module rules esig) () ;
+         Format.fprintf chan "(red %a == %a .)\n" print s print t)
+      (fun chan ->
+         while input_line chan <> "result Bool :" do () done ;
+         input_line chan = "  true")
+
+let equals s t rules =
+  let b = equals s t rules in
+    if debug then
+      Format.printf "equals %s %s: %b\n"
+        (show_term s) (show_term t) b ;
+    b
