@@ -94,6 +94,9 @@ let get_term atom = match atom with
 
 let size (_,_,body) = List.length body
 
+let get_id ((id, _, _) : statement) : int =
+  id
+
 let get_head ((_, head, body) : statement) : atom =
   head
 
@@ -240,7 +243,7 @@ let rec is_prefix_world small_world big_world =
   match (small_world, big_world) with
   | (Fun("empty", []), _) -> true
   | (Fun("world", [h; t]), Fun("world", [hp; tp])) ->
-      assert (h = hp) ;
+      assert (Maude.equals h hp []) ;
       is_prefix_world t tp
   | (Fun("world", [_; _]), Fun("empty", [])) -> false
   | (Var(x), Var(y)) ->
@@ -447,8 +450,6 @@ let csu_enforce_nonplus sigmas =
 (** Restrict a csu based on plus-constraints *)
 let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
 
-  let sigmas = csu_enforce_nonplus sigmas in
-
   (* Find the leftmost rigid (non-plus,non-var) subterm *)
   let rec extract_rigid = function
     | Fun ("plus",[x;y])::l -> extract_rigid (x::y::l)
@@ -513,7 +514,9 @@ let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
             let ox = occurs [List.assoc x sigma] in
             let oy = occurs [List.assoc y sigma] in
               if (ox && oy) || not (ox || oy) then
-                if dynamic_nooccur && is_var (List.assoc x sigma) then update ry sigma else
+                if dynamic_nooccur && is_var (List.assoc x sigma) then
+                  update ry sigma
+                else
                   update rx sigma
               else
                 if ox then update rx sigma else update ry sigma
@@ -581,6 +584,7 @@ let adapt_plus_plus_csu ~a ~b ~rx ~ry ~x ~y sigmas =
       sigmas
 
 let plus_restrict ~t (slave_head,slave_body) sigmas =
+  let sigmas = csu_enforce_nonplus sigmas in
   match slave_head,slave_body with
     | _ when sigmas = [] -> sigmas
     | Predicate ("knows",
@@ -592,8 +596,7 @@ let plus_restrict ~t (slave_head,slave_body) sigmas =
         when (rx,x,ry,y) = (r',x',r'',y'') && w = w' && w = w''
       ->
         begin match t with
-          | Fun ("plus",[Var a; Var b]) ->
-              let sigmas = csu_enforce_nonplus sigmas in
+          | Fun ("plus",[Var a; Var b]) when a <> b ->
               let sigmas = adapt_plus_plus_csu ~a ~b ~rx ~ry ~x ~y sigmas in
                 debugOutput "flexible 2-2 equation, csu becomes:\n" ;
                 List.iter
@@ -743,13 +746,13 @@ let ridentical (fa, fb) =
 
 (** {2 Saturation procedure} *)
 
-let useful (_, head, body) rules = (* TODO AC normalize and equality *)
+let useful (_, head, body) rules =
   match head with
     | Predicate("knows", _) -> true
     | Predicate("reach", _) -> true
     | Predicate("identical", [_; r; rp])
     | Predicate("ridentical", [_; r; rp]) ->
-        normalize r rules <> normalize rp rules
+        not (Maude.equals r rp rules)
     | _ -> invalid_arg("useful")
 
 let resolution_step_new unsolved_s solved_ks =
