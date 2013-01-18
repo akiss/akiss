@@ -4,6 +4,7 @@ open Term;;
 open Horn;;
 
 module Variants = Maude
+let normalize = Maude.normalize
 
 (** {2 Processes} *)
 
@@ -293,7 +294,8 @@ let knows_variantize (head, body) rules =
     | Predicate("knows", [world; recipe; t]) ->
 	let v = Variants.variants t rules in
 	let new_clause (_, sigma) = 
-	  Horn.new_clause (normalize_msg_st (apply_subst_msg_st (head, body) sigma) rules)
+          Horn.new_clause
+            (normalize_msg_st (apply_subst_msg_st (head, body) sigma) rules)
 	in
 	trmap new_clause v
     | _ -> invalid_arg("variantize")

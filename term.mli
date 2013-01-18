@@ -36,4 +36,3 @@ val restrict : subst -> varName list -> (varName * term) list
 
 val mgu : term -> term -> (varName * term) list
 val mgm : term -> term -> (varName * term) list
-val normalize : term -> (term * term) list -> term
