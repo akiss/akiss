@@ -1,4 +1,5 @@
 symbols plus/2, zero/0, h/1, pair/2;
+symbols fst/1, snd/1;
 
 private idA, idB, r2, r4, ok;
 channels C;
@@ -6,6 +7,9 @@ var X, Y, Z;
 
 rewrite plus(zero,X) -> X;
 rewrite plus(X,X) -> zero;
+
+rewrite fst(pair(X,Y)) -> X;
+rewrite snd(pair(X,Y)) -> Y;
 
 // We model RFID tags that authenticate with a reader
 // in the following way:
@@ -18,8 +22,6 @@ rewrite plus(X,X) -> zero;
 // and will be able to tell if the two sessions are against
 // the same tag or not. Indeed, by xoring the two components
 // of the pair one gets idX+h(r1).
-// However, this attack doesn't exist (and none exists) if
-// projections have not been modeled, which is the case here.
 
 TtagA1 = in(C,Y).out(C,pair(plus(idA,r2), plus(h(Y),r2))).0;
 TtagA2 = in(C,X).out(C,pair(plus(idA,r4), plus(h(X),r4))).0;
