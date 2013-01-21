@@ -35,7 +35,7 @@ let rec print chan = function
   | Fun (s,[]) | Var s ->
       begin try
         Scanf.sscanf s "w%d"
-          (fun _ -> Format.fprintf chan "akissw%s" s)
+          (fun _ -> Format.fprintf chan "akiss%s" s)
       with Scanf.Scan_failure _ ->
         begin try
           Scanf.sscanf s "!n!%d"
