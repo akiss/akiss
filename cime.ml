@@ -273,13 +273,26 @@ let run_cime ?op outchan s t =
         raise e
     in
       match Unix.close_process (chan_out,chan_in) with
-        | Unix.WEXITED 0 ->
+        | Unix.WEXITED r ->
+            if r <> 0 then
+              Util.debugOutput "CiME exited with error code %d!\n" r ;
             (* if op = Some `Matching then begin
               print_script ?op Format.std_formatter s t ;
               Printf.printf "%d results\n" (List.length csu) ;
             end ; *)
             csu
-        | _ -> Format.printf "CiME exited abnormally!\n" ; exit 1
+        | status ->
+            let status = match status with
+              | Unix.WEXITED i -> "exit" ^ string_of_int i
+              | Unix.WSTOPPED i -> "stop" ^ string_of_int i
+              | Unix.WSIGNALED i -> "sig" ^ string_of_int i
+            in
+              print_script ?op Format.std_formatter s t ;
+              List.iter
+                (fun s -> Format.printf "> %s\n" (show_subst s))
+                csu ;
+              Format.printf "CiME exited abnormally (%s)!\n" status ;
+              exit 1
 
 (** Perform unification with CiME *)
 let csu s t = run_cime stdout s t
