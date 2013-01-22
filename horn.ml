@@ -19,11 +19,11 @@ end
 (** {2 Predicates and clauses, conversions and printing} *)
 
 (* TODO
- * - lists as sets is bad, at least stop caring about their order
  * - using a string for predicate names isn't so great (no check
  *   on typos, uselessly costly comparison); a fixed set of variants seems
  *   appropriate, and would solve those issues
- * - the use of startswith x "!n!" to check term types is fragile *)
+ * - the use of startswith x "!n!" to check term types is fragile;
+ *   it's even worse now with P variables (and lowercase x variables).. *)
 
 type predicateName = id
 
@@ -65,12 +65,6 @@ let is_solved (_,_,body) =
            is_var x
        | _ -> invalid_arg("is_solved"))
     body
-
-let only_knows kb =
-  List.filter is_deduction_st kb
-
-let only_solved kb =
-  List.filter is_solved kb
 
 let rec vars_of_atom = function
   | Predicate(_, term_list) -> vars_of_term_list term_list
@@ -155,9 +149,6 @@ let show_statement ((id, head, body) : hornClause) =
     (show_atom head)
     (String.concat ", " (trmap show_atom_body body))
 
-let show_kb kb =
-  String.concat "\n" (trmap show_statement kb)
-
 (** {3 Unification and substitutions} *)
 
 let csu_atom a1 a2 = 
@@ -236,10 +227,6 @@ let new_clause =
   let c = ref 0 in
     fun ?(label="") ?(parents=([]:statement list)) (head,body) ->
       let body = List.sort compare body in
-      (* TODO understand why refreshing here causes recipization failures *)
-      (* TODO in equation it's clear (as coded currenly) do not refresh before
-       * a substitution is applied *)
-      (* let _,head,body = fresh_statement (-1,head,body) in *)
         incr c ;
         Printf.fprintf dotfile
           "n%d [label=\"%s%d\" parents=%S clause=%S];\n"
@@ -294,6 +281,48 @@ let rec is_prefix_world small_world big_world =
       true
   | _ ->
       assert false
+
+(** {3 Knowledge bases} *)
+
+module Statements = struct
+  type t = statement
+  let is_solved = is_solved
+  let equiv = same_statement
+  let compare = compare
+end
+
+module Base = struct
+
+  include Base.Make(Statements)
+
+  exception Found
+
+  let mem_equiv x kb =
+    try
+      S.iter
+        (fun y -> if same_statement x y then raise Found)
+        (if is_solved x then solved kb else not_solved kb) ;
+      false
+    with Found -> true
+
+  let add ?(needs_check=true) x kb =
+    assert (needs_check || not (mem_equiv x kb)) ;
+    if not (needs_check && mem_equiv x kb) then begin
+      debugOutput "Adding clause #%d.\n" (get_id x) ;
+      add (fresh_statement x) kb
+    end
+
+end
+
+let only_knows kb = List.filter is_deduction_st kb
+
+let only_solved kb = Base.only_solved kb
+
+let show_kb kb =
+  Base.fold (fun stmt str -> str ^ "\n" ^ show_statement stmt) kb ""
+
+let show_kb_list kb =
+  List.fold_left (fun str stmt -> str ^ "\n" ^ show_statement stmt) "" kb
 
 (** {2 Knowledge base update} *)
 
@@ -430,20 +459,12 @@ let consequence st kb =
   in
     aux st (only_knows (only_solved kb))
 
-let set_insert f kb =
-  if (List.exists (fun x -> same_statement f x) kb) then
-    []
-  else begin
-    debugOutput "Adding clause #%d.\n" (let (i,_,_) = f in i) ;
-    [fresh_statement f]
-  end
-
 (** Update a knowledge base with a new statement. This involves canonizing
   * the statement, checking whether it already belongs to the consequences
   * of the base, and actually inserting the statement or a variant of it. *)
-let update (kb : statement list) (f : statement) : statement list =
+let update (kb : Base.t) (f : statement) : unit =
   let (id, head, body) as fc = canonical_form f in
-  if ((is_deduction_st f) && (is_solved f)) then
+  if is_deduction_st f && is_solved f then
     try
       let recipe = consequence fc kb in
       let world = get_world head in
@@ -452,30 +473,21 @@ let update (kb : statement list) (f : statement) : statement list =
           "USELESS: %s\nCF:%s\nINSTEAD:%s\n\n%!"
           (show_statement f) (show_statement fc)
           (show_statement (id, newhead, body)); 
-        let result = set_insert (id, newhead, body) kb in
-          debugOutput "STATEMENTS INSERTED: %d\n%!" (List.length result);
-          result
-    with Not_a_consequence -> 
-      set_insert fc kb
+        Base.add (id, newhead, body) kb
+    with Not_a_consequence ->
+      Base.add ~needs_check:false fc kb
   else
-    set_insert fc kb
+    Base.add fc kb
 
 (** {2 Initial knowledge base}
   * TODO seed stuff should be here *)
 
 (** Compute the initial knowledge base K_i(S) associated to the
   * seed statements S of a ground trace T. *)
-let initial_kb (seed : statement list) : statement list =
-  snd(
-    iterate
-      (
-	fun (x : (statement list) * (statement list)) ->
-	  match x with
-	    | (s :: r, kb) -> (r, (List.append (update kb s) kb))
-	    | ([], kb) -> ([], kb)
-      )
-      (seed, [])
-  )
+let initial_kb (seed : statement list) : Base.t =
+  let kb = Base.create () in
+    List.iter (update kb) seed ;
+    kb
 
 (** {2 Resolution steps} *)
 
@@ -662,9 +674,8 @@ let plus_restrict ~t (slave_head,slave_body) sigmas =
   * against the first premise of [master] that is of the form (knows _ _ t)
   * where t is not a variable.
   * This corresponds to the "Resolution" rule in the paper.
-  * Return the list of newly generated clauses, of length at most 1.
-  * The parameter [d_kb] is useless. *)
-let resolution d_kb (master,slave) =
+  * Return the list of newly generated clauses. *)
+let resolution master slave =
   let (mid, master_head, master_body) = master in
   let (sid, slave_head, slave_body) = slave in
   match (List.filter (fun x -> not (is_var (get_term x))) master_body) with
@@ -713,12 +724,12 @@ let resolution d_kb (master,slave) =
         sigmas
   | [] -> []
 
-(** [equation (fa,fb)] takes two clauses and, when they are solved clauses
+(** [equation fa fb] takes two clauses and, when they are solved clauses
   * concluding "knows", attempts to combine them: if the terms and worlds can be
   * unified, generate a clause concluding that the recipes are "identical".
   * This corresponds to the "Equation" rule in the paper.
   * It returns [] if it fails to produce any new clause. *)
-let equation (fa, fb) =
+let equation fa fb =
   let (a,_,_),(b,_,_) = fa,fb in
     (* Avoid reflexivity and symmetry, and order so that the plus context
      * statement will be second (the latter needs to be made more solid). *)
@@ -745,7 +756,6 @@ let equation (fa, fb) =
                        new_clause ~label:"eq" ~parents:[fa;fb] st)
                   sigmas
               in
-              let clauses = List.map fresh_statement clauses in
                 if sigmas <> [] then
                   debugOutput "Generated clauses %s.\n"
                     (String.concat ","
@@ -756,10 +766,10 @@ let equation (fa, fb) =
     else
       []
 
-(** [ridentical (fa,fb)] attempts to combine the two clauses when [fa]
+(** [ridentical fa fb] attempts to combine the two clauses when [fa]
   * concludes "identical" and [fb] concludes "reach" and their world params
   * match. This corresponds to the "Test" rule in the paper. *)
-let ridentical (fa, fb) =
+let ridentical fa fb =
   (* debugOutput "entering ridentical\n%!";  *)
   if not (is_solved fa && is_solved fb) then [] else
     match ((get_head fa), (get_head fb)) with
@@ -778,7 +788,6 @@ let ridentical (fa, fb) =
                    List.map (fun x -> apply_subst_atom x sigma) newbody
                  in
                  let result = new_clause ~label:"ri" ~parents:[fa;fb] result in
-                 let result = fresh_statement result in
                    debugOutput "\n\nRID FROM: %s\nRID AND : %s\nRID GOT: %s\n\n%!" 
                      (show_statement fa)
                      (show_statement fb)
@@ -798,37 +807,29 @@ let useful (_, head, body) rules =
         not (Maude.equals r rp rules)
     | _ -> invalid_arg("useful")
 
-let resolution_step_new unsolved_s solved_ks =
-  trconcat (trmap (fun x -> resolution solved_ks x) (combine unsolved_s solved_ks))
+let saturate_step_not_solved kb =
+  match Base.next_not_solved kb with
+    | None -> false
+    | Some (solved,not_solved) ->
+        let new_statements = resolution not_solved solved in
+          List.iter (update kb) new_statements ;
+          true
 
-let saturate_class_one_step kb ff =
-  let solved_ks = only_solved (only_knows kb) in
-  let to_solve = List.filter ff kb in
-  let new_statements = resolution_step_new to_solve solved_ks in
-  List.append kb (trconcat (trmap (fun x -> update kb x) new_statements))
+let saturate_step_solved kb =
+  match Base.next_solved kb with
+    | None -> false
+    | Some (f,g) ->
+        (* TODO use rules to remove identical statements
+         * that are reflexive, cf [useful] *)
+        List.iter (update kb) (equation f g) ;
+        List.iter (update kb) (equation g f) ;
+        List.iter (update kb) (ridentical f g) ;
+        List.iter (update kb) (ridentical g f) ;
+        true
 
-let saturate_class kb ff =
-  iterate (fun x -> saturate_class_one_step x ff) kb
-
-(** Saturation strategy:
-  * (1) saturate deduction statements by resolution;
-  * (2) apply the equation rule to resulting solved statements, keep only
-  * useful equation statements, saturate them by resolution against
-  * solved knows statements;
-  * (3) saturate reach statements by resolution, create all possible
-  * ridentical statements, saturate by applying resolution on them. *)
 let saturate kb rules =
-  let kb_p = saturate_class kb is_deduction_st in
-  let solved_ks = only_knows (only_solved kb_p) in
-  let new_es = trconcat (trmap equation (combine solved_ks solved_ks)) in
-  let new_es_useful = List.filter (fun x -> useful x rules) new_es in
-  let kb_q = saturate_class (List.append kb_p new_es_useful) is_equation_st in
-  let kb_r = saturate_class kb_q is_reach_st in
-  let eq_sts = List.filter is_equation_st kb_r in
-  let reach_sts = List.filter is_reach_st kb_r in
-  let new_ri = trconcat (trmap ridentical (combine eq_sts reach_sts)) in
-  let kb_s = List.append kb_r new_ri in
-  saturate_class kb_s is_ridentical_st
+  (* Try not_solved step, otherwise solved step, otherwise stop. *)
+  while saturate_step_not_solved kb || saturate_step_solved kb do () done
 
 (** {2 Recipe stuff} *)
 
@@ -887,7 +888,7 @@ let find_recipe atom kb =
   with No_recipe_found -> (
     Printf.eprintf "Trying to get %s out of:\n%s\n\n%!" 
       (show_atom atom)
-      (show_kb kbsolved);
+      (show_kb_list kbsolved);
     raise Algorithm_error
   )
 
@@ -932,47 +933,41 @@ let recipize tl kb =
 
 (** Extract all successful reachability tests from a knowledge base. *)
 let checks_reach kb = 
-  trconcat (
-    trmap
-      (fun x ->
-	(
-	  (* debugOutput "TESTER: %s\n" (show_statement x); *)
-  	  match (get_head x) with
-  	    | Predicate("reach", [w]) when is_solved x ->
-  	      [Fun("check_run", [revworld (recipize (namify w) kb)])]
-  	    | _ -> []))
-      kb)
+  Base.fold_solved
+    (fun x checks ->
+       (* debugOutput "TESTER: %s\n" (show_statement x); *)
+       match (get_head x) with
+         | Predicate("reach", [w]) when is_solved x ->
+             Fun ("check_run", [revworld (recipize (namify w) kb)]) :: checks
+         | _ -> checks)
+    kb []
 
 (** Extract all successful identity tests from a knowledge base. *)
 let checks_ridentical kb =
-  trconcat (
-    trmap
-      (fun x ->
-	(
-	  (* debugOutput "TESTER: %s\n" (show_statement x); *)
-  	  match (get_head x) with
-   	    | Predicate("ridentical", [w; r; rp]) when is_solved x ->
-		let sigma = namify_subst w in
-		let new_w = revworld (recipize (apply_subst w sigma) kb) in
-		let omega = trmap (function arg -> match arg with
-				     | Predicate("knows", [_; Var(vX); Var(vx)]) -> 
-					 (vX, apply_subst (Var(vx)) sigma)
-				     | _ -> invalid_arg("checks_ridentical"))
-		  (get_body x) in
-		let resulting_test = Fun("check_identity", [new_w; 
-							    apply_subst r omega;
-							    apply_subst rp omega]) in
-		(
-		  (* debugOutput "FROM: %s\nGOT:%s\n\n%!" (show_statement x) (show_term resulting_test); *)
-  		  [resulting_test]
-		)
-  	    | _ -> []))
-      kb)
+  Base.fold_solved
+    (fun x checks ->
+       (* debugOutput "TESTER: %s\n" (show_statement x); *)
+       match (get_head x) with
+         | Predicate("ridentical", [w; r; rp]) when is_solved x ->
+             let sigma = namify_subst w in
+             let new_w = revworld (recipize (apply_subst w sigma) kb) in
+             let omega = trmap (function arg -> match arg with
+                                  | Predicate("knows", [_; Var(vX); Var(vx)]) -> 
+                                      (vX, apply_subst (Var(vx)) sigma)
+                                  | _ -> invalid_arg("checks_ridentical"))
+                           (get_body x) in
+             let resulting_test = Fun("check_identity", [new_w; 
+                                                         apply_subst r omega;
+                                                         apply_subst rp omega]) in
+               (* debugOutput "FROM: %s\nGOT:%s\n\n%!"
+                *   (show_statement x) (show_term resulting_test); *)
+               resulting_test :: checks
+  	    | _ -> checks)
+    kb []
 
 (** Extract all successful tests from a (saturated) knowledge base. *)
 let checks kb  =
-  let kb_solved = List.filter is_solved kb in
-  List.append (checks_reach kb_solved) (checks_ridentical kb_solved)
+  List.append (checks_reach kb) (checks_ridentical kb)
 
 let show_tests tests =
   String.concat "\n\n" (trmap show_term tests)

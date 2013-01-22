@@ -141,18 +141,13 @@ let tests_of_trace t rew =
   verboseOutput "Constructing seed statements\n%!";
   let seed = seed_statements t rew in
   (* Printf.printf "\n\nSeed statements of %s:\n\n%s\n\n%!" (show_trace t) (show_kb seed); *)
-  (
     verboseOutput "Constructing initial kb\n%!";
-    let kb_can = initial_kb seed in
-    (
+    let kb = initial_kb seed in
 (*      Printf.printf "\n\nInitial knowledge base of %s:\n\n%s\n\n%!" (show_trace t) (show_kb kb_can); *)
       verboseOutput "Saturating knowledge base\n%!";
-      let kb_sat = saturate kb_can rew in
+      saturate kb rew ;
 (*      Printf.printf "\n\nSaturated knowledge base of %s:\n\n%s\n\n%!" (show_trace t) (show_kb kb_can);*)
-      checks kb_sat
-    )
-  )
-;;
+      checks kb
 
 let check_test_multi test trace_list =
   List.exists (fun x -> check_test x test !rewrite_rules) trace_list
@@ -488,26 +483,42 @@ let declare_sequence traceName traceList =
 ;;
 
 let query_print traceName =
+  let print_kbs ?(filter=fun _ -> true) s =
+    Printf.printf "(%d statements)\n" (Base.S.cardinal s) ;
+    Base.S.iter
+      (fun f -> if filter f then Printf.printf "%s\n" (show_statement f))
+      s
+  in
   let t = trace_of_process(List.assoc traceName !processes) in
   let kb_seed = seed_statements t !rewrite_rules in
-  (
-    Printf.printf "\n\nSeed statements of %s:\n\n%s%!" traceName (show_kb kb_seed);
-    let kb_ini = initial_kb kb_seed in
-    (
-      Printf.printf "\n\nInitial knowledge base of %s:\n\n%s%!" traceName (show_kb kb_ini);
-      let kb_sat = saturate kb_ini !rewrite_rules in
-      let tests = checks kb_sat in
-      (
-	Printf.printf "\n\nAfter saturation:\n\n%s\n\nKnows solved statements in saturation: %s\n\nKnows statements in saturation: %s\n\nTests:\n%s\n\n%!" (show_kb kb_sat) (show_kb (only_solved (only_knows kb_sat))) (show_kb (only_knows kb_sat)) (show_tests tests);
-	let trace = trace_of_process (List.assoc traceName !processes) in
-	Printf.printf "Running reach self tests: %s\nRunning ridentical self tests: %s\n\n%!"
-	  (str_of_tr (check_reach_tests trace (List.filter is_reach_test tests) !rewrite_rules))
-	  (str_of_tr (check_ridentical_tests trace (List.filter is_ridentical_test tests) !rewrite_rules))
-      )
-    )
-  )
-;;
-
+    Printf.printf
+      "\n\nSeed statements of %s:\n%s\n\n%!"
+      traceName (show_kb_list kb_seed);
+    let kb = initial_kb kb_seed in
+      Printf.printf
+        "Initial knowledge base of %s:\n\n%s%!"
+        traceName (show_kb kb);
+      saturate kb !rewrite_rules ;
+      Printf.printf "\n\nAfter saturation:\n" ;
+      print_kbs (Base.solved kb) ;
+      print_kbs (Base.not_solved kb) ;
+      Printf.printf "\n\nKnows solved statements in saturation:\n" ;
+      print_kbs ~filter:is_deduction_st (Base.solved kb) ;
+      Printf.printf "\n\nKnows unsolved statements in saturation:\n" ;
+      print_kbs ~filter:is_deduction_st (Base.not_solved kb) ;
+      let tests = checks kb in
+        Printf.printf "\n\nTests:\n%s\n\n%!" (show_tests tests);
+        let trace = trace_of_process (List.assoc traceName !processes) in
+          Printf.printf
+            "Running reach self tests: %s\n\
+             Running ridentical self tests: %s\n\n%!"
+            (str_of_tr
+               (check_reach_tests
+                  trace (List.filter is_reach_test tests) !rewrite_rules))
+            (str_of_tr
+               (check_ridentical_tests
+                  trace (List.filter is_ridentical_test tests) !rewrite_rules))
+      
 let processCommand (c : cmd) =
   match c with
   | DeclSymbols symbolList ->
