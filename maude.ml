@@ -1,7 +1,7 @@
 
 open Term
 
-let debug = true
+let debug = false
 let pdebug = false (* show parsing info *)
 let sdebug = pdebug || false (* show maude script *)
 
@@ -138,13 +138,15 @@ let run_maude print_command parse_result =
 let tokens chan =
   let stream = Stream.of_channel chan in
   let keywords =
-    [ ":";";";",";"{";"}";"(";")";"-->" ]
+    [ ":";".";";";",";"{";"}";"(";")";"-->" ]
   in
     Genlex.make_lexer keywords stream
 
 let is_var s =
   s.[0] = '#' ||
+  s.[0] = 'x' ||
   s.[0] = 'X' ||
+  s.[0] = 'P' ||
   List.mem s !vars
 
 let arity f =
@@ -296,24 +298,24 @@ let rec parse_variants tokens =
     | None -> assert false
 
 let rec parse_unifiers tokens =
-  match Stream.peek tokens with
-    | Some (Genlex.Ident "Solution") ->
-        Stream.junk tokens ; (* Solution *)
+  match Stream.next tokens with
+    | Genlex.Ident "Solution" ->
         Stream.junk tokens ; (* <int> *)
         let s = parse_substitution tokens in
           s :: parse_unifiers tokens
-    | Some (Genlex.Ident "No") ->
-        expect tokens (Genlex.Ident "No") ;
-        expect tokens (Genlex.Ident "more") ;
-        expect tokens (Genlex.Ident "solutions") ;
-        []
-    | Some t ->
+    | Genlex.Ident "No" ->
+        begin match Stream.next tokens with
+          | Genlex.Ident "solution" -> []
+          | Genlex.Ident "more" ->
+              expect tokens (Genlex.Ident "solutions") ;
+              []
+          | _ -> assert false
+        end
+    | t ->
         if pdebug then Format.printf "pvs> skip %s\n%!" (string_of_token t) ;
-        Stream.junk tokens ;
         parse_unifiers tokens
-    | None -> assert false
 
-(** Putting everything together *)
+(** Variants *)
 
 let variants t rules =
   let esig = sig_of_term_list [t] in
@@ -328,7 +330,22 @@ let variants t rules =
          parse_variants (tokens chan))
 
 let variants t rules =
-  let v = variants t rules in
+  let v : (term * subst) list = variants t rules in
+  let { vars = vars } =
+    let all_terms = List.map (fun (t,s) -> t::List.map snd s) v in
+      sig_of_term_list (List.concat all_terms)
+  in
+  let vars = List.filter (fun name -> name.[0] = '#') vars in
+  let subst =
+    List.map (fun name -> name, Var (Util.fresh_variable ())) vars
+  in
+  let v =
+    List.map
+      (fun (t,sigma) ->
+         apply_subst t subst,
+         List.map (fun (x,t) -> x, apply_subst t subst) sigma)
+      v
+  in
     if debug then begin
       Format.printf "variants %s (%d solutions):\n"
         (show_term t) (List.length v) ;
@@ -338,6 +355,8 @@ let variants t rules =
         v
     end ;
     v
+
+(** Unification *)
 
 let unifiers s t rules =
   let esig = sig_of_term_list [s;t] in
@@ -350,14 +369,54 @@ let unifiers s t rules =
          do () done ;
          parse_unifiers (tokens chan))
 
+let rename_in_subst v =
+  let { vars = vars } =
+    let tms_of_subst subst = List.map snd subst in
+      sig_of_term_list (List.concat (List.map tms_of_subst v))
+  in
+  let vars = List.filter (fun name -> name.[0] = '#') vars in
+  let subst =
+    List.map (fun name -> name, Var (Util.fresh_variable ())) vars
+  in
+    List.map
+      (fun sigma ->
+         List.map (fun (x,t) -> x, apply_subst t subst) sigma)
+      v
+
 let unifiers s t rules =
   let v = unifiers s t rules in
+  let v = rename_in_subst v in
     if debug then begin
       Format.printf "unifiers %s %s (%d solutions):\n%!"
         (show_term s) (show_term t) (List.length v) ;
       List.iter (fun s -> Format.printf " %s\n" (show_subst s)) v
     end ;
     v
+
+(** Matching *)
+
+let matchers s t rules =
+  let esig = sig_of_term_list [s;t] in
+    run_maude
+      (fun chan ->
+         Format.fprintf chan "%a\n" (print_module rules esig) () ;
+         Format.fprintf chan "(match %a <=? %a .)\n" print s print t)
+      (fun chan ->
+         while not (Util.startswith ~prefix:"match in " (input_line chan))
+         do () done ;
+         parse_unifiers (tokens chan))
+
+let matchers s t rules =
+  let v = matchers s t rules in
+  let v = rename_in_subst v in
+    if debug then begin
+      Format.printf "matchers %s %s (%d solutions):\n%!"
+        (show_term s) (show_term t) (List.length v) ;
+      List.iter (fun s -> Format.printf " %s\n" (show_subst s)) v
+    end ;
+    v
+
+(** Check equality modulo AC+R *)
 
 let equals s t rules =
   if s = t then true else
@@ -377,6 +436,8 @@ let equals s t rules =
         (show_term s) (show_term t) b ;
     b
 
+(** Normalize a term *)
+
 let normalize t rules =
   let esig = sig_of_term_list [t] in
     run_maude
@@ -389,6 +450,12 @@ let normalize t rules =
 
 let normalize t rules =
   let t' = normalize t rules in
+  let { vars = vars } = sig_of_term_list [t'] in
+  let vars = List.filter (fun name -> name.[0] = '#') vars in
+  let subst =
+    List.map (fun name -> name, Var (Util.fresh_variable ())) vars
+  in
+  let t' = apply_subst t' subst in
     if debug then
       Format.printf "normalize %s -> %s\n" (show_term t) (show_term t') ;
     t'
