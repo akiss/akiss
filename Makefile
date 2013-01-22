@@ -44,9 +44,9 @@ doc: $(ML)
 TESTS = examples/tests/xor.api examples/tests/rfid.api \
 		examples/tests/stat.api \
 		examples/tests/ac.api examples/tests/ac2.api examples/tests/ac3.api
-NOTESTS = examples/tests/rfid0.api examples/tests/rfid1.api \
-		  examples/tests/nstat.api \
-		  examples/tests/nac.api examples/tests/nac2.api examples/tests/nac3.api
+NOTESTS = examples/tests/nstat.api \
+		  examples/tests/nac.api examples/tests/nac2.api examples/tests/nac3.api \
+		  examples/tests/rfid0h.api examples/tests/rfid0.api examples/tests/rfid1.api
 RUN = OCAMLRUNPARAM=b ./akiss -verbose
 
 test: akiss $(TESTS)
@@ -65,4 +65,4 @@ notest: akiss $(NOTESTS)
 
 BFILES = log akiss.dot akiss.lbl NOTES
 backup:
-	date=`date +%y%m%d%H%M` ; mkdir test-$$date ; cp $(BFILES) test-$$date
+	date=`date +%y%m%d%H%M` ; mkdir test-$$date ; mv $(BFILES) test-$$date ; cp test-$$date/NOTES .
