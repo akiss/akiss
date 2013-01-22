@@ -88,17 +88,37 @@ let context_statements symbol arity rules =
   in
   let t = Fun(symbol, box_vars vZs) in
   let v = Variants.variants t rules in
-  trmap
-    (function (x,y) ->
-       new_clause
-         (Predicate("knows", 
-                    [w;
-                     Fun(symbol, box_vars vYs);
-                     x
-                    ]),
-          body y))
+    trmap
+    (function (t',sigma) ->
+      let clause =
+        new_clause
+          (Predicate("knows", 
+                     [w;
+                      Fun(symbol, box_vars vYs);
+                      t'
+                     ]),
+           body sigma)
+      in
+        (* Mark recipe variables in non-trivial variants of the plus clause. *)
+        if symbol = "plus" && sigma <> [] then
+          try
+            let r =
+              match
+                List.find
+                  (function
+                     | Predicate("knows",[_;_;Fun("plus",_)]) -> true
+                     | _ -> false)
+                  (get_body clause)
+              with
+                | Predicate (_,[_;Var r;_]) -> r
+                | _ -> assert false
+            in
+            let p = fresh_string "P" in
+              apply_subst_st clause [r,Var p]
+          with Not_found -> clause
+        else
+          clause)
     v
-;;
 
 let seed_statements trace rew =
   let (l1, l2) = List.split !fsymbols in
