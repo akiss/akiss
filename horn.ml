@@ -186,13 +186,56 @@ let dotfile =
     at_exit (fun () -> Printf.fprintf dotfile "}\n") ;
     dotfile
 
+let isnt_plus = function
+  | Fun ("plus",_) -> false
+  | _ -> true
+
+let is_marked x = x.[0] = 'P'
+
+let rec has_rigid = function
+  | Fun ("plus",[a;b]) :: l -> has_rigid (a::b::l)
+  | Fun (_,_) :: _ -> true
+  | Var _ :: l -> has_rigid l
+  | [] -> false
+
+let has_rigid t = has_rigid [t]
+
+let rec nb_flexibles n = function
+  | Fun ("plus",[a;b]) :: l -> nb_flexibles n (a::b::l)
+  | Fun (_,_) :: l -> nb_flexibles n l
+  | Var _ :: l -> nb_flexibles (1+n) l
+  | [] -> n
+
+let nb_flexibles t = nb_flexibles 0 [t]
+
 (** Create a new clause with unique clause identifier.
   * The clause will be registerd in the DOT output.
   * It would be tempting to automatically refresh the new clause,
   * although it might make logs less readable. *)
 let new_clause =
+  let compare p q =
+    (* We return -1 when p should occur before q in the body,
+     * 1 in the opposite case and 0 when it does no matter. *)
+    match p,q with
+      | Predicate ("knows",[_;Var r1;t1]), Predicate ("knows",[_;Var r2;t2]) ->
+          (* Prioritize terms that pass this test *)
+          let check f x1 x2 k =
+            match f x1, f x2 with
+              | true, true -> 0
+              | true, _ -> -1
+              | _, true -> 1
+              | false, false -> k ()
+          in
+            check is_var t1 t2 (fun () ->
+              check isnt_plus t1 t2 (fun () ->
+                check is_marked r1 r2 (fun () ->
+                  check has_rigid t1 t2 (fun () ->
+                    -1 * compare (nb_flexibles t1) (nb_flexibles t2)))))
+      | _ -> assert false
+  in
   let c = ref 0 in
     fun ?(label="") ?(parents=([]:statement list)) (head,body) ->
+      let body = List.sort compare body in
       (* TODO understand why refreshing here causes recipization failures *)
       (* TODO in equation it's clear (as coded currenly) do not refresh before
        * a substitution is applied *)
