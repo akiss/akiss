@@ -111,7 +111,7 @@ let atom_from_term term = match term with
   | _ -> invalid_arg("atom_from_term")
 
 let statement_from_term term = match term with 
-  | Fun("implies", head :: body) ->
+  | Fun("!tuple!", head :: body) ->
       (atom_from_term head, trmap atom_from_term body)
   | _ -> invalid_arg("statement_from_term")
 
@@ -119,7 +119,7 @@ let term_from_atom (Predicate(name, al)) =
   Fun(name, al)
 
 let term_from_statement (_, head, body) =
-  Fun("implies",  (term_from_atom head) :: (trmap term_from_atom body))
+  Fun("!tuple!",  (term_from_atom head) :: (trmap term_from_atom body))
 
 (** {3 Printing} *)
 

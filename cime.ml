@@ -22,12 +22,10 @@ let rec pp_list pp sep chan = function
 (** Print out a term in cime notation, translating symbols as needed
   * and registering every parameter used. *)
 let rec print chan = function
-  | Fun ("!tuple!",[]) ->
-      print chan (Fun ("akiss_0uple",[]))
-  | Fun ("!tuple!",[x]) ->
-      print chan (Fun ("akiss_1uple",[x]))
-  | Fun ("!tuple!",[x;y]) ->
-      print chan (Fun ("akiss_2uple",[x;y]))
+  | Fun ("!tuple!",l) ->
+      let n = List.length l in
+      let s = Printf.sprintf "akiss_%duple" n in
+        print chan (Fun (s,l))
   | Fun ("!test!",[]) ->
       print chan (Fun ("akiss_test",[]))
   | Fun ("!out!",s) ->
@@ -103,7 +101,9 @@ let print_script ?(op=`Unification) chan s t =
   let t = sprint t in
     declare "S" "signature"
       (fun () ->
-         output_string chan "akiss_0uple:0; akiss_1uple:1; akiss_2uple:2; " ;
+         for i = 0 to 15 do
+           Format.fprintf chan "akiss_%duple:%d; " i i
+         done ;
          output_string chan "akiss_out:1; akiss_in:2; akiss_test:0; " ;
          output_string chan
            "world:2; empty:0; knows:3; reach:1; identical:3; ridentical:3;\n" ;
