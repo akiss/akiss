@@ -12,7 +12,7 @@ module Term = struct
   let csu u v =
     let sols = csu u v in
     let n = List.length sols in
-      debugOutput "Found %d solution(s)\n" n ;
+      if n>0 then debugOutput "Found %d solution(s)\n" n ;
       sols
 end
 
@@ -221,7 +221,7 @@ let new_clause =
               check isnt_plus t1 t2 (fun () ->
                 check is_marked r1 r2 (fun () ->
                   check has_rigid t1 t2 (fun () ->
-                    -1 * compare (nb_flexibles t1) (nb_flexibles t2)))))
+                    compare (nb_flexibles t1) (nb_flexibles t2)))))
       | _ -> assert false
   in
   let c = ref 0 in
@@ -305,12 +305,21 @@ module Base = struct
       false
     with Found -> true
 
-  let add ?(needs_check=true) x kb =
+  let is_normal st rules =
+    let t = term_from_statement st in
+      Maude.equals t (Maude.normalize t rules) []
+
+  let add ?(needs_check=true) x rules kb =
     assert (needs_check || not (mem_equiv x kb)) ;
-    if not (needs_check && mem_equiv x kb) then begin
-      debugOutput "Adding clause #%d.\n" (get_id x) ;
-      add (fresh_statement x) kb
-    end
+      if not (is_normal x rules) then
+        debugOutput "Clause #%d is not normal.\n" (get_id x)
+      else
+        if needs_check && mem_equiv x kb then
+          debugOutput "Clause #%d already present in kb.\n" (get_id x)
+        else begin
+          debugOutput "Adding clause #%d.\n" (get_id x) ;
+          add (fresh_statement x) kb
+        end
 
 end
 
@@ -462,10 +471,11 @@ let consequence st kb =
 (** Update a knowledge base with a new statement. This involves canonizing
   * the statement, checking whether it already belongs to the consequences
   * of the base, and actually inserting the statement or a variant of it. *)
-let update (kb : Base.t) (f : statement) : unit =
+let update (kb : Base.t) rules (f : statement) : unit =
   let (id, head, body) as fc = canonical_form f in
   if is_deduction_st f && is_solved f then
     try
+      (* TODO can we really run consequence before freshening the clause? *)
       let recipe = consequence fc kb in
       let world = get_world head in
       let newhead = Predicate("identical", [world; get_recipe head; recipe]) in
@@ -473,11 +483,11 @@ let update (kb : Base.t) (f : statement) : unit =
           "USELESS: %s\nCF:%s\nINSTEAD:%s\n\n%!"
           (show_statement f) (show_statement fc)
           (show_statement (id, newhead, body)); 
-        Base.add (id, newhead, body) kb
+        Base.add (id, newhead, body) rules kb
     with Not_a_consequence ->
-      Base.add ~needs_check:false fc kb
+      Base.add ~needs_check:false fc rules kb
   else
-    Base.add fc kb
+    Base.add fc rules kb
 
 (** {2 Initial knowledge base}
   * TODO seed stuff should be here *)
@@ -486,7 +496,7 @@ let update (kb : Base.t) (f : statement) : unit =
   * seed statements S of a ground trace T. *)
 let initial_kb (seed : statement list) : Base.t =
   let kb = Base.create () in
-    List.iter (update kb) seed ;
+    List.iter (update kb []) seed ;
     kb
 
 (** {2 Resolution steps} *)
@@ -681,12 +691,12 @@ let resolution master slave =
   match (List.filter (fun x -> not (is_var (get_term x))) master_body) with
   | atom :: _ ->
 
-    debugOutput "Resolution?\n FROM: %s\n AND : %s\n\n"
-      (show_statement (mid, master_head, master_body))
-      (show_statement (sid, slave_head, slave_body)) ;
     let sigmas = csu_atom atom slave_head in
     let length = List.length sigmas in
     if !debug_output && length > 0 then begin
+      debugOutput "Resolution?\n FROM: %s\n AND : %s\n\n"
+        (show_statement (mid, master_head, master_body))
+        (show_statement (sid, slave_head, slave_body)) ;
       Printf.printf "csu of size %d:\n" length ;
       List.iter
         (fun s -> Printf.printf "> %s\n" (show_subst s))
@@ -798,38 +808,41 @@ let ridentical fa fb =
 
 (** {2 Saturation procedure} *)
 
-let useful (_, head, body) rules =
+let useful (id, head, body) rules =
   match head with
     | Predicate("knows", _) -> true
     | Predicate("reach", _) -> true
     | Predicate("identical", [_; r; rp])
     | Predicate("ridentical", [_; r; rp]) ->
-        not (Maude.equals r rp rules)
+        if Maude.equals r rp rules then begin
+          debugOutput "Clause #%d is not useful.\n" id ;
+          false
+        end else true
     | _ -> invalid_arg("useful")
 
-let saturate_step_not_solved kb =
+let saturate_step_not_solved rules kb =
   match Base.next_not_solved kb with
     | None -> false
     | Some (solved,not_solved) ->
         let new_statements = resolution not_solved solved in
-          List.iter (update kb) new_statements ;
+          List.iter (update kb rules) new_statements ;
           true
 
-let saturate_step_solved kb =
+let saturate_step_solved rules kb =
   match Base.next_solved kb with
     | None -> false
     | Some (f,g) ->
-        (* TODO use rules to remove identical statements
-         * that are reflexive, cf [useful] *)
-        List.iter (update kb) (equation f g) ;
-        List.iter (update kb) (equation g f) ;
-        List.iter (update kb) (ridentical f g) ;
-        List.iter (update kb) (ridentical g f) ;
-        true
+        let ids = equation f g @ equation g f in
+        let ids = List.filter (fun x -> useful x rules) ids in
+          List.iter (update kb rules) ids ;
+          List.iter (update kb rules) (ridentical f g @ ridentical g f) ;
+          true
 
 let saturate kb rules =
   (* Try not_solved step, otherwise solved step, otherwise stop. *)
-  while saturate_step_not_solved kb || saturate_step_solved kb do () done
+  while saturate_step_not_solved rules kb
+     || saturate_step_solved rules kb
+  do () done
 
 (** {2 Recipe stuff} *)
 
