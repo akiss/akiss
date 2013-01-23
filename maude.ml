@@ -178,7 +178,6 @@ let translate_symbol = function
   | "akisstest" -> "!test!"
   | "akissout" -> "!out!"
   | "akissin" -> "!in!"
-  | "akiss0uple" | "akiss_1uple" | "akiss_2uple" -> "!tuple!"
   | "akisschA" -> "A"
   | "akisschB" -> "B"
   | "akisschC" -> "C"
@@ -186,7 +185,8 @@ let translate_symbol = function
       begin try
         Scanf.sscanf s "akissw%d" (fun d -> "w" ^ string_of_int d)
       with _ ->
-        Scanf.sscanf s "akissn%d" (fun d -> "!n!" ^ string_of_int d)
+        try Scanf.sscanf s "akissn%d" (fun d -> "!n!" ^ string_of_int d)
+        with _ -> Scanf.sscanf s "akiss%duple" (fun d -> "!tuple!")
       end
   | s -> s
 
