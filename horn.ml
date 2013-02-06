@@ -82,6 +82,13 @@ let get_recipe atom = match atom with
   | Predicate("knows", [_; r; _]) -> r
   | _ -> invalid_arg("get_recipe")
 
+let get_recipes atom = match atom with
+  | Predicate("knows", [_; r; _]) -> [r]
+  | Predicate("identical", [_; r1; r2])
+  | Predicate("ridentical", [_; r1; r2]) -> [r1;r2]
+  | Predicate("reach",[_]) -> []
+  | _ -> assert false
+
 let get_term atom = match atom with
   | Predicate("knows", [_; _; t]) -> t
   | _ -> invalid_arg("get_term")
@@ -104,9 +111,9 @@ let atom_from_term term = match term with
       Predicate(symbol, termlist)
   | _ -> invalid_arg("atom_from_term")
 
-let statement_from_term term = match term with 
+let statement_from_term id term = match term with 
   | Fun("!tuple!", head :: body) ->
-      (atom_from_term head, trmap atom_from_term body)
+      (id, atom_from_term head, trmap atom_from_term body)
   | _ -> invalid_arg("statement_from_term")
 
 let term_from_atom (Predicate(name, al)) =
@@ -123,23 +130,23 @@ let rec show_atom = function
   | Predicate(name, term_list) ->
       name ^ "(" ^ (show_term_list term_list) ^ ")"
 
+let rec world_length = function
+  | Fun ("world",[_;w]) -> 1 + world_length w
+  | Fun ("empty",[]) -> 0
+  | Var _ -> 0
+  | _ -> raise Not_found
+
 let rec show_atom_body = function
   | Predicate("!equals!", [s;t]) ->
       (show_term s) ^ " = " ^ (show_term t)
   | Predicate(name,[]) -> name ^ "()"
   | Predicate(name, w::term_list) ->
-      let rec wlen = function
-        | Fun ("world",[_;w]) -> 1 + wlen w
-        | Fun ("empty",[]) -> 0
-        | Var _ -> 0
-        | _ -> raise Not_found
-      in
-        try
-          name ^ "(" ^ (string_of_int (wlen w) ^ "," ^
-                        show_term_list term_list) ^ ")"
-        with
-          | Not_found ->
-              name ^ "(" ^ (show_term_list (w::term_list)) ^ ")"
+      try
+        name ^ "(" ^ (string_of_int (world_length w) ^ "," ^
+                      show_term_list term_list) ^ ")"
+      with
+        | Not_found ->
+            name ^ "(" ^ (show_term_list (w::term_list)) ^ ")"
 
 let show_statement ((id, head, body) : hornClause) =
   Printf.sprintf
@@ -177,9 +184,11 @@ let dotfile =
     at_exit (fun () -> Printf.fprintf dotfile "}\n") ;
     dotfile
 
-let isnt_plus = function
-  | Fun ("plus",_) -> false
-  | _ -> true
+let is_plus = function
+  | Fun ("plus",_) -> true
+  | _ -> false
+
+let isnt_plus x = not (is_plus x)
 
 let is_marked x = x.[0] = 'P'
 
@@ -255,16 +264,16 @@ let new_clause =
 (** {3 Misc} *)
 
 (** Statement equality for set updates
-  * This is currently modulo alpha renaming and it may or may not be
-  * updated to also include AC TODO *)
-let same_statement s t = 
+  * This is currently only modulo alpha renaming (and could be written
+  * better for that). It may be made modulo AC but this seems too
+  * costly.
+  * TODO properly treat marked variables! *)
+let same_statement s t =
   let ts = term_from_statement s in
   let tt = term_from_statement t in
-  try
-    let _ = mgm ts tt in
-    let _ = mgm tt ts in
-    true
-  with Not_matchable -> false
+    (* Maude.matchers ts tt [] <> [] && Maude.matchers tt ts [] <> [] *)
+    try ignore (mgm ts tt) ; ignore (mgm tt ts) ; true with Not_matchable ->
+    false
 
 (** [is_prefix_world w w'] checks whether [w] is a prefix of [w'],
   * assuming the two worlds come from the same statement, so that one
@@ -287,7 +296,6 @@ let rec is_prefix_world small_world big_world =
 module Statements = struct
   type t = statement
   let is_solved = is_solved
-  let equiv = same_statement
   let compare = compare
 end
 
@@ -300,26 +308,22 @@ module Base = struct
   let mem_equiv x kb =
     try
       S.iter
-        (fun y -> if same_statement x y then raise Found)
+        (fun y ->
+           if same_statement x y then begin
+             debugOutput "Statement #%d already in kb: #%d.\n"
+               (get_id x) (get_id y) ;
+             raise Found
+           end)
         (if is_solved x then solved kb else not_solved kb) ;
       false
     with Found -> true
 
-  let is_normal st rules =
-    let t = term_from_statement st in
-      Maude.equals t (Maude.normalize t rules) []
-
   let add ?(needs_check=true) x rules kb =
     assert (needs_check || not (mem_equiv x kb)) ;
-      if not (is_normal x rules) then
-        debugOutput "Clause #%d is not normal.\n" (get_id x)
-      else
-        if needs_check && mem_equiv x kb then
-          debugOutput "Clause #%d already present in kb.\n" (get_id x)
-        else begin
-          debugOutput "Adding clause #%d.\n" (get_id x) ;
-          add (fresh_statement x) kb
-        end
+    if not (needs_check && mem_equiv x kb) then begin
+      debugOutput "Adding clause #%d.\n" (get_id x) ;
+      add (fresh_statement x) kb
+    end
 
 end
 
@@ -377,11 +381,39 @@ let rule_remove statement = match statement with
 	 body)
   | _ -> statement
 
+(** For statements that are not canonized we still apply some simplifications
+  * to avoid explosions: if a term is derived using several recipes, we can
+  * remove derivations for which the recipe does not occur elsewhere in the
+  * statement. *)
+let simplify_statement (id,head,body) =
+  let hvars = vars_of_term_list (get_recipes head) in
+  let rec update body =
+    let useless,body =
+      List.partition
+        (fun a ->
+           not (List.mem (unbox_var (get_recipe a)) hvars) &&
+           let t = get_term a in
+           let l = world_length (get_world a) in
+             List.exists (fun a' ->
+                            a != a' &&
+                            l = world_length (get_world a') &&
+                            Maude.equals t (get_term a') []) body)
+        body
+    in
+      List.iter
+        (fun a -> debugOutput "Removed %s\n" (show_atom a))
+        useless ;
+      if useless <> [] then update body else body
+  in
+    (id,head,update body)
+
 let canonical_form statement = 
   if is_solved statement then
-    iterate rule_remove (iterate rule_rename statement)
+    let f = iterate rule_remove (iterate rule_rename statement) in
+      debugOutput "Canonized: %s\n" (show_statement f) ;
+      f
   else
-    statement
+    simplify_statement statement
 
 (* TODO AC term equality for t and tp? not if conseq stays syntactic in draft
  * not needed for worlds because we don't even need to look at their terms *)
@@ -468,11 +500,37 @@ let consequence st kb =
   in
     aux st (only_knows (only_solved kb))
 
+(** Avoid reflexive identities.
+  * Note: even with the simplification of non-solved clauses, there are
+  * some cases that we are missing,
+  * eg. identical(C[R1],C[R2]) <-- k(R1,T), k(R2,T)
+  * and variants of it with one recipe being broken in two parts, etc. *)
+let useful (id, head, body) =
+  match head with
+    | Predicate("knows", _) -> true
+    | Predicate("reach", _) -> true
+    | Predicate("identical", [_; r; rp])
+    | Predicate("ridentical", [_; r; rp]) ->
+        if r = rp then begin
+          debugOutput "Clause #%d is not useful.\n" id ;
+          false
+        end else true
+    | _ -> invalid_arg("useful")
+
 (** Update a knowledge base with a new statement. This involves canonizing
   * the statement, checking whether it already belongs to the consequences
   * of the base, and actually inserting the statement or a variant of it. *)
 let update (kb : Base.t) rules (f : statement) : unit =
+
+  let tf_orig = term_from_statement f in
+  let tf = Maude.normalize tf_orig rules in
+  let f = statement_from_term (get_id f) tf in
+  if not (Maude.equals tf_orig tf []) then
+    debugOutput "Clause #%d is not normal.\n" (get_id f)
+  else
+
   let (id, head, body) as fc = canonical_form f in
+  if useful fc then
   if is_deduction_st f && is_solved f then
     try
       (* TODO can we really run consequence before freshening the clause? *)
@@ -483,7 +541,8 @@ let update (kb : Base.t) rules (f : statement) : unit =
           "USELESS: %s\nCF:%s\nINSTEAD:%s\n\n%!"
           (show_statement f) (show_statement fc)
           (show_statement (id, newhead, body)); 
-        Base.add (id, newhead, body) rules kb
+        if useful (id,newhead,body) then
+          Base.add (id, newhead, body) rules kb
     with Not_a_consequence ->
       Base.add ~needs_check:false fc rules kb
   else
@@ -500,17 +559,6 @@ let initial_kb (seed : statement list) : Base.t =
     kb
 
 (** {2 Resolution steps} *)
-
-(** Avoid solutions that instantiate P (non-plus) variables *)
-let csu_enforce_nonplus sigmas =
-  List.filter
-    (fun sigma ->
-       List.for_all
-         (fun (v,t) -> not (v.[0] = 'P' &&
-                            match t with
-                              | Fun ("plus",_) -> true | _ -> false))
-         sigma)
-    sigmas
 
 (** Restrict a csu based on plus-constraints *)
 let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
@@ -600,7 +648,7 @@ let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
     end ;
     sigmas
 
-let adapt_plus_plus_csu ~a ~b ~rx ~ry ~x ~y sigmas =
+let mark_flexible_plus_2 ~a ~b ~rx ~ry ~x ~y sigmas =
 
   (* Adapt a substitution to mark one recipe variable as not being a plus.
    * In the case of equation, the recipe variables are not in the substitution. *)
@@ -648,8 +696,53 @@ let adapt_plus_plus_csu ~a ~b ~rx ~ry ~x ~y sigmas =
                | _ -> assert false)
       sigmas
 
+let mark_flexible_plus_3 ~a ~b ~c ~rx ~ry ~x ~y sigmas =
+
+  (* TODO factorize this *)
+  (* Adapt a substitution to mark one recipe variable as not being a plus.
+   * In the case of equation, the recipe variables are not in the substitution. *)
+  let update r sigma =
+    let sigma =
+      if List.mem_assoc r sigma then begin
+        assert (Var r = List.assoc r sigma) ;
+        sigma
+      end else
+        (r, Var r) :: sigma
+    in
+    let r' = Var (fresh_string "P") in
+      List.map (fun (x,t) -> x, apply_subst t [r,r']) sigma
+  in
+  let is_split = function
+    | Var _ -> false
+    | Fun (f,_) -> assert (f = "plus") ; true
+  in
+    assert (List.length sigmas <= 25) ;
+    List.map
+      (fun (sigma:subst) ->
+         let x' = List.assoc x sigma in
+         let a' = List.assoc a sigma in
+         let b' = List.assoc b sigma in
+         let c' = List.assoc c sigma in
+           (* Mark recipe associated with something of the form
+            *   a1+b1+c1, a1+b1, a+b+c1. *)
+         let split, whole = List.partition is_split [a';b';c'] in
+           match split,whole with
+             | [_;_;_],_ -> update rx sigma
+             | [_],_ ->
+                 begin match x' with
+                   | Var _ -> update ry sigma
+                   | _ -> update rx sigma
+                 end
+             | _,[_] ->
+                 begin match x' with
+                   | Fun ("plus",[Var _;Var _]) -> update rx sigma
+                   | _ -> update ry sigma
+                 end
+             | [],_ -> sigma
+             | _ -> assert false)
+      sigmas
+
 let plus_restrict ~t (slave_head,slave_body) sigmas =
-  let sigmas = csu_enforce_nonplus sigmas in
   match slave_head,slave_body with
     | _ when sigmas = [] -> sigmas
     | Predicate ("knows",
@@ -658,12 +751,29 @@ let plus_restrict ~t (slave_head,slave_body) sigmas =
                   Fun ("plus",[Var x; Var y])]),
       [ Predicate("knows",[Var w'; Var r'; Var x']) ;
         Predicate("knows",[Var w''; Var r''; Var y'']) ]
-        when (rx,x,ry,y) = (r',x',r'',y'') && w = w' && w = w''
+      when rx <> ry && x <> y && w = w' && w = w'' &&
+           ((rx,x,ry,y) = (r',x',r'',y'') ||
+            (rx,x,ry,y) = (r'',y'',r',x'))
       ->
         begin match t with
           | Fun ("plus",[Var a; Var b]) when a <> b ->
-              let sigmas = adapt_plus_plus_csu ~a ~b ~rx ~ry ~x ~y sigmas in
+              let sigmas = mark_flexible_plus_2 ~a ~b ~rx ~ry ~x ~y sigmas in
                 debugOutput "flexible 2-2 equation, csu becomes:\n" ;
+                List.iter
+                  (fun s ->
+                     debugOutput "> %s/%s, %s/%s -- %s\n"
+                       (show_term (List.assoc rx s))
+                       (show_term (List.assoc x s))
+                       (show_term (List.assoc ry s))
+                       (show_term (List.assoc y s))
+                       (show_subst s))
+                  sigmas ;
+                sigmas
+          | Fun ("plus",[Var a; Fun ("plus",[Var b; Var c])])
+          | Fun ("plus",[Fun ("plus",[Var a; Var b]); Var c])
+            when a <> b && a <> c && b <> c ->
+              let sigmas = mark_flexible_plus_3 ~a ~b ~c ~rx ~ry ~x ~y sigmas in
+                debugOutput "flexible 3-2 equation, csu becomes:\n" ;
                 List.iter
                   (fun s ->
                      debugOutput "> %s/%s, %s/%s -- %s\n"
@@ -688,8 +798,15 @@ let plus_restrict ~t (slave_head,slave_body) sigmas =
 let resolution master slave =
   let (mid, master_head, master_body) = master in
   let (sid, slave_head, slave_body) = slave in
-  match (List.filter (fun x -> not (is_var (get_term x))) master_body) with
-  | atom :: _ ->
+  let atom = List.find (fun x -> not (is_var (get_term x))) master_body in
+
+    (* Fail immediately if slave's head isn't a knows statement. *)
+    if not (is_deduction_st slave) then [] else
+
+    (* Fail immediately if solutions would violate marking. *)
+    if is_marked (unbox_var (get_recipe atom)) &&
+       is_plus (get_recipe slave_head)
+    then [] else
 
     let sigmas = csu_atom atom slave_head in
     let length = List.length sigmas in
@@ -732,7 +849,6 @@ let resolution master slave =
                (show_statement result);
              result)
         sigmas
-  | [] -> []
 
 (** [equation fa fb] takes two clauses and, when they are solved clauses
   * concluding "knows", attempts to combine them: if the terms and worlds can be
@@ -808,18 +924,6 @@ let ridentical fa fb =
 
 (** {2 Saturation procedure} *)
 
-let useful (id, head, body) rules =
-  match head with
-    | Predicate("knows", _) -> true
-    | Predicate("reach", _) -> true
-    | Predicate("identical", [_; r; rp])
-    | Predicate("ridentical", [_; r; rp]) ->
-        if Maude.equals r rp rules then begin
-          debugOutput "Clause #%d is not useful.\n" id ;
-          false
-        end else true
-    | _ -> invalid_arg("useful")
-
 let saturate_step_not_solved rules kb =
   match Base.next_not_solved kb with
     | None -> false
@@ -833,7 +937,7 @@ let saturate_step_solved rules kb =
     | None -> false
     | Some (f,g) ->
         let ids = equation f g @ equation g f in
-        let ids = List.filter (fun x -> useful x rules) ids in
+        (* let ids = List.filter (fun x -> useful x rules) ids in *)
           List.iter (update kb rules) ids ;
           List.iter (update kb rules) (ridentical f g @ ridentical g f) ;
           true
