@@ -937,7 +937,6 @@ let saturate_step_solved rules kb =
     | None -> false
     | Some (f,g) ->
         let ids = equation f g @ equation g f in
-        (* let ids = List.filter (fun x -> useful x rules) ids in *)
           List.iter (update kb rules) ids ;
           List.iter (update kb rules) (ridentical f g @ ridentical g f) ;
           true
