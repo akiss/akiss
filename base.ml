@@ -31,6 +31,7 @@ end
 module Make (M:O) : T with type elt = M.t = struct
 
   module S = Set.Make(M)
+  module Queue = Stack
 
   type elt = M.t
 
@@ -49,10 +50,10 @@ module Make (M:O) : T with type elt = M.t = struct
   let new_pair queue pair = Queue.push pair queue
 
   let next_not_solved kb =
-    try Some (Queue.take kb.ns_todo) with Queue.Empty -> None
+    try Some (Queue.pop kb.ns_todo) with Queue.Empty -> None
 
   let next_solved kb =
-    try Some (Queue.take kb.s_todo) with Queue.Empty -> None
+    try Some (Queue.pop kb.s_todo) with Queue.Empty -> None
 
   let add x kb =
     if M.is_solved x then begin
