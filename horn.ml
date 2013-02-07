@@ -560,6 +560,19 @@ let initial_kb (seed : statement list) : Base.t =
 
 (** {2 Resolution steps} *)
 
+(* Adapt a substitution to mark one recipe variable as not being a plus.
+ * In the case of equation, the recipe variables are not in the substitution. *)
+let mark r sigma =
+  let sigma =
+    if List.mem_assoc r sigma then begin
+      assert (Var r = List.assoc r sigma) ;
+      sigma
+    end else
+      (r, Var r) :: sigma
+  in
+  let r' = Var (fresh_string "P") in
+    List.map (fun (x,t) -> x, apply_subst t [r,r']) sigma
+
 (** Restrict a csu based on plus-constraints *)
 let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
 
@@ -569,20 +582,6 @@ let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
     | Fun (_,_) as t :: _ -> Some t
     | Var _ :: l -> extract_rigid l
     | [] -> None
-  in
-
-  (* Adapt a substitution to mark one recipe variable as not being a plus.
-   * In the case of equation, the recipe variables are not in the substitution. *)
-  let update r sigma =
-    let sigma =
-      if List.mem_assoc r sigma then begin
-        assert (Var r = List.assoc r sigma) ;
-        sigma
-      end else
-        (r, Var r) :: sigma
-    in
-    let r' = Var (fresh_string "P") in
-      List.map (fun (x,t) -> x, apply_subst t [r,r']) sigma
   in
 
   let sigmas =
@@ -607,13 +606,14 @@ let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
     match extract_rigid [t] with
       | None ->
           debugOutput "rigid subterm: none (%s)\n" (show_term t) ;
+          verboseOutput "WARNING: flexible AC equation!\n" ;
           if not static_norigid then sigmas else
           List.map
             (fun sigma ->
                if dynamic_norigid && is_var (List.assoc x sigma) then
-                 update ry sigma
+                 mark ry sigma
                else
-                 update rx sigma)
+                 mark rx sigma)
             sigmas
       | Some t ->
           debugOutput "rigid subterm: %s\n" (show_term t) ;
@@ -628,11 +628,11 @@ let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
             let oy = occurs [List.assoc y sigma] in
               if (ox && oy) || not (ox || oy) then
                 if dynamic_nooccur && is_var (List.assoc x sigma) then
-                  update ry sigma
+                  mark ry sigma
                 else
-                  update rx sigma
+                  mark rx sigma
               else
-                if ox then update rx sigma else update ry sigma
+                if ox then mark rx sigma else mark ry sigma
           in
             if not static_rigid then sigmas else
               List.map update_sigma sigmas
@@ -649,74 +649,45 @@ let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
     sigmas
 
 let mark_flexible_plus_2 ~a ~b ~rx ~ry ~x ~y sigmas =
-
-  (* Adapt a substitution to mark one recipe variable as not being a plus.
-   * In the case of equation, the recipe variables are not in the substitution. *)
-  let update r sigma =
-    let sigma =
-      if List.mem_assoc r sigma then begin
-        assert (Var r = List.assoc r sigma) ;
-        sigma
-      end else
-        (r, Var r) :: sigma
-    in
-    let r' = Var (fresh_string "P") in
-      List.map (fun (x,t) -> x, apply_subst t [r,r']) sigma
-  in
-
-    assert (List.length sigmas <= 7) ;
-    List.map
-      (fun (sigma:subst) ->
-         let x' = List.assoc x sigma in
-         let y' = List.assoc y sigma in
-         let a' = List.assoc a sigma in
-         let b' = List.assoc b sigma in
-           if (x',y') = (a',b') || (x',y') = (b',a') then
-             sigma
-           else
-             match a',b' with
-               | Fun ("plus",[Var _;Var _]), Fun ("plus",[Var _; Var _]) ->
-                   update rx sigma
-               | Fun ("plus",[Var _; Var _]), Var w
-               | Var w, Fun ("plus",[Var _; Var _]) ->
-                   begin match x' with
-                     | Fun ("plus",[Var x'1; Var x'2]) ->
-                         assert (w = x'1 || w = x'2) ;
-                         assert (is_var y') ;
-                         update rx sigma
-                     | Var o ->
-                         begin match y' with
-                           | Fun ("plus",[Var y'1; Var y'2]) ->
-                               assert (w = y'1 || w = y'2) ;
-                               update ry sigma
-                           | _ -> assert false
-                         end
-                     | _ -> assert false
-                   end
-               | _ -> assert false)
-      sigmas
+  assert (List.length sigmas = 7) ;
+  List.map
+    (fun (sigma:subst) ->
+       let x' = List.assoc x sigma in
+       let y' = List.assoc y sigma in
+       let a' = List.assoc a sigma in
+       let b' = List.assoc b sigma in
+         if (x',y') = (a',b') || (x',y') = (b',a') then
+           sigma
+         else
+           match a',b' with
+             | Fun ("plus",[Var _;Var _]), Fun ("plus",[Var _; Var _]) ->
+                 mark rx sigma
+             | Fun ("plus",[Var _; Var _]), Var w
+             | Var w, Fun ("plus",[Var _; Var _]) ->
+                 begin match x' with
+                   | Fun ("plus",[Var x'1; Var x'2]) ->
+                       assert (w = x'1 || w = x'2) ;
+                       assert (is_var y') ;
+                       mark rx sigma
+                   | Var o ->
+                       begin match y' with
+                         | Fun ("plus",[Var y'1; Var y'2]) ->
+                             assert (w = y'1 || w = y'2) ;
+                             mark ry sigma
+                         | _ -> assert false
+                       end
+                   | _ -> assert false
+                 end
+             | _ -> assert false)
+    sigmas
 
 let mark_flexible_plus_3 ~a ~b ~c ~rx ~ry ~x ~y sigmas =
 
-  (* TODO factorize this *)
-  (* Adapt a substitution to mark one recipe variable as not being a plus.
-   * In the case of equation, the recipe variables are not in the substitution. *)
-  let update r sigma =
-    let sigma =
-      if List.mem_assoc r sigma then begin
-        assert (Var r = List.assoc r sigma) ;
-        sigma
-      end else
-        (r, Var r) :: sigma
-    in
-    let r' = Var (fresh_string "P") in
-      List.map (fun (x,t) -> x, apply_subst t [r,r']) sigma
-  in
   let is_split = function
     | Var _ -> false
     | Fun (f,_) -> assert (f = "plus") ; true
   in
-    assert (List.length sigmas <= 25) ;
+    assert (List.length sigmas = 25) ;
     List.map
       (fun (sigma:subst) ->
          let x' = List.assoc x sigma in
@@ -727,16 +698,16 @@ let mark_flexible_plus_3 ~a ~b ~c ~rx ~ry ~x ~y sigmas =
             *   a1+b1+c1, a1+b1, a+b+c1. *)
          let split, whole = List.partition is_split [a';b';c'] in
            match split,whole with
-             | [_;_;_],_ -> update rx sigma
+             | [_;_;_],_ -> mark rx sigma
              | [_],_ ->
                  begin match x' with
-                   | Var _ -> update ry sigma
-                   | _ -> update rx sigma
+                   | Var _ -> mark ry sigma
+                   | _ -> mark rx sigma
                  end
              | _,[_] ->
                  begin match x' with
-                   | Fun ("plus",[Var _;Var _]) -> update rx sigma
-                   | _ -> update ry sigma
+                   | Fun ("plus",[Var _;Var _]) -> mark rx sigma
+                   | _ -> mark ry sigma
                  end
              | [],_ -> sigma
              | _ -> assert false)
