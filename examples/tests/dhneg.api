@@ -1,0 +1,18 @@
+symbols plus/2, zero/0, e/1, pow/2, g/0;
+
+private n1, n2, n3;
+channels C;
+var X, Y, Z;
+
+rewrite plus(X,zero) -> X;
+rewrite pow(e(X),Y) -> e(plus(X,Y));
+rewrite pow(X,zero) -> X;
+rewrite pow(pow(X,Y),Z) -> pow(X,plus(Y,Z));
+
+p = out(C,e(n1)).out(C,n2).out(C,e(n3));
+q = out(C,e(n1)).out(C,n2).out(C,e(plus(n1,n2)));
+equivalentct? p and q;
+
+p2 = out(C,pow(g,n1)).out(C,n2).out(C,pow(g,n3));
+q2 = out(C,pow(g,n1)).out(C,n2).out(C,pow(g,plus(n1,n2)));
+equivalentct? p2 and q2;
