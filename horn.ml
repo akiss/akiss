@@ -384,7 +384,7 @@ let rule_remove statement = match statement with
 (** For statements that are not canonized we still apply some simplifications
   * to avoid explosions: if a term is derived using several recipes, we can
   * remove derivations for which the recipe does not occur elsewhere in the
-  * statement. *)
+  * statement as long as one derivation remains. *)
 let simplify_statement (id,head,body) =
   let hvars = vars_of_term_list (get_recipes head) in
   let rec update body =
@@ -395,7 +395,7 @@ let simplify_statement (id,head,body) =
            let t = get_term a in
            let l = world_length (get_world a) in
              List.exists (fun a' ->
-                            a != a' &&
+                            a < a' &&
                             l = world_length (get_world a') &&
                             Maude.equals t (get_term a') []) body)
         body
@@ -1022,9 +1022,9 @@ let recipize tl kb =
 let checks_reach kb = 
   Base.fold_solved
     (fun x checks ->
-       (* debugOutput "TESTER: %s\n" (show_statement x); *)
        match (get_head x) with
-         | Predicate("reach", [w]) when is_solved x ->
+         | Predicate("reach", [w]) ->
+             debugOutput "TESTER: %s\n" (show_statement x) ;
              Fun ("check_run", [revworld (recipize (namify w) kb)]) :: checks
          | _ -> checks)
     kb []
@@ -1033,9 +1033,9 @@ let checks_reach kb =
 let checks_ridentical kb =
   Base.fold_solved
     (fun x checks ->
-       (* debugOutput "TESTER: %s\n" (show_statement x); *)
        match (get_head x) with
-         | Predicate("ridentical", [w; r; rp]) when is_solved x ->
+         | Predicate("ridentical", [w; r; rp]) ->
+             debugOutput "TESTER: %s\n" (show_statement x) ;
              let sigma = namify_subst w in
              let new_w = revworld (recipize (apply_subst w sigma) kb) in
              let omega = trmap (function arg -> match arg with
@@ -1049,7 +1049,7 @@ let checks_ridentical kb =
                (* debugOutput "FROM: %s\nGOT:%s\n\n%!"
                 *   (show_statement x) (show_term resulting_test); *)
                resulting_test :: checks
-  	    | _ -> checks)
+         | _ -> checks)
     kb []
 
 (** Extract all successful tests from a (saturated) knowledge base. *)
