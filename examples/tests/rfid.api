@@ -13,11 +13,13 @@ rewrite plus(X,X) -> zero;
 //   tag A sends <idA+r2, h(r1)+r2>
 // (in the real protocol there is also a shared key, but it
 //  doesn't play an important role here)
+
 // The protocol does not ensure untraceability: a fake
 // reader can initiate two sessions with the same nonce
 // and will be able to tell if the two sessions are against
 // the same tag or not. Indeed, by xoring the two components
 // of the pair one gets idX+h(r1).
+
 // However, this attack doesn't exist (and none exists) if
 // projections have not been modeled, which is the case here.
 
@@ -28,4 +30,4 @@ TtagB2 = in(C,X).out(C,pair(plus(idB,r4), plus(h(X),r4))).0;
 r1 = TtagA1 :: TtagA2;
 r2 = TtagA1 :: TtagB2;
 
-equivalentct? r1 and r2; // should be trace equivalent: no projections
+equivalentct? r1 and r2;

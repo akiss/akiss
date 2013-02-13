@@ -1,0 +1,13 @@
+symbols plus/2, zero/0, c/0;
+
+private a, ok;
+channels C;
+var X, Y, Z;
+
+rewrite plus(zero,X) -> X;
+rewrite plus(X,X) -> zero;
+
+s1 = out(C,a);
+r1 = out(C,plus(c,a));
+
+equivalentct? s1 and r1;
