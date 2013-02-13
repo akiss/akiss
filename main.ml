@@ -484,10 +484,14 @@ let declare_sequence traceName traceList =
 
 let query_print traceName =
   let print_kbs ?(filter=fun _ -> true) s =
-    Printf.printf "(%d statements)\n" (Base.S.cardinal s) ;
-    Base.S.iter
-      (fun f -> if filter f then Printf.printf "%s\n" (show_statement f))
-      s
+    let c = ref 0 in
+      Base.S.iter
+        (fun f -> if filter f then begin
+           incr c ;
+           Printf.printf "%s\n" (show_statement f)
+         end)
+        s ;
+      Printf.printf "(total: %d statements)\n" !c
   in
   let t = trace_of_process(List.assoc traceName !processes) in
   let kb_seed = seed_statements t !rewrite_rules in
@@ -501,6 +505,7 @@ let query_print traceName =
       saturate kb !rewrite_rules ;
       Printf.printf "\n\nAfter saturation:\n" ;
       print_kbs (Base.solved kb) ;
+      Printf.printf "\n" ;
       print_kbs (Base.not_solved kb) ;
       Printf.printf "\n\nKnows solved statements in saturation:\n" ;
       print_kbs ~filter:is_deduction_st (Base.solved kb) ;
