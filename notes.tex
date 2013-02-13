@@ -1,0 +1,339 @@
+\documentclass{article}
+
+\renewcommand{\O}{{\cal O}}
+\newcommand{\mathcst}[1]{\mathrm{\textbf{#1}}}
+\newcommand{\knows}{\mathcst{k}}
+\newcommand{\reach}{\mathcst{reach}}
+\newcommand{\identical}{\mathcst{knows}}
+\newcommand{\ridentical}{\mathcst{knows}}
+\newcommand{\pair}{\mathcst{pair}}
+\newcommand{\fst}{\mathcst{fst}}
+\newcommand{\snd}{\mathcst{snd}}
+\newcommand{\pow}{\mathcst{pow}}
+\newcommand{\e}{\mathcst{e}}
+
+\newcommand{\ra}{\rightarrow}
+\newcommand{\from}{\Leftarrow}
+
+\renewcommand{\in}{\mathcst{in}}
+\newcommand{\out}{\mathcst{out}}
+\newcommand{\test}{\mathcst{test}}
+\newcommand{\ok}{\mathcst{ok}}
+\newcommand{\zerop}{\mathbf{0}}
+
+\newcommand{\eg}{\emph{e.g.}}
+\newcommand{\ie}{\emph{i.e.}}
+
+\title{Akiss modulo AC}
+\author{D.~Baelde, S.~Delaune \& S.~Kremer}
+
+\begin{document}
+
+\maketitle
+
+The rules and theorems need to be adapted in various ways,
+with a few non-trivial issues. For now, this document mostly
+discusses the key additions made to the theory and implementation,
+in order to obtain a procedure that terminates
+on interesting examples.
+
+\paragraph{TODO}
+\begin{itemize}
+  \item The system does not check that the rewrite rules are confluent
+    and that it admits finite variants: it computes finite variants
+    even in theories that do not admit them!
+  \item We need to understand better what Maude does:
+    currently we have to define equations (not sure how they are
+    oriented) because variants are not computed properly when
+    we define rewrites.
+    Even then\ldots \textbf{\large OMG!}
+\end{itemize}
+{\tiny
+\begin{verbatim}
+(mod AKISS is
+sorts Term .
+op plus : Term Term -> Term [assoc comm] .
+op zero : -> Term .
+op pair : Term Term -> Term .
+op fst : Term -> Term .
+op snd : Term -> Term .
+op e : Term -> Term .
+op pow : Term Term -> Term .
+op n1 : -> Term .
+op n2 : -> Term .
+op n3 : -> Term .
+op n : -> Term .
+var Z Y X Y : Term .
+eq [rule1] : plus(X, zero) = X [variant] .
+eq [rule2] : pow(X, zero) = X [variant] .
+eq [rule3] : pow(e(X), Y) = e(plus(X, Y)) [variant] .
+eq [rule4] : pow(pow(X, Y), Z) = pow(X, plus(Y, Z)) [variant] .
+eq [rule5] : fst(pair(X, Y)) = X [variant] .
+eq [rule6] : snd(pair(X, Y)) = Y [variant] .
+endm)
+\end{verbatim}
+}
+% variants de pow(X,Y) sont bons
+\begin{verbatim}
+Maude> (get variants pair(pow(fst(Y), n3), pow(fst(snd(Y)), n3)) .)
+get variants in AKISS : pair(pow(fst(Y:Term),n3),pow(fst(snd(Y:Term)),n3))
+
+Variant 1
+{pair(pow(#3:Term,n3),pow(fst(#4:Term),n3)),Y:Term --> pair(#3:Term,#4:Term)}
+
+Variant 2
+{pair(pow(fst(Y:Term),n3),pow(fst(snd(Y:Term)),n3)),empty substitution}
+
+No more variants.
+\end{verbatim}
+
+
+\section{Avoiding divergence}
+
+\subsection{Rigid-based marking}
+
+The main new idea is to mark some recipe variables as not
+being instantiable by recipes whose head symbol is a plus.
+Such variables may be called \emph{non-plus} variables.
+In the implementation,
+their names follow the format \verb$P[0-9]+$ rather than
+the usual \verb$X[0-9]+$.
+
+The rigid-based marking strategy applies when performing resolution
+or equation against the plus clause,
+and the other clause has a selected atom $\knows(\ldots,T)$
+where $T$ has a rigid subterm
+underneath one or several plus symbols.
+In that case we mark the recipe variable which receives that
+rigid subterm.
+
+We illustrate the technique on a simple example (\verb#test2:ac3/r1#)
+that would otherwise diverge.
+Consider the following process, without any particular theory
+and $a$ is a public name:
+\[
+  \in(C,X).\in(C,Y).[X=Y+a].\out(C,\ok).\zerop
+\]
+We have to saturate a knowledge base initially containing
+the following two clauses:
+\begin{eqnarray}
+  \knows(R+R',X+Y) &\from& \knows(R,X), \knows(R',Y) \label{t2p} \\
+  \reach([\in(C,Y+a);\in(C,Y);\test;\out(C)]) &\from&
+     \underline{\knows(R_x,Y+a)}, \knows(R_y,Y) \label{t2o}
+\end{eqnarray}
+The second clause expresses that if $X$ and $Y$ pass the test, then
+the output becomes reachable. We shall write $T(Y)$ for the world in that 
+clause.
+By resolving (\ref{t2p}) against (\ref{t2o}) we obtain four solutions,
+one of which expressing that
+the recipe $R_x$ for the first input $Y+a$ could be built from
+the addition of recipe $R_1$ (deriving $Y_1$) and $R_2$ (deriving $a+Y_2$):
+\[
+\reach(T(Y_1+Y_2)) \from
+\knows(R_1,Y_1), \underline{\knows(R_2,Y_2+a)},
+\knows(R_y,Y_1+Y_2) \]
+Obviously the process can continue forever, the next step being:
+\[ \reach(T(Y_1+Y_2+Y_3)) \from
+ \knows(R_1,Y_1), \knows(R_2,Y_2), \underline{\knows(R_3,Y_3+a)},
+ \knows(R_y,Y_1+Y_2+Y_3) \]
+
+We believe that this restriction preserves completeness.
+The high-level idea is TODO.
+
+\subsection{Selection}
+
+Previously, akiss would always select the first atom whose term
+is not a variable. The theory allows for more flexibility.
+
+The previous example can be adapted so that we end up performing
+resolution on $Y_1+Y_2$ the second time, which leads to a new kind of
+divergence that we haven't treated so far. A good selection function
+would avoid that.
+More concretely, without such a selection our example \verb$test1:ac3/s3$ diverges.
+
+Selection makes flexible marking useless
+in most cases, but rigid-based remains necessary.
+
+\subsection{Non-normal clauses}
+
+Obviously, normalizing clauses reduces their number.
+More importantly, if normalization can be applied, then
+the normalized clause can be forgotten completely: indeed it will be (or will 
+have been) derived more directly by choosing appropriate variants.
+
+Let us see the kind of infinite behavior we are trying to avoid,
+from example \verb#test3:rfid0h/same#.
+Consider the following clauses,
+obtained under the theory of xor with a hashing function $h$
+for a trace that inputs $X$ then outputs $n+h(X)$ where $n$ is a secret name:
+\begin{eqnarray}
+  \knows(R+R',X+Y) &\from& \underline{\knows(R,X+Z)}, \knows(R',Y+Z) \label{c3pc} \\
+  \knows(R+R',X+Y) &\from& \knows(R,X), \knows(R',Y) \label{c3p} \\
+  \knows(h(R),h(X) &\from& \knows(R,X) \label{c3h} \\
+  \knows(w_0,n+h(X)) &\from& \knows(R,X) \label{c3o}
+\end{eqnarray}
+By combining (\ref{c3o}) with (\ref{c3pc}) we obtain
+\begin{eqnarray}
+  \knows(w_0+R_1,n+Y) &\from& \knows(R,X), \underline{\knows(R_1,Y+h(X))} \label{c317}
+\end{eqnarray}
+then by resolving it against (\ref{c3p}) and (\ref{c3h})
+we obtain the solved clause
+\begin{eqnarray}
+  \knows(w_0+h(R)+R_2,n+Y) &\from& \knows(R,X), \knows(R_2,Y) \label{c326}
+\end{eqnarray}
+We can now repeatedly apply (\ref{c326}) against (\ref{c317}), obtaining
+an infinite sequence\footnote{
+  Here, it seems that normalizing clauses reduces the infinite sequence 
+  into only a finite number of clauses, but the hidden details about the recipes 
+  does not make it that clear.
+} of new clauses.
+We show the first two clauses, where multiple derivations of the same
+term with different recipes have been omitted:
+\[ \begin{array}{l}
+    % clause 27
+    % var Y from (\ref{c326}) becomes h(X)+Y'
+    \knows(2 \times w_0 +h(R)+R_3, 2\times n +Y') \from
+    \knows(R,X), \underline{\knows(R_3,h(X)+Y')}
+    \\
+    % clause 30
+    % in the trace it had been normalized
+    % (normalization performed but not used to remove clause)
+    \knows(3 \times w_0+ 2 \times h(R)+R_4,3 \times n +Y') \from
+    \knows(R,X), \underline{\knows(R_4,h(X)+Y')}
+    \\
+    \ldots
+\end{array} \]
+
+This improvement is also critical in Diffie-Hellman style examples.
+The example is really easy to see, it is caused by the clause
+\[
+  \knows(\pow(R,R'),\e(X+Y)) \from \underline{\knows(R,\e(X))}, \knows(R',Y) 
+\]
+As soon as we have some $\knows(w,\e(n))$ we obtain
+$\knows(\pow(w,R),\e(n+X)) \from \knows(R,X)$, and then
+$\knows(\pow(\pow(w,R),R'),\e(n+X+Y)) \from \knows(R,X), \knows(R',Y)$
+and so on.
+This infinite chain can be broken by our optimization
+thanks to the following rewrite rule:
+\[ \pow(\pow(X,Y),Z) \ra \pow(X,Y+Z) \]
+
+\subsection{Marking non-trivial variants of the plus clause}
+
+Without it \verb#rfid0h# takes very long. Visually it's not clear
+that it diverges; I haven't looked into the results (\verb#test4#)
+carefully.
+
+An example of a bad situation between two variants of the xor clause:
+\[ \knows(R_X+R_Y,X+Y) \from \knows(R_X,X+Z), \knows(R_Y,Y+Z) \]
+\[ \knows(R_A+R_B,A+B) \from \knows(R_A,A), \knows(R_B,B) \]
+After one step of resolution one of the resulting new clauses is
+\[ \knows(R_A+R_B+R_Y,X_1+X_2+Y) \from \knows(R_Y,Y+Z_1+Z_2),
+     \knows(R_A,X_1+Z_1), \knows(R_B,X_2+Z_2) \]
+Obviously, this can continue forever.
+
+Solution: in non-trivial variants of the plus clause, mark the first
+recipe that corresponds to a plus term. Completeness should be preserved,
+as this only amounts to asking for a specific parenthesizing of those sums
+in recipes.
+
+\subsection{Flexible ``yellow'' marking}
+
+We can justify a special marking used in resolution and equation
+rules when the plus clause is involved and there is no rigid
+subterm.
+
+This optimization also solves the problem given in the previous
+section, but in general it is less powerful: in \verb#rfid0#
+the static marking of variants is really needed.
+
+% Seems useless except in hardest (non-terminating) examples!
+So far we do not have examples that terminate thanks to this
+optimization.
+
+\subsection{Redundant recipe variables}
+
+Run some sort of canonization even on non-solved statements
+to remove redundant atoms. More precisely, we remove from the body any
+$\knows_w(R,t)$ where $R$ does not occur in the head of the clause
+and another $\knows_w(R',t)$ is present in the body
+(equality modulo AC is used on terms\ldots TODO we could do better because
+this is done after normalization).
+
+So far no example that clearly diverges without this optimization,
+but there are examples (namely, \verb.ika.) that do not terminate in
+a day without that optimization, and take less than an hour with it.
+It is easy to see at least why this optimization saves a lot of work:
+TODO
+
+This simplification takes time because it uses equality modulo AC
+(using Maude) but it brings benefits on \verb#rfid0h# (some
+simplifications apply, and it runs faster) and does not slow down
+\verb#stat# (where no simplification applies).
+
+\section{Optimizations, or not} %% ==========================================
+
+\subsection{Useful statements}
+
+A small optim not described in the paper, but obviously allowed
+by the theory: do not add clauses that allow to derive instances
+of reflexivity for $\identical$ and $\ridentical$.
+
+This check was originally performed only after the Equation rule,
+we generalized it since it is useful in other cases and it's not
+too costly.
+
+A related optimization is to avoid deriving one identity and then
+the symmetric one: it wasn't done originally, we introduced it
+by forcing the order of clauses in the equation rule.
+
+No tests ran here but it can only help because it's so cheap.
+
+\subsection{Update}
+
+Doing it modulo AC is too costly. We do it modulo normalization and
+alpha renaming. Order of atoms still matters.
+
+\subsection{Conseq}
+
+Probably same as above: still syntactic,
+but I don't remember of any tests here.
+
+\section{Theory-specific comments} %% ========================================
+
+% \subsection{Xor}
+
+Many variants of the same equality:
+$\identical(A+B,C)$ is equivalent to
+$\identical(A,B+C)$ and also $\identical(A+B+C,0)$,
+but all those statements are going to be derived.
+We could restrict to $\identical$ statements where
+the second recipe is $0$ if the first is a xor.
+
+% TODO
+% \subsection{Pairs}
+% 
+% Similarly,
+% $\identical(\pair(A,B),\pair(C,D))$
+% is equivalent to $\identical(A,C)$ and $\identical(B,D)$.
+% We could forbid $\identical$ statements where both recipes
+% are pairs.
+
+\section{Optimizations} %% ==================================================
+
+Most of the relatively easy optimizations are only constant speedups and
+should not be rushed: the critical thing still is to understand why things
+take so long (\ie, generate so many clauses) and fix it.
+So far the only algorithmic optimization I did is on the saturation strategy,
+and it was mainly motivated by the need for more control for debugging.
+
+An obvious enhancement would be to natively implement AC unification,
+but equality (modulo AC + R) and normalization (modulo R) are also used during 
+the saturation process so there is actually a fair amount of things that we 
+need.
+
+Various other ideas: parallelize saturation, parallelize the saturation of
+different traces, process several traces in the same saturation phase, etc.
+
+Also: avoid duplicate tests, one at one point and another one at a later point
+
+\end{document}
