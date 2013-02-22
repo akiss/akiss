@@ -79,7 +79,7 @@ let rec sig_of_term_list cur = function
       sig_of_term_list cur (List.rev_append l l')
 
 let sig_of_term_list l =
-  let { vars ; names ; params } =
+  let { vars=vars ; names=names ; params=params } =
     sig_of_term_list { vars = [] ; names = [] ; params = [] } l
   in
     { vars = Util.unique vars ; names = Util.unique names ;
