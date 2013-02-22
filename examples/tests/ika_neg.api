@@ -1,0 +1,36 @@
+symbols plus/2, zero/0, pair/2, fst/1, snd/1, e/1, pow/2;
+
+private n1, n2, n3, n;
+channels C;
+var X, Y, Z;
+
+// Protocol
+// Three agents, agent <i> only knows n<i>
+// . Agent 1 sends X=e(n1)
+// . Agent 2 receives X, sends A=X, B=e(n2) and C=X^n2 (ie, e(n1+n2))
+// . Agent 3 receives those and sends A'=A^n3 and B'=B^n3
+//
+// Shared secret: e(n1+n2+n3)
+//   Agent 3 has it from C^n3
+//   Agent 1 has it from B'^n1
+//   Agent 2 has it from A'^n2
+// Intruder does not know the shared secret.
+
+rewrite plus(X,zero) -> X;
+rewrite pow(X,zero) -> X;
+rewrite pow(e(X),Y) -> e(plus(X,Y));
+rewrite pow(pow(X,Y),Z) -> pow(X,plus(Y,Z));
+rewrite fst(pair(X,Y)) -> X;
+rewrite snd(pair(X,Y)) -> Y;
+
+run =
+out(C,e(n1)) .
+  in(C,X) . out(C,pair(X, pair(e(n2), pow(X,n2)))) .
+    in(C,Y) . out(C,pair( pow(fst(Y),n3), pow(fst(snd(Y)),n3) )) . 0;
+
+// The shared key is indistinguishable from an encrypted random nonce
+// iff the three nonces are secret
+i3 = run :: out(C,n2).out(C,e(plus(n1,plus(n2,n3)))).0;
+i4 = run :: out(C,n2).out(C,n).0;
+
+equivalentct? i3 and i4;
