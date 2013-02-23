@@ -1,0 +1,46 @@
+symbols plus/2, zero/0, h/2;
+private idA, idB, r2, r4, kA, kB, ok;
+channels C;
+var X, Y, Z;
+
+rewrite plus(zero,X) -> X;
+rewrite plus(X,X) -> zero;
+
+
+// We model RFID tags that authenticate with a reader
+// in the following way:
+//   reader sends a nonce r1
+//   tag A sends <idA+r2, h(r1,kA)+r2>
+// (in the real protocol there is also a shared key, but it
+//  doesn't play an important role here)
+
+// The protocol does not ensure untraceability: a fake
+// reader can initiate two sessions with the same nonce
+// and will be able to tell if the two sessions are against
+// the same tag or not. Indeed, by xoring the two components
+// of the pair one gets idX+h(r1).
+
+// This is almost the real protocol but to help AKISS to find the attack
+// the two sessions are executed using the same input (the first one Y).
+
+TtagA1 = in(C,Y).out(C,plus(idA,r2)). out(C,plus(h(Y,kA),r2)).0;
+TtagA2 = out(C,plus(idA,r4)). out(C,plus(h(Y,kA),r4)).0;
+TtagB2 = out(C,plus(idB,r4)). out(C,plus(h(Y,kB),r4)).0;
+
+r1 = TtagA1 :: TtagA2;
+r2 = TtagA1 :: TtagB2;
+
+equivalentct? r1 and r2;
+
+
+// 22/02/2013: AKISS finds the attack within 6 min - noko (cf. rfid-2a.log rfid-2a.dot rfid-2a.dot.svg)
+// AKISS generates several tests that are equivalent, e.g.
+// check_identity(plus(plus(w0,w2),w3), w1) but also 
+// check_identity(plus(plus(w0,w1),w3), w2) and several others like that.
+// We have also some others that do not seem very useful. Could we avoid this?
+// e.g. check_identity(plus(plus(plus(w0,w1),w3),X470), plus(w2,X470))
+
+
+
+// TODO: add the rule rewrite plus(X,plus(X,Y)) -> Y; for coherence. 
+// We do not know if it is needed for MAUDE 
