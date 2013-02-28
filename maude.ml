@@ -306,13 +306,14 @@ let rec parse_unifiers tokens =
     | Genlex.Ident "No" ->
         begin match Stream.next tokens with
           | Genlex.Ident "solution" -> []
+          | Genlex.Ident "unifier" -> []
           | Genlex.Ident "more" ->
               expect tokens (Genlex.Ident "solutions") ;
               []
           | _ -> assert false
         end
     | t ->
-        if pdebug then Format.printf "pvs> skip %s\n%!" (string_of_token t) ;
+        if pdebug then Format.printf "pus> skip %s\n%!" (string_of_token t) ;
         parse_unifiers tokens
 
 (** Variants *)
