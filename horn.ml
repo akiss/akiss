@@ -7,7 +7,6 @@ open Term
 module Term = struct
   include Term
   let mgu = Cime.mgu
-  let mgm = Cime.mgm
   let csu = Cime.csu
   let csu u v =
     let sols = csu u v in
@@ -437,23 +436,32 @@ let rec first f l e =
 
 (** [inst_w_t my_head head_kb exc] attempts to match the world and term
   * arguments of two predicates of arity three, and raises [exc] upon
-  * failure.
-  * This is used for checking if a clause is in conseq, which is done
-  * in kb updates and when recipizing tests. In the first case we may
-  * or may not want AC (TODO). In the second case we need AC.
+  * failure. This is used for checking if a clause is in conseq.
+  * This version is not modulo AC, used for kb updates (TODO, design choice).
+  * Another version, modulo AC, is used for recipizing tests.
   * TODO check that instantiations respect annotations regarding + *)
-let inst_w_t ?(ac=false) my_head head_kb exc =
+let inst_w_t my_head head_kb exc =
   match (my_head, head_kb) with
     | (Predicate(_, [myw; _; myt]), Predicate(_, [wkb; _; tkb])) -> (
 	let t1 = Fun("!tuple!", [myw; myt]) in
 	let t2 = Fun("!tuple!", [wkb; tkb]) in
 	try
-          (* debugOutput "Maching %s against %s\n%!" (show_term t1) (show_term t2); *)
-          let sigma = (if ac then Term.mgm else mgm) t2 t1 in
+          (* debugOutput "Matching %s against %s\n%!" (show_term t1) (show_term t2); *)
+          let sigma = mgm t2 t1 in
             (* debugOutput "Result %s\n%!" (show_subst sigma); *)
             sigma
 	with Not_matchable -> raise exc
       )
+    | _ -> invalid_arg("inst_w_t")
+
+let inst_w_t_ac my_head head_kb =
+  match (my_head, head_kb) with
+    | (Predicate(_, [myw; _; myt]), Predicate(_, [wkb; _; tkb])) ->
+	let t1 = Fun("!tuple!", [myw; myt]) in
+	let t2 = Fun("!tuple!", [wkb; tkb]) in
+        (* debugOutput "Matching %s against %s\n%!" (show_term t1) (show_term t2); *)
+        Maude.matchers t2 t1 []
+        (* debugOutput "Result %s\n%!" (show_subst sigma); *)
     | _ -> invalid_arg("inst_w_t")
 
 (** Check whether a statement is a consequence of a knowledge base, ie.
@@ -930,54 +938,66 @@ let namify t =
   let sigma = namify_subst t in
   apply_subst t sigma
 
-exception Algorithm_error
-exception Find_recipe_h_error
+(** Using success/failure continuations for backtracking.
+  * The success continuation is called on each solution of type 'a,
+  * and it is passed a continuation for enumerating more solutions
+  * if necessary. Eventually the failure continuation (of type cont)
+  * is called to notify that there is no (more) solution. *)
+type cont = unit -> unit
+type 'a succ = 'a -> cont -> unit
 
-exception No_recipe_found
+(** [for_some l succ fail f]
+  * succeeds if [f] succeeds on some element of [l]. *)
+let rec for_some l (succ:'a succ) (fail:cont) f =
+  match l with
+    | [] -> fail ()
+    | hd::tl ->
+        f hd succ (fun () -> for_some tl succ fail f)
 
-let rec find_recipe_h atom kbs all = 
+(** [for_each l succ fail f]
+  * succeeds if [f] succeeds on all element of [l],
+  * and it returns (through success) the list of returned solutions. *)
+let for_each l (succ:'a list succ) (fail:cont) (f:'b -> 'a succ -> cont -> unit) =
+  let rec aux prefix fail = function
+    | [] -> succ (List.rev prefix) fail
+    | hd::tl ->
+        f hd (fun x k -> aux (x::prefix) k tl) fail
+  in aux [] fail l
+
+let rec find_recipe_h atom kbs (succ:term succ) (fail:cont) =
   match atom with
-    | Predicate("knows", [_; _; Fun(name, [])]) when (startswith name "!n!") ->
-        Fun(name, [])
+    | Predicate("knows", [_; _; Fun(name, [])]) when startswith name "!n!" ->
+        succ (Fun(name, [])) fail
     | _ ->
-	(
-	  match kbs with
-	    | (_, ((Predicate("knows", [wp; rp; tp])) as head), body) :: rest -> 
-		(
-		  try
-		    let sigma = inst_w_t ~ac:true atom head No_recipe_found in
-		    (
-		      (* debugOutput "Sigma: %s\n\n%!" (show_subst sigma); *)
-		      apply_subst 
-			(get_recipe head)
-			(List.combine
-			   (trmap 
-			      (fun y -> unbox_var (get_recipe y))
-			      body)
-			   (trmap 
-			      (fun y -> find_recipe_h
-				 (apply_subst_atom y sigma) 
-				 all
-				 all)
-			      body))
-		    )
-		  with
-		    | No_recipe_found -> find_recipe_h atom rest all
-		)
-	    | [] -> raise No_recipe_found;
-	    | _ -> raise Find_recipe_h_error;
-	)
+        for_some kbs succ fail
+          (fun clause succ fail ->
+             let sigmas = inst_w_t_ac atom (get_head clause) in
+               for_some sigmas succ fail
+                 (fun sigma succ fail ->
+                    let succ' theta k =
+                      succ
+                        (apply_subst (get_recipe (get_head clause)) theta)
+                        k
+                    in
+                      for_each (get_body clause) (succ':subst succ) fail
+                        (fun atom succ fail ->
+                           let rvar = unbox_var (get_recipe atom) in
+                           let succ recipe k = succ (rvar,recipe) k in
+                             find_recipe_h (apply_subst_atom atom sigma) kbs succ fail)))
+
+exception Recipe_found of term
 
 let find_recipe atom kb =
   let kbsolved = (only_knows (only_solved kb)) in
-  try
-    find_recipe_h atom kbsolved kbsolved
-  with No_recipe_found -> (
-    Printf.eprintf "Trying to get %s out of:\n%s\n\n%!" 
-      (show_atom atom)
-      (show_kb_list kbsolved);
-    raise Algorithm_error
-  )
+    try
+      find_recipe_h atom kbsolved
+        (fun r _ -> raise (Recipe_found r))
+        (fun () -> ()) ;
+      Printf.eprintf "Trying to get %s out of:\n%s\n\n%!" 
+        (show_atom atom)
+        (show_kb_list kbsolved) ;
+      assert false
+    with Recipe_found r -> r
 
 let rec revworld_h (w : term) (a : term) : term =
   match w with
