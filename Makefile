@@ -48,7 +48,8 @@ TESTS = examples/tests/xor.api examples/tests/rfid.api \
 NOTESTS = examples/tests/nstat.api \
 		  examples/tests/nac.api examples/tests/nac2.api examples/tests/nac3.api \
 		  examples/tests/dhneg.api examples/tests/nstatxor.api \
-		  examples/tests/rfid0h.api examples/tests/rfid0.api examples/tests/rfid1.api
+		  examples/tests/rfid0h.api
+LONGTESTS = examples/tests/rfid0.api examples/tests/rfid1.api
 RUN = OCAMLRUNPARAM=b ./akiss -verbose
 
 test: akiss $(TESTS)

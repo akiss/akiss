@@ -6,8 +6,7 @@ open Term
 (** Wrapper around Term to perform unification through Cime *)
 module Term = struct
   include Term
-  let mgu = Cime.mgu
-  let csu = Cime.csu
+  let csu s t = Maude.unifiers s t []
   let csu u v =
     let sols = csu u v in
     let n = List.length sols in
@@ -571,15 +570,15 @@ let initial_kb (seed : statement list) : Base.t =
 (* Adapt a substitution to mark one recipe variable as not being a plus.
  * In the case of equation, the recipe variables are not in the substitution. *)
 let mark r sigma =
-  let sigma =
-    if List.mem_assoc r sigma then begin
-      assert (Var r = List.assoc r sigma) ;
-      sigma
-    end else
-      (r, Var r) :: sigma
+  let r', sigma =
+    try
+      match List.assoc r sigma with
+        | Var r' -> r', sigma
+        | _ -> assert false
+    with Not_found -> r, (r, Var r) :: sigma
   in
-  let r' = Var (fresh_string "P") in
-    List.map (fun (x,t) -> x, apply_subst t [r,r']) sigma
+  let r'' = Var (fresh_string "P") in
+    List.map (fun (x,t) -> x, apply_subst t [r',r'']) sigma
 
 (** Restrict a csu based on plus-constraints *)
 let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
@@ -625,15 +624,16 @@ let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
             sigmas
       | Some t ->
           debugOutput "rigid subterm: %s\n" (show_term t) ;
-          let rec occurs = function
-            | Var _ :: l -> occurs l
+          let rec occurs t = function
+            | Var _ :: l -> occurs t l
             | Fun (s,args) as t' :: l ->
-                t = t' || occurs (List.rev_append args l)
+                t = t' || occurs t (List.rev_append args l)
             | [] -> false
           in
           let update_sigma sigma =
-            let ox = occurs [List.assoc x sigma] in
-            let oy = occurs [List.assoc y sigma] in
+            let t = apply_subst t sigma in
+            let ox = occurs t [List.assoc x sigma] in
+            let oy = occurs t [List.assoc y sigma] in
               if (ox && oy) || not (ox || oy) then
                 if dynamic_nooccur && is_var (List.assoc x sigma) then
                   mark ry sigma
