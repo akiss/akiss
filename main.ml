@@ -15,6 +15,8 @@ let usage = Printf.sprintf
 let args = ref []
 
 let command_line_options_list = [
+  ("-xor", Arg.Set Horn.xor,
+   "Enable EXPERIMENTAL xor-specific optimizations.") ;
   ("-verbose", Arg.Unit (fun () -> verbose_output := true),
    "Enable verbose output");
   ("-debug", Arg.Unit (fun () -> debug_output := true),

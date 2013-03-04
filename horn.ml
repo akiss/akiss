@@ -14,6 +14,10 @@ module Term = struct
       sols
 end
 
+(** {2 Flags} *)
+
+let xor = ref false
+
 (** {2 Predicates and clauses, conversions and printing} *)
 
 (* TODO
@@ -405,7 +409,7 @@ let simplify_statement (id,head,body) =
   in
     (id,head,update body)
 
-let canonical_form statement = 
+let canonical_form statement =
   if is_solved statement then
     let f = iterate rule_remove (iterate rule_rename statement) in
       debugOutput "Canonized: %s\n" (show_statement f) ;
@@ -524,11 +528,21 @@ let useful (id, head, body) =
         end else true
     | _ -> invalid_arg("useful")
 
+let normalize_identical f =
+  if not !xor then f else
+    match get_head f with
+      | Predicate("identical", [w;r;r']) ->
+          get_id f,
+          Predicate("identical", [w;Fun("plus",[r;r']);Fun("zero",[])]),
+          get_body f
+      | _ -> f
+
 (** Update a knowledge base with a new statement. This involves canonizing
   * the statement, checking whether it already belongs to the consequences
   * of the base, and actually inserting the statement or a variant of it. *)
 let update (kb : Base.t) rules (f : statement) : unit =
 
+  let f = normalize_identical f in
   let tf_orig = term_from_statement f in
   let tf = Maude.normalize tf_orig rules in
   let f = statement_from_term (get_id f) tf in
@@ -544,12 +558,13 @@ let update (kb : Base.t) rules (f : statement) : unit =
       let recipe = consequence fc kb in
       let world = get_world head in
       let newhead = Predicate("identical", [world; get_recipe head; recipe]) in
+      let newclause = normalize_identical (id,newhead,body) in
         debugOutput
           "USELESS: %s\nCF:%s\nINSTEAD:%s\n\n%!"
           (show_statement f) (show_statement fc)
-          (show_statement (id, newhead, body)); 
-        if useful (id,newhead,body) then
-          Base.add (id, newhead, body) rules kb
+          (show_statement newclause); 
+        if useful newclause then
+          Base.add newclause rules kb
     with Not_a_consequence ->
       Base.add ~needs_check:false fc rules kb
   else
