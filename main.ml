@@ -17,6 +17,10 @@ let args = ref []
 let command_line_options_list = [
   ("-xor", Arg.Set Horn.xor,
    "Enable EXPERIMENTAL xor-specific optimizations.") ;
+  ("-C", Arg.Clear Horn.conseq,
+   "Disable conseq optimization.") ;
+  ("-P", Arg.Set Horn.conseq_no_plus,
+   "Disable conseq optimization for plus clause.") ;
   ("-verbose", Arg.Unit (fun () -> verbose_output := true),
    "Enable verbose output");
   ("-debug", Arg.Unit (fun () -> debug_output := true),

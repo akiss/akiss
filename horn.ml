@@ -17,6 +17,8 @@ end
 (** {2 Flags} *)
 
 let xor = ref false
+let conseq = ref true
+let conseq_no_plus = ref true
 
 (** {2 Predicates and clauses, conversions and printing} *)
 
@@ -185,6 +187,19 @@ let dotfile =
     Printf.fprintf dotfile "digraph G {\n" ;
     at_exit (fun () -> Printf.fprintf dotfile "}\n") ;
     dotfile
+
+let is_plus_clause = function
+  | _, Predicate ("knows",
+               [Var w;
+                Fun ("plus",[Var rx; Var ry]);
+                Fun ("plus",[Var x; Var y])]),
+    [ Predicate("knows",[Var w'; Var r'; Var x']) ;
+      Predicate("knows",[Var w''; Var r''; Var y'']) ]
+    when rx <> ry && x <> y && w = w' && w = w'' &&
+         ((rx,x,ry,y) = (r',x',r'',y'') ||
+          (rx,x,ry,y) = (r'',y'',r',x'))
+    -> true
+  | _ -> false
 
 let is_plus = function
   | Fun ("plus",_) -> true
@@ -496,6 +511,8 @@ let consequence st kb =
                      (*   (show_statement (head, body)); *)
                      (* debugOutput "Against %s\n%!" *)
                      (*   (show_statement x); *)
+                     if !conseq_no_plus && is_plus_clause x then
+                       raise Not_a_consequence ;
                      let sigma = inst_w_t head (get_head x) Not_a_consequence in
                        (* debugOutput "Sigma: %s\n\n%!" (show_subst sigma); *)
                        apply_subst 
@@ -552,7 +569,7 @@ let update (kb : Base.t) rules (f : statement) : unit =
 
   let (id, head, body) as fc = canonical_form f in
   if useful fc then
-  if is_deduction_st f && is_solved f then
+  if !conseq && is_deduction_st f && is_solved f then
     try
       (* TODO can we really run consequence before freshening the clause? *)
       let recipe = consequence fc kb in
