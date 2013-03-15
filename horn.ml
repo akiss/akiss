@@ -18,7 +18,7 @@ end
 
 let xor = ref false
 let conseq = ref true
-let conseq_no_plus = ref true
+let conseq_no_plus = ref false
 
 (** {2 Predicates and clauses, conversions and printing} *)
 
