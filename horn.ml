@@ -548,6 +548,11 @@ let useful (id, head, body) =
 let normalize_identical f =
   if not !xor then f else
     match get_head f with
+      | Predicate("identical", [w;r;Fun("zero",[])])
+      | Predicate("identical", [w;Fun("zero",[]);r]) ->
+          get_id f,
+          Predicate("identical", [w;r;Fun("zero",[])]),
+          get_body f
       | Predicate("identical", [w;r;r']) ->
           get_id f,
           Predicate("identical", [w;Fun("plus",[r;r']);Fun("zero",[])]),
