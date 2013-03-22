@@ -500,6 +500,7 @@ let consequence st kb =
             get_recipe (List.find (is_same_t_smaller_w head) body)
           with
             | Not_found ->
+                if not !conseq then raise Not_a_consequence else
                 (* Inductive case: Res rule
                  * Find a (solved, well-formed) statement [x]
                  * whose head is matched by [head] and such that
@@ -574,7 +575,7 @@ let update (kb : Base.t) rules (f : statement) : unit =
 
   let (id, head, body) as fc = canonical_form f in
   if useful fc then
-  if !conseq && is_deduction_st f && is_solved f then
+  if is_deduction_st f && is_solved f then
     try
       (* TODO can we really run consequence before freshening the clause? *)
       let recipe = consequence fc kb in
@@ -588,7 +589,8 @@ let update (kb : Base.t) rules (f : statement) : unit =
         if useful newclause then
           Base.add newclause rules kb
     with Not_a_consequence ->
-      Base.add ~needs_check:false fc rules kb
+      let needs_check = not !conseq in
+        Base.add ~needs_check fc rules kb
   else
     Base.add fc rules kb
 
