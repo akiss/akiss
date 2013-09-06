@@ -451,11 +451,11 @@ let query_print traceName =
       let kb_sat = saturate kb_ini !rewrite_rules in
       let tests = checks kb_sat in
       (
-	Printf.printf "\n\nAfter saturation:\n\n%s\n\nKnows solved statements in saturation: %s\n\nKnows statements in saturation: %s\n\nTests:\n%s\n\n%!" (show_kb kb_sat) (show_kb (only_solved (only_knows kb_sat))) (show_kb (only_knows kb_sat)) (show_tests tests);
-	let trace = trace_of_process (List.assoc traceName !processes) in
-	Printf.printf "Running reach self tests: %s\nRunning ridentical self tests: %s\n\n%!"
-	  (str_of_tr (check_reach_tests trace (List.filter is_reach_test tests) !rewrite_rules))
-	  (str_of_tr (check_ridentical_tests trace (List.filter is_ridentical_test tests) !rewrite_rules))
+      	Printf.printf "\n\nAfter saturation:\n\n%s\n\nKnows solved statements in saturation: %s\n\nKnows statements in saturation: %s\n\nTests:\n%s\n\n%!" (show_kb kb_sat) (show_kb (only_solved (only_knows kb_sat))) (show_kb (only_knows kb_sat)) (show_tests tests);
+      	let trace = trace_of_process (List.assoc traceName !processes) in
+      	Printf.printf "Running reach self tests: %s\nRunning ridentical self tests: %s\n\n%!"
+      	  (str_of_tr (check_reach_tests trace (List.filter is_reach_test tests) !rewrite_rules))
+      	  (str_of_tr (check_ridentical_tests trace (List.filter is_ridentical_test tests) !rewrite_rules))
       )
     )
   )
@@ -513,6 +513,9 @@ let processCommand (c : cmd) =
   | QueryEvSquare (traceList1, traceList2) ->
     Printf.printf "Checking forward indistinguishability of  %s and %s\n%!" (show_string_list traceList1) (show_string_list traceList2);
     evequiv traceList1 traceList2
+
+  | QueryDeduc (traceList, t) ->
+    Printf.printf "Checking whether %s is deducible from %s \n%!" (show_term (parse_term t)) (show_string_list traceList)
 
   | QueryPrint traceName ->
     Printf.printf "Printing information about %s\n%!" traceName;

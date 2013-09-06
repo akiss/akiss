@@ -231,9 +231,12 @@ let rec knows_statements_h oc tr antecedents world clauses =
 	let next_antecedents = (List.append antecedents [ancedent]) in
 	knows_statements_h oc remaining_trace next_antecedents
 	  next_world clauses
-    | Trace(Test(s, t), remaining_trace) -> 
+
+    | Trace(Test(s, t), remaining_trace) ->
 	let next_world = worldadd world (Fun("!test!", [])) in
-	knows_statements_h oc remaining_trace antecedents
+	let antecedent = Predicate("!equals!", [s; t]) in
+	let next_antecedents = List.append antecedents [antecedent] in
+	knows_statements_h oc remaining_trace next_antecedents
 	  next_world clauses
 ;;
 
@@ -281,9 +284,36 @@ let knows_variantize (head, body) rules =
     | _ -> invalid_arg("variantize")
 ;;
 
+
+let knows_equationalize (head, body) rules =
+  let eqns = List.filter (function (Predicate(x, _)) -> x = "!equals!") body in
+  let lefts = trmap (function 
+			  | (Predicate(_, [x;_])) -> x 
+			  | _ -> invalid_arg("lefts")) eqns in
+  let rights = trmap (function 
+			   | (Predicate(_, [_;y])) -> y
+			   | _ -> invalid_arg("rights")) eqns in
+  let t1 = Fun("!tuple!", lefts) in
+  let t2 = Fun("!tuple!", rights) in
+  let sigmas = unifiers t1 t2 rules in
+  let newbody = List.filter (function (Predicate(x, _)) -> x <> "!equals!") body in
+  let newatom sigma = function
+    | (Predicate(x, [y; z; t])) -> 
+	Predicate(x, [apply_subst y sigma; z; apply_subst t sigma])
+    | _ -> invalid_arg("newatom") in
+  let newhead sigma = match head with 
+    | Predicate("knows", [w; r; t]) -> Predicate("knows", [apply_subst w sigma; r; apply_subst t sigma])
+    | _ -> invalid_arg("wrong head") in
+  let newclause sigma =
+    (newhead sigma, trmap (fun x -> newatom sigma x) newbody) in
+  trmap newclause sigmas
+;;
+
+
 let knows_statements tr rules = 
   let kstatements = knows_statements_h 0 tr [] (Fun("empty", [])) [] in
-  trconcat (trmap (function x -> knows_variantize x rules) kstatements)
+  trconcat (trmap (fun x -> knows_variantize x rules)
+   	      (trconcat (trmap (fun x -> knows_equationalize x rules) kstatements)))
 ;;
 
 let rec reach_statements_h tr antecedents world result =

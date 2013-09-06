@@ -31,11 +31,14 @@ evrewrite snd(pair(x, y)) -> y;
 evrewrite check(pk(x),sign(x,y)) -> ok;
 evrewrite getmsg(sign(x,y)) -> y;
 
-evrewrite ped(y, forge2(ped(x,r),y)) -> ped(x,r);
-evrewrite forge2(ped(x,r),x) -> r;
 
-evrewrite ped(forge1(ped(x,r),y), y) -> ped(x,r);
+// evrewrite ped(forge1(ped(x,r),y), y) -> ped(x,r);
+evrewrite ped(forge1(x, y), y) -> x;
 evrewrite forge1(ped(x,r),r) -> x;
+
+// evrewrite ped(y, forge2(ped(x,r),y)) -> ped(x,r);
+evrewrite ped(y, forge2(x, y)) -> x;
+evrewrite forge2(ped(x,r),x) -> r;
 
 evrewrite forge2(ped(x,r),forge1(ped(x,r),y)) -> y;
 evrewrite forge1(ped(x,r),forge2(ped(x,r),y)) -> y;
@@ -53,8 +56,8 @@ Byes = let v = yes in let id = b in let r = rb in let r2 = rb2 in let r3 = rb3 i
 Bno  = let v = no  in let id = b in let r = rb in let r2 = rb2 in let r3 = rb3 in V;
 
 
-AyBn = Ayes :: Bno;
-AnBy = Ano  :: Byes;
+AyBn = Ayes || Bno;
+AnBy = Ano  || Byes;
 
 
 Tally1 = out(bb,va);
@@ -65,6 +68,6 @@ T = Tally1 || Tally2;
 P =  out(bb,pk(skE)) :: AyBn :: let va = yes in let vb = no in T;
 Q =  out(bb,pk(skE)) :: AnBy :: let va = no in let vb = yes in T;
 
-equivalentft? P and Q; //trace equivalent
+//equivalentft? P and Q; //trace equivalent
 fwdequivalentft?  P and Q; //forward indistinguishable
 

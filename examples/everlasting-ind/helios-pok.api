@@ -58,9 +58,13 @@ Tally3 = out(bb,adec(skE, getmsg(fst(snd(z)))));
 
 T = Tally1 || Tally2 || Tally3;
 
-// P =  out(bb,pk(skE)) :: (AyBn || BB) :: let va = yes in let vb = no in T;
-// Q =  out(bb,pk(skE)) :: (AnBy || BB) :: let va = no in let vb = yes in T;
+P =  out(bb,pk(skE)) :: (AyBn || BB) :: let va = yes in let vb = no in T;
+Q =  out(bb,pk(skE)) :: (AnBy || BB) :: let va = no in let vb = yes in T;
 
+// equivalentft? P and Q;
+// fwdequivalentft? P and Q;
+
+// Slightly simplified model: sequential voters, instead of parallel
 
 P1  =  out(bb,pk(skE)) :: Ayes :: Bno :: BB :: let va = yes in let vb = no in T;
 P2  =  out(bb,pk(skE)) :: Ayes :: BB :: Bno :: let va = yes in let vb = no in T;
@@ -80,7 +84,7 @@ Q6  =  out(bb,pk(skE)) :: BB :: Byes :: Ano ::let va = yes in let vb = no in T;
 // P is the set of symbolic traces P1, P2, P3, P4, P5, P6;
 // Q is the set of symbolic traces Q1, Q2, Q3, Q4, Q5, Q6;
 
-//equivalentft? P1, P2, P3, P4, P5, P6 and Q1, Q2, Q3, Q4, Q5, Q6; //trace equivalent
+// equivalentft? P1, P2, P3, P4, P5, P6 and Q1, Q2, Q3, Q4, Q5, Q6; //trace equivalent
 
 // can also be verified by verifying the stronger property
 //equivalentft? P1 and Q1 //trace equivalent

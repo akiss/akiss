@@ -37,18 +37,18 @@ BnoP3 = [check(xBno, pk(kAuth)) = blind(commit(no, rBno), bBno)].0;
 BnoP4 = out(C, unblind(xBno, bBno)).0;
 BnoP5 = out(C, rBno).0;
 
-Ayes = sequence AyesP1, AyesP2, AyesP3, AyesP4, AyesP5;
-Ano = sequence AnoP1, AnoP2, AnoP3, AnoP4, AnoP5;
+Ayes =  AyesP1 :: AyesP2 :: AyesP3 :: AyesP4 :: AyesP5;
+Ano =  AnoP1 :: AnoP2 :: AnoP3 :: AnoP4 :: AnoP5;
 
-Byes = sequence ByesP1, ByesP2, ByesP3, ByesP4, ByesP5;
-Bno = sequence BnoP1, BnoP2, BnoP3, BnoP4, BnoP5;
+Byes = ByesP1 :: ByesP2 :: ByesP3 :: ByesP4 :: ByesP5;
+Bno = BnoP1 :: BnoP2 :: BnoP3 :: BnoP4 :: BnoP5;
 
-AyesBno = interleave Ayes, Bno;
-AnoByes = interleave Ano, Byes;
+AyesBno = Ayes || Bno;
+AnoByes = Ano || Byes;
 
 Setup = out(C, pk(kA)).out(C, pk(kB)).0;
 
-P = sequence Setup, AyesBno;
-Q = sequence Setup, AnoByes;
+P = Setup::AyesBno;
+Q = Setup::AnoByes;
 
-equivalentft? P and Q;
+equivalentct? P and Q;

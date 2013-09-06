@@ -52,7 +52,7 @@ let rec show_atom = function
 ;;
 
 let show_statement ((head, body) : hornClause) =
-(*  debugOutput "Statement of length %d\n%!" (List.length body); *)
+  debugOutput "Statement of length %d\n%!" (List.length body); 
   (show_atom head) ^ "  <==  " ^ (String.concat ", " (trmap show_atom body))
 ;;
 

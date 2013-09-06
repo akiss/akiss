@@ -30,6 +30,7 @@ rule token = parse
 	       | "print_traces" { PrintTraces (* :: main lexbuf *) }
 	       | "sequence" { Sequence (* :: main lexbuf *) }
 	       | "print" { Print (* :: main lexbuf *) }
+	       | "|-" { Deduc  (* :: main lexbuf *) }
 	       | "equivalentft?" { Square (* :: main lexbuf *) }
 	       | "fwdequivalentft?" { EvSquare (* :: main lexbuf *) }
 	       | "var" { Var (* :: main lexbuf *) }

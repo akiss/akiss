@@ -21,7 +21,8 @@ rewrite snd(pair(x, y)) -> y;
 rewrite check(pk(x),sign(x,y)) -> ok;
 rewrite getmsg(sign(x,y)) -> y;
 
-rewrite checkpok(sign(k, pair(ped(v,r), pair(aenc(pk(x),r2,v), aenc(pk(x), r3, v)))), pok(sign(k, pair(ped(v,r), pair(aenc(pk(x),r2,v), aenc(pk(x), r3, v)))),r, r2, r3)) -> ok;
+rewrite checkpok(sign(k, pair(ped(v,r), pair(aenc(pk(x),r2,v), aenc(pk(x), r3, v)))), pok(sign(k, pair(ped(v,r), pair(aenc(pk(x),r2,v), aenc(pk(x), r3, v)))),r, r2, r3))
+	-> ok;
 
 // Everlasting rewrite rules
 
@@ -34,18 +35,19 @@ evrewrite snd(pair(x, y)) -> y;
 evrewrite check(pk(x),sign(x,y)) -> ok;
 evrewrite getmsg(sign(x,y)) -> y;
 
-evrewrite ped(y, forge2(ped(x,r),y)) -> ped(x,r);
-evrewrite forge2(ped(x,r),x) -> r;
-
-evrewrite ped(forge1(ped(x,r),y), y) -> ped(x,r);
+// evrewrite ped(forge1(ped(x,r),y), y) -> ped(x,r);
+evrewrite ped(forge1(x, y), y) -> x;
 evrewrite forge1(ped(x,r),r) -> x;
+
+// evrewrite ped(y, forge2(ped(x,r),y)) -> ped(x,r);
+evrewrite ped(y, forge2(x, y)) -> x;
+evrewrite forge2(ped(x,r),x) -> r;
 
 evrewrite forge2(ped(x,r),forge1(ped(x,r),y)) -> y;
 evrewrite forge1(ped(x,r),forge2(ped(x,r),y)) -> y;
 
-
 // Rewrite rule for proof of knowledge
-evrewrite checkpok(sign(k, pair(ped(v,r), pair(aenc(pk(x),r2,v), aenc(pk(x), r3, v)))), pok(sign(k, pair(ped(v,r), pair(aenc(pk(x),r2,v), aenc(pk(x), r3, v)))),r, r2, r3)) -> ok;
+evrewrite checkpok(sign(k, pair(ped(v,r), pair(aenc(pk(x),r2,v), aenc(pk(x), r3, r)))), pok(sign(k, pair(ped(v,r), pair(aenc(pk(x),r2,v), aenc(pk(x), r3, r)))),r, r2, r3)) -> ok;
 
 
 V = out(ch, pair(id, pair(sign(k, pair(ped(v,r), pair(aenc(pk(skE),r2,v), aenc(pk(skE), r3, r)))), pok(sign(k, pair(ped(v,r), pair(aenc(pk(skE),r2,v), aenc(pk(skE), r3, r)))),r, r2, r3)))).
@@ -63,22 +65,22 @@ AyBn = Ayes :: Bno;
 AnBy = Ano  :: Byes;
 
 // ballot z is expected to be of the form 
-// pair(c, pair(sign(kc, pair(ped(v,r), pair(aenc(pk(skE),r2,v), aenc(pk(skE), r3, r)))), pok(sign(kc, pair(ped(v,r), pair(aenc(pk(skE),r2,v), aenc(pk(skE), r3, r),r, r2, r3))))))
+// pair(c, pair(sign(kc, pair(ped(v,r), pair(aenc(pk(skE),r2,v), aenc(pk(skE), r3, r)))), pok( sign(kc, pair(ped(v,r), pair(aenc(pk(skE),r2,v), aenc(pk(skE), r3, r),r, r2, r3))) )))
 
 BB = in(auth3,z). 
      let sig3 = fst(snd(z)) in 
      let peder = fst(getmsg(sig3)) in 
      let v = adec(skE, fst(snd(getmsg(sig3)))) in 
      let r = adec(skE, snd(snd(getmsg(sig3)))) in 
-     let pok3 = snd(snd(snd(z))) in 
-     [peder = ped(v,r)].[check(pk(kc),sig3) = ok].[checkpok(pok3,sig3)=ok].
+     let pok3 = snd(snd(z)) in 
+     [peder = ped(v,r)].[check(pk(kc),sig3) = ok].[checkpok(sig3,pok3)=ok].
      out(bb, pair(fst(z), ped(v,r)));
 
 Tally1 = out(bb,va);
 Tally2 = out(bb,vb);
-Tally3 = out(bb,adec(skE,fst(snd(getmsg(fst(snd(z)))))));
+Tally3 = out(bb,v);
 
-T = Tally1 || Tally2;// || Tally3;
+T = Tally1 || Tally2 :: Tally3;
 
 //P =  out(bb,pk(skE)) :: AyBn :: BB :: let va = yes in let vb = no in T;
 //Q =  out(bb,pk(skE)) :: AnBy :: BB :: let va = no in let vb = yes in T;
@@ -104,12 +106,8 @@ Q6  =  out(bb,pk(skE)) :: BB :: Byes :: Ano :: let va = no in let vb = yes in T;
 P =  out(bb,pk(skE)) :: AyBn :: let va = yes in let vb = no in T;
 Q =  out(bb,pk(skE)) :: AnBy :: let va = no in let vb = yes in T;
 
+print_traces P;
 
-//equivalentft? P1 and Q1; //trace equivalent
-//fwdequivalentft?  P1, P2, P3, P4, P5, P6 and Q1, Q2, Q3, Q4, Q5, Q6; //not forward indistinguishable
-
-
-
-equivalentft? P and Q; //trace equivalent
-fwdequivalentft?  P and Q; //not forward indistinguishable
+// equivalentft? P and Q; //trace equivalent
+//fwdequivalentft?  P and Q; //forward indistinguishable
 

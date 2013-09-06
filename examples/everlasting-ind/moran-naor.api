@@ -55,5 +55,5 @@ Tallyny = let va = no in let vb = yes in Tally;
  P =  AyBn :: Tallyyn;
  Q =  AnBy :: Tallyny;
 
-fwdequivalentft? P and Q;
-//equivalentft? P and Q;
+// fwdequivalentft? P and Q;
+equivalentft? P and Q;

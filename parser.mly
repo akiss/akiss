@@ -24,6 +24,7 @@ type cmd = DeclSymbols of (string * int) list
 	    | DeclInterleaveOpt of string * (string list)
 	    | DeclRemoveEndTests of string * (string list)
 	    | DeclSequence of string * (string list)
+	    | QueryDeduc of (string list) * (tempTerm)
 	    | QueryEquivalent of (string list) * (string list)
 	    | QuerySquare of (string list) * (string list)
 	    | QueryEvSquare of (string list) * (string list)
@@ -36,7 +37,7 @@ type cmd = DeclSymbols of (string * int) list
 %token <int> Int
 %token Symbols Private Var Rewrite EvRewrite Channels EvChannels Let
 %token LeftP RightP LeftB RightB
-%token Arrow Equals Dot Slash Comma Semicolon
+%token Arrow Equals Dot Slash Comma Semicolon Deduc
 %token Out In And Zero
 %token Equivalent Square EvSquare
 %token Print PrintTraces
@@ -75,6 +76,7 @@ command:
  | PrintTraces identifierList { QueryPrintTraces $2 }
  | Square identifierList And identifierList { QuerySquare ($2, $4) }
  | EvSquare identifierList And identifierList { QueryEvSquare ($2, $4) }
+ | identifierList Deduc term   { QueryDeduc ($1, $3) }
 
 identifierList:
  | { [] }
