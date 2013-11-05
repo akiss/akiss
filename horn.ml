@@ -336,6 +336,7 @@ module Base = struct
     with Found -> true
 
   let add ?(needs_check=true) x rules kb =
+    let needs_check = true in
     assert (needs_check || not (mem_equiv x kb)) ;
     if not (needs_check && mem_equiv x kb) then begin
       debugOutput "Adding clause #%d.\n" (get_id x) ;
@@ -488,8 +489,8 @@ let inst_w_t_ac my_head head_kb =
   * Raise [Not_a_consequence] if there is no such statement. If there is one,
   * return the associated recipe.
   * See Definition 14 and Lemma 2 in the paper. *)
-let consequence st kb =
-  assert (is_solved st) ;
+let consequence st kb = raise Not_a_consequence
+  (* assert (is_solved st) ;
   let rec aux (_, head, body) kb = 
     match head with
       | Predicate("knows", [_; _; Fun(name, [])]) when (startswith name "!n!") ->
@@ -527,7 +528,7 @@ let consequence st kb =
           end
       | _ -> invalid_arg("consequence")
   in
-    aux st (only_knows (only_solved kb))
+    aux st (only_knows (only_solved kb)) *)
 
 (** Avoid reflexive identities.
   * Note: even with the simplification of non-solved clauses, there are
@@ -573,7 +574,7 @@ let update (kb : Base.t) rules (f : statement) : unit =
     debugOutput "Clause #%d is not normal.\n" (get_id f)
   else
 
-  let (id, head, body) as fc = canonical_form f in
+  let (id, head, body) as fc = (* canonical_form *) f in
   if useful fc then
   if is_deduction_st f && is_solved f then
     try
@@ -640,7 +641,7 @@ let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
      * if it does not occur in a single subterm, always mark on the left, unless
      * [dynamic_nooccur] in which case the most convenient choice is made for
      * each solution. *)
-    let static_rigid = true in
+    let static_rigid = true in (* TODO ?!! *)
     let dynamic_nooccur = false in
 
     (* When there is no rigid subterm: do nothing unless [static_norigid];
@@ -805,7 +806,7 @@ let plus_restrict ~t (slave_head,slave_body) sigmas =
           | _ ->
               plus_restrict sigmas ~t ~rx ~x ~ry ~y
         end
-  | _ -> sigmas
+    | _ -> sigmas
 
 (** [resolution d_kb (master,slave)] attempts to perform a resolution step
   * between clauses [master] and [slave] by matching the head of [slave]
@@ -887,6 +888,7 @@ let equation fa fb =
               let t1 = Fun("!tuple!", [t; ul]) in
               let t2 = Fun("!tuple!", [tp; upl]) in
               let sigmas = Term.csu t1 t2 in
+              (* TODO est-ce qu'on utilise vraiment le marquage dynamique? *)
               let sigmas = plus_restrict ~t (get_head fb, get_body fb) sigmas in
               let newhead = Predicate("identical", [ul; r; rp]) in
               let newbody = List.append (get_body fb) (get_body fa) in
@@ -1004,6 +1006,7 @@ let for_each l (succ:'a list succ) (fail:cont) (f:'b -> 'a succ -> cont -> unit)
   in aux [] fail l
 
 let rec find_recipe_h atom kbs (succ:term succ) (fail:cont) =
+  Printf.printf "coucou\n%!" ;
   match atom with
     | Predicate("knows", [_; _; Fun(name, [])]) when startswith name "!n!" ->
         succ (Fun(name, [])) fail

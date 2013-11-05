@@ -67,7 +67,7 @@ let print_module rules extrasig chan () =
     Format.fprintf chan "(mod AKISS is\nsorts Term .\n" ;
 
     (* Constructors for tuples, actions, worlds and predicates *)
-    for i = 0 to 15 do
+    for i = 0 to 50 do
       op (Printf.sprintf "akiss%duple" i) i
     done ;
     op "akissout" 1 ; op "akissin" 2 ; op "akisstest" 0 ;

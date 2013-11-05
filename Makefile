@@ -50,7 +50,7 @@ NOTESTS = examples/tests/nstat.api \
 		  examples/tests/dhneg.api examples/tests/nstatxor.api \
 		  examples/tests/rfid0h.api
 LONGTESTS = examples/tests/rfid0.api examples/tests/rfid1.api
-RUN = OCAMLRUNPARAM=b ./akiss -verbose
+RUN = OCAMLRUNPARAM=b ./akiss -verbose -debug
 
 test: akiss $(TESTS)
 	@for i in $(TESTS) ; do \
