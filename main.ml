@@ -27,8 +27,6 @@ let command_line_options_list = [
    "Enable debug output")  
 ];;
 
-let channels = ref [];;
-
 let evchannels = ref [];;
 
 let rewrite_rules = ref [];;

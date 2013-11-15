@@ -67,16 +67,10 @@ let print_module rules extrasig chan () =
     Format.fprintf chan "(mod AKISS is\nsorts Term .\n" ;
 
     (* Constructors for tuples, actions, worlds and predicates *)
-    for i = 0 to 50 do
-      op (Printf.sprintf "akiss%duple" i) i
-    done ;
     op "akissout" 1 ; op "akissin" 2 ; op "akisstest" 0 ;
     op "world" 2 ; op "empty" 0 ;
     op "knows" 3 ; op "reach" 1 ; op "identical" 3 ; op "ridentical" 3 ;
-    (* TODO same as cime: don't hardcode *)
-    op "akisschA" 0 ;
-    op "akisschB" 0 ;
-    op "akisschC" 0 ;
+    List.iter (fun c -> op ("akissch"^c) 0) !Term.channels ;
 
     (* Declarations from the input file: theory symbols and private names *)
     List.iter
@@ -88,8 +82,12 @@ let print_module rules extrasig chan () =
       !fsymbols ;
     List.iter (fun v -> op v 0) !private_names ;
 
-    (* Parameters, names and variables not declared in input file
+    (* Tuples, parameters, names and variables not declared in input file
      * but present in the term, given as extrasig. *)
+    List.iter
+      (fun n ->
+         op (Printf.sprintf "akiss%duple" n) n)
+      extrasig.tuples ;
     List.iter
       (fun n -> op ("akissw" ^ string_of_int n) 0)
       extrasig.params ;
