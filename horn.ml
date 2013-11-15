@@ -18,8 +18,29 @@ end
 
 let xor = ref false
 let ac = ref false
-let conseq = ref true
-let conseq_no_plus = ref false
+
+let conseq_axiom = false
+let conseq = ref false
+let conseq_plus = ref false
+
+let canonize = true
+let yellow_marking = true
+
+(* Mark last two variants of "plus", corresponding to the introduction
+ * and elimination of 0. This is not compatible with the current theory
+ * because the marked literals are solved. Fortunately, it only seems
+ * necessary when canonisation is disabled. *)
+let extra_static_marks = false
+
+let print_flags () =
+  if !debug_output then
+    Printf.printf
+      "Parameters:\n\
+      \  xor: %b\n\
+      \  conseq: axiom=%b res=%b plus=%b\n\
+      \  canonize: %b\n\
+      \  yellow: %b\n"
+      !xor conseq_axiom !conseq !conseq_plus canonize yellow_marking
 
 (** {2 Predicates and clauses, conversions and printing} *)
 
@@ -200,6 +221,24 @@ let is_plus_clause = function
          ((rx,x,ry,y) = (r',x',r'',y'') ||
           (rx,x,ry,y) = (r'',y'',r',x'))
     -> true
+  | _ -> false
+
+let deconstruct_plus_clause = function
+  | Predicate ("knows",
+               [Var w;
+                Fun ("plus",[Var rx; Var ry]);
+                Fun ("plus",[Var x; Var y])]),
+    [ Predicate("knows",[Var w'; Var r'; Var x']) ;
+      Predicate("knows",[Var w''; Var r''; Var y'']) ]
+      when rx <> ry && x <> y && w = w' && w = w'' &&
+           ((rx = r' && ry = r'') || (rx = r'' && ry = r')) &&
+           ((x = x' && y = y'') || (x = y'' && y = x'))
+    ->
+      Some (r',r'',x',y'')
+  | _ -> None
+
+let is_zero_clause = function
+  | _, Predicate ("knows",[_;Fun("zero",[]);Fun("zero",[])]), [] -> true
   | _ -> false
 
 let is_plus = function
@@ -490,8 +529,9 @@ let inst_w_t_ac my_head head_kb =
   * Raise [Not_a_consequence] if there is no such statement. If there is one,
   * return the associated recipe.
   * See Definition 14 and Lemma 2 in the paper. *)
-let consequence st kb = raise Not_a_consequence
-  (* assert (is_solved st) ;
+let consequence st kb =
+  if not conseq_axiom then raise Not_a_consequence ;
+  assert (is_solved st) ;
   let rec aux (_, head, body) kb = 
     match head with
       | Predicate("knows", [_; _; Fun(name, [])]) when (startswith name "!n!") ->
@@ -514,7 +554,7 @@ let consequence st kb = raise Not_a_consequence
                      (*   (show_statement (head, body)); *)
                      (* debugOutput "Against %s\n%!" *)
                      (*   (show_statement x); *)
-                     if !conseq_no_plus && is_plus_clause x then
+                     if (not !conseq_plus) && is_plus_clause x then
                        raise Not_a_consequence ;
                      let sigma = inst_w_t head (get_head x) Not_a_consequence in
                        (* debugOutput "Sigma: %s\n\n%!" (show_subst sigma); *)
@@ -529,7 +569,7 @@ let consequence st kb = raise Not_a_consequence
           end
       | _ -> invalid_arg("consequence")
   in
-    aux st (only_knows (only_solved kb)) *)
+    aux st (only_knows (only_solved kb))
 
 (** Avoid reflexive identities.
   * Note: even with the simplification of non-solved clauses, there are
@@ -564,7 +604,11 @@ let normalize_identical f =
 
 (** Update a knowledge base with a new statement. This involves canonizing
   * the statement, checking whether it already belongs to the consequences
-  * of the base, and actually inserting the statement or a variant of it. *)
+  * of the base, and actually inserting the statement or a variant of it.
+  *
+  * We drop non-normal statements. This is done before canonization, which
+  * may avoid counter-examples to completeness but also seems a bit
+  * inefficient: we add clauses that can never be used -- TODO. *)
 let update (kb : Base.t) rules (f : statement) : unit =
 
   let f = normalize_identical f in
@@ -575,7 +619,7 @@ let update (kb : Base.t) rules (f : statement) : unit =
     debugOutput "Clause #%d is not normal.\n" (get_id f)
   else
 
-  let (id, head, body) as fc = (* canonical_form *) f in
+  let (id, head, body) as fc = if canonize then canonical_form f else f in
   if useful fc then
   if is_deduction_st f && is_solved f then
     try
@@ -622,7 +666,7 @@ let mark r sigma =
     List.map (fun (x,t) -> x, apply_subst t [r',r'']) sigma
 
 (** Restrict a csu based on plus-constraints *)
-let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
+let plus_restrict ?rx' sigmas ~t ~rx ~x ~ry ~y =
 
   (* Find the leftmost rigid (non-plus,non-var) subterm *)
   let rec extract_rigid = function
@@ -661,7 +705,10 @@ let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
                if dynamic_norigid && is_var (List.assoc x sigma) then
                  mark ry sigma
                else
-                 mark rx sigma)
+                 let sigma = mark rx sigma in
+                   match rx' with
+                     | None -> sigma
+                     | Some rx' -> mark rx' sigma)
             sigmas
       | Some t ->
           debugOutput "rigid subterm: %s\n" (show_term t) ;
@@ -762,36 +809,30 @@ let mark_flexible_plus_3 ~a ~b ~c ~rx ~ry ~x ~y sigmas =
              | _ -> assert false)
       sigmas
 
-let plus_restrict ~t (slave_head,slave_body) sigmas =
-  match slave_head,slave_body with
-    | _ when sigmas = [] -> sigmas
-    | Predicate ("knows",
-                 [Var w;
-                  Fun ("plus",[Var rx; Var ry]);
-                  Fun ("plus",[Var x; Var y])]),
-      [ Predicate("knows",[Var w'; Var r'; Var x']) ;
-        Predicate("knows",[Var w''; Var r''; Var y'']) ]
-      when rx <> ry && x <> y && w = w' && w = w'' &&
-           ((rx,x,ry,y) = (r',x',r'',y'') ||
-            (rx,x,ry,y) = (r'',y'',r',x'))
-      ->
+let plus_restrict ?rx' ~t (slave_head,slave_body) sigmas =
+  if sigmas = [] then sigmas else
+    match deconstruct_plus_clause (slave_head,slave_body) with
+      | None -> sigmas
+      | Some (rx,ry,x,y) ->
         begin match t with
-          | Fun ("plus",[Var a; Var b]) when a <> b ->
+          | Fun ("plus",[Var a; Var b]) when yellow_marking && a <> b ->
               let sigmas = mark_flexible_plus_2 ~a ~b ~rx ~ry ~x ~y sigmas in
                 debugOutput "flexible 2-2 equation, csu becomes:\n" ;
                 List.iter
                   (fun s ->
-                     debugOutput "> %s/%s, %s/%s -- %s\n"
+                     debugOutput "> %s %s\n"
+                       ry
+                       (* not suitable for equation
                        (show_term (List.assoc rx s))
                        (show_term (List.assoc x s))
                        (show_term (List.assoc ry s))
-                       (show_term (List.assoc y s))
+                       (show_term (List.assoc y s)) *)
                        (show_subst s))
                   sigmas ;
                 sigmas
           | Fun ("plus",[Var a; Fun ("plus",[Var b; Var c])])
           | Fun ("plus",[Fun ("plus",[Var a; Var b]); Var c])
-            when a <> b && a <> c && b <> c ->
+            when yellow_marking && a <> b && a <> c && b <> c ->
               let sigmas = mark_flexible_plus_3 ~a ~b ~c ~rx ~ry ~x ~y sigmas in
                 debugOutput "flexible 3-2 equation, csu becomes:\n" ;
                 List.iter
@@ -805,9 +846,36 @@ let plus_restrict ~t (slave_head,slave_body) sigmas =
                   sigmas ;
                 sigmas
           | _ ->
-              plus_restrict sigmas ~t ~rx ~x ~ry ~y
+              plus_restrict ?rx' sigmas ~t ~rx ~x ~ry ~y
         end
-    | _ -> sigmas
+
+exception Constraint_violation
+
+let propagate_constraint sigma =
+  let theta =
+    List.map
+      (function
+         | (x, Var y) when is_marked x && not (is_marked y) ->
+             let y' = Var (fresh_string "P") in
+               [(y, y')]
+         | (x, Fun("plus",_)) when is_marked x -> raise Constraint_violation
+         | _ -> [])
+      sigma
+  in
+  let theta = List.concat theta in
+    List.map (fun (x,t) -> x, apply_subst t theta) sigma
+
+let rec process_constraints = function
+  | sigma::sigmas ->
+      begin try
+        propagate_constraint sigma :: process_constraints sigmas
+      with
+        | Constraint_violation -> process_constraints sigmas
+      end
+  | [] -> []
+
+let plus_restrict ?rx' ~t c sigmas =
+  plus_restrict ?rx' ~t c (process_constraints sigmas)
 
 (** [resolution d_kb (master,slave)] attempts to perform a resolution step
   * between clauses [master] and [slave] by matching the head of [slave]
@@ -877,20 +945,39 @@ let resolution master slave =
   * It returns [] if it fails to produce any new clause. *)
 let equation fa fb =
   let (a,_,_),(b,_,_) = fa,fb in
-    (* Avoid reflexivity and symmetry, and order so that the plus context
-     * statement will be second (the latter needs to be made more solid). *)
-    if a<=b then [] else
+    (* Avoid performing the same equation twice by forcing the first
+     * clause to be older. We need the plus clause to always be the second
+     * clause, which is not enforced very strongly for now -- TODO.
+     * We still have to treat one clause against itself, in which case it needs
+     * to be refreshed. *)
+    if a<b then [] else
+    (* The following simplification breaks completeness:
+     * just consider out(C,c) where c is public, we miss id(w0,c). *)
+    (* if !xor && not (is_zero_clause fb) then [] else *)
     if (is_solved fa) && (is_solved fb) &&
-      (is_deduction_st fa) && (is_deduction_st fb) then (
-        debugOutput "Equation:\n %s\n %s\n%!" (show_statement fa) (show_statement fb);
+      (is_deduction_st fa) && (is_deduction_st fb) then
+
+      let fa = if a = b then fresh_statement fa else fa in
+        debugOutput "Equation:\n %s\n %s\n%!"
+          (show_statement fa) (show_statement fb);
         match ((get_head fa), (get_head fb)) with
           | (Predicate("knows", [ul; r; t]),
              Predicate("knows", [upl; rp; tp])) ->
               let t1 = Fun("!tuple!", [t; ul]) in
               let t2 = Fun("!tuple!", [tp; upl]) in
               let sigmas = Term.csu t1 t2 in
-              (* TODO est-ce qu'on utilise vraiment le marquage dynamique? *)
-              let sigmas = plus_restrict ~t (get_head fb, get_body fb) sigmas in
+              (* Call [plus_restrict] to apply dynamic marking strategies
+               * when fb is the plus clause. Additionally pass [rx'] if fa
+               * is also the plus clause, in which case a special strategy
+               * may be used. *)
+              let rx' =
+                match deconstruct_plus_clause (get_head fa, get_body fa) with
+                  | Some (rx',_,_,_) -> Some rx'
+                  | None -> None
+              in
+              let sigmas =
+                plus_restrict ?rx' ~t (get_head fb, get_body fb) sigmas
+              in
               let newhead = Predicate("identical", [ul; r; rp]) in
               let newbody = List.append (get_body fb) (get_body fa) in
               let clauses =
@@ -909,7 +996,6 @@ let equation fa fb =
                        (List.map (fun (id,_,_) -> "#"^string_of_int id) clauses)) ;
                 clauses
           | _ -> invalid_arg("equation")
-      )
     else
       []
 
@@ -963,6 +1049,8 @@ let saturate_step_solved rules kb =
           true
 
 let saturate kb rules =
+  assert (if !xor then List.mem ("zero",0) !fsymbols else true) ;
+  print_flags () ;
   (* Try not_solved step, otherwise solved step, otherwise stop. *)
   while saturate_step_not_solved rules kb
      || saturate_step_solved rules kb
@@ -1007,7 +1095,6 @@ let for_each l (succ:'a list succ) (fail:cont) (f:'b -> 'a succ -> cont -> unit)
   in aux [] fail l
 
 let rec find_recipe_h atom kbs (succ:term succ) (fail:cont) =
-  Printf.printf "coucou\n%!" ;
   match atom with
     | Predicate("knows", [_; _; Fun(name, [])]) when startswith name "!n!" ->
         succ (Fun(name, [])) fail
