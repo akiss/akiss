@@ -12,7 +12,9 @@ type tempProcess = TempSequence of tempProcess * tempProcess
 		 | TempEmpty
 		 | TempProcessRef of string
 		      
-type cmd = DeclSymbols of (string * int) list
+type cmd =
+        | SetXOR | SetAC
+        | DeclSymbols of (string * int) list
 	    | DeclPrivate of string list
 	    | DeclChannels of string list
 	    | DeclEvChannels of string list
@@ -34,6 +36,7 @@ type cmd = DeclSymbols of (string * int) list
 
 %token <string> Identifier
 %token <int> Int
+%token XOR AC
 %token Symbols Private Var Rewrite EvRewrite Channels EvChannels Let
 %token LeftP RightP LeftB RightB
 %token Arrow Equals Dot Slash Comma Semicolon
@@ -58,6 +61,7 @@ commandlist:
  | command Semicolon commandlist { $1 :: $3 }
      
 command:
+ | XOR { SetXOR }
  | Symbols symbollist { DeclSymbols $2 }
  | Private namelist { DeclPrivate $2 }
  | Channels namelist { DeclChannels $2 }

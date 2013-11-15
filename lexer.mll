@@ -18,6 +18,9 @@ let letters = letter ((letter | digit) * )
 rule token = parse
                | "0" { Zero (* :: main lexbuf *) }
 	       | "let" { Let (* :: main lexbuf *) }
+           | "#set xor" { XOR }
+           | "#set ac;"  { AC }
+           | "#set ac+;" { AC }
 	       | "symbols" { Symbols (* :: main lexbuf *) }
 	       | "private" { Private (* :: main lexbuf *) }
 	       | "channels" { Channels (* :: main lexbuf *) }
