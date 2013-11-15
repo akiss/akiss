@@ -1,3 +1,5 @@
+#set ac;
+
 symbols plus/2, h/1;
 
 private a, b, c, d;

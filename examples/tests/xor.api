@@ -1,3 +1,5 @@
+#set xor;
+
 symbols plus/2, zero/0;
 
 private a, ok;
