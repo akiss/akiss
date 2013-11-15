@@ -17,6 +17,7 @@ end
 (** {2 Flags} *)
 
 let xor = ref false
+let ac = ref false
 let conseq = ref true
 let conseq_no_plus = ref false
 

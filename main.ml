@@ -104,7 +104,7 @@ let context_statements symbol arity rules =
            body sigma)
       in
         (* Mark recipe variables in non-trivial variants of the plus clause. *)
-        if symbol = "plus" && sigma <> [] then
+        if !Horn.ac && symbol = "plus" && sigma <> [] then
           try
             let r =
               match
@@ -530,6 +530,8 @@ let query_print traceName =
       
 let processCommand (c : cmd) =
   match c with
+  | SetXOR -> Horn.xor := true
+  | SetAC -> Horn.xor := true ; Horn.ac := true
   | DeclSymbols symbolList ->
     Printf.printf "Declaring symbols\n%!";
     declare_symbols symbolList;
