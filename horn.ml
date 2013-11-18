@@ -619,7 +619,20 @@ let update (kb : Base.t) rules (f : statement) : unit =
     debugOutput "Clause #%d is not normal.\n" (get_id f)
   else
 
-  let (id, head, body) as fc = if canonize then canonical_form f else f in
+  match
+    (* Canonize, normalize again and keep only normal clauses. *)
+    if not canonize then Some f else
+      let f = canonical_form f in
+      let tf_orig = term_from_statement f in
+      let tf = Maude.normalize tf_orig rules in
+      let f = statement_from_term (get_id f) tf in
+        if not (Maude.equals tf_orig tf []) then begin
+          debugOutput "Clause #%d is not normal.\n" (get_id f) ;
+          None
+        end else
+          Some f
+  with None -> () | Some ((id, head, body) as fc) ->
+
   if useful fc then
   if is_deduction_st f && is_solved f then
     try
