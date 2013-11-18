@@ -466,7 +466,7 @@ let simplify_statement (id,head,body) =
     (id,head,update body)
 
 let canonical_form statement =
-  if is_solved statement then
+  if is_deduction_st statement && is_solved statement then
     let f = iterate rule_remove (iterate rule_rename statement) in
       debugOutput "Canonized: %s\n" (show_statement f) ;
       f
