@@ -16,15 +16,23 @@ end
 
 (** {2 Flags} *)
 
-let xor = ref false
+(** The first two flags should be set from the script using #set ac/xor.
+  * - [ac] triggers special treatment of "plus" as AC connective.
+  * - [xor] triggers normalization of identical statements in the form
+  *   id(X,0). *)
 let ac = ref false
+let xor = ref false
 
+(** Canonization and yellow/flexible-flexible marking are critical. *)
+let canonize = true
+let yellow_marking = true
+
+(** With AC, doing conseq against the plus clause is known to break
+  * completeness. Other flavors are not justified yet, but seem useless
+  * anyway. *)
 let conseq_axiom = false
 let conseq = ref false
 let conseq_plus = ref false
-
-let canonize = true
-let yellow_marking = true
 
 (* Mark last two variants of "plus", corresponding to the introduction
  * and elimination of 0. This is not compatible with the current theory
@@ -32,15 +40,24 @@ let yellow_marking = true
  * necessary when canonisation is disabled. *)
 let extra_static_marks = false
 
+(** [eqrefl_opt] avoids trivial uses of equation that essentially
+  * generate reflexive id(R,R) statements. It is not very useful. *)
+let eqrefl_opt = false
+
 let print_flags () =
   if !debug_output then
     Printf.printf
       "Parameters:\n\
+      \  ac: %b\n\
       \  xor: %b\n\
       \  conseq: axiom=%b res=%b plus=%b\n\
       \  canonize: %b\n\
-      \  yellow: %b\n"
-      !xor conseq_axiom !conseq !conseq_plus canonize yellow_marking
+      \  yellow: %b\n\
+      \  extra static: %b\n\
+      \  eqrefl_opt: %b\n"
+      !ac !xor
+      conseq_axiom !conseq !conseq_plus
+      canonize yellow_marking extra_static_marks eqrefl_opt
 
 (** {2 Predicates and clauses, conversions and printing} *)
 
@@ -990,6 +1007,44 @@ let equation fa fb =
               in
               let sigmas =
                 plus_restrict ?rx' ~t (get_head fb, get_body fb) sigmas
+              in
+              let sigmas =
+                (* Performing equation on twice the same clause is useless
+                 * if the unifier is trivial, ie. when it is essentially a
+                 * renaming. In those cases the resulting identical atom is
+                 * an instance of reflexivity.
+                 * The only non trivial cases should come from the plus clause,
+                 * but not all of its unifiers are non-trivial. *)
+                if eqrefl_opt && a = b then
+                  let nontrivial sigma =
+                    let v1 = vars_of_term t1 in
+                    let v2 = vars_of_term t2 in
+                    let rec unique = function
+                      | x::y::l ->
+                          if x=y then unique (y::l) else x :: unique (y::l)
+                      | l -> l
+                    in
+                      try
+                        let image v =
+                          unique
+                            (List.sort String.compare
+                               (List.map
+                                  (fun x -> unbox_var (List.assoc x sigma))
+                                  v))
+                        in
+                        let v'1 = image v1 in
+                        let v'2 = image v2 in
+                          assert (List.length v1 = List.length v2) ;
+                          not (List.length v'1 = List.length v1 && v'1 = v'2)
+                      with Invalid_argument "unbox_var" -> true
+                  in
+                  let sigmas' = List.filter nontrivial sigmas in
+                  let l' = List.length sigmas' in
+                    if l' < List.length sigmas then
+                      debugOutput "Non-trivial solutions: %d\n" l' ;
+                    sigmas'
+                else
+                  sigmas
               in
               let newhead = Predicate("identical", [ul; r; rp]) in
               let newbody = List.append (get_body fb) (get_body fa) in
