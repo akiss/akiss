@@ -543,8 +543,8 @@ let query_print traceName =
       
 let processCommand (c : cmd) =
   match c with
-  | SetXOR -> Horn.xor := true
-  | SetAC -> Horn.xor := true ; Horn.ac := true
+  | SetAC -> Horn.ac := true
+  | SetXOR -> Horn.xor := true ; Horn.ac := true
   | DeclSymbols symbolList ->
     Printf.printf "Declaring symbols\n%!";
     declare_symbols symbolList;
