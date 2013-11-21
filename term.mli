@@ -4,6 +4,7 @@ exception Not_unifiable
 exception Not_matchable
 
 val vars : string list ref
+val channels : string list ref
 val fsymbols : (string * int) list ref
 val private_names : string list ref
 
@@ -17,7 +18,11 @@ val is_var : term -> bool
 val unbox_var : term -> varName
 val vars_of_term_list : term list -> varName list
 val vars_of_term : term -> varName list
-type extrasig = { vars : string list ; names : int list ; params : int list }
+type extrasig =
+  { vars : string list ;
+    names : int list ;
+    params : int list ;
+    tuples : int list }
 val sig_of_term_list : term list -> extrasig
 
 val is_ground : term -> bool

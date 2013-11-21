@@ -1,4 +1,5 @@
-ML = base.ml lexer.ml parser.ml util.ml term.ml cime.ml maude.ml horn.ml process.ml main.ml 
+ML = base.ml parser.ml lexer.ml util.ml term.ml cime.ml maude.ml \
+	 horn.ml process.ml main.ml 
 MLI = $(wildcard $(ML:.ml=.mli))
 OCAMLC = ocamlopt -g
 CMA = cmxa
@@ -26,46 +27,69 @@ akiss: $(OBJS)
 -include .depend
 
 clean:
-	rm -rf *.o
-	rm -rf parser.ml
-	rm -rf lexer.ml
-	rm -rf parser.mli
-	rm -rf lexer.mli
-	rm -rf akiss
-	rm -rf *.cmi
-	rm -rf *.cmx
-	rm -rf *.cmo
-	rm -rf *.o
+	rm -f *.o
+	rm -f parser.ml
+	rm -f lexer.ml
+	rm -f parser.mli
+	rm -f lexer.mli
+	rm -f akiss
+	rm -f *.cmi
+	rm -f *.cmx
+	rm -f *.cmo
+	rm -f *.o
 
 doc: $(ML)
 	mkdir -p doc
 	ocamldoc -stars $(ML) -html -d doc
 
-TESTS = examples/tests/xor.api examples/tests/rfid.api \
-		examples/tests/stat.api \
-		examples/tests/ac.api examples/tests/ac2.api examples/tests/ac3.api \
-		examples/tests/dh.api examples/tests/statxor.api
-NOTESTS = examples/tests/nstat.api \
-		  examples/tests/nac.api examples/tests/nac2.api examples/tests/nac3.api \
-		  examples/tests/dhneg.api examples/tests/nstatxor.api \
-		  examples/tests/rfid0h.api
-LONGTESTS = examples/tests/rfid0.api examples/tests/rfid1.api
-RUN = OCAMLRUNPARAM=b ./akiss -verbose -debug
+# TESTS
+# Run make (PREFIX=DH_) test/yestest/notest
 
-test: akiss $(TESTS)
-	@for i in $(TESTS) ; do \
+# Xor and non-AC tests, should work
+TESTS = \
+  examples/tests/xor.api examples/tests/rfid.api \
+  examples/tests/statxor.api \
+  examples/tests/xorsym.api \
+  examples/running-example/running-example-both-traces.api
+NOTESTS = \
+  examples/tests/nstatxor.api \
+  examples/tests/rfid0h.api
+LONGTESTS = examples/tests/rfid0.api examples/tests/rfid1.api
+
+# Pure AC: most of them do not terminate
+AC_TESTS = \
+  examples/tests/stat.api \
+  examples/tests/ac.apiexamples/tests/ac3.api \
+  examples/tests/ac2.api
+AC_NOTESTS = \
+  examples/tests/nstat.api \
+  examples/tests/nac.api \
+  examples/tests/nac2.api \
+  examples/tests/nac3.api
+
+# Diffie-Hellman: surprisingly, they pass
+DH_TESTS = examples/tests/dh.api
+DH_NOTESTS = examples/tests/dhneg.api
+
+RUN = OCAMLRUNPARAM=b ./akiss -verbose
+
+.PHONY: test yestest notest
+test: yestest notest
+yestest: akiss
+	@for i in $($(PREFIX)TESTS) ; do \
 	  echo ; \
 	  echo '>>' Checking $$i... ; \
 	  $(RUN) < $$i || exit 1 ; \
 	done
-	$(MAKE) notest
-notest: akiss $(NOTESTS)
-	@for i in $(NOTESTS) ; do \
+notest: akiss
+	@for i in $($(PREFIX)NOTESTS) ; do \
 	  echo ; \
 	  echo '>>' Checking NOT $$i... ; \
 	  $(RUN) < $$i || exit 1 ; \
 	done
 
+# backup testing data and notes
 BFILES = log akiss.dot NOTES
 backup:
-	date=`date +%y%m%d%H%M` ; mkdir test-$$date ; mv $(BFILES) test-$$date ; cp test-$$date/NOTES .
+	date=`date +%y%m%d%H%M` ; mkdir test-$$date ; \
+		 mv $(BFILES) test-$$date ; cp test-$$date/NOTES .

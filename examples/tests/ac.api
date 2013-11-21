@@ -1,3 +1,5 @@
+#set ac;
+
 // symbols enc/2, dec/2, mult/2, fst/1, snd/1, true/0, false/0, op/1, unit/0;
 symbols plus/2;
 

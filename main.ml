@@ -19,15 +19,13 @@ let command_line_options_list = [
    "Enable EXPERIMENTAL xor-specific optimizations.") ;
   ("-C", Arg.Clear Horn.conseq,
    "Disable conseq optimization.") ;
-  ("-P", Arg.Set Horn.conseq_no_plus,
+  ("-P", Arg.Clear Horn.conseq_plus,
    "Disable conseq optimization for plus clause.") ;
   ("-verbose", Arg.Unit (fun () -> verbose_output := true),
    "Enable verbose output");
   ("-debug", Arg.Unit (fun () -> debug_output := true),
    "Enable debug output")  
 ];;
-
-let channels = ref [];;
 
 let evchannels = ref [];;
 
@@ -106,7 +104,7 @@ let context_statements symbol arity rules =
            body sigma)
       in
         (* Mark recipe variables in non-trivial variants of the plus clause. *)
-        if symbol = "plus" && sigma <> [] then
+        if !Horn.ac && symbol = "plus" && sigma <> [] then
           try
             let r =
               match
@@ -121,7 +119,20 @@ let context_statements symbol arity rules =
             in
             let p = fresh_string "P" in
               apply_subst_st clause [r,Var p]
-          with Not_found -> clause
+          with Not_found ->
+            if not Horn.extra_static_marks then clause else
+              begin match
+                List.find
+                  (function
+                     | Predicate("knows",[_;_;Var _]) -> true
+                     | _ -> false)
+                  (get_body clause)
+              with
+                | Predicate (_,[_;Var r;_]) ->
+                    let p = fresh_string "P" in
+                      apply_subst_st clause [r,Var p]
+                | _ -> assert false
+              end
         else
           clause)
     v
@@ -532,6 +543,8 @@ let query_print traceName =
       
 let processCommand (c : cmd) =
   match c with
+  | SetAC -> Horn.ac := true
+  | SetXOR -> Horn.xor := true ; Horn.ac := true
   | DeclSymbols symbolList ->
     Printf.printf "Declaring symbols\n%!";
     declare_symbols symbolList;

@@ -13,6 +13,8 @@ let vars : (string list) ref = ref [];;
 
 let fsymbols : ((string * int) list) ref = ref [];;
 
+let channels : (string list) ref = ref [];;
+
 let private_names : (string list) ref = ref [];;
 
 type id = string;;
@@ -52,13 +54,17 @@ and vars_of_term = function
 type extrasig = {
   vars : string list ;
   names : int list ;
-  params : int list
+  params : int list ;
+  tuples : int list
 }
 
 let rec sig_of_term_list cur = function
   | [] -> cur
   | Var x :: l ->
       sig_of_term_list { cur with vars = x :: cur.vars } l
+  | Fun ("!tuple!",l) :: l' ->
+      let cur = { cur with tuples = List.length l :: cur.tuples } in
+        sig_of_term_list cur (l@l')
   | Fun (s,[]) :: l ->
       begin try
         Scanf.sscanf s "w%d"
@@ -79,11 +85,11 @@ let rec sig_of_term_list cur = function
       sig_of_term_list cur (List.rev_append l l')
 
 let sig_of_term_list l =
-  let { vars=vars ; names=names ; params=params } =
-    sig_of_term_list { vars = [] ; names = [] ; params = [] } l
+  let { vars=vars ; names=names ; params=params ; tuples=tuples } =
+    sig_of_term_list { vars = [] ; names = [] ; params = [] ; tuples = [] } l
   in
     { vars = Util.unique vars ; names = Util.unique names ;
-      params = Util.unique params }
+      params = Util.unique params ; tuples = Util.unique tuples }
 
 let is_ground t =
   (List.length (vars_of_term t)) = 0
