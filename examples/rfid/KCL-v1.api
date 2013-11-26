@@ -1,0 +1,47 @@
+// Simplified version - without pair - of RFID protocol KCL 07
+// cf. Survey Attacks on RFID protocols. T. Deursen and S. Radomirovic
+// The protocol is flawed. To help AKISS, we assume that an honest session has been eavesdropped.
+
+#set xor;
+
+// Signature: xor and hash
+symbols plus/2, zero/0, h/2;
+
+private idA, idB, kA, kB, r1, r2, r4;
+channels C;
+var X, Y, Z;
+
+rewrite plus(zero,X) -> X;
+rewrite plus(X,X) -> zero;
+rewrite plus(X, plus(X,Y)) -> Y;
+
+// We model RFID tags that authenticate with a reader
+// in the following way:
+//   reader sends a nonce r1
+//   tag A sends <idA+r2, h(r1,kA)+r2>
+// The protocol does not ensure untraceability: a fake
+// reader can initiate two sessions with the same nonce
+// and will be able to tell if the two sessions are against
+// the same tag or not. Indeed, by xoring the second and the third outputs 
+// one gets idX+h(r1,kX).Thus, choosing X = r1, the attacker will compare 
+// this value with the xor of the two last outputs.
+
+
+
+Tinit = out(C,r1).out(C,plus(idA,r2)).out(C,plus(h(r1,kA),r2)).0;
+TtagA2 = in(C,X).out(C,plus(idA,r4)).out(C,plus(h(X,kA),r4)).0;
+TtagB2 = in(C,X).out(C,plus(idB,r4)).out(C,plus(h(X,kB),r4)).0;
+
+r1 = Tinit :: TtagA2;
+r2 = Tinit :: TtagB2;
+
+equivalentct? r1 and r2;
+
+// 26/11/2013 : AKISS concludes within 28min (not sure of the exact time - < 12h for sure)
+// The following tests work on r1 but not on r2
+// check_identity([out(C),[out(C),[out(C),[in(C,w0),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(w1,w2),w3),w4),X1892),X1892),zero)
+// check_identity([out(C),[out(C),[out(C),[in(C,w0),[out(C),[out(C),empty]]]]]],plus(plus(plus(w1,w2),w3),w4),zero)
+// check_identity([out(C),[out(C),[out(C),[in(C,w0),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(plus(plus(w1,w2),w3),w4),X17592),X17590),X17590),X17592),zero)
+// check_identity([out(C),[out(C),[out(C),[in(C,w0),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(plus(plus(w1,w2),w3),w4),X17603),X17605),X17603),X17605),zero)
+
+

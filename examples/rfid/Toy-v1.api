@@ -1,0 +1,25 @@
+// Toy example
+// An imaginary bad protocol where there is a traceability attack:
+// for instance choose X=Y, observe the difference of identifiers after a xor
+
+#set xor;
+
+// Signature: xor
+symbols plus/2, zero/0;
+
+private idA, idB;
+channels C;
+var X, Y, Z;
+
+rewrite plus(zero,X) -> X;
+rewrite plus(X,X) -> zero;
+rewrite plus(X, plus(X,Y)) -> Y;
+
+
+same = in(C,X).out(C,plus(X,idA)).in(C,Y).out(C,plus(Y,idA));
+diff = in(C,X).out(C,plus(X,idA)).in(C,Y).out(C,plus(Y,idB));
+
+equivalentct? same and diff;
+
+
+// 25/11/2013: C'est lent .... bizarre. Plus que 7 min (abandon). Csu de taille 352 !!

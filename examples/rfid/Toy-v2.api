@@ -1,0 +1,68 @@
+// Toy example
+// An imaginary bad protocol where there is a traceability attack:
+// for instance choose X=Y, observe the difference between the two  outputs
+
+#set xor;
+
+// Signature: xor and h
+
+symbols plus/2, zero/0, h/1;
+
+private idA, idB;
+channels C;
+var X, Y, Z;
+
+rewrite plus(zero,X) -> X;
+rewrite plus(X,X) -> zero;
+rewrite plus(X,plus(X,Y)) -> Y;
+
+same = in(C,X).out(C,plus(h(X),idA)).in(C,Y).out(C,plus(h(Y),idA));
+diff = in(C,X).out(C,plus(h(X),idA)).in(C,Y).out(C,plus(h(Y),idB));
+
+equivalentct? same and diff;
+
+// 26/11/2013: AKISS concludes within 4m45s
+// The following tests work on same but not on diff:
+
+
+// check_identity([in(C,!n!8679),[out(C),[in(C,!n!8679),[out(C),empty]]]],plus(w0,w1),zero)
+
+// check_identity([in(C,!n!8499),[out(C),[in(C,!n!8500),[out(C),empty]]]],plus(plus(plus(w0,w1),h(!n!8499)),h(!n!8500)),zero)
+// check_identity([in(C,!n!8503),[out(C),[in(C,!n!8504),[out(C),empty]]]],plus(plus(plus(w0,w1),h(!n!8503)),h(!n!8504)),zero)
+// check_identity([in(C,!n!8507),[out(C),[in(C,!n!8508),[out(C),empty]]]],plus(plus(plus(w0,w1),h(!n!8508)),h(!n!8507)),zero)
+// check_identity([in(C,!n!8527),[out(C),[in(C,!n!8528),[out(C),empty]]]],plus(plus(plus(w0,w1),h(!n!8527)),h(!n!8528)),zero)
+// check_identity([in(C,!n!8535),[out(C),[in(C,!n!8536),[out(C),empty]]]],plus(plus(plus(w0,w1),h(!n!8535)),h(!n!8536)),zero)
+// check_identity([in(C,!n!8539),[out(C),[in(C,!n!8540),[out(C),empty]]]],plus(plus(plus(w0,w1),h(!n!8540)),h(!n!8539)),zero)
+// check_identity([in(C,!n!8543),[out(C),[in(C,!n!8544),[out(C),empty]]]],plus(plus(plus(w0,w1),h(!n!8544)),h(!n!8543)),zero)
+
+// check_identity([in(C,!n!8619),[out(C),[in(C,!n!8620),[out(C),empty]]]],plus(plus(plus(plus(plus(w0,w1),X8273),X8273),h(!n!8620)),h(!n!8619)),zero)
+// check_identity([in(C,!n!8511),[out(C),[in(C,!n!8512),[out(C),empty]]]],plus(plus(plus(plus(plus(w0,w1),X967),X967),h(!n!8511)),h(!n!8512)),zero)
+// check_identity([in(C,!n!8515),[out(C),[in(C,!n!8516),[out(C),empty]]]],plus(plus(plus(plus(plus(w0,w1),X1083),X1083),h(!n!8516)),h(!n!8515)),zero)
+// check_identity([in(C,!n!8519),[out(C),[in(C,!n!8520),[out(C),empty]]]],plus(plus(plus(plus(plus(w0,w1),X1197),X1197),h(!n!8519)),h(!n!8520)),zero)
+// check_identity([in(C,!n!8523),[out(C),[in(C,!n!8524),[out(C),empty]]]],plus(plus(plus(plus(plus(w0,w1),X1247),X1247),h(!n!8523)),h(!n!8524)),zero)
+// check_identity([in(C,!n!8531),[out(C),[in(C,!n!8532),[out(C),empty]]]],plus(plus(plus(plus(plus(w0,w1),X1644),X1644),h(!n!8531)),h(!n!8532)),zero)
+// check_identity([in(C,!n!8599),[out(C),[in(C,!n!8600),[out(C),empty]]]],plus(plus(plus(plus(plus(w0,w1),X8210),X8210),h(!n!8600)),h(!n!8599)),zero)
+// check_identity([in(C,!n!8631),[out(C),[in(C,!n!8632),[out(C),empty]]]],plus(plus(plus(plus(plus(w0,w1),X8310),X8310),h(!n!8632)),h(!n!8631)),zero)
+// check_identity([in(C,!n!8635),[out(C),[in(C,!n!8636),[out(C),empty]]]],plus(plus(plus(plus(plus(w0,w1),X8319),X8319),h(!n!8635)),h(!n!8636)),zero)
+// check_identity([in(C,!n!8639),[out(C),[in(C,!n!8640),[out(C),empty]]]],plus(plus(plus(plus(plus(w0,w1),X8333),X8333),h(!n!8639)),h(!n!8640)),zero)
+// check_identity([in(C,!n!8643),[out(C),[in(C,!n!8644),[out(C),empty]]]],plus(plus(plus(plus(plus(w0,w1),X8344),X8344),h(!n!8643)),h(!n!8644)),zero)
+// check_identity([in(C,!n!8647),[out(C),[in(C,!n!8648),[out(C),empty]]]],plus(plus(plus(plus(plus(w0,w1),X8354),X8354),h(!n!8648)),h(!n!8647)),zero)
+// check_identity([in(C,!n!8651),[out(C),[in(C,!n!8652),[out(C),empty]]]],plus(plus(plus(plus(plus(w0,w1),X8368),X8368),h(!n!8652)),h(!n!8651)),zero)
+
+// check_identity([in(C,!n!8559),[out(C),[in(C,!n!8560),[out(C),empty]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),X8073),X8070),X8070),X8073),h(!n!8559)),h(!n!8560)),zero)
+// check_identity([in(C,!n!8563),[out(C),[in(C,!n!8564),[out(C),empty]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),X8084),X8087),X8084),X8087),h(!n!8563)),h(!n!8564)),zero)
+// check_identity([in(C,!n!8567),[out(C),[in(C,!n!8568),[out(C),empty]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),X8101),X8097),X8097),X8101),h(!n!8567)),h(!n!8568)),zero)
+// check_identity([in(C,!n!8571),[out(C),[in(C,!n!8572),[out(C),empty]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),X8110),X8114),X8110),X8114),h(!n!8571)),h(!n!8572)),zero)
+// check_identity([in(C,!n!8575),[out(C),[in(C,!n!8576),[out(C),empty]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),X8127),X8125),X8125),X8127),h(!n!8575)),h(!n!8576)),zero)
+// check_identity([in(C,!n!8579),[out(C),[in(C,!n!8580),[out(C),empty]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),X8139),X8141),X8139),X8141),h(!n!8579)),h(!n!8580)),zero)
+// check_identity([in(C,!n!8583),[out(C),[in(C,!n!8584),[out(C),empty]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),X8154),X8156),X8154),X8156),h(!n!8584)),h(!n!8583)),zero)
+// check_identity([in(C,!n!8587),[out(C),[in(C,!n!8588),[out(C),empty]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),X8169),X8167),X8167),X8169),h(!n!8588)),h(!n!8587)),zero)
+// check_identity([in(C,!n!8591),[out(C),[in(C,!n!8592),[out(C),empty]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),X8185),X8181),X8181),X8185),h(!n!8592)),h(!n!8591)),zero)
+// check_identity([in(C,!n!8595),[out(C),[in(C,!n!8596),[out(C),empty]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),X8195),X8199),X8195),X8199),h(!n!8596)),h(!n!8595)),zero)
+// check_identity([in(C,!n!8603),[out(C),[in(C,!n!8604),[out(C),empty]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),X8223),X8218),X8218),X8223),h(!n!8604)),h(!n!8603)),zero)
+// check_identity([in(C,!n!8607),[out(C),[in(C,!n!8608),[out(C),empty]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),X8231),X8236),X8231),X8236),h(!n!8608)),h(!n!8607)),zero)
+// check_identity([in(C,!n!8611),[out(C),[in(C,!n!8612),[out(C),empty]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),X8250),X8246),X8246),X8250),h(!n!8612)),h(!n!8611)),zero)
+// check_identity([in(C,!n!8615),[out(C),[in(C,!n!8616),[out(C),empty]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),X8260),X8264),X8260),X8264),h(!n!8616)),h(!n!8615)),zero)
+// check_identity([in(C,!n!8623),[out(C),[in(C,!n!8624),[out(C),empty]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),X8284),X8286),X8284),X8286),h(!n!8623)),h(!n!8624)),zero)
+// check_identity([in(C,!n!8627),[out(C),[in(C,!n!8628),[out(C),empty]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),X8299),X8297),X8297),X8299),h(!n!8627)),h(!n!8628)),zero)
+

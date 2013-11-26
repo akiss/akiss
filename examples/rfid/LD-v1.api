@@ -1,0 +1,48 @@
+// RFID protocol LD07 - without pair
+// Paper: Attacks on RFID Protocols T. Deursen and A. Radomirovic
+// I do not model the pair in the last message.
+// The protocol is supposed to achieve a weak form of untraceability, namely untraceability after updates.
+// An attack on weak untraceability has been found (see the survey for a complete description).
+// TODO: pas compris comment ki/k_{i+1} etaient mis à jour cote reader !!
+
+#set xor;
+
+// Signature xor and h
+symbols plus/2, zero/0, h/1;
+private k0, k1, k2, r,alphaB;
+channels C;
+var X, Y, Z;
+
+rewrite plus(zero,X) -> X;
+rewrite plus(X,X) -> zero;
+rewrite plus(X,plus(X,Y)) -> Y;
+
+
+// The protocol works as follows:
+// reader knows k0, ki, and k_{i+1}
+// tag knows alpha = k0+ki
+// reader sends a fresh nonce r
+// tag sends h(r+alpha)
+// tag computes a = ki + k_{i+1} and b = h(a+k0+ki)
+// tag sends <a,b>
+// reader updates alpha <-- alpha +a if b = h(a+alpha)
+ 
+// Tinit models an honest session between the tag A and the reader
+// TTagA2 models the beginning of Tag A (the two first messages only).
+// TTgagB models the beginning of Tag B (the two first messages only).
+
+Tinit = out(C,r).out(C,h(plus(r,plus(k0, k1)))).out(C,plus(k1,k2)).out(C,h(plus(k0,k2))).0;
+
+TtagA2 = in(C,X).out(C,h(plus(X,plus(k0, k2)))).0;
+TtagB2 = in(C,X).out(C,h(plus(X,alphaB))).0;
+
+r1 = Tinit :: TtagA2;
+r2 = Tinit :: TtagB2;
+
+equivalentct? r1 and r2;
+
+// 25/11/2013: Akiss concludes within 34s with the two following tests
+// check_identity([out(C),[out(C),[out(C),[out(C),[in(C,plus(w2,w0)),[out(C),empty]]]]]],plus(w1,w4),zero)
+// check_identity([out(C),[out(C),[out(C),[out(C),[in(C,plus(X62,X62)),[out(C),empty]]]]]],plus(w3,w4),zero)
+// TODO: The first test corresponds to the attack mentioned in the survey. The second test is also an attack. 
+// It is a bit strange to obtain a term plus(X62,X62) that is not in normal form (TO DO: why ?)

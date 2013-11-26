@@ -1,0 +1,30 @@
+#set xor;
+
+symbols plus/2, zero/0;
+
+private  a,b,c;
+channels C;
+
+var X;
+
+rewrite plus(zero,X) -> X;
+rewrite plus(X,X) -> zero;
+
+
+// Equiv OK
+
+ r1 = out(C,a).out(C,b).out(C,plus(a,b));
+ s1 = out(C,plus(a,b)).out(C,c).out(C,plus(plus(a,b),c));
+
+ equivalentct? r1 and s1;
+
+
+// Equiv OK
+
+r2 = out(C,a).out(C,b).out(C,plus(a,b));
+s2 = out(C,plus(plus(a,b),c)).out(C,b).out(C,plus(a,c));
+
+ equivalentct? r1 and s2;
+
+// 25/11/2013: AKISS concludes within 2min30s
+// TODO: Regarder pourquoi c'est si long !

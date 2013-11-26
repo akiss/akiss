@@ -1,0 +1,20 @@
+#set xor;
+
+// Signature xor
+
+symbols plus/2, zero/0;
+
+private a1, a2, a3, a4, a5;
+channels C;
+var X, Y, Z;
+
+rewrite plus(zero,X) -> X;
+rewrite plus(X,X) -> zero;
+
+s1 = out(C,plus(a1,a2)).out(C,plus(a2,a3)).out(C,plus(a3,a4)).out(C,plus(a4,a5));
+r1 = out(C,a1).out(C,a2).out(C,a3).out(C,a4);
+
+equivalentct? s1 and r1;
+
+// AKISS concludes TRACE EQUIVALENT within 2m50s
+

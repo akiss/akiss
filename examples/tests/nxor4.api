@@ -1,0 +1,24 @@
+#set xor;
+
+// Signature xor
+
+symbols plus/2, zero/0, c/0;
+
+private a, b, ok;
+channels C;
+var X, Y, Z;
+
+rewrite plus(zero,X) -> X;
+rewrite plus(X,X) -> zero;
+
+s1 = out(C,a).out(C,plus(a,b));
+r1 = out(C,a).out(C,plus(a,c));
+
+equivalentct? s1 and r1;
+
+// 26/11/2013: AKISS concludes within 18s
+// The following tests work on r1 but not on s1:
+// check_identity([out(C),[out(C),empty]],plus(plus(w0,w1),c),zero)
+// check_identity([out(C),[out(C),empty]],plus(plus(plus(plus(w0,w1),c),X699),X699),zero)
+// check_identity([out(C),[out(C),empty]],plus(plus(plus(plus(plus(plus(w0,w1),c),X1232),X1234),X1232),X1234),zero)
+// check_identity([out(C),[out(C),empty]],plus(plus(plus(plus(plus(plus(w0,w1),c),X1240),X1238),X1238),X1240),zero)

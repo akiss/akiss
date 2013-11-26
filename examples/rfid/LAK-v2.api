@@ -1,0 +1,49 @@
+// simplified version - without pair - of RFID protocol LAK 06
+// cf. Survey Attacks on RFID protocols. T. Deursen and S. Radomirovic
+// I do not understand the purpose of k0 known by the reader.
+// We encode authentication using equivalence. There is a known flaw.
+
+// Signature: xor and hash
+ 
+#set xor;
+
+// according to the survey there is no attack on untraceability
+
+// Signature xor and h
+
+symbols plus/2, zero/0, h/1;
+private kA, kB, k0, r0, r1, r2;
+channels C;
+var X,Y,Y2,Z2;
+
+rewrite plus(zero,X) -> X;
+rewrite plus(X,X) -> zero;
+rewrite plus(X, plus(X,Y)) -> Y;
+
+// The protocol works as follows:
+// reader sends a fresh nonce r0
+// tag sends <r1, h*r0+r1+k)>
+// reader sends h(h(r0+r1+k)+k+r0)
+// Then the reader and the tag update their key k with h(k)
+
+// Tinit models an honest session between the reader and tag A that has been eavesdropped
+// TtagA2 models a session of Tag A. The key that is used is h(kA)
+// TtagB2 models a session of Tag B. The key that is used is kB.
+
+Tinit = out(C,r0).out(C,r1).out(C,h(plus(r0,plus(r1,kA)))).0;
+Treader1 = out(C,r2).in(C,Y2).in(C,Z2).[Z2=h(plus(r2,plus(Y2,kA)))].out(C,k0).0;
+Treader2 = out(C,r2).in(C,Y2).in(C,Z2).[Z2=h(plus(r2,plus(Y2,kA)))].0;
+
+r1 = Tinit :: Treader1;
+r2 = Tinit :: Treader2;
+
+equivalentct? r1 and r2;
+
+// 25/11/2013: AKISS concludes that equivalence does not hold within 1m48s.
+// The attack works as follows: choose Y2 = r0+r1+r2 and Z2 = h(r0+r1+kA) (i.e. w2).
+// The following tests work on r1 but not on r2:
+// check_identity([out(C),[out(C),[out(C),[out(C),[in(C,plus(plus(w3,w1),w0)),[in(C,w2),[test,[out(C),empty]]]]]]]],plus(h(X1333),h(X1333)),zero)
+// check_identity([out(C),[out(C),[out(C),[out(C),[in(C,plus(plus(w3,w1),w0)),[in(C,w2),[test,[out(C),empty]]]]]]]],plus(plus(plus(X1462,X1460),X1460),X1462),zero)
+// check_identity([out(C),[out(C),[out(C),[out(C),[in(C,plus(plus(w3,w1),w0)),[in(C,w2),[test,[out(C),empty]]]]]]]],plus(plus(plus(X1517,X1519),X1517),X1519),zero)
+// check_run([out(C),[out(C),[out(C),[out(C),[in(C,plus(plus(w3,w1),w0)),[in(C,w2),[test,[out(C),empty]]]]]]]])
+
