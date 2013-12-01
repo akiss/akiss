@@ -393,7 +393,6 @@ module Base = struct
     with Found -> true
 
   let add ?(needs_check=true) x rules kb =
-    let needs_check = true in
     assert (needs_check || not (mem_equiv x kb)) ;
     if not (needs_check && mem_equiv x kb) then begin
       debugOutput "Adding clause #%d.\n" (get_id x) ;
@@ -665,7 +664,10 @@ let update (kb : Base.t) rules (f : statement) : unit =
         if useful newclause then
           Base.add newclause rules kb
     with Not_a_consequence ->
-      let needs_check = not !conseq in
+      (* If we ran conseq, no need to check whether the clause is already
+       * in the knowledge base. It may be that conseq_plus should be put there
+       * too. *)
+      let needs_check = not (conseq_axiom && !conseq) in
         Base.add ~needs_check fc rules kb
   else
     Base.add fc rules kb
