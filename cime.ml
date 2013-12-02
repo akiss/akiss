@@ -253,10 +253,8 @@ let run_cime ?op outchan s t =
     let csu =
       try
         (* Make sure the very first line is a let, not an error *)
-        assert
-          (let l = input_line chan_out in
-             (* Format.printf "peek line %S\n" l ; *)
-             prefix "let" l) ;
+        let l = input_line chan_out in
+        assert (prefix "let" l) ;
         (* Don't parse precisely the first lines *)
         let rec strip () =
           let l = input_line chan_out in
