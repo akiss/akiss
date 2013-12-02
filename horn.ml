@@ -986,30 +986,27 @@ let resolution master slave =
              result)
         sigmas
 
-(** [equation fa fb] takes two clauses and, when they are solved clauses
+(** [equation fa fb] takes two solved clauses and, when they are solved clauses
   * concluding "knows", attempts to combine them: if the terms and worlds can be
   * unified, generate a clause concluding that the recipes are "identical".
   * This corresponds to the "Equation" rule in the paper.
   * It returns [] if it fails to produce any new clause. *)
 let equation fa fb =
-  let a = fa.id in
-  let b = fb.id in
-    (* Avoid performing the same equation twice by forcing the first
-     * clause to be older. We need the plus clause to always be the second
-     * clause, which is not enforced very strongly for now -- TODO.
+
+  if is_deduction_st fa && is_deduction_st fb then
+
+    (* The rule is called only once per (unordered) pair. Enforce that b is the
+     * "oldest" clause. In case one of the clauses is the plus clause, it should
+     * always be b, which is not enforced very strongly for now -- TODO.
      * We still have to treat one clause against itself, in which case it needs
      * to be refreshed. *)
-    if a<b then [] else
-    (* The following simplification breaks completeness:
-     * just consider out(C,c) where c is public, we miss id(w0,c). *)
-    (* if !xor && not (is_zero_clause fb) then [] else *)
-    if (is_solved fa) && (is_solved fb) &&
-      (is_deduction_st fa) && (is_deduction_st fb) then
+    let fa,fb = if fa.id<fb.id then fb,fa else fa,fb in
+    let fa = if fa.id = fb.id then fresh_statement fa else fa in
+        assert (is_solved fa && is_solved fb) ;
 
-      let fa = if a = b then fresh_statement fa else fa in
         debugOutput "Equation:\n %s\n %s\n%!"
           (show_statement fa) (show_statement fb);
-        match ((get_head fa), (get_head fb)) with
+        match get_head fa, get_head fb with
           | (Predicate("knows", [ul; r; t]),
              Predicate("knows", [upl; rp; tp])) ->
               let t1 = Fun("!tuple!", [t; ul]) in
@@ -1034,7 +1031,7 @@ let equation fa fb =
                  * an instance of reflexivity.
                  * The only non trivial cases should come from the plus clause,
                  * but not all of its unifiers are non-trivial. *)
-                if eqrefl_opt && a = b then
+                if eqrefl_opt && fa.id = fb.id then
                   let nontrivial sigma =
                     let v1 = vars_of_term t1 in
                     let v2 = vars_of_term t2 in
@@ -1086,15 +1083,15 @@ let equation fa fb =
     else
       []
 
-(** [ridentical fa fb] attempts to combine the two clauses when [fa]
-  * concludes "identical" and [fb] concludes "reach" and their world params
-  * match. This corresponds to the "Test" rule in the paper. *)
-let ridentical fa fb =
-  (* debugOutput "entering ridentical\n%!";  *)
-  if not (is_solved fa && is_solved fb) then [] else
-    match ((get_head fa), (get_head fb)) with
-      | (Predicate("identical", [u; r; rp]),
-         Predicate("reach", [up])) ->
+(** [ridentical fa fb] attempts to combine two clauses when one
+  * concludes "identical" and the other concludes "reach" and
+  * their world params match.
+  * This corresponds to the "Test" rule in the paper. *)
+let rec ridentical fa fb =
+  match fa.head, fb.head with
+    | Predicate("identical", [u; r; rp]),
+      Predicate("reach", [up]) ->
+          assert (is_solved fa && is_solved fb) ;
           debugOutput
             "ridentical trying to combine %s with %s\n%!"
             (show_statement fa) (show_statement fb);
@@ -1114,6 +1111,7 @@ let ridentical fa fb =
                      (show_statement result);
                    result)
               sigmas
+      | Predicate("reach",_),Predicate("identical",_) -> ridentical fb fa
       | _ -> []
 
 (** {2 Saturation procedure} *)
@@ -1130,10 +1128,9 @@ let saturate_step_solved rules kb =
   match Base.next_solved kb with
     | None -> false
     | Some (f,g) ->
-        let ids = equation f g @ equation g f in
-          List.iter (update kb rules) ids ;
-          List.iter (update kb rules) (ridentical f g @ ridentical g f) ;
-          true
+        List.iter (update kb rules) (equation f g) ;
+        List.iter (update kb rules) (ridentical f g) ;
+        true
 
 let saturate kb rules =
   assert (if !xor then List.mem ("zero",0) !fsymbols else true) ;
