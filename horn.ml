@@ -32,9 +32,9 @@ let yellow_marking = true
 let canonize_all = false
 
 (** With AC, doing conseq against the plus clause is known to break
-  * completeness. Other flavors are not justified yet, but seem useless
-  * anyway. *)
-let conseq_axiom = false
+  * completeness. Other flavors are not justified yet. At least axiom
+  * seems useless, in simple cases such as in(X).out(X) with pairs. *)
+let conseq_axiom = true
 let conseq = ref false
 let conseq_plus = ref false
 
