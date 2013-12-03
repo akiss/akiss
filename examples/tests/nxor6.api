@@ -14,6 +14,6 @@ rewrite plus(X,X) -> zero;
 s1 = out(C,plus(a1,a2)).out(C,plus(a2,a3)).out(C,plus(a1,a3));
 r1 = out(C,a1).out(C,a2).out(C,a3);
 
-equivalentct? s1 and r1;
+inequivalentct? s1 and r1;
 
 // AKISS concludes within 45s TRACE EQUIVALENT

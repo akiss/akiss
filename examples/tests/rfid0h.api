@@ -15,4 +15,4 @@ rewrite plus(X,X) -> zero;
 same = in(C,X).out(C,plus(h(X),idA)).in(C,Y).out(C,plus(h(Y),idA));
 diff = in(C,X).out(C,plus(h(X),idA)).in(C,Y).out(C,plus(h(Y),idB));
 
-equivalentct? same and diff;
+inequivalentct? same and diff;

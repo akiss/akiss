@@ -27,6 +27,7 @@ type cmd =
 	    | DeclRemoveEndTests of string * (string list)
 	    | DeclSequence of string * (string list)
 	    | QueryEquivalent of (string list) * (string list)
+	    | QueryInequivalent of (string list) * (string list)
 	    | QuerySquare of (string list) * (string list)
 	    | QueryEvSquare of (string list) * (string list)
 	    | QueryPrint of string
@@ -41,7 +42,7 @@ type cmd =
 %token LeftP RightP LeftB RightB
 %token Arrow Equals Dot Slash Comma Semicolon
 %token Out In And Zero
-%token Equivalent Square EvSquare
+%token Equivalent Inequivalent Square EvSquare
 %token Print PrintTraces
 %token Interleave Sequence InterleaveOpt RemoveEndTests
 %token InnerSequence InnerInterleave
@@ -75,6 +76,7 @@ command:
  | Identifier Equals RemoveEndTests identifierList { DeclRemoveEndTests ($1, $4) }
  | Identifier Equals Sequence identifierList { DeclSequence ($1, $4) }
  | Equivalent identifierList And identifierList { QueryEquivalent ($2, $4) }
+ | Inequivalent identifierList And identifierList { QueryInequivalent ($2, $4) }
  | Print Identifier { QueryPrint $2 }
  | PrintTraces identifierList { QueryPrintTraces $2 }
  | Square identifierList And identifierList { QuerySquare ($2, $4) }
