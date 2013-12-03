@@ -27,6 +27,10 @@ let xor = ref false
 let canonize = true
 let yellow_marking = true
 
+(** Having canonical forms for non-deduction statements is not known to
+  * affect termination but we may need it for the final theorem. *)
+let canonize_all = false
+
 (** With AC, doing conseq against the plus clause is known to break
   * completeness. Other flavors are not justified yet, but seem useless
   * anyway. *)
@@ -51,13 +55,14 @@ let print_flags () =
       \  ac: %b\n\
       \  xor: %b\n\
       \  conseq: axiom=%b res=%b plus=%b\n\
-      \  canonize: %b\n\
+      \  canonize: %b (all %b)\n\
       \  yellow: %b\n\
       \  extra static: %b\n\
       \  eqrefl_opt: %b\n"
       !ac !xor
       conseq_axiom !conseq !conseq_plus
-      canonize yellow_marking extra_static_marks eqrefl_opt
+      canonize canonize_all
+      yellow_marking extra_static_marks eqrefl_opt
 
 (** {2 Predicates and clauses, conversions and printing} *)
 
@@ -428,47 +433,42 @@ let show_kb_list kb =
 
 (** {2 Knowledge base update} *)
 
-let rule_rename statement = match statement with
-  | { head = Predicate("knows", _) ;
-      body = body } ->
-      let options = trconcat (
-	trmap 
-	  (fun (atom1, atom2) -> match (atom1, atom2) with
-	     | (Predicate("knows", [u; bx; x]), Predicate("knows", [v; by; y])) ->
-		 (if (is_prefix_world u v) 
-		    && (is_var x) 
-		    && (is_var y) 
-		    && ((unbox_var x) = (unbox_var y))
-		    && ((unbox_var bx) <> (unbox_var by)) then
-		      [(unbox_var by, (Var(unbox_var bx)))]
-		  else
-		    [])
-	     | _ -> invalid_arg("rule_rename"))
-	  (combine body body)) in (
-	match options with
-	  | (by, tbx) :: _ -> 
-              let body =
-                List.filter
-                  (fun atom -> match atom with
-                     | Predicate("knows", [_; testy; _]) -> (unbox_var testy) <> by
-                     | _ -> invalid_arg("rule_rename"))
-                  body
-              in
-                apply_subst_st { statement with body = body } [(by, tbx)]
-	  | _ -> statement
-      )
-  | _ -> statement
+let rule_rename st =
+  (* We need this assertion to justify rename on identical statements.
+   * It is guaranteed when we do not use conseq. *)
+  assert (match st.head with
+            | Predicate("identical",[_;Var _;Var _]) -> false
+            | _ -> true) ;
+  let rec attempts = function
+    | (Predicate(_, [u; Var bx; Var x]),
+       Predicate(_, [uv; Var by; Var y])) :: _
+      when is_prefix_world u uv && x = y && bx <> by ->
+        apply_subst_st
+          { st with body =
+              (* Since there must be at most one atom k(_,by,_)
+               * in the body, the filter should remove excatly
+               * one element. This can easily be optimized. *)
+              List.filter
+                (function
+                   | Predicate(_, [_; Var v; _]) ->
+                       v <> by
+                   | _ -> assert false)
+                st.body }
+          [(by, Var bx)]
+    | _ :: options -> attempts options
+    | [] -> st
+  in
+    attempts (combine st.body st.body)
 
 let rule_remove = function
   | { head = Predicate("knows", _) as head } as st ->
       let vars_to_keep = vars_of_atom head in
       let body =
-        List.filter 
+        List.filter
           (fun atom -> match atom with
-             | Predicate(_, [_; _; x]) -> 
-                 (not (is_var x)) || 
-                 (List.mem (unbox_var x) vars_to_keep)
-             | _ -> invalid_arg("rule_remove"))
+             | Predicate(_, [_; _; Var x]) ->
+                 List.mem x vars_to_keep
+             | _ -> true)
           st.body
       in
         { st with body = body }
@@ -501,7 +501,8 @@ let simplify_statement st =
     { st with body = update st.body }
 
 let canonical_form statement =
-  if is_deduction_st statement && is_solved statement then
+  if (canonize_all || is_deduction_st statement) &&
+     is_solved statement then
     let f = iterate rule_remove (iterate rule_rename statement) in
       debugOutput "Canonized: %s\n" (show_statement f) ;
       f
