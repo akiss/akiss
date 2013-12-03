@@ -187,8 +187,11 @@ let do_count () =
   )
 ;;
 
-let query s t =
-  verboseOutput "Checking equivalence of %s and %s\n%!" (show_string_list s) (show_string_list t);
+let query ?(expected=true) s t =
+  verboseOutput
+    "Checking %sequivalence of %s and %s\n%!"
+    (if expected then "" else "in")
+    (show_string_list s) (show_string_list t);
   let (straces : trace list) = trconcat (trmap (fun x -> List.assoc x !processes) s) in
   let ttraces = trconcat (trmap (fun x -> List.assoc x !processes) t) in
   let _ = reset_count ((List.length straces) + (List.length ttraces)) in
@@ -206,18 +209,20 @@ let query s t =
 			   ttraces) in
   let fail_stests = List.filter (fun x -> not (check_test_multi x ttraces)) stests in
   let fail_ttests = List.filter (fun x -> not (check_test_multi x straces)) ttests in
-  if (List.length fail_stests) = 0 && (List.length fail_ttests) = 0 then
-    Printf.printf "%s and %s are TRACE EQUIVALENT!\n%!" (show_string_list s) (show_string_list t)
-  else
-    (
-      if (List.length fail_stests) <> 0 then
-	Printf.printf "The following tests work on %s but not on %s:\n%s\n%!"
-	  (show_string_list s) (show_string_list t) (show_tests fail_stests);
-      if (List.length fail_ttests) <> 0 then
-	Printf.printf "The following tests work on %s but not on %s:\n%s\n%!"
-	  (show_string_list t) (show_string_list s) (show_tests fail_ttests);
-    )
-;;
+  if (List.length fail_stests) = 0 && (List.length fail_ttests) = 0 then begin
+    Printf.printf
+      "%s and %s are TRACE EQUIVALENT!\n%!"
+      (show_string_list s) (show_string_list t) ;
+    if not expected then exit 1
+  end else begin
+    if (List.length fail_stests) <> 0 then
+      Printf.printf "The following tests work on %s but not on %s:\n%s\n%!"
+        (show_string_list s) (show_string_list t) (show_tests fail_stests);
+    if (List.length fail_ttests) <> 0 then
+      Printf.printf "The following tests work on %s but not on %s:\n%s\n%!"
+        (show_string_list t) (show_string_list s) (show_tests fail_ttests);
+    if expected then exit 1
+  end
 
 exception OneToMoreFail of trace * term list;;
 
@@ -587,7 +592,9 @@ let processCommand (c : cmd) =
     Printf.printf "Declaring trace as sequence\n%!";
     declare_sequence traceName traceList
   | QueryEquivalent(traceList1, traceList2) ->
-    query traceList1 traceList2
+    query ~expected:true traceList1 traceList2
+  | QueryInequivalent(traceList1, traceList2) ->
+    query ~expected:false traceList1 traceList2
   | QuerySquare (traceList1, traceList2) ->
     Printf.printf "Checking fine grained equivalence of %s and %s\n%!" (show_string_list traceList1) (show_string_list traceList2);
     square traceList1 traceList2

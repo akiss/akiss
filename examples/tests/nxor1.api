@@ -15,7 +15,7 @@ rewrite plus(X,X) -> zero;
 r2 = in(C,X).in(C,Y).0;
 s2 = in(C,X).in(C,Y).[plus(X,a)=Y].out(C,ok);
 
-equivalentct? r2 and s2;
+inequivalentct? r2 and s2;
 
 
 // 25/11/2013: AKISS concludes within 10s

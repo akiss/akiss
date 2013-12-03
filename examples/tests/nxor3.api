@@ -17,7 +17,7 @@ rewrite plus(X,X) -> zero;
  r1 = out(C,plus(ida,r2)).out(C,plus(h(r1,ka),r2)).out(C,plus(ida,r3)).out(C,plus(h(r1,ka),r3));
  s1 = out(C,plus(ida,r2)).out(C,plus(h(r1,ka),r2)).out(C,plus(idb,r3)).out(C,plus(h(r1,kb),r3));
  
- equivalentct? r1 and s1;
+inequivalentct? r1 and s1;
 
 
 // 25/11/2013: AKISS concludes within 6m30s

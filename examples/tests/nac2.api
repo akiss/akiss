@@ -9,4 +9,4 @@ var X, Y, Z;
 r = out(C,plus(a,b)).in(C,X).[X=a].out(C,ok);
 s = out(C,plus(a,b)).in(C,X).out(C,ok);
 
-equivalentct? r and s;
+inequivalentct? r and s;

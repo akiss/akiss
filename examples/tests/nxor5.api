@@ -15,7 +15,7 @@ rewrite plus(X,X) -> zero;
 s2 = out(C,plus(a,b)).out(C,plus(a,c)).out(C,b);
 r2 = out(C,plus(a,b)).out(C,plus(a,c)).out(C,plus(b,c));
 
-equivalentct? s2 and r2;
+inequivalentct? s2 and r2;
 
 // 26/11/2013: AKISS concludes within 3m4s
 
