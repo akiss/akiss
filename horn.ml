@@ -35,8 +35,8 @@ let canonize_all = false
   * completeness. Other flavors are not justified yet. At least axiom
   * seems useless, in simple cases such as in(X).out(X) with pairs. *)
 let conseq_axiom = true
-let conseq = ref false
-let conseq_plus = ref false
+let conseq = ref true
+let conseq_plus = ref true
 
 (* Mark last two variants of "plus", corresponding to the introduction
  * and elimination of 0. This is not compatible with the current theory
@@ -46,7 +46,7 @@ let extra_static_marks = false
 
 (** [eqrefl_opt] avoids trivial uses of equation that essentially
   * generate reflexive id(R,R) statements. It is not very useful. *)
-let eqrefl_opt = false
+let eqrefl_opt = true
 
 let print_flags () =
   if !debug_output then
@@ -1003,13 +1003,16 @@ let equation fa fb =
      * to be refreshed. *)
     let fa,fb = if fa.id<fb.id then fb,fa else fa,fb in
     let fa = if fa.id = fb.id then fresh_statement fa else fa in
-        assert (is_solved fa && is_solved fb) ;
+        (* assert (is_solved fa && is_solved fb) ; *)
 
-        debugOutput "Equation:\n %s\n %s\n%!"
-          (show_statement fa) (show_statement fb);
         match get_head fa, get_head fb with
           | (Predicate("knows", [ul; r; t]),
              Predicate("knows", [upl; rp; tp])) ->
+              if (is_plus r) && (is_plus rp) then [] else 
+begin
+
+         debugOutput "Equation:\n %s\n %s\n%!"
+          (show_statement fa) (show_statement fb); 
               let t1 = Fun("!tuple!", [t; ul]) in
               let t2 = Fun("!tuple!", [tp; upl]) in
               let sigmas = Term.csu t1 t2 in
@@ -1080,6 +1083,7 @@ let equation fa fb =
                     (String.concat ","
                        (List.map (fun st -> "#"^string_of_int st.id) clauses)) ;
                 clauses
+end
           | _ -> invalid_arg("equation")
     else
       []
