@@ -142,8 +142,8 @@ let rec interleave_opt_traces (tlist : trace list) : trace list =
     | [] -> [NullTrace]
     | hd :: [] -> [hd]
     | hd :: hdp :: tl ->
-	trconcat
-	  (trmap
+	List.concat
+	  (List.map
 	     (fun x -> interleave_opt_traces (x :: tl))
 	     (interleave_opt_two_traces hd hdp))
 ;;
@@ -152,14 +152,16 @@ let rec interleave_opt_trace_process (t : trace) (p : trace list) : trace list =
   match p with
   | [] -> []
   | hd :: tl ->
-    trconcat [(interleave_opt_two_traces t hd); interleave_opt_trace_process t tl]
+      List.concat
+        [(interleave_opt_two_traces t hd); interleave_opt_trace_process t tl]
 ;;
 
 let rec interleave_opt_two_processes (tl1 : trace list) (tl2 : trace list) : trace list =
   match tl1 with
   | [] -> []
   | hd :: tl ->
-    trconcat [interleave_opt_trace_process hd tl2; interleave_opt_two_processes tl tl2]
+      List.concat
+        [interleave_opt_trace_process hd tl2; interleave_opt_two_processes tl tl2]
 ;;
 
 let replace_var_in_term x t term =
@@ -303,7 +305,8 @@ let knows_variantize (head, body) rules =
 
 let knows_statements tr rules = 
   let kstatements = knows_statements_h 0 tr [] (Fun("empty", [])) [] in
-  trconcat (trmap (function x -> knows_variantize x rules) kstatements)
+    List.concat
+      (List.map (function x -> knows_variantize x rules) kstatements)
 ;;
 
 (** {3 Computing reach statements from a trace} *)
@@ -386,8 +389,11 @@ let reach_variantize (head, body) rules =
 
 let reach_statements tr rules =
   let statements = reach_statements_h tr [] (Fun("empty", [])) [] in
-  trconcat (trmap (fun x -> reach_variantize x rules)
-	      (trconcat (trmap (fun x -> reach_equationalize x rules) statements)))
+    List.concat
+      (List.map
+         (fun x -> reach_variantize x rules)
+         (List.concat
+            (List.map (fun x -> reach_equationalize x rules) statements)))
 ;;
 
 (** {2 Executing and testing processes} *)
