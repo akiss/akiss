@@ -23,14 +23,10 @@ let rec print chan = function
         print chan (Fun (f,l))
   | Fun ("!test!",[]) ->
       print chan (Fun ("akisstest",[]))
-  | Fun ("!out!",s) ->
-      print chan (Fun ("akissout",s))
-  | Fun ("!in!",s) ->
-      print chan (Fun ("akissin",s))
-
-  | Fun ("A",[]) -> output_string chan "akisschA"
-  | Fun ("B",[]) -> output_string chan "akisschB"
-  | Fun ("C",[]) -> output_string chan "akisschC"
+  | Fun ("!out!",[Fun(c,[])]) ->
+      print chan (Fun ("akissout",[Fun ("akissch"^c,[])]))
+  | Fun ("!in!",[Fun(c,[]);t]) ->
+      print chan (Fun ("akissin",[Fun("akissch"^c,[]);t]))
 
   | Fun (s,[]) | Var s ->
       begin try
@@ -176,9 +172,8 @@ let translate_symbol = function
   | "akisstest" -> "!test!"
   | "akissout" -> "!out!"
   | "akissin" -> "!in!"
-  | "akisschA" -> "A"
-  | "akisschB" -> "B"
-  | "akisschC" -> "C"
+  | s when Util.startswith ~prefix:"akissch" s ->
+      String.sub s 7 (String.length s - 7)
   | s when Util.startswith ~prefix:"akiss" s ->
       begin try
         Scanf.sscanf s "akissw%d" (fun d -> "w" ^ string_of_int d)
