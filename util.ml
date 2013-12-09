@@ -21,17 +21,15 @@ let debugOutput a =
 
 let trmap f l = List.rev (List.rev_map f l)
 
-let trconcat ll =
-  List.fold_left (fun a l -> List.rev_append l a) [] ll
-
-let f res e = 
-  if List.mem e res then 
-    res 
-  else 
-    e::res
-
-(* return a list without duplicates *)
-let unique list = List.fold_left f [] list
+(** Return a list without duplicates, for structural equality. *)
+let unique =
+  let f res e = 
+    if List.mem e res then 
+      res 
+    else 
+      e::res
+  in
+    fun l -> List.fold_left f [] l
 
 (** [create_list elem no]
   * creates a list containing [no] times the element [elem]. *)
@@ -60,9 +58,12 @@ let fresh_variable () = fresh_string "X"
 
 let fresh_axiom () = fresh_string "axiom"
 
-let combine list1 list2 =
-  trconcat (trmap (function x ->
-			   (trmap (function y -> (x, y)) list2)) list1)
+let combine l1 l2 =
+  List.fold_left
+    (fun c e1 ->
+       List.fold_left (fun c e2 -> (e1,e2)::c) c l2)
+    []
+    l1
 
 let list_diff big small = 
   List.filter (function x -> not (List.mem x small))  big

@@ -138,12 +138,12 @@ let context_statements symbol arity rules =
     v
 
 let seed_statements trace rew =
-  let (l1, l2) = List.split !fsymbols in
-  let context_clauses = trconcat
-    (List.map2
-       (fun x -> fun y ->
-	  context_statements x y rew)
-       l1 l2)
+  let context_clauses =
+    List.concat
+      (List.map
+         (fun (f,a) ->
+            context_statements f a rew)
+         !fsymbols)
   in
   let trace_clauses =
     knows_statements trace rew
@@ -151,7 +151,7 @@ let seed_statements trace rew =
   let reach_clauses =
     reach_statements trace rew
   in
-  trconcat [context_clauses; trace_clauses; reach_clauses]
+    List.concat [context_clauses; trace_clauses; reach_clauses]
 ;;
 
 let tests_of_trace t rew =
@@ -192,21 +192,27 @@ let query ?(expected=true) s t =
     "Checking %sequivalence of %s and %s\n%!"
     (if expected then "" else "in")
     (show_string_list s) (show_string_list t);
-  let (straces : trace list) = trconcat (trmap (fun x -> List.assoc x !processes) s) in
-  let ttraces = trconcat (trmap (fun x -> List.assoc x !processes) t) in
+  let (straces : trace list) =
+    List.concat (List.map (fun x -> List.assoc x !processes) s)
+  in
+  let ttraces = List.concat (List.map (fun x -> List.assoc x !processes) t) in
   let _ = reset_count ((List.length straces) + (List.length ttraces)) in
-  let stests = trconcat (trmap (fun x ->
-				  (
-				    do_count ();
-				    tests_of_trace x !rewrite_rules
-				  ))
-			   straces) in
-  let ttests = trconcat (trmap (fun x ->
-				  (
-				    do_count ();
-				    tests_of_trace x !rewrite_rules
-				  ))
-			   ttraces) in
+  let stests =
+    List.concat
+      (List.map
+         (fun x ->
+            do_count ();
+            tests_of_trace x !rewrite_rules)
+         straces)
+  in
+  let ttests =
+    List.concat
+      (List.map
+         (fun x ->
+            do_count ();
+            tests_of_trace x !rewrite_rules)
+         ttraces)
+  in
   let fail_stests = List.filter (fun x -> not (check_test_multi x ttraces)) stests in
   let fail_ttests = List.filter (fun x -> not (check_test_multi x straces)) ttests in
   if (List.length fail_stests) = 0 && (List.length fail_ttests) = 0 then begin
@@ -242,46 +248,53 @@ let check_one_to_more (tests1, trace1) list rew =
 ;;
 
 let square s t =
-  (
-    verboseOutput "Checking fine grained equivalence of %s and %s\n%!" (show_string_list s) (show_string_list t);
-    let ls = trconcat (trmap (fun x -> List.assoc x !processes) s) in
-    let lt = trconcat (trmap (fun x -> List.assoc x !processes) t) in
-    let _ = reset_count ((List.length ls) + (List.length lt)) in
-    let stests = trmap (fun x -> 
-			  (
-			    do_count ();
-			    ((tests_of_trace x !rewrite_rules), x)
-			  )
-		       ) ls in
-    let ttests = trmap (fun x -> 
-			  (
-			    do_count ();
-			    ((tests_of_trace x !rewrite_rules), x)
-			  )
-		       ) lt in
-    try
-      (
-	ignore (trmap (fun x -> check_one_to_more x ttests !rewrite_rules) stests);
-	ignore (trmap (fun x -> check_one_to_more x stests !rewrite_rules) ttests);
-	Printf.printf "%s and %s are trace equivalent\n%!"
-	  (show_string_list s) (show_string_list t)
-      )
-    with
-	OneToMoreFail(tr, tests) -> 
-	  (
-	    Printf.printf "cannot establish trace equivalence of %s and %s\n%!" 
-	      (show_string_list s) (show_string_list t);
-	    Printf.printf "the trace %s has no equivalent trace on the other side\n%!"
-	      (show_trace tr);
-	    Printf.printf "its tests are\n%!%s\n%!"
-	      (show_tests tests);
-	  )
-  )
-;;
+  verboseOutput
+    "Checking fine grained equivalence of %s and %s\n%!"
+    (show_string_list s) (show_string_list t);
+  let ls = List.concat (List.map (fun x -> List.assoc x !processes) s) in
+  let lt = List.concat (List.map (fun x -> List.assoc x !processes) t) in
+  let _ = reset_count ((List.length ls) + (List.length lt)) in
+  let stests =
+    List.map
+      (fun x -> 
+         do_count ();
+         ((tests_of_trace x !rewrite_rules), x))
+      ls
+  in
+  let ttests =
+   List.map
+     (fun x -> 
+        do_count ();
+        ((tests_of_trace x !rewrite_rules), x))
+     lt
+  in
+  try
+    ignore
+      (List.iter
+         (fun x -> check_one_to_more x ttests !rewrite_rules)
+         stests);
+    ignore
+      (List.iter
+         (fun x -> check_one_to_more x stests !rewrite_rules)
+         ttests);
+    Printf.printf "%s and %s are trace equivalent\n%!"
+      (show_string_list s) (show_string_list t)
+  with
+    | OneToMoreFail(tr, tests) -> 
+        Printf.printf
+          "cannot establish trace equivalence of %s and %s\n%!" 
+          (show_string_list s) (show_string_list t);
+        Printf.printf
+          "the trace %s has no equivalent trace on the other side\n%!"
+          (show_trace tr);
+        Printf.printf "its tests are\n%!%s\n%!"
+          (show_tests tests)
 
 let stat_equiv frame1 frame2 rew =
   
-  verboseOutput "Checking static equivalence of frames %s and %s \n%!" (show_frame frame1) (show_frame frame2);
+  verboseOutput
+    "Checking static equivalence of frames %s and %s \n%!"
+    (show_frame frame1) (show_frame frame2);
     
   let t1 = trace_from_frame frame1 in
   let t2 = trace_from_frame frame2 in  
@@ -350,51 +363,53 @@ let ev_check_one_to_more (tests1, trace1) list =
 
 let evequiv s t =
   verboseOutput "Checking forward indistinguishability for %s and %s\n%!" (show_string_list s) (show_string_list t);
-    let ls = trconcat (trmap (fun x -> List.assoc x !processes) s) in (* list of traces of s *)
-    let lt = trconcat (trmap (fun x -> List.assoc x !processes) t) in (* list of traces of t *)
-    let _ = reset_count ((List.length ls) + (List.length lt)) in
-    let stests = trmap 
+  (* list of traces of s, then t *)
+  let ls =
+    List.concat (List.map (fun x -> List.assoc x !processes) s)
+  in
+  let lt =
+    List.concat (List.map (fun x -> List.assoc x !processes) t)
+  in
+  let _ = reset_count ((List.length ls) + (List.length lt)) in
+  let stests =
+    List.map
       (fun x -> 
-	(
-	  do_count ();
-	  ((List.filter is_reach_test (tests_of_trace x !rewrite_rules)), x)
-	)
-      ) ls in
-    let ttests = trmap 
+         do_count ();
+         ((List.filter is_reach_test (tests_of_trace x !rewrite_rules)), x))
+      ls
+  in
+  let ttests =
+    List.map
       (fun x -> 
-	(
-	  do_count ();
-	  ((List.filter is_reach_test (tests_of_trace x !rewrite_rules)), x)
-	)
-      ) lt in 
+         do_count ();
+         ((List.filter is_reach_test (tests_of_trace x !rewrite_rules)), x))
+      lt
+  in 
     try
-      (
-	ignore (trmap (fun x -> ev_check_one_to_more x ttests ) stests);
-	ignore (trmap (fun x -> ev_check_one_to_more x stests ) ttests);
-	Printf.printf "%s and %s are forward indistinguishable\n%!"
-	  (show_string_list s) (show_string_list t)
-      )
+      ignore (trmap (fun x -> ev_check_one_to_more x ttests ) stests);
+      ignore (trmap (fun x -> ev_check_one_to_more x stests ) ttests);
+      Printf.printf
+        "%s and %s are forward indistinguishable\n%!"
+        (show_string_list s) (show_string_list t)
     with
-	OneToMoreFail(tr, tests) -> 
-	  (
-	    Printf.printf "cannot establish forward equivalence of %s and %s\n%!" 
-	      (show_string_list s) (show_string_list t);
-	    Printf.printf "the trace %s has no equivalent trace on the other side\n%!"
-	      (show_trace tr);
-	    Printf.printf "its tests are\n%!%s\n%!"
-	      (show_tests tests);
-	  )
-
-;;
+      |	OneToMoreFail(tr, tests) -> 
+          Printf.printf
+            "cannot establish forward equivalence of %s and %s\n%!" 
+            (show_string_list s) (show_string_list t);
+          Printf.printf
+            "the trace %s has no equivalent trace on the other side\n%!"
+            (show_trace tr);
+          Printf.printf
+            "its tests are\n%!%s\n%!"
+            (show_tests tests)
 
 type atom_type =  
   | Channel
   | Name
   | Symbol of int
   | Variable
-;;
 
-exception No_duplicate;;
+exception No_duplicate
 
 let rec find_dup l = 
   match l with
@@ -405,47 +420,50 @@ let rec find_dup l =
 	  x
 	else
 	  find_dup (hd :: tl)
-;;
 
 exception Parse_error_semantic of string;;
 
 let check_atoms () =
   let atoms = 
-    trconcat [
-      trmap (fun (x, y) -> (x, Symbol(y))) !fsymbols;
-      trmap (fun x -> (x, Channel)) !channels;
-      trmap (fun x -> (x, Variable)) !vars;
-      trmap (fun x -> (x, Name)) !private_names;
+    List.concat [
+      List.map (fun (x, y) -> (x, Symbol(y))) !fsymbols;
+      List.map (fun x -> (x, Channel)) !channels;
+      List.map (fun x -> (x, Variable)) !vars;
+      List.map (fun x -> (x, Name)) !private_names;
     ] in
-  let sorted_atoms = List.sort (fun (x, _) (xp, _) -> compare x xp) atoms in
+  let sorted_atoms =
+    List.sort (fun (x, _) (xp, _) -> compare x xp) atoms
+  in
   try
     let duplicate = find_dup sorted_atoms in
-    raise (Parse_error_semantic
-	     (Printf.sprintf "Identifier \"%s\" declared more than once." duplicate))
+    raise
+      (Parse_error_semantic
+         (Printf.sprintf
+            "Identifier \"%s\" declared more than once."
+            duplicate))
   with
     | No_duplicate -> ()
     | Parse_error_semantic(e) -> raise (Parse_error_semantic(e))
-;;
 
 let trace_of_process (p : process) : trace =
   match p with
     | [t] -> t
     | _ -> invalid_arg("trace_of_process: not a trace")
-;;
 
 let interleave_opt tnl =
-  let tl = trmap (fun x -> trace_of_process(List.assoc x !processes)) tnl in
+  let tl =
+    List.map (fun x -> trace_of_process(List.assoc x !processes)) tnl
+  in
   interleave_opt_traces tl
-;;
 
 let remove_end_tests_traces (tlist : trace list) =
-  trmap (fun x -> fst (split_endingtests x)) tlist
-;;
+  List.map (fun x -> fst (split_endingtests x)) tlist
 
 let remove_end_tests tnl =
-  let tl = trmap (fun x -> trace_of_process(List.assoc x !processes)) tnl in
+  let tl =
+    List.map (fun x -> trace_of_process(List.assoc x !processes)) tnl
+  in
   remove_end_tests_traces tl
-;;
 
 let rec interleave_two_traces s t =
   match (s, t) with
@@ -453,56 +471,48 @@ let rec interleave_two_traces s t =
     | (_, NullTrace) -> [s]
     | (Trace(a, sn), Trace(b, tn)) ->
 	List.append
-	  (trmap (fun x -> Trace(a, x)) (interleave_two_traces sn t))
-	  (trmap (fun x -> Trace(b, x)) (interleave_two_traces s tn))
-;;
+	  (List.map (fun x -> Trace(a, x)) (interleave_two_traces sn t))
+	  (List.map (fun x -> Trace(b, x)) (interleave_two_traces s tn))
 
 let rec interleave_traces (tlist : trace list) : trace list =
   match tlist with
     | [] -> [NullTrace]
     | hd :: [] -> [hd]
     | hd :: hdp :: tl ->
-	trconcat
-	  (trmap
+	List.concat
+	  (List.map
 	     (fun x -> interleave_traces (x :: tl))
 	     (interleave_two_traces hd hdp))
-;;
 
 let interleave tnl =
-  let tl = trmap (fun x -> trace_of_process(List.assoc x !processes)) tnl in
+  let tl =
+    List.map (fun x -> trace_of_process(List.assoc x !processes)) tnl
+  in
   interleave_traces tl
-;;
 
 let declare_interleave traceName traceList =
   addto processes (traceName, interleave traceList)
-;;
 
 let declare_interleave_opt traceName traceList =
   addto processes (traceName, interleave_opt traceList)
-;;
 
 let declare_remove_end_tests traceName traceList =
   addto processes (traceName, remove_end_tests traceList)
-;;
 
 let print_trace_list (tlist : trace list) = 
   Printf.printf "%s\n%!" (String.concat "\n" (trmap show_trace tlist))
-;;
 
 let print_traces tnl =
   Printf.printf "Printing the list of traces of %s\n%!" (String.concat ", " tnl);
-  let tl = trconcat (trmap (fun x -> (List.assoc x !processes)) tnl) in
+  let tl = List.concat (trmap (fun x -> (List.assoc x !processes)) tnl) in
   print_trace_list tl
-;;
 
 let sequence tnl =
-  let tl = trmap (fun x -> List.assoc x !processes) tnl in
+  let tl = List.map (fun x -> List.assoc x !processes) tnl in
   sequence_traces tl
-;;
 
 let declare_sequence traceName traceList =
   addto processes (traceName, sequence traceList)
-;;
 
 let query_print traceName =
   let print_kbs ?(filter=fun _ -> true) s =

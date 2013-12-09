@@ -121,7 +121,7 @@ let rec vars_of_atom = function
 
 let rec vars_of_horn_clause {head=head;body=body} =
   unique (List.append
-	    (trconcat (trmap vars_of_atom body))
+	    (List.concat (List.map vars_of_atom body))
             (vars_of_atom head))
 
 let get_world = function

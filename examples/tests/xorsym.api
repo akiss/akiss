@@ -1,0 +1,20 @@
+#set xor;
+
+symbols plus/2, zero/0, enc/2, dec/2;
+
+private a, ok;
+channels C;
+var X, Y, Z;
+
+rewrite plus(zero,X) -> X;
+rewrite plus(X,X) -> zero;
+rewrite dec(enc(X,Y),Y) -> X;
+
+// XXX we shouldn't need this rule if Maude
+//   has strong enough notions of rewriting modulo and variants
+// rewrite plus(X,plus(X,Y)) -> Y;
+
+r1 = 0;
+s1 = 0;
+
+equivalentct? r1 and s1;
