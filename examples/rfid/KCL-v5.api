@@ -1,5 +1,7 @@
 // RFID protocol KCL07
 
+#set xor;
+
 symbols plus/2, zero/0, h/2, pair/2, fst/1, snd/1;
 private idA, idB, r2, r4, kA, kB, r1;
 channels C;
@@ -30,7 +32,7 @@ TtagB2 = in(C,X).out(C,pair(plus(idB,r4),plus(h(X,kB),r4))).0;
 r1 = Tinit :: TtagA2;
 r2 = Tinit :: TtagB2;
 
-equivalentct? r1 and r2;
+inequivalentct? r1 and r2;
 
 
 // 25/02/2013: AKISS finds the attack within  20 min - sume (cf. rfid-3b.log rfid-3b.dot rfid-3b.dot.svg)

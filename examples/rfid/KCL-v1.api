@@ -35,7 +35,7 @@ TtagB2 = in(C,X).out(C,plus(idB,r4)).out(C,plus(h(X,kB),r4)).0;
 r1 = Tinit :: TtagA2;
 r2 = Tinit :: TtagB2;
 
-equivalentct? r1 and r2;
+inequivalentct? r1 and r2;
 
 // 26/11/2013 : AKISS concludes within 28min (not sure of the exact time - < 12h for sure)
 // The following tests work on r1 but not on r2

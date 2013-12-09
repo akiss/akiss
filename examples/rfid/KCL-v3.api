@@ -1,7 +1,8 @@
 // Simplified version - without pair - of RFID protocol KCL 07
 // cf. Survey Attacks on RFID protocols. T. Deursen and S. Radomirovic
 // The protocol is flawed. 
-// We consider two sessions of the tag. This is almost the real protocol (without pairs).
+// We consider two sessions of the tag. This is almost the real protocol
+// but without pairs.
 
 #set xor;
 
@@ -38,7 +39,7 @@ TtagB2 = in(C,X).out(C,plus(idB,r4)). out(C,plus(h(X,kB),r4)).0;
 r1 = TtagA1 :: TtagA2;
 r2 = TtagA1 :: TtagB2;
 
-equivalentct? r1 and r2;
+inequivalentct? r1 and r2;
 
 
 // 22/02/2013: AKISS finds the attack within 18 min - noko (cf. rfid-2b.log rfid-2b.dot rfid-2b.dot.svg)
@@ -53,10 +54,10 @@ equivalentct? r1 and r2;
 // check_identity([in(C,!n!26019),[out(C),[out(C),[in(C,!n!26019),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),w2),w3),X25752),X25750),X25750),X25752),zero)
 // check_identity([in(C,!n!26022),[out(C),[out(C),[in(C,!n!26022),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),w2),w3),X25760),X25762),X25760),X25762),zero)
 
-check_identity([in(C,!n!26025),[out(C),[out(C),[in(C,!n!26025),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),w2),w3),X25775),X25772),X25772),X25775),zero)
+// check_identity([in(C,!n!26025),[out(C),[out(C),[in(C,!n!26025),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),w2),w3),X25775),X25772),X25772),X25775),zero)
 
-check_identity([in(C,!n!26028),[out(C),[out(C),[in(C,!n!26028),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),w2),w3),X25782),X25785),X25782),X25785),zero)
+// check_identity([in(C,!n!26028),[out(C),[out(C),[in(C,!n!26028),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),w2),w3),X25782),X25785),X25782),X25785),zero)
 
-check_identity([in(C,!n!26031),[out(C),[out(C),[in(C,!n!26031),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(w0,w1),w2),w3),X25792),X25792),zero)
+// check_identity([in(C,!n!26031),[out(C),[out(C),[in(C,!n!26031),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(w0,w1),w2),w3),X25792),X25792),zero)
 
-check_identity([in(C,!n!26034),[out(C),[out(C),[in(C,!n!26034),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(w0,w1),w2),w3),X25798),X25798),zero)
+// check_identity([in(C,!n!26034),[out(C),[out(C),[in(C,!n!26034),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(w0,w1),w2),w3),X25798),X25798),zero)
