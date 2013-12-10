@@ -31,7 +31,6 @@ end
 module Make (M:O) : T with type elt = M.t = struct
 
   module S = Set.Make(M)
-  module Queue = Stack
 
   type elt = M.t
 
