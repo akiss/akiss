@@ -52,11 +52,10 @@ equivalentct? r1 and r2;
 // check_identity([in(C,!n!25998),[out(C),[out(C),[in(C,!n!25998),[out(C),[out(C),empty]]]]]],plus(plus(plus(w0,w1),w2),w3),zero)
 // check_identity([in(C,!n!26019),[out(C),[out(C),[in(C,!n!26019),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),w2),w3),X25752),X25750),X25750),X25752),zero)
 // check_identity([in(C,!n!26022),[out(C),[out(C),[in(C,!n!26022),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),w2),w3),X25760),X25762),X25760),X25762),zero)
+// check_identity([in(C,!n!26025),[out(C),[out(C),[in(C,!n!26025),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),w2),w3),X25775),X25772),X25772),X25775),zero)
 
-check_identity([in(C,!n!26025),[out(C),[out(C),[in(C,!n!26025),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),w2),w3),X25775),X25772),X25772),X25775),zero)
+// check_identity([in(C,!n!26028),[out(C),[out(C),[in(C,!n!26028),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),w2),w3),X25782),X25785),X25782),X25785),zero)
 
-check_identity([in(C,!n!26028),[out(C),[out(C),[in(C,!n!26028),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),w2),w3),X25782),X25785),X25782),X25785),zero)
+// check_identity([in(C,!n!26031),[out(C),[out(C),[in(C,!n!26031),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(w0,w1),w2),w3),X25792),X25792),zero)
 
-check_identity([in(C,!n!26031),[out(C),[out(C),[in(C,!n!26031),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(w0,w1),w2),w3),X25792),X25792),zero)
-
-check_identity([in(C,!n!26034),[out(C),[out(C),[in(C,!n!26034),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(w0,w1),w2),w3),X25798),X25798),zero)
+// check_identity([in(C,!n!26034),[out(C),[out(C),[in(C,!n!26034),[out(C),[out(C),empty]]]]]],plus(plus(plus(plus(plus(w0,w1),w2),w3),X25798),X25798),zero)
