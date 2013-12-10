@@ -73,23 +73,10 @@ DH_NOTESTS = examples/tests/dhneg.api
 
 RUN = OCAMLRUNPARAM=b ./akiss -verbose
 
-.PHONY: test yestest notest
-test: yestest notest
-yestest: akiss
-	@for i in $($(PREFIX)TESTS) ; do \
-	  echo ; \
-	  echo '>>' Checking $$i... ; \
-	  $(RUN) < $$i || exit 1 ; \
-	done
-notest: akiss
-	@for i in $($(PREFIX)NOTESTS) ; do \
-	  echo ; \
-	  echo '>>' Checking NOT $$i... ; \
-	  $(RUN) < $$i || exit 1 ; \
-	done
-
-# backup testing data and notes
-BFILES = log akiss.dot NOTES
-backup:
-	date=`date +%y%m%d%H%M` ; mkdir test-$$date ; \
-		 mv $(BFILES) test-$$date ; cp test-$$date/NOTES .
+.PHONY: test actest dhtest
+test:
+	./runtests.sh test "$(TESTS) $(NOTESTS)"
+actest:
+	./runtests.sh actest "$(AC_TESTS) $(AC_NOTESTS)"
+dhtest:
+	./runtests.sh actest "$(DH_TESTS) $(DH_NOTESTS)"
