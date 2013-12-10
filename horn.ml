@@ -685,8 +685,8 @@ let update (kb : Base.t) rules (f : statement) : unit =
       let newhead = Predicate("identical", [world; get_recipe head; recipe]) in
       let newclause = normalize_identical { fc with head = newhead } in
         debugOutput
-          "USELESS: %s\nCF:%s\nINSTEAD:%s\n\n%!"
-          (show_statement f) (show_statement fc)
+          "Useless: %s\nOriginal form:%s\nReplaced by:%s\n\n%!"
+          (show_statement fc) (show_statement f)
           (show_statement newclause); 
         if useful newclause then
           Base.add newclause rules kb
@@ -704,9 +704,9 @@ let update (kb : Base.t) rules (f : statement) : unit =
 
 (** Compute the initial knowledge base K_i(S) associated to the
   * seed statements S of a ground trace T. *)
-let initial_kb (seed : statement list) : Base.t =
+let initial_kb (seed : statement list) rules : Base.t =
   let kb = Base.create () in
-    List.iter (update kb []) seed ;
+    List.iter (update kb rules) seed ;
     kb
 
 (** {2 Resolution steps} *)

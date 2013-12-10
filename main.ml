@@ -157,13 +157,10 @@ let seed_statements trace rew =
 let tests_of_trace t rew =
   verboseOutput "Constructing seed statements\n%!";
   let seed = seed_statements t rew in
-  (* Printf.printf "\n\nSeed statements of %s:\n\n%s\n\n%!" (show_trace t) (show_kb seed); *)
     verboseOutput "Constructing initial kb\n%!";
-    let kb = initial_kb seed in
-(*      Printf.printf "\n\nInitial knowledge base of %s:\n\n%s\n\n%!" (show_trace t) (show_kb kb_can); *)
+    let kb = initial_kb seed rew in
       verboseOutput "Saturating knowledge base\n%!";
       saturate kb rew ;
-(*      Printf.printf "\n\nSaturated knowledge base of %s:\n\n%s\n\n%!" (show_trace t) (show_kb kb_can);*)
       checks kb
 
 let check_test_multi test trace_list =
@@ -530,7 +527,7 @@ let query_print traceName =
     Printf.printf
       "\n\nSeed statements of %s:\n%s\n\n%!"
       traceName (show_kb_list kb_seed);
-    let kb = initial_kb kb_seed in
+    let kb = initial_kb kb_seed !rewrite_rules in
       Printf.printf
         "Initial knowledge base of %s:\n\n%s%!"
         traceName (show_kb kb);
