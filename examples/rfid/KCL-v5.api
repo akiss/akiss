@@ -1,31 +1,39 @@
-// RFID protocol KCL07
 
-symbols plus/2, zero/0, h/2, pair/2, fst/1, snd/1;
-private idA, idB, r2, r4, kA, kB, r1;
+// 6/12/2013: le but de cet exemple. 
+// Je suis partie de KCL avec paire en cherchant a le simplifier pour essayer de comprendre 
+// pourquoi il ne termine pas
+
+
+
+
+#set xor;
+
+
+ symbols plus/2, zero/0, pair/2, h/2, fst/1, snd/1;
+// symbols plus/2, zero/0; 
+
+private idA, idB, r2, r4, kA, kB;
 channels C;
 var X, Y, Z;
 
 rewrite plus(zero,X) -> X;
 rewrite plus(X,X) -> zero;
 rewrite plus(X,plus(X,Y)) -> Y;
-rewrite fst(pair(X,Y)) -> X;
-rewrite snd(pair(X,Y)) -> Y;
 
-// We model RFID tags that authenticate with a reader
-// in the following way:
-//   reader sends a nonce r1
-//   tag A sends <idA+r2, h(r1,kA)+r2>
+ rewrite fst(pair(X,Y)) -> X;
+ rewrite snd(pair(X,Y)) -> Y;
 
-// The protocol does not ensure untraceability: a fake
-// reader can initiate a session with the nonce used in the previous honest session.
-// Then, an attacker will be able to tell if the two sessions are against
-// the same tag or not. Indeed, by xoring the two components
-// of the pair one gets idX+h(r1).
+// version avec paire
 
+//Tinit = in(C,Y).out(C,pair(plus(idA,r2),plus(h(Y,kA),r2))).0;
+//TtagA2 = in(C,X).out(C,pair(plus(idA,r4),plus(h(X,kA),r4))).0;
+//TtagB2 = in(C,X).out(C,pair(plus(idB,r4),plus(h(X,kB),r4))).0;
 
-Tinit = out(C,r1).out(C,pair(plus(idA,r2),plus(h(r1,kA),r2))).0;
-TtagA2 = in(C,X).out(C,pair(plus(idA,r4),plus(h(X,kA),r4))).0;
-TtagB2 = in(C,X).out(C,pair(plus(idB,r4),plus(h(X,kB),r4))).0;
+// version sans paire
+
+ Tinit = in(C,Y).out(C,plus(idA,r2)).out(C,plus(h(Y,kA),r2)).0;
+ TtagA2 = in(C,X).out(C,plus(idA,r4)).out(C,plus(h(X,kA),r4)).0;
+ TtagB2 = in(C,X).out(C,plus(idB,r4)).out(C,plus(h(X,kB),r4)).0;
 
 r1 = Tinit :: TtagA2;
 r2 = Tinit :: TtagB2;
@@ -33,11 +41,19 @@ r2 = Tinit :: TtagB2;
 equivalentct? r1 and r2;
 
 
-// 25/02/2013: AKISS finds the attack within  20 min - sume (cf. rfid-3b.log rfid-3b.dot rfid-3b.dot.svg)
-// Among the tests we obtain:
-// check_identity([out(C),[out(C),[in(C,w0),[out(C),empty]]]],plus(fst(w1),fst(w2)),plus(snd(w1),snd(w2)))
-// but also:
-// check_identity([out(C),[out(C),[in(C,w0),[out(C),empty]]]],w1,pair(fst(w1),plus(plus(fst(w1),fst(w2)),snd(w2))))
+// Version sans paire mais avec paire declare: termine sans conseq ()
 
-// TODO: I add the rule for coherence but this example has been been tested without this line 
+// Version avec paire et conseq (sauf +) active: termine ()
+
+// Version avec paire et seulement axiom de conseq active: termine (46 s)
+
+// ajout de r1 et du symbole h (54s)
+
+// ajout d'un input inutile: 1m 31s
+
+// ajout de la variable dans l'output 1m54s.
+
+// Tinit est maintenant le vrai protocole et pas seulement une frame. Termine en 2m20s
+// (Meme exemple mais sans paire - termine aussi en 2m17s)
+
 
