@@ -143,7 +143,7 @@ let seed_statements trace rew =
       (List.map
          (fun (f,a) ->
             context_statements f a rew)
-         !fsymbols)
+         (List.sort (fun (_,a) (_,a') -> compare a a') !fsymbols))
   in
   let trace_clauses =
     knows_statements trace rew
