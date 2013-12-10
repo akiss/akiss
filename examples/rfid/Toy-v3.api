@@ -13,7 +13,7 @@ var X, Y, Z;
 
 rewrite plus(zero,X) -> X;
 rewrite plus(X,X) -> zero;
-rewrite plus(X, plus(X,Y)) -> same;
+rewrite plus(X, plus(X,Y)) -> Y;
 
 diff = in(C,X).out(C,plus(X,idA));
 

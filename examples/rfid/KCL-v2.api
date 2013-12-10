@@ -1,7 +1,8 @@
 // Simplified version - without pair - of RFID protocol KCL 07
 // cf. Survey Attacks on RFID protocols. T. Deursen and S. Radomirovic
 // The protocol is flawed. 
-// To help AKISS to find the attack, the two sessions are executed using the same input (the first one Y).
+// To help AKISS to find the attack, the two sessions are executed using
+// the same input (the first one Y).
 
 #set xor;
 
@@ -24,7 +25,8 @@ rewrite plus(X,X) -> zero;
 // The protocol does not ensure untraceability: a fake
 // reader can initiate two sessions with the same nonce
 // and will be able to tell if the two sessions are against
-// the same tag or not. Indeed, by xoring the two outputs one gets idX+h(r1).
+// the same tag or not. Indeed, by xoring the two outputs
+// one gets idX+h(r1,kX).
 
 
 TtagA1 = in(C,Y).out(C,plus(idA,r2)). out(C,plus(h(Y,kA),r2)).0;
@@ -34,7 +36,7 @@ TtagB2 = out(C,plus(idB,r4)). out(C,plus(h(Y,kB),r4)).0;
 r1 = TtagA1 :: TtagA2;
 r2 = TtagA1 :: TtagB2;
 
-equivalentct? r1 and r2;
+inequivalentct? r1 and r2;
 
 // 25/11/2013: AKISS concludes within 12m12s
 // The following tests work on r1 but not on r2:

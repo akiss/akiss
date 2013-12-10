@@ -234,7 +234,7 @@ let rec worldreplempty w wp =
 (** Core statements without variant computations *)
 let rec knows_statements_h oc tr antecedents world clauses =
   match tr with 
-    | NullTrace -> clauses
+    | NullTrace -> List.rev clauses
     | Trace(Output(ch, t), remaining_trace) -> 
 	let next_world = worldadd world (Fun("!out!", [Fun(ch, [])])) in
 	let next_head = Predicate("knows",
@@ -313,7 +313,7 @@ let knows_statements tr rules =
 
 let rec reach_statements_h tr antecedents world result =
   match tr with
-    | NullTrace -> result
+    | NullTrace -> List.rev result
     | Trace(Output(ch, t), remaining_trace) ->
 	let next_world = worldadd world (Fun("!out!", [Fun(ch, [])])) in
 	let new_clause = (Predicate(

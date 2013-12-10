@@ -19,7 +19,7 @@ rewrite plus(X, plus(X,Y)) -> Y;
 same = in(C,X).out(C,plus(X,idA)).in(C,Y).out(C,plus(Y,idA));
 diff = in(C,X).out(C,plus(X,idA)).in(C,Y).out(C,plus(Y,idB));
 
-equivalentct? same and diff;
+inequivalentct? same and diff;
 
 
 // 25/11/2013: C'est lent .... bizarre. Plus que 7 min (abandon). Csu de taille 352 !!

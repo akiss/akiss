@@ -35,7 +35,7 @@ TtagB2 = in(C,X).out(C,pair(plus(idB,r4),plus(h(X,kB),r4))).0;
 r1 = TtagA1 :: TtagA2;
 r2 = TtagA1 :: TtagB2;
 
-equivalentct? r1 and r2;
+inequivalentct? r1 and r2;
 
 
 // 22/02/2013: AKISS finds the attack within 25 min - sume (cf. rfid-3a.log rfid-3a.dot rfid-3a.dot.svg)
