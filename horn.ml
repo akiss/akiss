@@ -480,25 +480,33 @@ let rule_remove = function
   * statement as long as one derivation remains. *)
 let simplify_statement st =
   let hvars = vars_of_term_list (get_recipes st.head) in
-  let rec update body =
-    let useless,body =
-      List.partition
-        (fun a ->
-           not (List.mem (unbox_var (get_recipe a)) hvars) &&
-           let t = get_term a in
-           let l = world_length (get_world a) in
-             List.exists (fun a' ->
-                            a < a' &&
-                            l = world_length (get_world a') &&
-                            Maude.equals t (get_term a') []) body)
-        body
-    in
-      List.iter
-        (fun a -> debugOutput "Removed %s\n" (show_atom a))
-        useless ;
-      if useless <> [] then update body else body
+  let (<<) a a' =
+    (* a<<a' indicates that a can be discarded in favor of a'.
+     * By default we use the standard order on strings, but we tweak
+     * it so that marked and necessary variables are kept, while making
+     * sure that such atoms can be used to justify dropping others. *)
+    if List.mem a hvars || is_marked a then false else
+      if List.mem a' hvars || is_marked a' then true else
+        a<a'
   in
-    { st with body = update st.body }
+  let useless,body =
+    List.partition
+      (fun a ->
+         let recipe_var = unbox_var (get_recipe a) in
+         not (is_marked recipe_var) &&
+         not (List.mem recipe_var hvars) &&
+         let t = get_term a in
+         let l = world_length (get_world a) in
+           List.exists (fun a' ->
+                          recipe_var << unbox_var (get_recipe a') &&
+                          l = world_length (get_world a') &&
+                          Maude.equals t (get_term a') []) st.body)
+      st.body
+  in
+    List.iter
+      (fun a -> debugOutput "Removed %s\n" (show_atom a))
+      useless ;
+    if useless = [] then st else { st with body = body }
 
 let canonical_form statement =
   if (canonize_all || is_deduction_st statement) &&
