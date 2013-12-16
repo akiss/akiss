@@ -5,13 +5,30 @@ let debug = false
 let pdebug = false (* show parsing info *)
 let sdebug = pdebug || false (* show maude script *)
 
-let output_string = Cime.output_string
+let output_string ch s = Format.fprintf ch "%s" s
 
 let input_line chan =
   let line = input_line chan in
     if pdebug then
       Format.printf "input line > %S\n%!" line ;
     line
+
+let prefix s s' =
+  if String.length s > String.length s' then false else
+    try
+      for i = 0 to String.length s - 1 do
+        if s.[i] <> s'.[i] then failwith "false"
+      done ;
+      true
+    with Failure "false" -> false
+
+let rec pp_list pp sep chan = function
+  | [] -> ()
+  | [x] -> pp chan x
+  | x::tl ->
+      pp chan x ;
+      output_string chan sep ;
+      pp_list pp sep chan tl
 
 (** Printing Maude terms and modules *)
 
@@ -41,7 +58,7 @@ let rec print chan = function
         end
       end
   | Fun (s,args) ->
-      Format.fprintf chan "%s(%a)" s (Cime.pp_list print ", ") args
+      Format.fprintf chan "%s(%a)" s (pp_list print ", ") args
 
 let sprint t =
   print Format.str_formatter t ;
@@ -92,7 +109,7 @@ let print_module rules extrasig chan () =
       extrasig.names ;
     if !vars <> [] || extrasig.vars <> [] then
       Format.fprintf chan "var %a : Term .\n"
-        (Cime.pp_list output_string " ")
+        (pp_list output_string " ")
         (List.rev_append !vars extrasig.vars) ;
 
     (* Rewrite rules *)

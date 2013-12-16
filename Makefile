@@ -1,4 +1,4 @@
-ML = base.ml parser.ml lexer.ml util.ml term.ml cime.ml maude.ml \
+ML = base.ml parser.ml lexer.ml util.ml term.ml maude.ml \
 	 horn.ml process.ml main.ml 
 MLI = $(wildcard $(ML:.ml=.mli))
 OCAMLC = ocamlopt -g
