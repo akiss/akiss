@@ -3,8 +3,21 @@ open Util;;
 open Term;;
 open Horn;;
 
-module Variants = Maude
-let normalize = Maude.normalize
+type var = string
+type rules = (term*term) list
+type subst = (var*term) list
+module type REWRITING = sig
+  val unifiers : term -> term -> rules -> subst list
+  val normalize : term -> rules -> term
+  val variants : term -> rules -> (term*subst) list
+  val equals : term -> term -> rules -> bool
+end
+module R : REWRITING = struct
+  let normalize = Maude.normalize
+  let equals = Maude.equals
+  let unifiers = Maude.unifiers
+  let variants = Tamarin.variants
+end
 
 (** {2 Processes} *)
 
@@ -260,13 +273,13 @@ let rec knows_statements_h oc tr antecedents world clauses =
 
 let normalize_msg_atom rules = function
   | Predicate("knows", [w; r; t]) ->
-      Predicate("knows", [normalize w rules; r; normalize t rules])
+      Predicate("knows", [R.normalize w rules; r; R.normalize t rules])
   | Predicate("reach", [w]) -> 
-      Predicate("reach", [normalize w rules])
+      Predicate("reach", [R.normalize w rules])
   | Predicate("identical", [w; r; rp]) -> 
-      Predicate("identical", [normalize w rules; r; rp])
+      Predicate("identical", [R.normalize w rules; r; rp])
   | Predicate("ridentical", [w; r; rp]) -> 
-      Predicate("ridentical", [normalize w rules; r; rp])
+      Predicate("ridentical", [R.normalize w rules; r; rp])
   | _ -> invalid_arg("normalize_msg_atom")
 ;;
 
@@ -294,7 +307,7 @@ let apply_subst_msg_st (head, body) sigma =
 let knows_variantize (head, body) rules =
   match head with
     | Predicate("knows", [world; recipe; t]) ->
-	let v = Variants.variants t rules in
+	let v = R.variants t rules in
 	let new_clause (_, sigma) = 
           Horn.new_clause
             (normalize_msg_st (apply_subst_msg_st (head, body) sigma) rules)
@@ -356,7 +369,7 @@ let reach_equationalize (head, body) rules =
 			   | _ -> invalid_arg("rights")) eqns in
   let t1 = Fun("!tuple!", lefts) in
   let t2 = Fun("!tuple!", rights) in
-  let sigmas = Variants.unifiers t1 t2 rules in
+  let sigmas = R.unifiers t1 t2 rules in
   let newbody = List.filter (function (Predicate(x, _)) -> x <> "!equals!") body in
   let newatom sigma = function
     | (Predicate(x, [y; z; t])) -> 
@@ -373,15 +386,15 @@ let reach_equationalize (head, body) rules =
 let reach_variantize (head, body) rules =
   match head with
     | Predicate("reach", [w]) ->
-	let v = Variants.variants w rules in
+	let v = R.variants w rules in
 	let newhead sigma = Predicate("reach", 
-				[normalize (apply_subst w sigma) rules]) in
+				[R.normalize (apply_subst w sigma) rules]) in
 	let newbody sigma = trmap
 	  (function 
 	     | Predicate("knows", [x; y; z]) -> 
-		 Predicate("knows", [normalize (apply_subst x sigma) rules; 
+		 Predicate("knows", [R.normalize (apply_subst x sigma) rules; 
 				     y; 
-				     normalize (apply_subst z sigma) rules])
+				     R.normalize (apply_subst z sigma) rules])
 	     | _ -> invalid_arg("reach_variantize")) body in
 	trmap (fun (_, sigma) -> Horn.new_clause (newhead sigma, newbody sigma)) v
     | _ -> invalid_arg("reach_variantize")
@@ -464,7 +477,7 @@ let rec execute_h process frame instructions rules =
 	  else
 	    raise Invalid_instruction
       | (Trace(Test(x, y), pr), Fun("world", _)) ->
-	  if Maude.equals x y rules then
+	  if R.equals x y rules then
 	    execute_h pr frame instructions rules
 	  else
 	    raise Process_blocked
@@ -553,7 +566,7 @@ let check_ridentical process test_ridentical rules = match test_ridentical with
 	let frame = execute process [] w rules in
 	let t1 = apply_frame r frame in
 	let t2 = apply_frame rp frame in
-	  Maude.equals t1 t2 rules
+	  R.equals t1 t2 rules
       with 
 	| Process_blocked -> false
 	| Too_many_instructions -> false

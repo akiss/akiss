@@ -91,7 +91,7 @@ let context_statements symbol arity rules =
     (trmap (function x -> apply_subst x sigma) (box_vars vZs))
   in
   let t = Fun(symbol, box_vars vZs) in
-  let v = Variants.variants t rules in
+  let v = R.variants t rules in
     trmap
     (function (t',sigma) ->
       let clause =
