@@ -3,9 +3,9 @@
 
 open Term
 
-let debug = true
-let pdebug = true (* show parsing info *)
-let sdebug = pdebug || true (* show script *)
+let debug = false
+let pdebug = false (* show parsing info *)
+let sdebug = pdebug || false (* show script *)
 
 let output_string ch s = Format.fprintf ch "%s" s
 
@@ -59,8 +59,7 @@ let rec print chan = function
 (** Running and interacting with tamarin-prover *)
 let process print_query parse_result =
   let chan_out,chan_in =
-    let home = Sys.getenv "HOME" in
-      Unix.open_process (home ^ "/.cabal/bin/tamarin-prover variants")
+    Unix.open_process (Config.tamarin_binary ^ " variants")
   in
   let chan_in = Format.formatter_of_out_channel chan_in in
     if sdebug then print_query Format.std_formatter ;

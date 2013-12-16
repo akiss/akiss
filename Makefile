@@ -1,5 +1,5 @@
 ML = base.ml parser.ml lexer.ml util.ml term.ml \
-	 maude.ml lextam.ml parsetam.ml tamarin.ml \
+	 config.ml maude.ml lextam.ml parsetam.ml tamarin.ml \
 	 horn.ml process.ml main.ml 
 MLI = $(wildcard $(ML:.ml=.mli))
 OCAMLC = ocamlopt -g
@@ -8,7 +8,7 @@ CMO = cmx
 OBJS = $(ML:.ml=.$(CMO))
 
 akiss: $(OBJS)
-	$(OCAMLC) -o akiss unix.$(CMA) $(OBJS)
+	$(OCAMLC) -o akiss str.$(CMA) unix.$(CMA) $(OBJS)
 
 %.$(CMO): %.ml
 	$(OCAMLC) -c $<

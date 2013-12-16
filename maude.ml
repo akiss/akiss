@@ -127,12 +127,7 @@ let print_module rules extrasig chan () =
 (** Interacting with a full-maude process *)
 
 let chan_out,chan_in =
-  let o,i =
-    let home = Sys.getenv "HOME" in
-    Unix.open_process
-      (home ^ "/soft/maude/maude -batch -no-banner -no-ansi-color " ^
-       home ^ "/soft/maude/full-maude.maude")
-  in
+  let o,i = Unix.open_process Config.maude_command in
     at_exit (fun () -> ignore (Unix.close_process (o,i))) ;
     o,
     (Format.formatter_of_out_channel i)
