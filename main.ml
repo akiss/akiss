@@ -552,9 +552,10 @@ let query_print traceName =
             (str_of_tr
                (check_ridentical_tests
                   trace (List.filter is_ridentical_test tests) !rewrite_rules))
-      
-let processCommand (c : cmd) =
-  match c with
+
+open Ast
+
+let processCommand = function
   | SetAC -> Horn.ac := true
   | SetXOR -> Horn.xor := true ; Horn.ac := true
   | DeclSymbols symbolList ->

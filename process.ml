@@ -68,6 +68,8 @@ let rec show_process process =
 
 (** {3 Parsing} *)
 
+open Ast
+
 let rec parse_action = function
   | TempActionOut(ch, t) -> Output(ch, parse_term t)
   | TempActionIn(ch, x) -> Input(ch, x)
