@@ -117,8 +117,25 @@ open Ast
 
 let process_decl = function
 
-  | SetAC -> ac := true
-  | SetXOR -> xor := true ; ac := true
+  | SetAC ->
+      ac := true
+  | SetXOR ->
+      ac := true ;
+      xor := true ;
+      if !rewrite_rules <> [] then begin
+        Printf.printf
+          "#set xor: only allowed at the beginning of the script!\n" ;
+        exit 1
+      end ;
+      let x = Var "X" and y = Var "Y" in
+      let (+) a b = Fun("plus",[a;b]) in
+      let zero = Fun("zero",[]) in
+      let (==) left right = left,right in
+        rewrite_rules := [
+          x+zero  == x ;
+          x+x     == zero ;
+          x+(x+y) == y
+        ]
 
   | DeclSymbols symbolList ->
     Printf.printf "Declaring symbols\n%!";
