@@ -6,6 +6,10 @@
 *.cmi
 parser.ml
 parser.mli
+lextam.ml
+lextam.mli
+parsetam.ml
+parsetam.mli
 lexer.ml
 .depend
 akiss

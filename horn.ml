@@ -16,13 +16,6 @@ end
 
 (** {2 Flags} *)
 
-(** The first two flags should be set from the script using #set ac/xor.
-  * - [ac] triggers special treatment of "plus" as AC connective.
-  * - [xor] triggers normalization of identical statements in the form
-  *   id(X,0). *)
-let ac = ref false
-let xor = ref false
-
 (** Canonization and yellow/flexible-flexible marking are critical. *)
 let canonize = true
 let yellow_marking = true
@@ -35,8 +28,8 @@ let canonize_all = false
   * completeness. Other flavors are not justified yet. At least axiom
   * seems useless, in simple cases such as in(X).out(X) with pairs. *)
 let conseq_axiom = true
-let conseq = ref true
-let conseq_plus = ref true
+let conseq = true
+let conseq_plus = true
 
 (* Mark last two variants of "plus", corresponding to the introduction
  * and elimination of 0. This is not compatible with the current theory
@@ -59,8 +52,8 @@ let print_flags () =
       \  yellow: %b\n\
       \  extra static: %b\n\
       \  eqrefl_opt: %b\n"
-      !ac !xor
-      conseq_axiom !conseq !conseq_plus
+      Theory.ac Theory.xor
+      conseq_axiom conseq conseq_plus
       canonize canonize_all
       yellow_marking extra_static_marks eqrefl_opt
 
@@ -586,7 +579,7 @@ let consequence st kb =
             get_recipe (List.find (is_same_t_smaller_w head) body)
           with
             | Not_found ->
-                if not !conseq then raise Not_a_consequence else
+                if not conseq then raise Not_a_consequence else
                 (* Inductive case: Res rule
                  * Find a (solved, well-formed) statement [x]
                  * whose head is matched by [head] and such that
@@ -598,7 +591,7 @@ let consequence st kb =
                      (*   (show_statement (head, body)); *)
                      (* debugOutput "Against %s\n%!" *)
                      (*   (show_statement x); *)
-                     if (not !conseq_plus) && is_plus_clause x then
+                     if (not conseq_plus) && is_plus_clause x then
                        raise Not_a_consequence ;
                      let sigma = inst_w_t head (get_head x) Not_a_consequence in
                        (* debugOutput "Sigma: %s\n\n%!" (show_subst sigma); *)
@@ -635,7 +628,7 @@ let useful st =
     | _ -> invalid_arg "useful"
 
 let normalize_identical f =
-  if not !xor then f else
+  if not Theory.xor then f else
     match get_head f with
       | Predicate("identical", [w;r;Fun("zero",[])])
       | Predicate("identical", [w;Fun("zero",[]);r]) ->
@@ -694,7 +687,7 @@ let update (kb : Base.t) rules (f : statement) : unit =
       (* If we ran conseq, no need to check whether the clause is already
        * in the knowledge base. It may be that conseq_plus should be put there
        * too. *)
-      let needs_check = not (conseq_axiom && !conseq) in
+      let needs_check = not (conseq_axiom && conseq) in
         Base.add ~needs_check fc rules kb
   else
     Base.add fc rules kb
@@ -1146,7 +1139,7 @@ let saturate_step_solved rules kb =
         true
 
 let saturate kb rules =
-  assert (if !xor then List.mem ("zero",0) !fsymbols else true) ;
+  assert (if Theory.xor then List.mem ("zero",0) !fsymbols else true) ;
   print_flags () ;
   (* Try not_solved step, otherwise solved step, otherwise stop. *)
   while saturate_step_not_solved rules kb

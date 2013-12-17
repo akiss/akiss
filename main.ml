@@ -4,79 +4,9 @@ open Util
 open Term
 open Process
 open Horn
+open Theory
 
 module Variants = Maude
-
-let usage = Printf.sprintf
-  "Usage: %s [-verbose] [-debug] < specification-file.api"
-  (Filename.basename Sys.argv.(0))
-;;
-
-let args = ref []
-
-let command_line_options_list = [
-  ("-xor", Arg.Set Horn.xor,
-   "Enable EXPERIMENTAL xor-specific optimizations.") ;
-  ("-C", Arg.Clear Horn.conseq,
-   "Disable conseq optimization.") ;
-  ("-P", Arg.Clear Horn.conseq_plus,
-   "Disable conseq optimization for plus clause.") ;
-  ("-verbose", Arg.Unit (fun () -> verbose_output := true),
-   "Enable verbose output");
-  ("-debug", Arg.Unit (fun () -> debug_output := true),
-   "Enable debug output")  
-];;
-
-let evchannels = ref [];;
-
-let rewrite_rules = ref [];;
-
-let evrewrite_rules = ref [];;
-
-let processes = ref [];;
-
-let appendto lref l = lref := List.append !lref l;;
-
-let addto lref e = appendto lref [e];;
-
-let rec declare_symbols symbolList =
-  appendto fsymbols symbolList
-;;
-
-let rec declare_names nameList = 
-  appendto private_names nameList
-;;
-
-let rec declare_channels nameList =
-  appendto channels nameList
-;;
-
-let rec declare_evchannels nameList =
-  appendto channels nameList;
-  appendto evchannels nameList
-;;
-
-
-let rec declare_vars varList = 
-  appendto vars varList
-;;
-
-let rec declare_rewrite t1 t2 = 
-  addto rewrite_rules ((parse_term t1), (parse_term t2))
-;;
-
-let rec declare_evrewrite t1 t2 = 
-  addto evrewrite_rules ((parse_term t1), (parse_term t2))
-;;
-
-
-(* let rec declare_trace traceName actionList = *)
-(*   addto processes (traceName, [parse_trace actionList]) *)
-(* ;; *)
-
-let rec declare_process name process =
-  addto processes (name, parse_process process !processes)
-;;
 
 (** Compute the part of seed statements that comes from the theory. *)
 let context_statements symbol arity rules =
@@ -104,7 +34,7 @@ let context_statements symbol arity rules =
            body sigma)
       in
         (* Mark recipe variables in non-trivial variants of the plus clause. *)
-        if !Horn.ac && symbol = "plus" && sigma <> [] then
+        if Theory.ac && symbol = "plus" && sigma <> [] then
           try
             let r =
               match
@@ -143,7 +73,7 @@ let seed_statements trace rew =
       (List.map
          (fun (f,a) ->
             context_statements f a rew)
-         (List.sort (fun (_,a) (_,a') -> compare a a') !fsymbols))
+         (List.sort (fun (_,a) (_,a') -> compare a a') Theory.fsymbols))
   in
   let trace_clauses =
     knows_statements trace rew
@@ -152,7 +82,6 @@ let seed_statements trace rew =
     reach_statements trace rew
   in
     List.concat [context_clauses; trace_clauses; reach_clauses]
-;;
 
 let tests_of_trace t rew =
   verboseOutput "Constructing seed statements\n%!";
@@ -164,25 +93,27 @@ let tests_of_trace t rew =
       checks kb
 
 let check_test_multi test trace_list =
-  List.exists (fun x -> check_test x test !rewrite_rules) trace_list
-;;
+  List.exists (fun x -> check_test x test Theory.rewrite_rules) trace_list
 
-let trace_counter = ref 0;;
-let count_traces = ref 0;;
+(** Processes and traces *)
+
+let processes = ref []
+
+let rec declare_process name process =
+  addto processes (name, parse_process process !processes)
+
+let trace_counter = ref 0
+let count_traces = ref 0
 
 let reset_count new_count =
-  (
-    trace_counter := 0;
-    count_traces := new_count;
-  )
-;;
+  trace_counter := 0 ;
+  count_traces := new_count
 
 let do_count () = 
-  (
-    trace_counter := !trace_counter + 1;
-    verboseOutput "On the %d-th saturation out of %d\n%!" !trace_counter !count_traces
-  )
-;;
+  trace_counter := !trace_counter + 1;
+  verboseOutput
+    "On the %d-th saturation out of %d\n%!"
+    !trace_counter !count_traces
 
 let query ?(expected=true) s t =
   verboseOutput
@@ -199,7 +130,7 @@ let query ?(expected=true) s t =
       (List.map
          (fun x ->
             do_count ();
-            tests_of_trace x !rewrite_rules)
+            tests_of_trace x Theory.rewrite_rules)
          straces)
   in
   let ttests =
@@ -207,7 +138,7 @@ let query ?(expected=true) s t =
       (List.map
          (fun x ->
             do_count ();
-            tests_of_trace x !rewrite_rules)
+            tests_of_trace x Theory.rewrite_rules)
          ttraces)
   in
   let fail_stests = List.filter (fun x -> not (check_test_multi x ttraces)) stests in
@@ -227,22 +158,26 @@ let query ?(expected=true) s t =
     if expected then exit 1
   end
 
-exception OneToMoreFail of trace * term list;;
+exception OneToMoreFail of trace * term list
 
 let check_one_to_one (tests1, trace1) (tests2, trace2) rew =
-  let fail1 = List.filter
-    (fun x -> not (check_test trace2 x rew)) tests1 in
-  let fail2 = List.filter
-    (fun x -> not (check_test trace1 x rew)) tests2 in
-  ((List.length fail1 = 0) && (List.length fail2 = 0))
-;;
+  let fail1 =
+    List.filter
+      (fun x -> not (check_test trace2 x rew))
+      tests1
+  in
+  let fail2 =
+    List.filter
+      (fun x -> not (check_test trace1 x rew))
+      tests2
+  in
+    fail1 = [] && fail2 = []
 
 let check_one_to_more (tests1, trace1) list rew =
   if List.exists (fun x -> check_one_to_one (tests1, trace1) x rew) list then
     ()
   else
     raise (OneToMoreFail(trace1, tests1))
-;;
 
 let square s t =
   verboseOutput
@@ -255,24 +190,24 @@ let square s t =
     List.map
       (fun x -> 
          do_count ();
-         ((tests_of_trace x !rewrite_rules), x))
+         ((tests_of_trace x Theory.rewrite_rules), x))
       ls
   in
   let ttests =
    List.map
      (fun x -> 
         do_count ();
-        ((tests_of_trace x !rewrite_rules), x))
+        ((tests_of_trace x Theory.rewrite_rules), x))
      lt
   in
   try
     ignore
       (List.iter
-         (fun x -> check_one_to_more x ttests !rewrite_rules)
+         (fun x -> check_one_to_more x ttests Theory.rewrite_rules)
          stests);
     ignore
       (List.iter
-         (fun x -> check_one_to_more x stests !rewrite_rules)
+         (fun x -> check_one_to_more x stests Theory.rewrite_rules)
          ttests);
     Printf.printf "%s and %s are trace equivalent\n%!"
       (show_string_list s) (show_string_list t)
@@ -312,54 +247,54 @@ let stat_equiv frame1 frame2 rew =
       false
     )
 
-;;
-
-
 let check_ev_ind_test trace1 trace2 test = 
   (* check that reach test from trace1 is reachable in trace2 and check static equiv of two resulting frames *)
   match test with
   | Fun("check_run", [w]) ->
-    (
-	(* debugOutput *)
-	(*   "CHECK FOR: %s\nREACH: %s\n\n%!" *)
-	(*   (show_trace process) *)
-	(*   (show_term w); *)
-      let f1 = execute trace1 [] w !rewrite_rules in
-      try
-	(
-	  let f2 = execute trace2 [] w !rewrite_rules in
-	  let rf1 = restrict_frame_to_channels f1 trace1 !evchannels in
-	  let rf2 = restrict_frame_to_channels f2 trace2 !evchannels in
-	  let r = stat_equiv rf1 rf2 !evrewrite_rules in (if r then (verboseOutput "static equivalence verified\n%!"; r) else (verboseOutput "static equivalence not verified\n%!"; r))
-	)
+      let f1 = execute trace1 [] w Theory.rewrite_rules in
+      begin try
+        let f2 = execute trace2 [] w Theory.rewrite_rules in
+        let rf1 = restrict_frame_to_channels f1 trace1 Theory.evchannels in
+        let rf2 = restrict_frame_to_channels f2 trace2 Theory.evchannels in
+        let r = stat_equiv rf1 rf2 Theory.evrewrite_rules in
+          if r then
+            verboseOutput "static equivalence verified\n%!"
+          else
+            verboseOutput "static equivalence not verified\n%!";
+          r
       with
-      | Process_blocked -> false
-      | Too_many_instructions -> false
-      | Not_a_recipe -> false
-      | Invalid_instruction -> false
-      | Bound_variable -> invalid_arg("the process binds twice the same variable")
-    )
+        | Process_blocked -> false
+        | Too_many_instructions -> false
+        | Not_a_recipe -> false
+        | Invalid_instruction -> false
+        | Bound_variable -> invalid_arg "the process binds twice the same variable"
+      end
   | _ -> invalid_arg("check_reach")
-;;
 
 
 let ev_check_one_to_one (tests1, trace1) (tests2, trace2) =
-  let fail1 = List.filter
-    (fun x -> not (check_ev_ind_test trace1 trace2 x)) tests1 in
-  let fail2 = List.filter
-    (fun x -> not (check_ev_ind_test trace2 trace1 x)) tests2 in
-  ((List.length fail1 = 0) && (List.length fail2 = 0))
-;;
+  let fail1 =
+    List.filter
+      (fun x -> not (check_ev_ind_test trace1 trace2 x))
+      tests1
+  in
+  let fail2 =
+    List.filter
+      (fun x -> not (check_ev_ind_test trace2 trace1 x))
+      tests2
+  in
+    fail1 = [] && fail2 = []
 
 let ev_check_one_to_more (tests1, trace1) list =
   if List.exists (fun x -> ev_check_one_to_one (tests1, trace1) x ) list then
     ()
   else
     raise (OneToMoreFail(trace1, tests1))
-;;
 
 let evequiv s t =
-  verboseOutput "Checking forward indistinguishability for %s and %s\n%!" (show_string_list s) (show_string_list t);
+  verboseOutput
+    "Checking forward indistinguishability for %s and %s\n%!"
+    (show_string_list s) (show_string_list t);
   (* list of traces of s, then t *)
   let ls =
     List.concat (List.map (fun x -> List.assoc x !processes) s)
@@ -372,14 +307,14 @@ let evequiv s t =
     List.map
       (fun x -> 
          do_count ();
-         ((List.filter is_reach_test (tests_of_trace x !rewrite_rules)), x))
+         ((List.filter is_reach_test (tests_of_trace x Theory.rewrite_rules)), x))
       ls
   in
   let ttests =
     List.map
       (fun x -> 
          do_count ();
-         ((List.filter is_reach_test (tests_of_trace x !rewrite_rules)), x))
+         ((List.filter is_reach_test (tests_of_trace x Theory.rewrite_rules)), x))
       lt
   in 
     try
@@ -400,52 +335,10 @@ let evequiv s t =
             "its tests are\n%!%s\n%!"
             (show_tests tests)
 
-type atom_type =  
-  | Channel
-  | Name
-  | Symbol of int
-  | Variable
-
-exception No_duplicate
-
-let rec find_dup l = 
-  match l with
-    | [] -> raise No_duplicate
-    | _ :: [] -> raise No_duplicate
-    | (x, _) :: ((y, _) as hd) :: tl ->
-	if y = x then
-	  x
-	else
-	  find_dup (hd :: tl)
-
-exception Parse_error_semantic of string;;
-
-let check_atoms () =
-  let atoms = 
-    List.concat [
-      List.map (fun (x, y) -> (x, Symbol(y))) !fsymbols;
-      List.map (fun x -> (x, Channel)) !channels;
-      List.map (fun x -> (x, Variable)) !vars;
-      List.map (fun x -> (x, Name)) !private_names;
-    ] in
-  let sorted_atoms =
-    List.sort (fun (x, _) (xp, _) -> compare x xp) atoms
-  in
-  try
-    let duplicate = find_dup sorted_atoms in
-    raise
-      (Parse_error_semantic
-         (Printf.sprintf
-            "Identifier \"%s\" declared more than once."
-            duplicate))
-  with
-    | No_duplicate -> ()
-    | Parse_error_semantic(e) -> raise (Parse_error_semantic(e))
-
 let trace_of_process (p : process) : trace =
   match p with
     | [t] -> t
-    | _ -> invalid_arg("trace_of_process: not a trace")
+    | _ -> invalid_arg "trace_of_process: not a trace"
 
 let interleave_opt tnl =
   let tl =
@@ -523,15 +416,15 @@ let query_print traceName =
       Printf.printf "(total: %d statements)\n" !c
   in
   let t = trace_of_process(List.assoc traceName !processes) in
-  let kb_seed = seed_statements t !rewrite_rules in
+  let kb_seed = seed_statements t Theory.rewrite_rules in
     Printf.printf
       "\n\nSeed statements of %s:\n%s\n\n%!"
       traceName (show_kb_list kb_seed);
-    let kb = initial_kb kb_seed !rewrite_rules in
+    let kb = initial_kb kb_seed Theory.rewrite_rules in
       Printf.printf
         "Initial knowledge base of %s:\n\n%s%!"
         traceName (show_kb kb);
-      saturate kb !rewrite_rules ;
+      saturate kb Theory.rewrite_rules ;
       Printf.printf "\n\nAfter saturation:\n" ;
       print_kbs (Base.solved kb) ;
       Printf.printf "\n" ;
@@ -548,41 +441,17 @@ let query_print traceName =
              Running ridentical self tests: %s\n\n%!"
             (str_of_tr
                (check_reach_tests
-                  trace (List.filter is_reach_test tests) !rewrite_rules))
+                  trace
+                  (List.filter is_reach_test tests)
+                  Theory.rewrite_rules))
             (str_of_tr
                (check_ridentical_tests
-                  trace (List.filter is_ridentical_test tests) !rewrite_rules))
-      
-let processCommand (c : cmd) =
-  match c with
-  | SetAC -> Horn.ac := true
-  | SetXOR -> Horn.xor := true ; Horn.ac := true
-  | DeclSymbols symbolList ->
-    Printf.printf "Declaring symbols\n%!";
-    declare_symbols symbolList;
-    check_atoms ()
-  | DeclChannels channelList ->
-    Printf.printf "Declaring symbols\n%!";
-    declare_channels channelList;
-    check_atoms ()
-  | DeclEvChannels evchannelList ->
-    Printf.printf "Declaring symbols\n%!";
-    declare_evchannels evchannelList;
-    check_atoms ()
-  | DeclPrivate nameList ->
-    Printf.printf "Declaring private names\n%!";
-    declare_names nameList;
-    check_atoms ()
-  | DeclVar varList ->
-    Printf.printf "Declaring variables\n%!";
-    declare_vars varList;
-    check_atoms ()
-  | DeclRewrite(t1, t2) ->
-    Printf.printf "Declaring rewrite rule\n%!";
-    declare_rewrite t1 t2
-  | DeclEvRewrite(t1, t2) ->
-    Printf.printf "Declaring rewrite rule\n%!";
-    declare_evrewrite t1 t2
+                  trace
+                  (List.filter is_ridentical_test tests)
+                  Theory.rewrite_rules))
+
+let processCommand = function
+
   | DeclProcess(name, process) ->
     Printf.printf "Declaring process %s\n%!" name;
     declare_process name process
@@ -598,38 +467,33 @@ let processCommand (c : cmd) =
   | DeclSequence(traceName, traceList) ->
     Printf.printf "Declaring trace as sequence\n%!";
     declare_sequence traceName traceList
+
   | QueryEquivalent(traceList1, traceList2) ->
     query ~expected:true traceList1 traceList2
   | QueryInequivalent(traceList1, traceList2) ->
     query ~expected:false traceList1 traceList2
   | QuerySquare (traceList1, traceList2) ->
-    Printf.printf "Checking fine grained equivalence of %s and %s\n%!" (show_string_list traceList1) (show_string_list traceList2);
+    Printf.printf
+      "Checking fine grained equivalence of %s and %s\n%!"
+      (show_string_list traceList1) (show_string_list traceList2);
     square traceList1 traceList2
-
   | QueryEvSquare (traceList1, traceList2) ->
-    Printf.printf "Checking forward indistinguishability of  %s and %s\n%!" (show_string_list traceList1) (show_string_list traceList2);
+    Printf.printf
+      "Checking forward indistinguishability of  %s and %s\n%!"
+      (show_string_list traceList1) (show_string_list traceList2);
     evequiv traceList1 traceList2
-
   | QueryPrint traceName ->
     Printf.printf "Printing information about %s\n%!" traceName;
     query_print traceName
   | QueryPrintTraces traceList ->
-    Printf.printf "Printing trace list of %s\n%!" (show_string_list traceList);
+    Printf.printf
+      "Printing trace list of %s\n%!"
+      (show_string_list traceList);
     print_traces traceList
-;;
 
-let process (cmdlist : cmd list) = 
-  ignore (trmap processCommand cmdlist)
-;;
+  | _ ->
+    Printf.eprintf "Illegal declaration outside preamble!\n" ;
+    exit 1
 
-let _ =
-  let collect arg = args := !args @ [arg] in
-  let _ = Arg.parse command_line_options_list collect usage in
-  let lexbuf = Lexing.from_channel stdin in
-  try
-    process (Parser.main Lexer.token lexbuf)
-  with Parsing.Parse_error ->
-    let curr = lexbuf.Lexing.lex_curr_p in
-    let line = curr.Lexing.pos_lnum in
-    let cnum = curr.Lexing.pos_cnum - curr.Lexing.pos_bol in
-    Printf.printf "Syntax error at line %d, column %d!\n" line cnum;
+let () =
+  List.iter processCommand cmdlist
