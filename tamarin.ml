@@ -112,4 +112,12 @@ let variants t rules =
             result
       | _ -> assert false
   in
+  let parse_variants ch =
+    try parse_variants ch with
+      | Parsing.Parse_error as e ->
+          Format.printf
+            "Error while parsing tamarin-prover output.\n" ;
+          query Format.std_formatter ;
+          raise e
+  in
     process query parse_variants

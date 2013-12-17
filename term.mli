@@ -28,7 +28,7 @@ val sig_of_term_list : term list -> extrasig
 val is_ground : term -> bool
 val occurs : varName -> term -> bool
 
-val parse_term : Parser.tempTerm -> term
+val parse_term : Ast.tempTerm -> term
 val show_term : term -> varName
 val show_term_list : term list -> varName
 val show_subst : subst -> string

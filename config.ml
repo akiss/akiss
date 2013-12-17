@@ -18,3 +18,15 @@ let tamarin_binary =
         Printf.eprintf "You may need to add something like \
                         ~/.cabal/bin to it.\n" ;
         exit 1
+
+let maude_binary =
+  try
+    let path = Str.split (Str.regexp ":") (Sys.getenv "PATH") in
+      List.find
+        Sys.file_exists
+        (List.map (fun d -> Filename.concat d "maude") path)
+  with
+    | Not_found ->
+        Printf.eprintf "Cound not find maude in PATH!\n" ;
+        Printf.eprintf "It is likely that tamarin-prover won't work.\n" ;
+        exit 1

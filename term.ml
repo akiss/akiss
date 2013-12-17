@@ -154,36 +154,33 @@ let subst_one_in_list x small list =
 let subst_one_in_subst x small sigma =
   trmap (function (v, t) -> (v, (subst_one x small t))) sigma
 
-let rec parse_term (t : tempTerm) =
-  match t with
-  | TempTermCons(x, l) ->
-    if List.mem x !vars then
-      if List.length l = 0 then
-	Var(x)
+let rec parse_term (Ast.TempTermCons(x,l)) =
+  if List.mem x !vars then
+    if l = [] then
+      Var x
+    else
+      raise (Parse_error_semantic
+               (Printf.sprintf "variable %s used as function symbol" x))
+    else if List.mem x !private_names then
+      if l = [] then
+        Fun(x, [])
       else
-	raise (Parse_error_semantic
-		 (Printf.sprintf "variable %s used as function symbol" x))
-      else
-      if List.mem x !private_names then
-	if List.length l = 0 then
-	  Fun(x, [])
-	else
-	  raise (Parse_error_semantic
-		   (Printf.sprintf "private name %s used as function symbol" x))
-      else
-	try
-	  let arity = List.assoc x !fsymbols in
-	  if List.length l = arity then
-	    Fun(x, trmap parse_term l)
-	  else
+        raise (Parse_error_semantic
+                 (Printf.sprintf "private name %s used as function symbol" x))
+    else
+      try
+        let arity = List.assoc x !fsymbols in
+          if List.length l = arity then
+            Fun(x, trmap parse_term l)
+          else
             raise
               (Parse_error_semantic
                  (Printf.sprintf
                     "function symbol %s has arity %d \
-                     but is used here with arity %d"
+                                but is used here with arity %d"
                     x arity (List.length l)))
-        with
-	| Not_found ->
+      with
+        | Not_found ->
             raise
               (Parse_error_semantic
                  (Printf.sprintf "undeclared function symbol %s" x))

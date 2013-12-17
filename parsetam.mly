@@ -2,13 +2,6 @@
 
 open Term
 
-type result = [
-  | `Variants of (subst list)
-  | `Unify of (subst list)
-  | `Match of (subst list)
-  | `Norm of term
-]
-
 (** [freshen sigma] replaces all variables in the range of the substitution
   * [sigma] by fresh variables. *)
 let freshen (sigma : subst) =
@@ -37,10 +30,9 @@ let freshen (sigma : subst) =
 %token Zero
 %token Plus
 
-
 %start main
 
-%type <result list> main
+%type < [ `Variants of (Term.subst list) | `Unify of (Term.subst list) | `Match of (Term.subst list) | `Norm of Term.term ] list > main
 
 %%
 

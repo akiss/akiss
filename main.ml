@@ -450,6 +450,8 @@ let query_print traceName =
                   (List.filter is_ridentical_test tests)
                   Theory.rewrite_rules))
 
+open Ast
+
 let processCommand = function
 
   | DeclProcess(name, process) ->

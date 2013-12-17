@@ -1,4 +1,4 @@
-ML = base.ml parser.ml lexer.ml util.ml term.ml theory.ml \
+ML = base.ml ast.ml parser.ml lexer.ml util.ml term.ml theory.ml \
 	 config.ml maude.ml lextam.ml parsetam.ml tamarin.ml \
 	 horn.ml process.ml main.ml 
 MLI = $(wildcard $(ML:.ml=.mli))
@@ -17,7 +17,7 @@ akiss: $(OBJS)
 	$(OCAMLC) -c $<
 
 %.ml: %.mly
-	ocamlyacc $< && $(OCAMLC) -c -i $@ > $(@:.ml=.mli)
+	ocamlyacc $<
 
 %.ml: %.mll
 	ocamllex $<
@@ -29,14 +29,10 @@ akiss: $(OBJS)
 
 clean:
 	rm -f *.o
-	rm -f parser.ml
-	rm -f lexer.ml
-	rm -f parser.mli
-	rm -f lexer.mli
+	rm -f parser.ml lexer.ml parser.mli lexer.mli
+	rm -f lextam.ml lextam.mli parsetam.ml parsetam.mli
 	rm -f akiss
-	rm -f *.cmi
-	rm -f *.cmx
-	rm -f *.cmo
+	rm -f *.cmi *.cmx *.cmo
 	rm -f *.o
 
 doc: $(ML)

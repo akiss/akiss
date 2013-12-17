@@ -113,10 +113,13 @@ let check_atoms () =
     | No_duplicate -> ()
     | Parse_error_semantic(e) -> raise (Parse_error_semantic(e))
 
-let process_decl (c : cmd) =
-  match c with
+open Ast
+
+let process_decl = function
+
   | SetAC -> ac := true
   | SetXOR -> xor := true ; ac := true
+
   | DeclSymbols symbolList ->
     Printf.printf "Declaring symbols\n%!";
     declare_symbols symbolList;
@@ -137,6 +140,7 @@ let process_decl (c : cmd) =
     Printf.printf "Declaring variables\n%!";
     declare_vars varList;
     check_atoms ()
+
   | DeclRewrite(t1, t2) ->
     Printf.printf "Declaring rewrite rule\n%!";
     declare_rewrite t1 t2
