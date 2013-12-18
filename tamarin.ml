@@ -87,7 +87,6 @@ let variants t rules =
       (fun (left,right) ->
          Format.fprintf chan "equations: %a = %a\n" print left print right)
       rules ;
-    Format.fprintf chan "equations: akissin(empty,X) = akisstest\n" ;
     Format.fprintf chan ".\n" ;
     Format.fprintf chan "variants %a\n" print t ;
     Format.fprintf chan ".\n"
