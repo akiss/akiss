@@ -3,15 +3,23 @@
 open Util
 open Term
 
-(** Wrapper around Term to perform unification through Cime *)
-module Term = struct
-  include Term
-  let csu s t = Maude.unifiers s t []
+module R = struct
+
+  include Theory.R
+
   let csu u v =
-    let sols = csu u v in
+    let sols = unifiers u v [] in
     let n = List.length sols in
       if n>0 then debugOutput "Found %d solution(s)\n" n ;
       sols
+
+  (** If it returns true, terms must be alpha equivalent.
+    * It is okay to not return true on all alpha equivalent pairs. *)
+  let rough_alpha_equiv ts tt =
+    (* Maude.matchers ts tt [] <> [] && Maude.matchers tt ts [] <> [] *)
+    try ignore (Rewriting.mgm ts tt) ; ignore (Rewriting.mgm tt ts) ; true with
+      | Rewriting.Not_matchable -> false
+
 end
 
 (** {2 Flags} *)
@@ -201,7 +209,7 @@ let show_statement st =
 (** {3 Unification and substitutions} *)
 
 let csu_atom a1 a2 = 
-  Term.csu (term_from_atom a1) (term_from_atom a2)
+  R.csu (term_from_atom a1) (term_from_atom a2)
 
 let apply_subst_atom atom sigma = match atom with
   | Predicate(name, term_list) ->
@@ -358,9 +366,7 @@ let dummy_statement head body =
 let same_statement s t =
   let ts = term_from_statement s in
   let tt = term_from_statement t in
-    (* Maude.matchers ts tt [] <> [] && Maude.matchers tt ts [] <> [] *)
-    try ignore (mgm ts tt) ; ignore (mgm tt ts) ; true with Not_matchable ->
-    false
+    R.rough_alpha_equiv ts tt
 
 (** [is_prefix_world w w'] checks whether [w] is a prefix of [w'],
   * assuming the two worlds come from the same statement, so that one
@@ -369,7 +375,7 @@ let rec is_prefix_world small_world big_world =
   match (small_world, big_world) with
   | (Fun("empty", []), _) -> true
   | (Fun("world", [h; t]), Fun("world", [hp; tp])) ->
-      assert (Maude.equals h hp []) ;
+      assert (R.equals h hp []) ;
       is_prefix_world t tp
   | (Fun("world", [_; _]), Fun("empty", [])) -> false
   | (Var(x), Var(y)) ->
@@ -493,7 +499,7 @@ let simplify_statement st =
            List.exists (fun a' ->
                           recipe_var << unbox_var (get_recipe a') &&
                           l = world_length (get_world a') &&
-                          Maude.equals t (get_term a') []) st.body)
+                          R.equals t (get_term a') []) st.body)
       st.body
   in
     List.iter
@@ -538,16 +544,17 @@ let rec first f l e =
   * TODO check that instantiations respect annotations regarding + *)
 let inst_w_t my_head head_kb exc =
   match (my_head, head_kb) with
-    | (Predicate(_, [myw; _; myt]), Predicate(_, [wkb; _; tkb])) -> (
-	let t1 = Fun("!tuple!", [myw; myt]) in
-	let t2 = Fun("!tuple!", [wkb; tkb]) in
-	try
-          (* debugOutput "Matching %s against %s\n%!" (show_term t1) (show_term t2); *)
-          let sigma = mgm t2 t1 in
-            (* debugOutput "Result %s\n%!" (show_subst sigma); *)
-            sigma
-	with Not_matchable -> raise exc
-      )
+    | (Predicate(_, [myw; _; myt]), Predicate(_, [wkb; _; tkb])) ->
+        let t1 = Fun("!tuple!", [myw; myt]) in
+        let t2 = Fun("!tuple!", [wkb; tkb]) in
+          begin try
+            (* debugOutput "Matching %s against %s\n%!" (show_term t1) (show_term t2); *)
+            let sigma = Rewriting.mgm t2 t1 in
+              (* debugOutput "Result %s\n%!" (show_subst sigma); *)
+              sigma
+          with
+            | Rewriting.Not_matchable -> raise exc
+          end
     | _ -> invalid_arg("inst_w_t")
 
 let inst_w_t_ac my_head head_kb =
@@ -556,7 +563,7 @@ let inst_w_t_ac my_head head_kb =
 	let t1 = Fun("!tuple!", [myw; myt]) in
 	let t2 = Fun("!tuple!", [wkb; tkb]) in
         (* debugOutput "Matching %s against %s\n%!" (show_term t1) (show_term t2); *)
-        Maude.matchers t2 t1 []
+        R.matchers t2 t1 []
         (* debugOutput "Result %s\n%!" (show_subst sigma); *)
     | _ -> invalid_arg("inst_w_t")
 
@@ -649,9 +656,9 @@ let update (kb : Base.t) rules (f : statement) : unit =
 
   let f = normalize_identical f in
   let tf_orig = term_from_statement f in
-  let tf = Maude.normalize tf_orig rules in
+  let tf = R.normalize tf_orig rules in
   let f = statement_from_term ~orig:f tf in
-  if not (Maude.equals tf_orig tf []) then
+  if not (R.equals tf_orig tf []) then
     debugOutput "Clause #%d is not normal.\n" (get_id f)
   else
 
@@ -660,9 +667,9 @@ let update (kb : Base.t) rules (f : statement) : unit =
     if not canonize then Some f else
       let f = canonical_form f in
       let tf_orig = term_from_statement f in
-      let tf = Maude.normalize tf_orig rules in
+      let tf = R.normalize tf_orig rules in
       let f = statement_from_term ~orig:f tf in
-        if not (Maude.equals tf_orig tf []) then begin
+        if not (R.equals tf_orig tf []) then begin
           debugOutput "Clause #%d is not normal.\n" (get_id f) ;
           None
         end else
@@ -1016,7 +1023,7 @@ begin
           (show_statement fa) (show_statement fb); 
               let t1 = Fun("!tuple!", [t; ul]) in
               let t2 = Fun("!tuple!", [tp; upl]) in
-              let sigmas = Term.csu t1 t2 in
+              let sigmas = R.csu t1 t2 in
               (* Call [plus_restrict] to apply dynamic marking strategies
                * when fb is the plus clause. Additionally pass [rx'] if fa
                * is also the plus clause, in which case a special strategy
@@ -1046,11 +1053,14 @@ begin
                       | l -> l
                     in
                       try
+                        let assoc x sigma =
+                          try List.assoc x sigma with Not_found -> Var x
+                        in
                         let image v =
                           unique
                             (List.sort String.compare
                                (List.map
-                                  (fun x -> unbox_var (List.assoc x sigma))
+                                  (fun x -> unbox_var (assoc x sigma))
                                   v))
                         in
                         let v'1 = image v1 in
@@ -1101,7 +1111,7 @@ let rec ridentical fa fb =
           debugOutput
             "ridentical trying to combine %s with %s\n%!"
             (show_statement fa) (show_statement fb);
-          let sigmas = Term.csu u up in
+          let sigmas = R.csu u up in
             List.map
               (fun sigma ->
                  let newhead = Predicate("ridentical", [u; r; rp]) in
@@ -1150,7 +1160,7 @@ let saturate kb rules =
 
 let namify_subst t =
   let vars = vars_of_term t in
-  let names = trmap (fun _ -> Fun(fresh_string "!n!", [])) vars in
+  let names = List.map (fun _ -> Fun(fresh_string "!n!", [])) vars in
   let sigma = List.combine vars names in
   sigma
 
@@ -1278,11 +1288,14 @@ let checks_ridentical kb =
              debugOutput "TESTER: %s\n" (show_statement x) ;
              let sigma = namify_subst w in
              let new_w = revworld (recipize (apply_subst w sigma) kb) in
-             let omega = trmap (function arg -> match arg with
-                                  | Predicate("knows", [_; Var(vX); Var(vx)]) -> 
-                                      (vX, apply_subst (Var(vx)) sigma)
-                                  | _ -> invalid_arg("checks_ridentical"))
-                           (get_body x) in
+             let omega =
+               List.map
+                 (function
+                    | Predicate("knows", [_; Var(vX); Var(vx)]) -> 
+                        (vX, apply_subst (Var(vx)) sigma)
+                    | _ -> invalid_arg("checks_ridentical"))
+                 (get_body x)
+             in
              let resulting_test = Fun("check_identity", [new_w; 
                                                          apply_subst r omega;
                                                          apply_subst rp omega]) in

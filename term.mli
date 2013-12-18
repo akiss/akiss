@@ -1,7 +1,5 @@
 exception Parse_error_semantic of string
 exception Invalid_term
-exception Not_unifiable
-exception Not_matchable
 
 val vars : string list ref
 val channels : string list ref
@@ -38,6 +36,3 @@ val bound : varName -> subst -> bool
 
 val compose : subst -> subst -> (varName * term) list
 val restrict : subst -> varName list -> (varName * term) list
-
-val mgu : term -> term -> (varName * term) list
-val mgm : term -> term -> (varName * term) list

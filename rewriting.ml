@@ -1,7 +1,92 @@
+open Term
+
+(** Unification and matching *)
+
+exception Not_unifiable
+exception Not_matchable
+
+let rec subst_one x small = function
+  | Var(y) -> if x = y then small else Var(y)
+  | Fun(f, list) ->
+      Fun(f, List.map (function y -> subst_one x small y) list)
+
+let subst_one_in_list x small list =
+  List.map (function y -> subst_one x small y) list
+
+let subst_one_in_subst x small sigma =
+  List.map (function (v, t) -> (v, (subst_one x small t))) sigma
+
+let rec unify_once s t sl tl sigma =
+  match (s, t) with
+    | (Var(x), Var(y)) when x = y -> unify_list sl tl sigma
+    | (Var(x), _) ->
+	(if occurs x t then
+	   raise Not_unifiable
+	 else
+	   let update = function list -> subst_one_in_list x t list in
+	   unify_list (update sl) (update tl) ((x, t) :: (subst_one_in_subst x t sigma)))
+    | (_, Var(y)) ->
+	unify_once t s sl tl sigma
+    | (Fun(f, sa), Fun(g, ta)) when ((f = g) && (List.length sa = List.length ta)) ->
+	unify_list (List.append sa sl) (List.append ta tl) sigma
+    | _ -> raise Not_unifiable
+and unify_list sl tl sigma = 
+  match (sl, tl) with
+    | ([], []) -> sigma
+    | (s :: sr, t :: tr) -> unify_once s t sr tr sigma
+    | _ -> raise Not_unifiable
+
+let rec mgu s t = unify_once s t [] [] []
+
+let rec new_or_same x t sigma =
+  try
+    if (List.assoc x sigma) = t then
+      sigma
+    else
+      raise Not_matchable
+  with Not_found -> (x, t) :: sigma
+
+let rec match_once pattern model pl ml sigma =
+  match (pattern, model) with
+    | (Var(x), t) -> match_list pl ml (new_or_same x t sigma)
+    | (Fun(f, pa), Fun(g, ma)) when ((f = g) && (List.length pa = List.length ma)) ->
+	match_list (List.append pa pl) (List.append ma ml) sigma
+    | (_, _) -> raise Not_matchable
+and match_list pl ml sigma =
+  match (pl, ml) with
+    | ([], []) -> sigma
+    | (p :: pr, m :: mr) -> match_once p m pr mr sigma
+    | _ -> raise Not_matchable
+
+(** Most general matcher *)
+let rec mgm p m = match_once p m [] [] []
+
+(** Normalization *)
+
+let rec top_rewrite t (l, r) =
+  try
+    let sigma = mgm l t in
+    [apply_subst r sigma]
+  with Not_matchable -> []
+
+(* top normalize assumes that all strict subterms are in normal form *)
+let rec top_normalize t rules =
+  match List.concat (List.map (fun x -> top_rewrite t x) rules) with
+    | [] -> t
+    | s :: _ -> normalize s rules
+(* call this function to find the normal form of any term *)
+and normalize t rules =
+  match t with
+    | Fun(f, ta) ->
+	top_normalize (Fun(f, List.map (fun x -> normalize x rules) ta)) rules
+    | Var(x) -> t
+
 (** Variants and unification modulo R *)
 
-open Util;;
-open Term;;
+(** TODO *)
+open Util
+let trconcat = List.concat
+let trmap = List.map
 
 type position = int list;;
 

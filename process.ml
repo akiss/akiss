@@ -1,23 +1,9 @@
-open Parser;;
-open Util;;
-open Term;;
-open Horn;;
+open Parser
+open Util
+open Term
+open Horn
 
-type var = string
-type rules = (term*term) list
-type subst = (var*term) list
-module type REWRITING = sig
-  val unifiers : term -> term -> rules -> subst list
-  val normalize : term -> rules -> term
-  val variants : term -> rules -> (term*subst) list
-  val equals : term -> term -> rules -> bool
-end
-module R : REWRITING = struct
-  let normalize = Maude.normalize
-  let equals = Maude.equals
-  let unifiers = Maude.unifiers
-  let variants = Tamarin.variants
-end
+module R = Theory.R
 
 (** {2 Processes} *)
 

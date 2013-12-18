@@ -13,17 +13,23 @@ open Util
 let ac = ref false
 let xor = ref false
 
+let ac_toolbox = ref false
+
 let usage = Printf.sprintf
   "Usage: %s [-verbose] [-debug] < specification-file.api"
   (Filename.basename Sys.argv.(0))
 
 let command_line_options_list = [
-  ("-xor", Arg.Set xor,
-   "Enable EXPERIMENTAL xor-specific optimizations.") ;
+  ("--verbose", Arg.Unit (fun () -> verbose_output := true),
+   "Enable verbose output");
   ("-verbose", Arg.Unit (fun () -> verbose_output := true),
    "Enable verbose output");
   ("-debug", Arg.Unit (fun () -> debug_output := true),
-   "Enable debug output")  
+   "Enable debug output");
+  ("--debug", Arg.Unit (fun () -> debug_output := true),
+   "Enable debug output");
+  ("--ac-compatible", Arg.Set ac_toolbox,
+   "Use the AC-compatible toolbox even on non-AC theories.")
 ]
 
 let cmdlist =
@@ -190,3 +196,62 @@ let private_names = !private_names
 let evchannels = !evchannels
 let rewrite_rules = !rewrite_rules
 let evrewrite_rules = !evrewrite_rules
+
+(** Rewriting toolbox *)
+
+type var = string
+type rules = (term*term) list
+type subst = (var*term) list
+module type REWRITING = sig
+  val unifiers : term -> term -> rules -> subst list
+  val normalize : term -> rules -> term
+  val variants : term -> rules -> (term*subst) list
+  val equals : term -> term -> rules -> bool
+  val matchers : term -> term -> rules -> subst list
+end
+
+module AC : REWRITING = struct
+  let normalize = Maude.normalize
+  let equals = Maude.equals
+  let unifiers = Maude.unifiers
+  let matchers = Maude.matchers
+  let variants = Tamarin.variants
+end
+
+module NonAC : REWRITING = struct
+
+  let normalize = Rewriting.normalize
+
+  let equals s t rules =
+    if rules = [] then s = t else
+      normalize s rules = normalize t rules
+
+  let unifiers s t rules =
+    if rules = [] then
+      try [Rewriting.mgu s t] with
+        | Rewriting.Not_unifiable -> []
+    else
+      Rewriting.unifiers s t rules
+
+  let matchers s t rules =
+    assert (rules = []) ;
+    try [Rewriting.mgm s t] with
+      | Rewriting.Not_matchable -> []
+
+  let variants = Rewriting.variants
+
+end
+
+module R = (val if ac || !ac_toolbox then begin
+              if not ac && List.mem ("plus",2) fsymbols then begin
+                Printf.printf
+                  "Cannot use non-AC \"plus\" symbol \
+                   with AC-compatible toolbox!\n" ;
+                exit 1
+              end ;
+              Printf.printf "Using AC-compatible toolbox...\n" ;
+              (module AC : REWRITING)
+            end else begin
+              Printf.printf "Using non-AC toolbox...\n" ;
+              (module NonAC : REWRITING)
+            end : REWRITING)

@@ -1,6 +1,7 @@
-ML = base.ml ast.ml parser.ml lexer.ml util.ml term.ml theory.ml \
+ML = ast.ml parser.ml lexer.ml util.ml term.ml \
 	 config.ml maude.ml lextam.ml parsetam.ml tamarin.ml \
-	 horn.ml process.ml main.ml 
+	 rewriting.ml theory.ml \
+	 base.ml horn.ml process.ml main.ml 
 MLI = $(wildcard $(ML:.ml=.mli))
 OCAMLC = ocamlopt -g
 CMA = cmxa
@@ -40,7 +41,6 @@ doc: $(ML)
 	ocamldoc -stars $(ML) -html -d doc
 
 # TESTS
-# Run make (PREFIX=DH_) test/yestest/notest
 
 # Xor and non-AC tests, should work
 TESTS = \

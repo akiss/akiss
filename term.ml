@@ -5,10 +5,6 @@ exception Parse_error_semantic of string
 
 exception Invalid_term
 
-exception Not_unifiable
-
-exception Not_matchable
-
 let vars : (string list) ref = ref []
 
 let fsymbols : ((string * int) list) ref = ref []
@@ -143,17 +139,6 @@ let compose (sigma : subst) (tau : subst) =
 let restrict (sigma : subst) (domain : varName list) =
   List.filter (fun (x, _) -> List.mem x domain) sigma
 
-let rec subst_one x small = function
-  | Var(y) -> if x = y then small else Var(y)
-  | Fun(f, list) ->
-      Fun(f, trmap (function y -> subst_one x small y) list)
-
-let subst_one_in_list x small list =
-  trmap (function y -> subst_one x small y) list
-
-let subst_one_in_subst x small sigma =
-  trmap (function (v, t) -> (v, (subst_one x small t))) sigma
-
 let rec parse_term (Ast.TempTermCons(x,l)) =
   if List.mem x !vars then
     if l = [] then
@@ -184,66 +169,3 @@ let rec parse_term (Ast.TempTermCons(x,l)) =
             raise
               (Parse_error_semantic
                  (Printf.sprintf "undeclared function symbol %s" x))
-
-let rec unify_once s t sl tl sigma =
-  match (s, t) with
-    | (Var(x), Var(y)) when x = y -> unify_list sl tl sigma
-    | (Var(x), _) ->
-	(if occurs x t then
-	   raise Not_unifiable
-	 else
-	   let update = function list -> subst_one_in_list x t list in
-	   unify_list (update sl) (update tl) ((x, t) :: (subst_one_in_subst x t sigma)))
-    | (_, Var(y)) ->
-	unify_once t s sl tl sigma
-    | (Fun(f, sa), Fun(g, ta)) when ((f = g) && (List.length sa = List.length ta)) ->
-	unify_list (List.append sa sl) (List.append ta tl) sigma
-    | _ -> raise Not_unifiable
-and unify_list sl tl sigma = 
-  match (sl, tl) with
-    | ([], []) -> sigma
-    | (s :: sr, t :: tr) -> unify_once s t sr tr sigma
-    | _ -> raise Not_unifiable
-
-let rec mgu s t = unify_once s t [] [] []
-
-let rec new_or_same x t sigma =
-  try
-    if (List.assoc x sigma) = t then
-      sigma
-    else
-      raise Not_matchable
-  with Not_found -> (x, t) :: sigma
-
-let rec match_once pattern model pl ml sigma =
-  match (pattern, model) with
-    | (Var(x), t) -> match_list pl ml (new_or_same x t sigma)
-    | (Fun(f, pa), Fun(g, ma)) when ((f = g) && (List.length pa = List.length ma)) ->
-	match_list (List.append pa pl) (List.append ma ml) sigma
-    | (_, _) -> raise Not_matchable
-and match_list pl ml sigma =
-  match (pl, ml) with
-    | ([], []) -> sigma
-    | (p :: pr, m :: mr) -> match_once p m pr mr sigma
-    | _ -> raise Not_matchable
-
-(* most general matcher *)
-let rec mgm p m = match_once p m [] [] []
-
-let rec top_rewrite t (l, r) =
-  try
-    let sigma = mgm l t in
-    [apply_subst r sigma]
-  with Not_matchable -> []
-
-(* top normalize assumes that all strict subterms are in normal form *)
-let rec top_normalize t rules =
-  match List.concat (List.map (fun x -> top_rewrite t x) rules) with
-    | [] -> t
-    | s :: _ -> normalize s rules
-(* call this function to find the normal form of any term *)
-and normalize t rules =
-  match t with
-    | Fun(f, ta) ->
-	top_normalize (Fun(f, trmap (fun x -> normalize x rules) ta)) rules
-    | Var(x) -> t
