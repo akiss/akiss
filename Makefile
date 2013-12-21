@@ -2,8 +2,9 @@ ML = ast.ml parser.ml lexer.ml util.ml term.ml \
 	 config.ml maude.ml lextam.ml parsetam.ml tamarin.ml \
 	 rewriting.ml theory.ml \
 	 base.ml horn.ml process.ml main.ml 
-MLI = $(wildcard $(ML:.ml=.mli))
+MLI = $(wildcard $(ML:.ml=.mli)) parser.mli parsetam.mli
 OCAMLC = ocamlopt -g
+OCAMLDEP = ocamldep -native
 CMA = cmxa
 CMO = cmx
 OBJS = $(ML:.ml=.$(CMO))
@@ -24,17 +25,16 @@ akiss: $(OBJS)
 	ocamllex $<
 
 .depend: $(ML) $(MLI)
-	ocamldep $(ML) $(MLI) > .depend
+	$(OCAMLDEP) $(ML) $(MLI) > .depend
 
 -include .depend
 
 clean:
-	rm -f *.o
 	rm -f parser.ml lexer.ml parser.mli lexer.mli
 	rm -f lextam.ml lextam.mli parsetam.ml parsetam.mli
+	rm -f *.o *.cmi *.cmx *.cmo
 	rm -f akiss
-	rm -f *.cmi *.cmx *.cmo
-	rm -f *.o
+	rm -f .depend
 
 doc: $(ML)
 	mkdir -p doc
