@@ -1,0 +1,53 @@
+// Simplified version of ns.api with a single trace
+
+symbols adec/2, aenc/3, pk/1, fst/1, snd/1, pair/2, a/0, b/0, d/0, kd/0, ok/0;
+
+private na, nb, ka, kb, fk, r1, r2, r3;
+
+channels C;
+
+var x, y, z, xx, yy, zz, x0, y0, z0;
+
+rewrite adec(aenc(xx, pk(yy), zz), yy) -> xx;
+rewrite fst(pair(xx, yy)) -> xx;
+rewrite snd(pair(xx, yy)) -> yy;
+
+P =
+       // A sends to D
+       out(C, aenc(pair(na, a), pk(kd), r1)).
+
+       // B expects message from A
+       // he will receive aenc(pair(na,a),pk(kb),_) from D
+       // he sends back   aend(pair(na,nb),pk(ka),_)
+       in(C, y0).
+       [snd(adec(y0, kb)) = a].
+       out(C, aenc(pair(fst(adec(y0, kb)), nb), pk(ka),r3)).
+
+       // A receives from D what B sent
+       // sends back aenc(nb,pk(kd),_)
+       in(C, y).
+       [fst(adec(y,ka))=na].
+       out(C, aenc(snd(adec(y,ka)), pk(kd),r2)).
+
+       // D knows nb, he is man-in-the-middle
+
+       0;
+
+Setup = out(C,pk(ka)).out(C,pk(kb)).0;
+
+TeardownReal = out(C,nb).0;
+
+TeardownFake = out(C,fk).0;
+
+PP = Setup :: P :: TeardownReal;
+
+QQ = Setup :: P :: TeardownFake;
+
+inequivalentct? PP and QQ;
+
+// Test that works on PP but not on QQ:
+// check_identity(
+//   [out(C),[out(C),[out(C),
+//     [in(C,aenc(pair(fst(adec(w2,kd)),a),w1,!n!6670)),
+//       [test,[out(C),[in(C,w3),[test,[out(C),[out(C),empty]]]]]]]]]],
+//   adec(w4,kd),w5)
