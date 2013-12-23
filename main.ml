@@ -6,8 +6,6 @@ open Process
 open Horn
 open Theory
 
-module Variants = Maude
-
 (** Compute the part of seed statements that comes from the theory. *)
 let context_statements symbol arity rules =
   let w = Var(fresh_variable ()) in
