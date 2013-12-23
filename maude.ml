@@ -5,6 +5,12 @@ let debug = false
 let pdebug = false (* show parsing info *)
 let sdebug = pdebug || false (* show maude script *)
 
+let terms_of_rules rules =
+  List.fold_left
+    (fun tms (l,r) -> l::r::tms)
+    []
+    rules
+
 let output_string ch s = Format.fprintf ch "%s" s
 
 let input_line chan =
@@ -324,6 +330,7 @@ let rec parse_unifiers tokens =
 (** Variants *)
 
 let variants t rules =
+  assert (rules = []) ;
   let esig = sig_of_term_list [t] in
     run_maude
       (fun chan ->
@@ -365,6 +372,7 @@ let variants t rules =
 (** Unification *)
 
 let unifiers s t rules =
+  assert (rules = []) ;
   let esig = sig_of_term_list [s;t] in
     run_maude
       (fun chan ->
@@ -402,6 +410,7 @@ let unifiers s t rules =
 (** Matching *)
 
 let matchers s t rules =
+  assert (rules = []) ;
   let esig = sig_of_term_list [s;t] in
     run_maude
       (fun chan ->
@@ -426,7 +435,7 @@ let matchers s t rules =
 
 let equals s t rules =
   if s = t then true else
-  let esig = sig_of_term_list [s;t] in
+  let esig = sig_of_term_list (s :: t :: terms_of_rules rules) in
     run_maude
       (fun chan ->
          Format.fprintf chan "%a\n" (print_module rules esig) () ;
@@ -445,7 +454,7 @@ let equals s t rules =
 (** Normalize a term *)
 
 let normalize t rules =
-  let esig = sig_of_term_list [t] in
+  let esig = sig_of_term_list (t :: terms_of_rules rules) in
     run_maude
       (fun chan ->
          Format.fprintf chan "%a\n" (print_module rules esig) () ;
