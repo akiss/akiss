@@ -11,6 +11,13 @@ let freshen (sigma : subst) =
   in
     List.map (fun (v,t) -> v, (apply_subst t fresh_subst)) sigma
 
+(** Translating symbol names back to Akiss conventions *)
+let translate_symbol = function
+  | "akisstest" -> "!test!"
+  | "akissout" -> "!out!"
+  | "akissin" -> "!in!"
+  | s -> s
+
 %}
 
 
@@ -60,18 +67,25 @@ result:
 
 term:
  | Identifier {
-   if (List.mem $1 !private_names) ||
-      (List.mem $1 (List.map ( fun (x,y) -> x ) !fsymbols))
-   then
-     Fun($1,[])
-   else
-     Var($1)
- }
+     let id = translate_symbol $1 in
+     if (List.mem id !private_names) || (List.mem (id,0) !fsymbols) then
+       Fun(id,[])
+     else
+       Var id
+   }
  | Quote Identifier Quote { Fun($2, []) }
- | Identifier LeftP termlist RightP { Fun($1, $3) }
+ | Identifier LeftP termlist RightP { Fun(translate_symbol $1, $3) }
  | term Plus term { Fun ("plus", [$1; $3]) }
  | LeftP term Plus term RightP { Fun("plus", [$2; $4]) }
- | Less term Comma term Greater {Fun("pair", [$2; $4]) }
+ | Less term Comma netermlist Greater {
+     let pair item = function
+       | None -> Some (item)
+       | Some tm -> Some (Fun("pair", [item; tm]))
+     in
+     match List.fold_right pair ($2::$4) None with
+     | Some tm -> tm
+     | None -> assert false
+   }
 
 
 termlist:

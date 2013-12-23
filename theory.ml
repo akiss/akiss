@@ -213,7 +213,13 @@ end
 module AC : REWRITING = struct
   let normalize = Maude.normalize
   let equals = Maude.equals
-  let unifiers = Maude.unifiers
+  let unifiers s t r =
+    if r = [] then Maude.unifiers s t [] else
+      let u1 = Tamarin.unifiers s t r in
+        assert (ac ||
+                let u2 = Rewriting.unifiers s t r in
+                  List.length u1 = List.length u2) ;
+        u1
   let matchers = Maude.matchers
   let variants = Tamarin.variants
 end
