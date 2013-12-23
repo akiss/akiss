@@ -77,3 +77,7 @@ actest:
 	./runtests.sh actest "$(AC_TESTS) $(AC_NOTESTS)"
 dhtest:
 	./runtests.sh actest "$(DH_TESTS) $(DH_NOTESTS)"
+
+test_tamarin: $(wildcard *.ml)
+	ocamlopt unix.cmxa str.cmxa util.ml term.ml config.ml \
+	  maude.ml lextam.ml parsetam.ml tamarin.ml test_tamarin.ml -o test_tamarin
