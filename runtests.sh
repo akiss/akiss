@@ -4,7 +4,7 @@ today=`date +%m%d`
 dir="test_${today}_$1"
 
 mkdir $dir || exit 1
-cp *.ml Makefile $dir
+cp *.ml *.mli *.mly *.mll Makefile $dir
 chmod -w $dir/*
 
 cp $2 $dir
