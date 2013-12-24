@@ -1,0 +1,74 @@
+// NSL with xor
+// A -> B: aenc(<na,A>,pub(B))
+// B -> A: aenc(<na+B,nb>,pub(A))
+// A -> B: aenc(nb,pub(B))
+
+// Well-known attack
+
+
+#set xor;
+
+symbols plus/2, zero/0, aenc/2, adec/2, pub/1, h/1, pair/2, fst/1, snd/1, yes/0, no/0, i/0;
+private na, nb, a, b;
+channels C;
+var X,X1, X2,Y,Z;
+
+rewrite plus(zero,X) -> X;
+rewrite plus(X,X) -> zero;
+rewrite plus(X, plus(X,Y)) -> Y;
+
+rewrite adec(aenc(X,pub(Y)),Y) -> X;
+rewrite fst(pair(X,Y)) -> X;
+rewrite snd(pair(X,Y)) -> Y;
+
+
+
+Tinit = out(C,pub(a)).out(C,pub(b)).0;
+
+RoleAIfst = out(C,aenc(pair(na,pub(a)),pub(i))).0;
+
+RoleAIsnd = in(C,X).[plus(fst(adec(X,a)),pub(i)) = na].out(C,aenc(snd(adec(X,a)),pub(i))).0;
+//RoleAIsndhelp = in(C,X). [X= aenc(pair(plus(na,pub(i)),nb),pub(a))].out(C,aenc(snd(adec(X,a)),pub(i))).0;
+
+RoleBfst = in(C,Y).out(C,aenc(pair(plus(fst(adec(Y,b)),pub(b)),nb),snd(adec(Y,b)))).0;
+//RoleBfsthelp = in(C,Y).[Y = aenc(pair(plus(na,plus(pub(b),pub(i))), pub(a)),pub(b))]. out(C,aenc(pair(plus(fst(adec(Y,b)),pub(b)),nb),snd(adec(Y,b)))).0;
+
+
+// Scenario 0
+// r1 = out(C,aenc(pair(plus(na,plus(pub(b),pub(i))), pub(a)),pub(b))) :: RoleBfsthelp :: RoleAIsndhelp :: out(C,yes);
+// r2 = out(C,aenc(pair(plus(na,plus(pub(b),pub(i))), pub(a)),pub(b))) :: RoleBfsthelp :: RoleAIsndhelp :: out(C,no); 
+
+// AKISS finds the attack within 3m11s
+// The following tests work on r1 but not on r2:
+// check_identity([out(C),[in(C,w0),[test,[out(C),[in(C,w1),[test,[out(C),[out(C),empty]]]]]]]],plus(w3,yes),zero)
+// The following tests work on r2 but not on r1:
+// check_identity([out(C),[in(C,w0),[test,[out(C),[in(C,w1),[test,[out(C),[out(C),empty]]]]]]]],plus(w3,no),zero)
+
+
+// Scenario 1
+// r1 = Tinit :: out(C,aenc(pair(plus(na,plus(pub(b),pub(i))), pub(a)),pub(b))) :: out(C,yes);
+// r2 = Tinit :: out(C,aenc(pair(plus(na,plus(pub(b),pub(i))), pub(a)),pub(b))) :: out(C,no); 
+
+// AKISS finds the attack within 20s
+
+
+// Scenario 2 
+// r1 = Tinit :: out(C,aenc(pair(plus(na,plus(pub(b),pub(i))), pub(a)),pub(b))) :: RoleBfsthelp  :: out(C,yes);
+// r2 = Tinit :: out(C,aenc(pair(plus(na,plus(pub(b),pub(i))), pub(a)),pub(b))) :: RoleBfsthelp  :: out(C,no); 
+
+
+
+// Scenario 3 
+ r1 = Tinit :: out(C,aenc(pair(plus(na,plus(pub(b),pub(i))), pub(a)),pub(b))) :: RoleBfst  :: RoleAIsnd :: out(C,yes);
+ r2 = Tinit :: out(C,aenc(pair(plus(na,plus(pub(b),pub(i))), pub(a)),pub(b))) :: RoleBfst  :: RoleAIsnd :: out(C,no); 
+
+
+// Scenario 4
+// r1 = Tinit :: RoleAIfst :: RoleBfst :: RoleAIsnd :: out(C,yes);
+//  r2 = Tinit :: RoleAIfst :: RoleBfst :: RoleAIsnd :: out(C,no);
+
+// AKISS seems to not terminate :-( for sure not after 5 min
+
+
+
+equivalentct? r1 and r2;

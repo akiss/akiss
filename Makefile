@@ -48,6 +48,7 @@ TESTS = \
   examples/tests/statxor.api \
   examples/tests/xorsym.api \
   examples/tests/rigid.api \
+  examples/NSLxor/nsl.api \
   examples/running-example/running-example-both-traces.api
 NOTESTS = \
   examples/tests/nstatxor.api \
