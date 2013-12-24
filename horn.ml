@@ -239,11 +239,12 @@ let is_plus_clause = function
                [Var w;
                 Fun ("plus",[Var rx; Var ry]);
                 Fun ("plus",[Var x; Var y])]) ;
-      body = [ Predicate("knows",[Var w'; Var r'; Var x']) ;
-               Predicate("knows",[Var w''; Var r''; Var y'']) ] }
-    when rx <> ry && x <> y && w = w' && w = w'' &&
-         ((rx,x,ry,y) = (r',x',r'',y'') ||
-          (rx,x,ry,y) = (r'',y'',r',x'))
+
+      body = [ Predicate("knows",[Var w1; Var r1; Var x1]) ;
+               Predicate("knows",[Var w2; Var r2; Var x2]) ] }
+      when (rx <> ry && x <> y) && w = w1 && w = w2 &&
+           ((rx,ry) = (r1,r2) || (rx,ry) = (r2,r1)) &&
+           ((x,y) = (x1,x2) || (x,y) = (x2,x1))
     -> true
   | _ -> false
 
@@ -599,6 +600,8 @@ let consequence st kb =
                      (* debugOutput "Against %s\n%!" *)
                      (*   (show_statement x); *)
                      if (not conseq_plus) && is_plus_clause x then
+                       raise Not_a_consequence ;
+                     if is_plus_clause x && is_plus (get_recipe head) then
                        raise Not_a_consequence ;
                      let sigma = inst_w_t head (get_head x) Not_a_consequence in
                        (* debugOutput "Sigma: %s\n\n%!" (show_subst sigma); *)

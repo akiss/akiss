@@ -1,6 +1,12 @@
+#set xor;
+
+// This example shows that the full conseq of standard akiss
+// is incompatible with the dynamic marking technique developed
+// for handling xor.
+
 symbols plus/2, zero/0, ok/0, ko/0;
 
-private a,b,c,u;
+private a, b, c, u;
 
 channels C;
 var X, Y, Z;
@@ -9,8 +15,10 @@ rewrite plus(zero,X) -> X;
 rewrite plus(X,X) -> zero;
 rewrite plus(X,plus(X,Y)) -> Y;
 
-T1 = out(C,plus(u,a)).out(C,plus(b,u)).out(C,c).in(C,X).[X = plus(plus(b,a),c)].out(C,ok).0;
+T1 = out(C,plus(u,a)).out(C,plus(b,u)).out(C,c).
+     in(C,X).[X = plus(plus(b,a),c)].out(C,ok).0;
 
-T2 = out(C,plus(u,a)).out(C,plus(b,u)).out(C,c).in(C,X).[X = plus(plus(b,a),c)].0;
+T2 = out(C,plus(u,a)).out(C,plus(b,u)).out(C,c).
+     in(C,X).[X = plus(plus(b,a),c)].0;
 
-equivalentct? T1 and T2; 
+inequivalentct? T1 and T2; 

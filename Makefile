@@ -47,6 +47,7 @@ TESTS = \
   examples/tests/xor.api examples/tests/rfid.api \
   examples/tests/statxor.api \
   examples/tests/xorsym.api \
+  examples/tests/rigid.api \
   examples/running-example/running-example-both-traces.api
 NOTESTS = \
   examples/tests/nstatxor.api \
