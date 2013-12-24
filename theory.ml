@@ -188,6 +188,21 @@ let cmdlist =
 
 (** Final versions of the theory parameters *)
 
+let () =
+  (* we use pairing in tamarin, and indirectly in maude:
+   * make sure it is properly defined. *)
+  fsymbols :=
+    try
+      let a = List.assoc "pair" !fsymbols in
+        if a <> 2 then begin
+          Format.printf
+            "The \"pair\" symbol cannot be defined \
+             with another arity than 2!\n" ;
+          exit 1
+        end ;
+        !fsymbols
+    with Not_found -> ("pair",2) :: !fsymbols
+
 let xor = !xor
 let ac = !ac
 let fsymbols = !fsymbols
