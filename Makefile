@@ -44,7 +44,8 @@ doc: $(ML)
 
 # Xor and non-AC tests, should work
 TESTS = \
-  examples/tests/xor.api examples/tests/rfid.api \
+  examples/tests/xor.api \
+  examples/rfid/KCL-h1.api examples/rfid/KCL-h1bis.api \
   examples/tests/statxor.api \
   examples/tests/xorsym.api \
   examples/tests/rigid.api \
@@ -53,7 +54,6 @@ TESTS = \
 NOTESTS = \
   examples/tests/nstatxor.api \
   examples/tests/rfid0h.api
-LONGTESTS = examples/tests/rfid0.api examples/tests/rfid1.api
 
 # Pure AC: most of them do not terminate
 AC_TESTS = \

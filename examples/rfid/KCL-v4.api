@@ -7,10 +7,6 @@ private idA, idB, r2, r4, kA, kB,ok;
 channels C;
 var X, Y, Z;
 
-rewrite plus(zero,X) -> X;
-rewrite plus(X,X) -> zero;
-rewrite plus(X,plus(X,Y)) -> Y;
-
 rewrite fst(pair(X,Y)) -> X;
 rewrite snd(pair(X,Y)) -> Y;
 
@@ -36,12 +32,3 @@ r1 = TtagA1 :: TtagA2;
 r2 = TtagA1 :: TtagB2;
 
 inequivalentct? r1 and r2;
-
-
-// 22/02/2013: AKISS finds the attack within 25 min - sume (cf. rfid-3a.log rfid-3a.dot rfid-3a.dot.svg)
-
-// 26/11/2013:deja 50000 clauses !!
-
-
-// 6/12/2013: version avec conseq axiom active et equation (R,R') avec Top(R) = Top(R') = + interdit
-// Cet exemple termine en ??

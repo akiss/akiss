@@ -6,13 +6,10 @@ private idA, idB;
 channels C;
 var X, Y, Z;
 
-rewrite plus(zero,X) -> X;
-rewrite plus(X,X) -> zero;
-
 // An imaginary bad protocol where there is a traceability attack:
 // choose X=Y, observe the difference of identifiers after a xor
 
 same = in(C,X).out(C,plus(X,idA)).in(C,Y).out(C,plus(Y,idA));
 diff = in(C,X).out(C,plus(X,idA)).in(C,Y).out(C,plus(Y,idB));
 
-equivalentct? same and diff;
+inequivalentct? same and diff;

@@ -13,10 +13,6 @@ private idA, idB, r2, r4, kA, kB, ok;
 channels C;
 var X, Y, Z;
 
-rewrite plus(zero,X) -> X;
-rewrite plus(X,X) -> zero;
-
-
 // We model RFID tags that authenticate with a reader
 // in the following way:
 //   reader sends a nonce r1
@@ -37,10 +33,3 @@ r1 = TtagA1 :: TtagA2;
 r2 = TtagA1 :: TtagB2;
 
 inequivalentct? r1 and r2;
-
-// 25/11/2013: AKISS concludes within 12m12s
-// The following tests work on r1 but not on r2:
-// check_identity([in(C,!n!13139),[out(C),[out(C),[out(C),[out(C),empty]]]]],plus(plus(plus(plus(plus(w0,w1),w2),w3),X1391),X1391),zero)
-// check_identity([in(C,!n!13141),[out(C),[out(C),[out(C),[out(C),empty]]]]],plus(plus(plus(w0,w1),w2),w3),zero)
-// check_identity([in(C,!n!13153),[out(C),[out(C),[out(C),[out(C),empty]]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),w2),w3),X12988),X12986),X12986),X12988),zero)
-// check_identity([in(C,!n!13155),[out(C),[out(C),[out(C),[out(C),empty]]]]],plus(plus(plus(plus(plus(plus(plus(w0,w1),w2),w3),X12995),X12997),X12995),X12997),zero)

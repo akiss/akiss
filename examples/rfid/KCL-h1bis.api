@@ -1,3 +1,7 @@
+// This is KCL-h1.api with pairing, but without pair destructors.
+// It is a dumb test from a security viewpoint, only useful to test the tool
+// also on examples where there is no attack.
+
 #set xor;
 
 symbols plus/2, zero/0, h/1, pair/2;
@@ -5,9 +9,6 @@ symbols plus/2, zero/0, h/1, pair/2;
 private idA, idB, r2, r4, ok;
 channels C;
 var X, Y, Z;
-
-rewrite plus(zero,X) -> X;
-rewrite plus(X,X) -> zero;
 
 // We model RFID tags that authenticate with a reader
 // in the following way:
