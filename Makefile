@@ -50,10 +50,9 @@ TESTS = \
   examples/tests/xorsym.api \
   examples/tests/rigid.api \
   examples/NSLxor/nsl.api \
-  examples/running-example/running-example-both-traces.api
-NOTESTS = \
+  examples/running-example/running-example-both-traces.api \
   examples/tests/nstatxor.api \
-  examples/tests/rfid0h.api
+  examples/rfid/Toy-v2.api
 
 # Pure AC: most of them do not terminate
 AC_TESTS = \
@@ -74,7 +73,7 @@ RUN = OCAMLRUNPARAM=b ./akiss -verbose
 
 .PHONY: test actest dhtest
 test:
-	./runtests.sh test "$(TESTS) $(NOTESTS)"
+	./runtests.sh test "$(TESTS)"
 actest:
 	./runtests.sh actest "$(AC_TESTS) $(AC_NOTESTS)"
 dhtest:
