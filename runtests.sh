@@ -1,19 +1,21 @@
-#!/bin/sh
+#!/bin/bash
 
 today=`date +%m%d`
 dir="test_${today}_$1"
+
+shift
 
 mkdir $dir || exit 1
 cp *.ml *.mli *.mly *.mll Makefile $dir
 chmod -w $dir/*
 
-cp $2 $dir
+cp $* $dir
 
 cd $dir
 make || exit 1
 
 # Run tests in the same order as on the command line
-for i in $2 ; do
+for i in $* ; do
   i=`basename $i`
   mkdir $i.test
   cd $i.test
