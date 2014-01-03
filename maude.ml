@@ -29,8 +29,6 @@ let terms_of_rules rules =
     []
     rules
 
-let output_string ch s = Format.fprintf ch "%s" s
-
 let input_line chan =
   let line = input_line chan in
     if pdebug then
@@ -45,14 +43,6 @@ let prefix s s' =
       done ;
       true
     with Failure "false" -> false
-
-let rec pp_list pp sep chan = function
-  | [] -> ()
-  | [x] -> pp chan x
-  | x::tl ->
-      pp chan x ;
-      output_string chan sep ;
-      pp_list pp sep chan tl
 
 (** Printing Maude terms and modules *)
 
@@ -78,11 +68,11 @@ let rec print chan = function
           Scanf.sscanf s "!n!%d"
             (fun n -> Format.fprintf chan "akissn%d" n)
         with Scanf.Scan_failure _ ->
-          output_string chan s
+          Util.output_string chan s
         end
       end
   | Fun (s,args) ->
-      Format.fprintf chan "%s(%a)" s (pp_list print ", ") args
+      Format.fprintf chan "%s(%a)" s (Util.pp_list print ", ") args
 
 let sprint t =
   print Format.str_formatter t ;
@@ -133,7 +123,7 @@ let print_module rules extrasig chan () =
       extrasig.names ;
     if !vars <> [] || extrasig.vars <> [] then
       Format.fprintf chan "var %a : Term .\n"
-        (pp_list output_string " ")
+        (Util.pp_list Util.output_string " ")
         (List.rev_append !vars extrasig.vars) ;
 
     (* Rewrite rules *)

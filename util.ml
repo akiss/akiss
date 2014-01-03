@@ -23,15 +23,15 @@ let verbose_output = ref false
 
 let verboseOutput a =
   if !verbose_output then
-    Printf.printf a
+    Format.printf a
   else
-    Printf.ifprintf stdout a
+    Format.ifprintf Format.std_formatter a
 
 let debugOutput a =
   if !debug_output then
-    Printf.printf a
+    Format.printf a
   else
-    Printf.ifprintf stdout a
+    Format.ifprintf Format.std_formatter a
 
 (* TODO use the standard library:
  *  - List.rev is already tailrec
@@ -135,3 +135,13 @@ let startswith s ~prefix =
       done ;
       true
     with Not_found -> false
+
+let output_string ch s = Format.fprintf ch "%s" s
+
+let rec pp_list pp sep chan = function
+  | [] -> ()
+  | [x] -> pp chan x
+  | x::tl ->
+      pp chan x ;
+      output_string chan sep ;
+      pp_list pp sep chan tl

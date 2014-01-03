@@ -26,21 +26,11 @@ let debug = false
 let pdebug = false (* show parsing info *)
 let sdebug = pdebug || false (* show script *)
 
-let output_string ch s = Format.fprintf ch "%s" s
-
 let input_line chan =
   let line = input_line chan in
     if pdebug then
       Format.printf "input line > %S\n%!" line ;
     line
-
-let rec pp_list pp sep chan = function
-  | [] -> ()
-  | [x] -> pp chan x
-  | x::tl ->
-      pp chan x ;
-      output_string chan sep ;
-      pp_list pp sep chan tl
 
 (** Printing *)
 let rec print chan = function
@@ -49,7 +39,7 @@ let rec print chan = function
 
   | Fun ("!tuple!",l) ->
       assert (List.length l > 1) ;
-      Format.fprintf chan "<%a>" (pp_list print ", ") l
+      Format.fprintf chan "<%a>" (Util.pp_list print ", ") l
 
   | Fun ("!test!",[]) ->
       Format.fprintf chan "akisstest()"
@@ -75,7 +65,7 @@ let rec print chan = function
       end
 
   | Fun (s,args) ->
-      Format.fprintf chan "%s(%a)" s (pp_list print ", ") args
+      Format.fprintf chan "%s(%a)" s (Util.pp_list print ", ") args
 
   | Var s ->
       Format.fprintf chan "%s" s

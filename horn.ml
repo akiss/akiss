@@ -70,7 +70,7 @@ let eqrefl_opt = true
 
 let print_flags () =
   if !debug_output then
-    Printf.printf
+    Format.printf
       "Parameters:\n\
       \  ac: %b\n\
       \  xor: %b\n\
@@ -218,8 +218,8 @@ let rec show_atom_body = function
             name ^ "(" ^ (show_term_list (w::term_list)) ^ ")"
 
 let show_statement st =
-  Printf.sprintf
-    "#%d@%d(len=%d): %s <== %s"
+  Format.sprintf
+    "#%d@@%d(len=%d): %s <== %s"
     st.id st.age
     (List.length st.body)
     (show_atom st.head)
@@ -434,7 +434,7 @@ module Base = struct
   let add ?(needs_check=true) x rules kb =
     assert (needs_check || not (mem_equiv x kb)) ;
     if not (needs_check && mem_equiv x kb) then begin
-      debugOutput "Adding clause #%d@%d.\n" x.id x.age ;
+      debugOutput "Adding clause #%d@@%d.\n" x.id x.age ;
       add (fresh_statement x) kb
     end
 
@@ -587,23 +587,65 @@ let inst_w_t_ac my_head head_kb =
         (* debugOutput "Result %s\n%!" (show_subst sigma); *)
     | _ -> invalid_arg("inst_w_t")
 
+let rec factors = function
+  | Fun ("plus",[a;b]) -> factors a @ factors b
+  | x -> [x]
+
+(** Tell whether the deduction statement [st] may be an extension.
+  * Currently we check that it is of the form
+  * k(_,_+R,_+x) <= ..., k(_,R,x), ... *)
+let may_be_extension st =
+  let h = st.head in
+  let rs = factors (get_recipe h) in
+  let xs = factors (get_term h) in
+    if List.length rs = 1 || List.length xs = 1 then false else
+      let rs = List.filter is_var rs in
+      let xs = List.filter is_var xs in
+      let pairs = Util.combine rs xs in
+      let found =
+        List.exists
+          (fun (r,x) ->
+             List.exists
+               (function
+                  | Predicate ("knows",[_;r';x']) -> r = r' && x = x'
+                  | _ -> false)
+               st.body)
+          pairs
+      in
+        found
+
+(** Formatter for printing conseq traces, which are essentially derivations. *)
+let rec print_trace chan = function
+  | `Public_name ->
+      Format.fprintf chan "name"
+  | `Axiom ->
+      Format.fprintf chan "ax"
+  | `Res (st,traces) ->
+      Format.fprintf chan "#%d(%a)" st.id (pp_list print_trace ",") traces
+
 (** Check whether a statement is a consequence of a knowledge base, ie.
-  * try to find a statement deriving the same "knows" atoms up to the recipe
-  * from the same "knows" assumptions, among the solved statements of the base.
-  * Raise [Not_a_consequence] if there is no such statement. If there is one,
-  * return the associated recipe.
+  * try to find solved statements deriving the same term from the same
+  * assumptions.
+  * Raise [Not_a_consequence] if there is no such statement.
+  * If there is one, return the associated recipe. An identical statement
+  * will be added to indicate that the two recipes have the same result,
+  * instead of the new useless deduction statement.
   * See Definition 14 and Lemma 2 in the paper. *)
 let consequence st kb =
   if not conseq_axiom then raise Not_a_consequence ;
   assert (is_solved st) ;
+  let may_be_extension = may_be_extension st in
+  (* Do not declare Not_a_consequence here when may_be_extension,
+   * but do it in update instead so that ~needs_check can be adapted
+   * accordingly (otherwise we break an assertion). *)
   let rec aux { head = head ; body = body } kb = 
     match head with
       | Predicate("knows", [_; _; Fun(name, [])]) when (startswith name "!n!") ->
-          Fun(name, [])
+          `Public_name, Fun(name, [])
       | Predicate("knows", [w; _; t]) ->
           begin try
             (* Base case: Axiom rule of conseq *)
-            get_recipe (List.find (is_same_t_smaller_w head) body)
+            `Axiom, get_recipe (List.find (is_same_t_smaller_w head) body)
           with
             | Not_found ->
                 if not conseq then raise Not_a_consequence else
@@ -620,24 +662,33 @@ let consequence st kb =
                      (*   (show_statement x); *)
                      if (not conseq_plus) && is_plus_clause x then
                        raise Not_a_consequence ;
-                     if is_plus_clause x && is_plus (get_recipe head) then
+                     if may_be_extension && is_plus_clause x then
                        raise Not_a_consequence ;
                      let sigma = inst_w_t head (get_head x) Not_a_consequence in
-                       (* debugOutput "Sigma: %s\n\n%!" (show_subst sigma); *)
+                     let subresults =
+                       List.map
+                         (fun y ->
+                            let trace,r =
+                              aux
+                                (dummy_statement (apply_subst_atom y sigma) body)
+                                kb
+                            in
+                              trace, (unbox_var (get_recipe y), r))
+                         (get_body x)
+                     in
+                     let traces,subst = List.split subresults in
+                       `Res (x,traces),
                        apply_subst 
                          (get_recipe (get_head x))
-                         (List.map
-                            (fun y ->
-                               unbox_var (get_recipe y),
-                               aux
-                                 (dummy_statement (apply_subst_atom y sigma) body)
-                                 kb)
-                            (get_body x)))
+                         subst)
                   kb Not_a_consequence
           end
       | _ -> invalid_arg("consequence")
   in
-    aux st (only_knows (only_solved kb))
+  let trace,r = aux st (only_knows (only_solved kb)) in
+    if !debug_output then
+      Format.printf "Conseq derivation for #%d: %a\n" st.id print_trace trace ;
+    r
 
 (** Avoid reflexive identities.
   * Note: even with the simplification of non-solved clauses, there are
@@ -816,11 +867,11 @@ let plus_restrict ?rx' sigmas ~t ~rx ~x ~ry ~y =
   in
 
     if !debug_output then begin
-      Printf.printf
+      Format.printf
         "final csu of size %d:\n"
         (List.length sigmas) ;
       List.iter
-        (fun s -> Printf.printf "* %s\n" (show_subst s))
+        (fun s -> Format.printf "* %s\n" (show_subst s))
         sigmas
     end ;
     sigmas
@@ -981,9 +1032,9 @@ let resolution master slave =
       debugOutput "Resolution?\n FROM: %s\n AND : %s\n\n"
         (show_statement master)
         (show_statement slave) ;
-      Printf.printf "csu of size %d:\n" length ;
+      Format.printf "csu of size %d:\n" length ;
       List.iter
-        (fun s -> Printf.printf "> %s\n" (show_subst s))
+        (fun s -> Format.printf "> %s\n" (show_subst s))
         sigmas
     end ;
     let sigmas =
@@ -991,9 +1042,9 @@ let resolution master slave =
     in
     let () =
       if !debug_output && List.length sigmas < length then begin
-        Printf.printf "filtered csu of size %d:\n" (List.length sigmas) ;
+        Format.printf "filtered csu of size %d:\n" (List.length sigmas) ;
         List.iter
-          (fun s -> Printf.printf "+ %s\n" (show_subst s))
+          (fun s -> Format.printf "+ %s\n" (show_subst s))
           sigmas
       end
     in
@@ -1245,7 +1296,7 @@ let find_recipe atom kb =
       find_recipe_h atom kbsolved
         (fun r _ -> raise (Recipe_found r))
         (fun () -> ()) ;
-      Printf.eprintf "Trying to get %s out of:\n%s\n\n%!" 
+      Format.eprintf "Trying to get %s out of:\n%s\n\n%!"
         (show_atom atom)
         (show_kb_list kbsolved) ;
       assert false
