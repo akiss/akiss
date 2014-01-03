@@ -821,27 +821,19 @@ let plus_restrict ?rx' sigmas ~t ~rx ~x ~ry ~y =
     let static_rigid = true in (* TODO ?!! *)
     let dynamic_nooccur = false in
 
-    (* When there is no rigid subterm: do nothing unless [static_norigid];
-     * mark the left recipe, unless [dynamic_norigid] in which case the most
-     * convenient marking is made for each solution. *)
-    let static_norigid = false in
-    let dynamic_norigid = false in
-
     match extract_rigid [t] with
       | None ->
           debugOutput "rigid subterm: none (%s)\n" (show_term t) ;
           verboseOutput "WARNING: flexible AC equation!\n" ;
-          if not static_norigid then sigmas else
-          List.map
-            (fun sigma ->
-               if dynamic_norigid && is_var (List.assoc x sigma) then
-                 mark ry sigma
-               else
-                 let sigma = mark rx sigma in
-                   match rx' with
-                     | None -> sigma
-                     | Some rx' -> mark rx' sigma)
-            sigmas
+          if not yellow_marking then sigmas else
+            List.map
+              (fun sigma ->
+                 let x' = List.assoc x sigma in
+                 let y' = List.assoc y sigma in
+                   if is_plus x' then mark rx sigma else
+                     if is_plus y' then mark ry sigma else
+                       sigma)
+              sigmas
       | Some t ->
           debugOutput "rigid subterm: %s\n" (show_term t) ;
           let rec occurs t = function
@@ -876,110 +868,12 @@ let plus_restrict ?rx' sigmas ~t ~rx ~x ~ry ~y =
     end ;
     sigmas
 
-let mark_flexible_plus_2 ~a ~b ~rx ~ry ~x ~y sigmas =
-  assert (List.length sigmas = 7) ;
-  List.map
-    (fun (sigma:subst) ->
-       let x' = List.assoc x sigma in
-       let y' = List.assoc y sigma in
-       let a' = List.assoc a sigma in
-       let b' = List.assoc b sigma in
-         if (x',y') = (a',b') || (x',y') = (b',a') then
-           sigma
-         else
-           match a',b' with
-             | Fun ("plus",[Var _;Var _]), Fun ("plus",[Var _; Var _]) ->
-                 mark rx sigma
-             | Fun ("plus",[Var _; Var _]), Var w
-             | Var w, Fun ("plus",[Var _; Var _]) ->
-                 begin match x' with
-                   | Fun ("plus",[Var x'1; Var x'2]) ->
-                       assert (w = x'1 || w = x'2) ;
-                       assert (is_var y') ;
-                       mark rx sigma
-                   | Var o ->
-                       begin match y' with
-                         | Fun ("plus",[Var y'1; Var y'2]) ->
-                             assert (w = y'1 || w = y'2) ;
-                             mark ry sigma
-                         | _ -> assert false
-                       end
-                   | _ -> assert false
-                 end
-             | _ -> assert false)
-    sigmas
-
-let mark_flexible_plus_3 ~a ~b ~c ~rx ~ry ~x ~y sigmas =
-
-  let is_split = function
-    | Var _ -> false
-    | Fun (f,_) -> assert (f = "plus") ; true
-  in
-    assert (List.length sigmas = 25) ;
-    List.map
-      (fun (sigma:subst) ->
-         let x' = List.assoc x sigma in
-         let a' = List.assoc a sigma in
-         let b' = List.assoc b sigma in
-         let c' = List.assoc c sigma in
-           (* Mark recipe associated with something of the form
-            *   a1+b1+c1, a1+b1, a+b+c1. *)
-         let split, whole = List.partition is_split [a';b';c'] in
-           match split,whole with
-             | [_;_;_],_ -> mark rx sigma
-             | [_],_ ->
-                 begin match x' with
-                   | Var _ -> mark ry sigma
-                   | _ -> mark rx sigma
-                 end
-             | _,[_] ->
-                 begin match x' with
-                   | Fun ("plus",[Var _;Var _]) -> mark rx sigma
-                   | _ -> mark ry sigma
-                 end
-             | [],_ -> sigma
-             | _ -> assert false)
-      sigmas
-
 let plus_restrict ?rx' ~t (slave_head,slave_body) sigmas =
   if sigmas = [] then sigmas else
     match deconstruct_plus_clause (slave_head,slave_body) with
       | None -> sigmas
       | Some (rx,ry,x,y) ->
-        begin match t with
-          | Fun ("plus",[Var a; Var b]) when yellow_marking && a <> b ->
-              let sigmas = mark_flexible_plus_2 ~a ~b ~rx ~ry ~x ~y sigmas in
-                debugOutput "flexible 2-2 equation, csu becomes:\n" ;
-                List.iter
-                  (fun s ->
-                     debugOutput "> %s %s\n"
-                       ry
-                       (* not suitable for equation
-                       (show_term (List.assoc rx s))
-                       (show_term (List.assoc x s))
-                       (show_term (List.assoc ry s))
-                       (show_term (List.assoc y s)) *)
-                       (show_subst s))
-                  sigmas ;
-                sigmas
-          | Fun ("plus",[Var a; Fun ("plus",[Var b; Var c])])
-          | Fun ("plus",[Fun ("plus",[Var a; Var b]); Var c])
-            when yellow_marking && a <> b && a <> c && b <> c ->
-              let sigmas = mark_flexible_plus_3 ~a ~b ~c ~rx ~ry ~x ~y sigmas in
-                debugOutput "flexible 3-2 equation, csu becomes:\n" ;
-                List.iter
-                  (fun s ->
-                     debugOutput "> %s/%s, %s/%s -- %s\n"
-                       (show_term (List.assoc rx s))
-                       (show_term (List.assoc x s))
-                       (show_term (List.assoc ry s))
-                       (show_term (List.assoc y s))
-                       (show_subst s))
-                  sigmas ;
-                sigmas
-          | _ ->
-              plus_restrict ?rx' sigmas ~t ~rx ~x ~ry ~y
-        end
+          plus_restrict ?rx' sigmas ~t ~rx ~x ~ry ~y
 
 exception Constraint_violation
 
