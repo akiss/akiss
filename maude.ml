@@ -140,13 +140,34 @@ let print_module rules extrasig chan () =
 
 (** Interacting with a full-maude process *)
 
-let chan_out,chan_in =
-  let o,i = Unix.open_process Config.maude_command in
-    at_exit (fun () -> ignore (Unix.close_process (o,i))) ;
-    o,
-    (Format.formatter_of_out_channel i)
+let get_chans =
+  let dummy = stdin,stdout in
+  let chans = ref dummy in
+  let countdown = ref 0 in
+  let close () =
+    if !chans <> dummy then begin
+      (* Maude doesn't seem to return 0 on clean termination. *)
+      ignore (Unix.close_process !chans) ;
+      (* Reset chans to dummy to avoid closing twice. *)
+      chans := dummy
+    end
+  in
+    at_exit close ;
+    fun () ->
+      if !countdown > 0 then begin
+        decr countdown ;
+        !chans
+      end else begin
+        close () ;
+        let pair = Unix.open_process Config.maude_command in
+          chans := pair ;
+          countdown := 10000 ;
+          pair
+      end
 
 let run_maude print_command parse_result =
+  let chan_out,chan_in = get_chans () in
+  let chan_in = Format.formatter_of_out_channel chan_in in
   if sdebug then print_command Format.std_formatter ;
   Format.print_flush () ;
   print_command chan_in ;
