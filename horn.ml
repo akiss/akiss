@@ -373,8 +373,14 @@ let new_clause =
           parents ;
         st
 
-let dummy_statement head body =
+(** Create anonymous/temporary statement.
+  * This is currently only used in conseq. *)
+let anon_statement head body =
   { id = -1 ; age = -1 ; head = head ; body = body }
+
+(** Check that a term is a normal form. *)
+let is_normal tm rules =
+  R.equals tm (R.normalize tm rules) []
 
 (** {3 Misc} *)
 
@@ -631,7 +637,7 @@ let rec print_trace chan = function
   * will be added to indicate that the two recipes have the same result,
   * instead of the new useless deduction statement.
   * See Definition 14 and Lemma 2 in the paper. *)
-let consequence st kb =
+let consequence st kb rules =
   if not conseq_axiom then raise Not_a_consequence ;
   assert (is_solved st) ;
   let may_be_extension = may_be_extension st in
@@ -653,7 +659,13 @@ let consequence st kb =
                  * Find a (solved, well-formed) statement [x]
                  * whose head is matched by [head] and such that
                  * [aux] succeeds on [y<-body] for each [y] in the
-                 * body of [x]. *)
+                 * body of [x].
+                 *
+                 * We need to make sure that we are not finding a conseq
+                 * derivation involving non-normal clause instantiations,
+                 * as they may not be proper redundancies.
+                 * So we require, for each conseq step, that the head of the
+                 * instantiated clause [x] is normal. *)
                 first
                   (fun x ->
                      (* debugOutput "Checking %s\n%!" *)
@@ -670,17 +682,23 @@ let consequence st kb =
                          (fun y ->
                             let trace,r =
                               aux
-                                (dummy_statement (apply_subst_atom y sigma) body)
+                                (anon_statement (apply_subst_atom y sigma) body)
                                 kb
                             in
                               trace, (unbox_var (get_recipe y), r))
                          (get_body x)
                      in
+                     (* All variables occurring in the head recipe must occur
+                      * in the body, so there is no need to apply [sigma] to
+                      * [x], it gets done as part of applying the accumulated
+                      * substitution [subst]. *)
                      let traces,subst = List.split subresults in
-                       `Res (x,traces),
-                       apply_subst 
-                         (get_recipe (get_head x))
-                         subst)
+                     let hx_subst =
+                       apply_subst (get_recipe (get_head x)) subst
+                     in
+                       if not (is_normal hx_subst rules) then
+                         raise Not_a_consequence ;
+                       `Res (x,traces), hx_subst)
                   kb Not_a_consequence
           end
       | _ -> invalid_arg("consequence")
@@ -727,6 +745,10 @@ let normalize_identical f =
   * inefficient: we add clauses that can never be used -- TODO. *)
 let update (kb : Base.t) rules (f : statement) : unit =
 
+  (* Do not use [is_normal], in order to replace [f] by its normalization.
+   * It is equal modulo AC but will additionnally be normalized wrt some
+   * order, which eases reading and gives / may give more power to non-AC
+   * tests, eg. in consequence. *)
   let f = normalize_identical f in
   let tf_orig = term_from_statement f in
   let tf = R.normalize tf_orig rules in
@@ -753,12 +775,14 @@ let update (kb : Base.t) rules (f : statement) : unit =
   if is_deduction_st f && is_solved f then
     try
       (* TODO can we really run consequence before freshening the clause? *)
-      let recipe = consequence fc kb in
+      let recipe = consequence fc kb rules in
       let world = get_world head in
       let newhead = Predicate("identical", [world; get_recipe head; recipe]) in
       let newclause = normalize_identical { fc with head = newhead } in
         debugOutput
-          "Useless: %s\nOriginal form:%s\nReplaced by:%s\n\n%!"
+          "Useless: %s\n\
+           Original form: %s\n\
+           Replaced by: %s\n\n%!"
           (show_statement fc) (show_statement f)
           (show_statement newclause); 
         if useful newclause then
