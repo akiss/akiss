@@ -591,7 +591,7 @@ let inst_w_t_ac my_head head_kb =
         (* debugOutput "Matching %s against %s\n%!" (show_term t1) (show_term t2); *)
         R.matchers t2 t1 []
         (* debugOutput "Result %s\n%!" (show_subst sigma); *)
-    | _ -> invalid_arg("inst_w_t")
+    | _ -> invalid_arg("inst_w_t_ac")
 
 let rec factors = function
   | Fun ("plus",[a;b]) -> factors a @ factors b
@@ -599,7 +599,10 @@ let rec factors = function
 
 (** Tell whether the deduction statement [st] may be an extension.
   * Currently we check that it is of the form
-  * k(_,_+R,_+x) <= ..., k(_,R,x), ... *)
+  * k(_,_+R,_+x) <= ..., k(_,R,x), ...
+  * The test could be made more precise by checking that R and x
+  * are fresh in the rest of the clause. It also seems that we can
+  * restrict extensions to a single such pair (R,x). *)
 let may_be_extension st =
   let h = st.head in
   let rs = factors (get_recipe h) in
@@ -738,11 +741,7 @@ let normalize_identical f =
 
 (** Update a knowledge base with a new statement. This involves canonizing
   * the statement, checking whether it already belongs to the consequences
-  * of the base, and actually inserting the statement or a variant of it.
-  *
-  * We drop non-normal statements. This is done before canonization, which
-  * may avoid counter-examples to completeness but also seems a bit
-  * inefficient: we add clauses that can never be used -- TODO. *)
+  * of the base, and actually inserting the statement or a variant of it. *)
 let update (kb : Base.t) rules (f : statement) : unit =
 
   (* Do not use [is_normal], in order to replace [f] by its normalization.
@@ -783,7 +782,8 @@ let update (kb : Base.t) rules (f : statement) : unit =
           "Useless: %s\n\
            Original form: %s\n\
            Replaced by: %s\n\n%!"
-          (show_statement fc) (show_statement f)
+          (show_statement fc)
+          (show_statement f)
           (show_statement newclause); 
         if useful newclause then
           Base.add newclause rules kb
@@ -797,7 +797,9 @@ let update (kb : Base.t) rules (f : statement) : unit =
     Base.add fc rules kb
 
 (** {2 Initial knowledge base}
-  * TODO seed stuff should be here *)
+  * Seed statements are generated in [Main] and [Process].
+  * Here we only take care of creating the initial knowledge base
+  * from them. *)
 
 (** Compute the initial knowledge base K_i(S) associated to the
   * seed statements S of a ground trace T. *)
@@ -1002,16 +1004,18 @@ let equation fa fb =
      * to be refreshed. *)
     let fa,fb = if fa.id<fb.id then fb,fa else fa,fb in
     let fa = if fa.id = fb.id then fresh_statement fa else fa in
-        (* assert (is_solved fa && is_solved fb) ; *)
 
-        match get_head fa, get_head fb with
-          | (Predicate("knows", [ul; r; t]),
-             Predicate("knows", [upl; rp; tp])) ->
-              if (is_plus r) && (is_plus rp) then [] else 
-begin
+      match get_head fa, get_head fb with
+        | (Predicate("knows", [ul; r; t]),
+           Predicate("knows", [upl; rp; tp])) ->
 
-         debugOutput "Equation:\n %s\n %s\n%!"
-          (show_statement fa) (show_statement fb); 
+            (* Optimization: skip equation when both recipes are sums.
+             * This greatly reduces execution time as well as the number of
+             * generated tests. *)
+            if (is_plus r) && (is_plus rp) then [] else begin
+
+              debugOutput "Equation:\n %s\n %s\n%!"
+                (show_statement fa) (show_statement fb) ;
               let t1 = Fun("!tuple!", [t; ul]) in
               let t2 = Fun("!tuple!", [tp; upl]) in
               let sigmas = R.csu t1 t2 in
