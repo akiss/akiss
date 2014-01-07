@@ -44,15 +44,14 @@ doc: $(ML)
 
 # Xor and non-AC tests, should work
 TESTS = \
+  examples/running-example/running-example-both-traces.api \
   examples/tests/xor.api \
-  examples/rfid/KCL-h1.api examples/rfid/KCL-h1bis.api \
-  examples/tests/statxor.api \
+  examples/tests/statxor.api examples/tests/nstatxor.api \
   examples/tests/xorsym.api \
   examples/tests/rigid.api \
-  examples/NSLxor/nsl.api \
-  examples/running-example/running-example-both-traces.api \
-  examples/tests/nstatxor.api \
-  examples/rfid/Toy-v2.api
+  examples/rfid/Toy-v2.api \
+  examples/rfid/KCL-h1.api examples/rfid/KCL-h1bis.api \
+  examples/NSLxor/nsl.api
 
 # Pure AC: most of them do not terminate
 AC_TESTS = \
