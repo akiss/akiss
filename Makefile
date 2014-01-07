@@ -69,15 +69,39 @@ AC_NOTESTS = \
 DH_TESTS = examples/tests/dh.api
 DH_NOTESTS = examples/tests/dhneg.api
 
+# Basic tests + RFID tests without Toy-v1 + NSLxor tests,
+# without duplicates
+VALIDATION = $(TESTS) \
+			 examples/rfid/KCL-v1.api \
+			 examples/rfid/KCL-v2.api \
+			 examples/rfid/KCL-v3.api \
+			 examples/rfid/KCL-v4.api \
+			 examples/rfid/LAK-v1.api \
+			 examples/rfid/LAK-v2.api \
+			 examples/rfid/LD-v1.api \
+			 examples/rfid/OTYT-v1.api \
+			 examples/rfid/Toy-v3.api \
+			 examples/rfid/YPL-v1.api \
+			 examples/rfid/YPL-v2.api \
+			 examples/rfid/YPL-v3.api \
+			 examples/NSLxor/NSL-xor-1a.api \
+			 examples/NSLxor/nslhelp.api
+
 RUN = OCAMLRUNPARAM=b ./akiss -verbose
 
-.PHONY: test actest dhtest
+.PHONY: test actest dhtest validate
+
 test:
-	./runtests.sh test "$(TESTS)"
+	./runtests.sh test$(NAME) "$(TESTS)"
+
 actest:
-	./runtests.sh actest "$(AC_TESTS) $(AC_NOTESTS)"
+	./runtests.sh actest$(NAME) "$(AC_TESTS) $(AC_NOTESTS)"
+
 dhtest:
-	./runtests.sh actest "$(DH_TESTS) $(DH_NOTESTS)"
+	./runtests.sh actest$(NAME) "$(DH_TESTS) $(DH_NOTESTS)"
+
+validate:
+	./runtests.sh val$(NAME)  $(VALIDATION)
 
 test_tamarin: $(wildcard *.ml)
 	ocamlopt unix.cmxa str.cmxa util.ml term.ml config.ml \
