@@ -7,6 +7,8 @@ shift
 
 mkdir $dir || exit 1
 cp *.ml *.mli *.mly *.mll Makefile $dir
+rm -f $dir/parser.ml $dir/lexer.ml $dir/parsetam.ml $dir/lextam.ml
+rm -f $dir/parser.mli $dir/parsetam.mli
 chmod -w $dir/*
 
 cp $* $dir
