@@ -834,7 +834,7 @@ let mark r sigma =
     List.map (fun (x,t) -> x, apply_subst t [r',r'']) sigma
 
 (** Restrict a csu based on plus-constraints *)
-let plus_restrict ?rx' sigmas ~t ~rx ~x ~ry ~y =
+let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
 
   (* Find the leftmost rigid (non-plus,non-var) subterm *)
   let rec extract_rigid = function
@@ -904,12 +904,12 @@ let plus_restrict ?rx' sigmas ~t ~rx ~x ~ry ~y =
     end ;
     sigmas
 
-let plus_restrict ?rx' ~t (slave_head,slave_body) sigmas =
+let plus_restrict ~t (slave_head,slave_body) sigmas =
   if sigmas = [] then sigmas else
     match deconstruct_plus_clause (slave_head,slave_body) with
       | None -> sigmas
       | Some (rx,ry,x,y) ->
-          plus_restrict ?rx' sigmas ~t ~rx ~x ~ry ~y
+          plus_restrict sigmas ~t ~rx ~x ~ry ~y
 
 exception Constraint_violation
 
@@ -936,8 +936,8 @@ let rec process_constraints = function
       end
   | [] -> []
 
-let plus_restrict ?rx' ~t c sigmas =
-  plus_restrict ?rx' ~t c (process_constraints sigmas)
+let plus_restrict ~t c sigmas =
+  plus_restrict ~t c (process_constraints sigmas)
 
 (** [resolution d_kb (master,slave)] attempts to perform a resolution step
   * between clauses [master] and [slave] by matching the head of [slave]
@@ -1007,12 +1007,15 @@ let equation fa fb =
 
   if is_deduction_st fa && is_deduction_st fb then
 
-    (* The rule is called only once per (unordered) pair. Enforce that b is the
-     * "oldest" clause. In case one of the clauses is the plus clause, it should
-     * always be b, which is not enforced very strongly for now -- TODO.
-     * We still have to treat one clause against itself, in which case it needs
-     * to be refreshed. *)
-    let fa,fb = if fa.id<fb.id then fb,fa else fa,fb in
+    (* The rule is called only once per (unordered) pair.
+     * In case one of the clauses is the plus clause, it should
+     * always be [fb] -- we swap if it's not the case.
+     * We have to treat one clause against itself, in which case it needs
+     * to be refreshed. Those cases were all trivial in the original Akiss
+     * but not modulo AC. *)
+    let fa,fb =
+      if is_plus_clause fa then fb,fa else fa,fb
+    in
     let fa = if fa.id = fb.id then fresh_statement fa else fa in
 
       match get_head fa, get_head fb with
@@ -1029,17 +1032,8 @@ let equation fa fb =
               let t1 = Fun("!tuple!", [t; ul]) in
               let t2 = Fun("!tuple!", [tp; upl]) in
               let sigmas = R.csu t1 t2 in
-              (* Call [plus_restrict] to apply dynamic marking strategies
-               * when fb is the plus clause. Additionally pass [rx'] if fa
-               * is also the plus clause, in which case a special strategy
-               * may be used. *)
-              let rx' =
-                match deconstruct_plus_clause (get_head fa, get_body fa) with
-                  | Some (rx',_,_,_) -> Some rx'
-                  | None -> None
-              in
               let sigmas =
-                plus_restrict ?rx' ~t (get_head fb, get_body fb) sigmas
+                plus_restrict ~t (get_head fb, get_body fb) sigmas
               in
               let sigmas =
                 (* Performing equation on twice the same clause is useless
