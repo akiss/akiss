@@ -51,6 +51,7 @@ TESTS = \
   examples/tests/rigid.api \
   examples/rfid/Toy-v2.api \
   examples/rfid/KCL-h1.api examples/rfid/KCL-h1bis.api \
+  examples/NSLxor/nslhelp.api \
   examples/NSLxor/nsl.api
 
 # Pure AC: most of them do not terminate
@@ -83,8 +84,7 @@ VALIDATION = $(TESTS) \
 			 examples/rfid/YPL-v1.api \
 			 examples/rfid/YPL-v2.api \
 			 examples/rfid/YPL-v3.api \
-			 examples/NSLxor/NSL-xor-1a.api \
-			 examples/NSLxor/nslhelp.api
+			 examples/NSLxor/NSL-xor-1a.api
 
 RUN = OCAMLRUNPARAM=b ./akiss -verbose
 
