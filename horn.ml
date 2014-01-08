@@ -441,7 +441,7 @@ module Base = struct
     assert (needs_check || not (mem_equiv x kb)) ;
     if not (needs_check && mem_equiv x kb) then begin
       debugOutput "Adding clause #%d@@%d.\n" x.id x.age ;
-      add (fresh_statement x) kb
+      add x kb
     end
 
 end
@@ -460,7 +460,8 @@ let show_kb_list kb =
 
 let rule_rename st =
   (* We need this assertion to justify rename on identical statements.
-   * It is guaranteed when we do not use conseq. *)
+   * It is guaranteed when we do not use conseq -- TODO cleanup for when
+   * we use conseq. *)
   assert (match st.head with
             | Predicate("identical",[_;Var _;Var _]) -> false
             | _ -> true) ;
@@ -756,6 +757,12 @@ let update (kb : Base.t) rules (f : statement) : unit =
     debugOutput "Clause #%d is not normal.\n" (get_id f)
   else
 
+  (** Freshen only now to avoid freshening the (many) non-normal clauses
+    * that the procedure generates. We don't want to do it too late, though:
+    * freshening should come before normalization to preserve the (weak)
+    * canonical forms it provides. *)
+  let f = fresh_statement f in
+
   match
     (* Canonize, normalize again and keep only normal clauses. *)
     if not canonize then Some f else
@@ -768,16 +775,19 @@ let update (kb : Base.t) rules (f : statement) : unit =
           None
         end else
           Some f
-  with None -> () | Some ({head=head;body=body} as fc) ->
+  with None -> () | Some fc ->
 
   if useful fc then
-  if is_deduction_st f && is_solved f then
+  if is_deduction_st fc && is_solved fc then
     try
-      (* TODO can we really run consequence before freshening the clause? *)
       let recipe = consequence fc kb rules in
-      let world = get_world head in
-      let newhead = Predicate("identical", [world; get_recipe head; recipe]) in
+      let world = get_world fc.head in
+      let newhead =
+        Predicate("identical", [world; get_recipe fc.head; recipe])
+      in
       let newclause = normalize_identical { fc with head = newhead } in
+        (* No need to freshen [newclause], since it has the same variables as
+         * [fc] which is fresh. *)
         debugOutput
           "Useless: %s\n\
            Original form: %s\n\
