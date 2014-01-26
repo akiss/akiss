@@ -49,8 +49,7 @@ TESTS = \
   examples/tests/statxor.api examples/tests/nstatxor.api \
   examples/tests/xorsym.api \
   examples/tests/rigid.api \
-  examples/rfid/Toy-v2.api \
-  examples/rfid/KCL-h1.api examples/rfid/KCL-h1bis.api \
+  examples/rfid/KCL-h1bis.api \
   examples/NSLxor/nslhelp.api \
   examples/NSLxor/nsl.api
 
@@ -80,7 +79,6 @@ VALIDATION = $(TESTS) \
 			 examples/rfid/LAK-v2.api \
 			 examples/rfid/LD-v1.api \
 			 examples/rfid/OTYT-v1.api \
-			 examples/rfid/Toy-v3.api \
 			 examples/rfid/YPL-v1.api \
 			 examples/rfid/YPL-v2.api \
 			 examples/rfid/YPL-v3.api \

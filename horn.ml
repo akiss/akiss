@@ -52,11 +52,18 @@ let yellow_marking = true
 let canonize_all = false
 
 (** With AC, doing conseq against the plus clause is known to break
-  * completeness. Other flavors are not justified yet. At least axiom
-  * seems useless, in simple cases such as in(X).out(X) with pairs. *)
+  * completeness, unless conseq is not used against extension-like clauses. *)
 let conseq_axiom = true
 let conseq = true
 let conseq_plus = true
+
+(** When dealing with xor, normalize i(R,R') into i(R+R',0) to avoid
+  * redundancies. This seems safe but is not yet justified by the theory. *)
+let normalize_identical = false
+
+(** Instead of normalizing, drop non normal clauses.
+  * This is not justified by the theory. *)
+let drop_non_normal = false
 
 (* Mark last two variants of "plus", corresponding to the introduction
  * and elimination of 0. This is not compatible with the current theory
@@ -644,10 +651,6 @@ let rec print_trace chan = function
 let consequence st kb rules =
   if not conseq_axiom then raise Not_a_consequence ;
   assert (is_solved st) ;
-  let may_be_extension = may_be_extension st in
-  (* Do not declare Not_a_consequence here when may_be_extension,
-   * but do it in update instead so that ~needs_check can be adapted
-   * accordingly (otherwise we break an assertion). *)
   let rec aux { head = head ; body = body } kb = 
     match head with
       | Predicate("knows", [_; _; Fun(name, [])]) when (startswith name "!n!") ->
@@ -677,8 +680,6 @@ let consequence st kb rules =
                      (* debugOutput "Against %s\n%!" *)
                      (*   (show_statement x); *)
                      if (not conseq_plus) && is_plus_clause x then
-                       raise Not_a_consequence ;
-                     if may_be_extension && is_plus_clause x then
                        raise Not_a_consequence ;
                      let sigma = inst_w_t head (get_head x) Not_a_consequence in
                      let subresults =
@@ -730,7 +731,7 @@ let useful st =
     | _ -> invalid_arg "useful"
 
 let normalize_identical f =
-  if not Theory.xor then f else
+  if not (Theory.xor && normalize_identical) then f else
     match get_head f with
       | Predicate("identical", [w;r;Fun("zero",[])])
       | Predicate("identical", [w;Fun("zero",[]);r]) ->
@@ -753,7 +754,7 @@ let update (kb : Base.t) rules (f : statement) : unit =
   let tf_orig = term_from_statement f in
   let tf = R.normalize tf_orig rules in
   let f = statement_from_term ~orig:f tf in
-  if not (R.equals tf_orig tf []) then
+  if drop_non_normal && not (R.equals tf_orig tf []) then
     debugOutput "Clause #%d is not normal.\n" (get_id f)
   else
 
@@ -770,7 +771,7 @@ let update (kb : Base.t) rules (f : statement) : unit =
       let tf_orig = term_from_statement f in
       let tf = R.normalize tf_orig rules in
       let f = statement_from_term ~orig:f tf in
-        if not (R.equals tf_orig tf []) then begin
+        if drop_non_normal && not (R.equals tf_orig tf []) then begin
           debugOutput "Clause #%d is not normal.\n" (get_id f) ;
           None
         end else
@@ -779,7 +780,9 @@ let update (kb : Base.t) rules (f : statement) : unit =
 
   if useful fc then
   if is_deduction_st fc && is_solved fc then
+    let may_be_extension = may_be_extension fc in
     try
+      if may_be_extension then raise Not_a_consequence ;
       let recipe = consequence fc kb rules in
       let world = get_world fc.head in
       let newhead =
@@ -801,7 +804,7 @@ let update (kb : Base.t) rules (f : statement) : unit =
       (* If we ran conseq, no need to check whether the clause is already
        * in the knowledge base. It may be that conseq_plus should be put there
        * too. *)
-      let needs_check = not (conseq_axiom && conseq) in
+      let needs_check = may_be_extension || not (conseq_axiom && conseq) in
         Base.add ~needs_check fc rules kb
   else
     Base.add fc rules kb
