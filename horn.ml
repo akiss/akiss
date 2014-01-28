@@ -444,7 +444,7 @@ module Base = struct
       false
     with Found -> true
 
-  let add ?(needs_check=true) x rules kb =
+  let add ?(needs_check=true) x _ kb =
     assert (needs_check || not (mem_equiv x kb)) ;
     if not (needs_check && mem_equiv x kb) then begin
       debugOutput "Adding clause #%d@@%d.\n" x.id x.age ;
@@ -549,6 +549,48 @@ let canonical_form statement =
       f
   else
     simplify_statement statement
+
+(* Check whether fc is a xor-generalization of a clause already in kb.
+ * We are looking for n-step generalizations, where a 1-step generalization
+ * would be a statement f of the form H <- Gamma, k_w(X,x)
+ * where fc = H\theta <- Gamma\theta, k_w\theta(Xi,x_i)
+ * for   theta = [X1+..+Xn/X,x1+..+xn/x].
+ * Performing a precise check would be costly, and a rough approximation
+ * is actually enough. At the moment it is still quite expensive, so we
+ * disable this sanity check by default. When enabled it shows that the
+ * current strategy always considers generalizations first, and so the check
+ * always passes. *)
+let may_be_generalization fc kb =
+  if not Theory.check_generalizations then false else
+  let check_gen_of fkb =
+    (* Match (modulo AC) the head of fkb with that of fc,
+     * keep only unifiers that map variables into sums of variables. *)
+    let h f = term_from_atom f.head in
+    let thetas = R.matchers (h fkb) (h fc) [] in
+    let rec is_sumvars = function
+      | Var _ -> true
+      | Fun ("plus",[l;r]) -> is_sumvars l && is_sumvars r
+      | _ -> false
+    in
+    let thetas =
+      List.filter
+        (fun theta ->
+           List.for_all (fun (x,t) -> is_sumvars t) theta &&
+           List.exists (fun (x,t) -> not (is_var t)) theta)
+        thetas
+    in
+      if thetas <> [] then begin
+        debugOutput
+          "Clause %d may be a generalization of %d\n"
+          fc.id fkb.id ;
+        failwith "found gen"
+      end
+  in
+    try
+      Base.fold (fun fkb () -> check_gen_of fkb) kb () ;
+      false
+    with
+      | Failure "found gen" -> true
 
 (* TODO AC term equality for t and tp? not if conseq stays syntactic in draft
  * not needed for worlds because we don't even need to look at their terms *)
@@ -780,9 +822,10 @@ let update (kb : Base.t) rules (f : statement) : unit =
 
   if useful fc then
   if is_deduction_st fc && is_solved fc then
-    let may_be_extension = may_be_extension fc in
+    if Theory.xor && (may_be_extension fc || may_be_generalization fc kb) then
+      Base.add fc rules kb
+    else
     try
-      if may_be_extension then raise Not_a_consequence ;
       let recipe = consequence fc kb rules in
       let world = get_world fc.head in
       let newhead =
@@ -804,7 +847,7 @@ let update (kb : Base.t) rules (f : statement) : unit =
       (* If we ran conseq, no need to check whether the clause is already
        * in the knowledge base. It may be that conseq_plus should be put there
        * too. *)
-      let needs_check = may_be_extension || not (conseq_axiom && conseq) in
+      let needs_check = not (conseq_axiom && conseq) in
         Base.add ~needs_check fc rules kb
   else
     Base.add fc rules kb

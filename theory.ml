@@ -34,6 +34,9 @@ let xor = ref false
 
 let ac_toolbox = ref false
 
+(** See in [Horn] for documentation. *)
+let check_generalizations = ref false
+
 let usage = Printf.sprintf
   "Usage: %s [-verbose] [-debug] < specification-file.api"
   (Filename.basename Sys.argv.(0))
@@ -48,7 +51,9 @@ let command_line_options_list = [
   ("--debug", Arg.Unit (fun () -> debug_output := true),
    "Enable debug output");
   ("--ac-compatible", Arg.Set ac_toolbox,
-   "Use the AC-compatible toolbox even on non-AC theories.")
+   "Use the AC-compatible toolbox even on non-AC theories.");
+  ("--check-generalizations", Arg.Set check_generalizations,
+   "Check that generalizations of kept statements are never dropped.")
 ]
 
 let cmdlist =
@@ -230,6 +235,7 @@ let private_names = !private_names
 let evchannels = !evchannels
 let rewrite_rules = !rewrite_rules
 let evrewrite_rules = !evrewrite_rules
+let check_generalizations = !check_generalizations
 
 (** Rewriting toolbox *)
 
