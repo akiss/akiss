@@ -783,6 +783,54 @@ let normalize_identical f =
               Predicate("identical", [w;Fun("plus",[r;r']);Fun("zero",[])]) }
       | _ -> f
 
+(** Dealing with normalization aspects of newly deduced clauses.
+  * This is called before _and_ after canonization, which may be slightly
+  * inefficient but allows canonization to use structural equality rather
+  * than equality modulo.
+  *
+  * This version of the function checks that the skeleton of the clause is
+  * normal, and drops the clause otherwise. Non-normal recipes are allowed
+  * and are re-normalized. *)
+let normalize_new_statement rules f =
+  let process t =
+    let t' = R.normalize t rules in
+      if not (R.equals t t' []) then begin
+        debugOutput "Non-normal term in clause #%d.\n" (get_id f) ;
+        None
+      end else
+        Some t'
+  in
+  let renorm r = R.normalize r rules in
+  let process = function
+    | Predicate ("knows",[w;r;t]) ->
+        begin match process t, process w with
+          | Some t', Some w' -> Some (Predicate ("knows",[w';renorm r;t']))
+          | None,_ | _,None -> None
+        end
+    | Predicate ("reach",[w]) ->
+        begin match process w with
+          | Some w' -> Some (Predicate ("reach",[w']))
+          | None -> None
+        end
+    | Predicate (id,[w;r;r']) -> (* covers identical and ridentical *)
+        begin match process w with
+          | Some w' -> Some (Predicate (id,[w';renorm r;renorm r']))
+          | None -> None
+        end
+    | _ -> assert false
+  in
+  let get_some = function
+    | Some x -> x
+    | None -> failwith "get_some"
+  in
+    try
+      Some
+        { f with
+          head = get_some (process f.head) ;
+          body = List.map (fun p -> get_some (process p)) f.body }
+    with
+      | Failure "get_some" -> None
+
 (** Update a knowledge base with a new statement. This involves canonizing
   * the statement, checking whether it already belongs to the consequences
   * of the base, and actually inserting the statement or a variant of it. *)
@@ -793,12 +841,9 @@ let update (kb : Base.t) rules (f : statement) : unit =
    * order, which eases reading and gives / may give more power to non-AC
    * tests, eg. in consequence. *)
   let f = normalize_identical f in
-  let tf_orig = term_from_statement f in
-  let tf = R.normalize tf_orig rules in
-  let f = statement_from_term ~orig:f tf in
-  if drop_non_normal && not (R.equals tf_orig tf []) then
-    debugOutput "Clause #%d is not normal.\n" (get_id f)
-  else
+  match normalize_new_statement rules f with
+    | None -> ()
+    | Some f ->
 
   (** Freshen only now to avoid freshening the (many) non-normal clauses
     * that the procedure generates. We don't want to do it too late, though:
@@ -810,14 +855,7 @@ let update (kb : Base.t) rules (f : statement) : unit =
     (* Canonize, normalize again and keep only normal clauses. *)
     if not canonize then Some f else
       let f = canonical_form f in
-      let tf_orig = term_from_statement f in
-      let tf = R.normalize tf_orig rules in
-      let f = statement_from_term ~orig:f tf in
-        if drop_non_normal && not (R.equals tf_orig tf []) then begin
-          debugOutput "Clause #%d is not normal.\n" (get_id f) ;
-          None
-        end else
-          Some f
+        normalize_new_statement rules f
   with None -> () | Some fc ->
 
   if useful fc then
