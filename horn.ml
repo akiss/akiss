@@ -926,61 +926,72 @@ let mark r sigma =
 let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
 
   (* Find the leftmost rigid (non-plus,non-var) subterm *)
-  let rec extract_rigid = function
-    | Fun ("plus",[x;y])::l -> extract_rigid (x::y::l)
-    | Fun (_,_) as t :: _ -> Some t
-    | Var _ :: l -> extract_rigid l
-    | [] -> None
+  let rec extract_rigid variables = function
+    | Fun ("plus",[x;y])::l -> extract_rigid variables (x::y::l)
+    | Fun (_,_) as t :: _ -> `Some t
+    | Var v :: l -> extract_rigid (v::variables) l
+    | [] -> `None variables
   in
 
   let sigmas =
-    (* Recipe renaming strategy *)
+    (* Dynamic constraint generation *)
 
-    (* When there is a rigid (non-plus) subterm a in t:
-     * do nothing unless [static_rigid];
-     * if it occurs in a single subterm on the other side, mark the corresponding
-     * recipe;
-     * if it does not occur in a single subterm, always mark on the left, unless
-     * [dynamic_nooccur] in which case the most convenient choice is made for
-     * each solution. *)
-    let static_rigid = true in (* TODO ?!! *)
-    let dynamic_nooccur = false in
-
-    match extract_rigid [t] with
-      | None ->
-          debugOutput "rigid subterm: none (%s)\n" (show_term t) ;
-          verboseOutput "WARNING: flexible AC equation!\n" ;
+    match extract_rigid [] [t] with
+      | `None variables ->
+          debugOutput
+            "rigid subterm: none, size %d\n"
+            (List.length variables) ;
           if not yellow_marking then sigmas else
-            List.map
-              (fun sigma ->
-                 let x' = List.assoc x sigma in
-                 let y' = List.assoc y sigma in
-                   if is_plus x' then mark rx sigma else
-                     if is_plus y' then mark ry sigma else
-                       sigma)
-              sigmas
-      | Some t ->
+            List.concat
+              (List.map
+                 (fun sigma ->
+                    (* Mark any recipe that is associated with a sum,
+                     * but allow for all such choices,
+                     * except if [size<=3] and one recipe is mapped to
+                     * a single variable. *)
+                    let x' = List.assoc x sigma in
+                    let y' = List.assoc y sigma in
+                      (* Check that none of the recipes x' or y'
+                       * is exactly one of the original variables,
+                       * ie. we are looking at the split x+(y+z). *)
+                      if List.length variables = 3 &&
+                         List.exists
+                           (fun v ->
+                              let v' = List.assoc v sigma in
+                                x' = v' || y' = v')
+                           variables
+                      then [ sigma ] else
+                        match is_plus x', is_plus y' with
+                          | true,true -> [ mark rx sigma ; mark ry sigma ]
+                          | true,false -> [ mark rx sigma ]
+                          | false,true -> [ mark ry sigma ]
+                          | false,false -> [ sigma ])
+                 sigmas)
+      | `Some t ->
           debugOutput "rigid subterm: %s\n" (show_term t) ;
           let rec occurs t = function
             | Var _ :: l -> occurs t l
-            | Fun (s,args) as t' :: l ->
-                t = t' || occurs t (List.rev_append args l)
+            | Fun ("plus",args) :: l ->
+                occurs t (List.rev_append args l)
+            | t' :: l ->
+                t = t' || occurs t l
             | [] -> false
           in
           let update_sigma sigma =
             let t = apply_subst t sigma in
-            let ox = occurs t [List.assoc x sigma] in
-            let oy = occurs t [List.assoc y sigma] in
-              if (ox && oy) || not (ox || oy) then
-                if dynamic_nooccur && is_var (List.assoc x sigma) then
-                  mark ry sigma
-                else
-                  mark rx sigma
+            let x' = List.assoc x sigma in
+            let y' = List.assoc y sigma in
+              if occurs t [x'] then
+                (* If the rigid term is alone we are not allowed
+                 * to mark, and it would not be very useful anyway. *)
+                if is_plus x' then mark rx sigma else sigma
               else
-                if ox then mark rx sigma else mark ry sigma
+                (* We must have [occurs t y'] since the original term
+                 * was normal modulo xor, ie. the factor could not occur
+                 * twice. *)
+                if is_plus y' then mark ry sigma else sigma
           in
-            if not static_rigid then sigmas else
-              List.map update_sigma sigmas
+            List.map update_sigma sigmas
   in
 
     if !debug_output then begin
@@ -1002,6 +1013,8 @@ let plus_restrict ~t (slave_head,slave_body) sigmas =
 
 exception Constraint_violation
 
+(** Propagate constraints on one unifier, raise [Constraint_violation] if the
+  * unifier violates some constraint. *)
 let propagate_constraint sigma =
   let theta =
     List.map
@@ -1016,6 +1029,8 @@ let propagate_constraint sigma =
   let theta = List.concat theta in
     List.map (fun (x,t) -> x, apply_subst t theta) sigma
 
+(** Propagate constraints on a collection of unifiers, drop unifiers that
+  * violate constraints. *)
 let rec process_constraints = function
   | sigma::sigmas ->
       begin try
@@ -1025,6 +1040,7 @@ let rec process_constraints = function
       end
   | [] -> []
 
+(** Check and propagate constraints, and generate new dynamic constraints. *)
 let plus_restrict ~t c sigmas =
   plus_restrict ~t c (process_constraints sigmas)
 
