@@ -51,6 +51,10 @@ let yellow_marking = true
   * affect termination but we may need it for the final theorem. *)
 let canonize_all = false
 
+(** Asymmetric equation: forbid sum recipes on both sides of equation.
+  * It speeds things up and reduces the number of tests. *)
+let asym_eq = true
+
 (** With AC, doing conseq against the plus clause is known to break
   * completeness, unless conseq is not used against extension-like clauses. *)
 let conseq_axiom = true
@@ -82,13 +86,14 @@ let print_flags () =
       \  ac: %b\n\
       \  xor: %b\n\
       \  conseq: axiom=%b res=%b plus=%b\n\
+      \  asym equation: %b\n\
       \  canonize: %b (all %b)\n\
       \  yellow: %b\n\
       \  extra static: %b\n\
       \  eqrefl_opt: %b\n"
       Theory.ac Theory.xor
       conseq_axiom conseq conseq_plus
-      canonize canonize_all
+      asym_eq canonize canonize_all
       yellow_marking extra_static_marks eqrefl_opt
 
 (** {2 Predicates and clauses, conversions and printing} *)
@@ -1109,7 +1114,7 @@ let equation fa fb =
             (* Optimization: skip equation when both recipes are sums.
              * This greatly reduces execution time as well as the number of
              * generated tests. *)
-            if (is_plus r) && (is_plus rp) then [] else begin
+            if asym_eq && (is_plus r) && (is_plus rp) then [] else begin
 
               debugOutput "Equation:\n %s\n %s\n%!"
                 (show_statement fa) (show_statement fb) ;
