@@ -760,6 +760,44 @@ let consequence st kb rules =
       Format.printf "Conseq derivation for #%d: %a\n" st.id print_trace trace ;
     r
 
+let consequence st kb rules =
+  let r' = consequence st kb rules in
+    if is_plus r' && not (is_plus (get_recipe st.head)) then begin
+      debugOutput
+        "Consequence introduced a sum: from %s to %s. Trying to save it...\n"
+        (show_term (get_recipe st.head))
+        (show_term r') ;
+      (* Find a factor t of r' that is already in H(K_solved), not just
+       * He(K_solved). For a given factor it's non-trivial to know what part
+       * of the message it's going to derive. Instead, we assume that t
+       * derives a factor of the original message and so we check for each
+       * such factor (using conseq) if it is derived by a factor of r'. *)
+      let rfactors = factors r' in
+      let factors = factors (get_term st.head) in
+      let good_factor =
+        List.exists
+          (fun f ->
+             debugOutput "Trying term factor %s...\n" (show_term f) ;
+             let dummy = Fun("dummy",[]) in
+             let w = get_world st.head in
+             let head' = Predicate ("knows",[w;dummy;f]) in
+             let st' = { st with head = head' } in
+               try
+                 let t = consequence st' kb rules in
+                 let mem = List.mem t rfactors in
+                   debugOutput
+                     "Got recipe %s, which is%s a recipe factor.\n"
+                     (show_term t)
+                     (if mem then "" else " not") ;
+                   mem
+               with
+                 | Not_a_consequence -> false)
+          factors
+      in
+        if good_factor then r' else raise Not_a_consequence
+    end else
+      r'
+
 (** Avoid reflexive identities.
   * Note: even with the simplification of non-solved clauses, there are
   * some cases that we are missing,
