@@ -4,7 +4,6 @@ symbols aenc/3, adec/2, break/1, pk/1, pair/2, fst/1, snd/1, sign/2, getmsg/1, c
 
 private ka, kb, skE, ra, rb;
 
-
 channels ch, auth3;
 evchannels bb;
 
@@ -60,8 +59,8 @@ Tally3 = out(bb, adec(skE, getmsg(fst(z))));
 
 T = Tally1 || Tally2 || Tally3;
 
-// P =  out(bb,pk(skE)) :: (AyBn || BB) :: let va = yes in let vb = no in T;
-// Q =  out(bb,pk(skE)) :: (AnBy || BB) :: let va = no in let vb = yes in T;
+P =  out(bb,pk(skE)) :: (AyBn || BB) :: let va = yes in let vb = no in T;
+Q =  out(bb,pk(skE)) :: (AnBy || BB) :: let va = no in let vb = yes in T;
 
 
 P1  =  out(bb,pk(skE)) :: Ayes :: Bno :: BB :: let va = yes in let vb = no in T;
@@ -82,11 +81,11 @@ Q6  =  out(bb,pk(skE)) :: BB :: Byes :: Ano ::let va = yes in let vb = no in T;
 
 //Q = Q1, Q2, Q3, Q4, Q5, Q6;
 
-equivalentft? P1, P2, P3, P4, P5, P6 and Q1, Q2, Q3, Q4, Q5, Q6; //trace equivalent
+// equivalentft? P1, P2, P3, P4, P5, P6 and Q1, Q2, Q3, Q4, Q5, Q6; //trace equivalent
 fwdequivalentft?  P1, P2, P3, P4, P5, P6 and Q1, Q2, Q3, Q4, Q5, Q6; //not forward indistinguishable
 
 
 //both forward and trace equivalent => everlasting indistinguishable
-equivalentft? P and Q;
-fwdequivalentft? P and Q;
+// equivalentft? P and Q;
+// fwdequivalentft? P and Q;
 
