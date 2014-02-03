@@ -29,8 +29,10 @@ for i in $* ; do
   date >> log
   if [ $ret = 0 ] ; then
     echo OK
+    echo $i OK >> ../RESULTS
   else
     echo FAILURE
+    echo $i FAILURE $ret >> ../RESULTS
   fi
   cd ..
 done
