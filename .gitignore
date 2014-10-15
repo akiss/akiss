@@ -4,6 +4,7 @@
 *.cma
 *.cmxa
 *.cmi
+*.annot
 parser.ml
 parser.mli
 lextam.ml

@@ -3,7 +3,7 @@ ML = ast.ml parser.ml lexer.ml util.ml term.ml \
 	 rewriting.ml theory.ml \
 	 base.ml horn.ml process.ml main.ml 
 MLI = $(wildcard $(ML:.ml=.mli)) parser.mli parsetam.mli
-OCAMLC = ocamlopt -g
+OCAMLC = ocamlopt -g -annot
 OCAMLDEP = ocamldep -native
 CMA = cmxa
 CMO = cmx
