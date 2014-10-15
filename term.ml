@@ -167,13 +167,13 @@ let rec parse_term (Ast.TempTermCons(x,l)) =
     else
       raise (Parse_error_semantic
                (Printf.sprintf "variable %s used as function symbol" x))
-    else if List.mem x !private_names then
+  else if List.mem x !private_names then
       if l = [] then
         Fun(x, [])
       else
         raise (Parse_error_semantic
                  (Printf.sprintf "private name %s used as function symbol" x))
-    else
+  else
       try
         let arity = List.assoc x !fsymbols in
           if List.length l = arity then
