@@ -54,5 +54,5 @@ val show_subst : subst -> string
 val apply_subst : term -> subst -> term
 val bound : varName -> subst -> bool
 
-val compose : subst -> subst -> (varName * term) list
-val restrict : subst -> varName list -> (varName * term) list
+val compose : subst -> subst -> subst
+val restrict : subst -> varName list -> subst
