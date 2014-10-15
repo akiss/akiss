@@ -139,8 +139,7 @@ let rec apply_subst term (sigma : subst) =
 	Fun(symbol, trmap (function x -> apply_subst x sigma) list)
 
 let bound variable sigma =
-  let (f, _) = List.split sigma in
-  List.mem variable f
+  List.mem_assoc variable sigma
 
 let apply_subst_term_list tl sigma =
   trmap (fun x -> apply_subst x sigma) tl
