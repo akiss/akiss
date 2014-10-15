@@ -475,16 +475,16 @@ let processCommand = function
     Printf.printf "Declaring process %s\n%!" name;
     declare_process name process
   | DeclInterleave(traceName, traceList) ->
-    Printf.printf "Declaring trace as interleaving\n%!";
+    Printf.printf "Declaring %s as interleaving\n%!" traceName;
     declare_interleave traceName traceList
   | DeclInterleaveOpt(traceName, traceList) ->
-    Printf.printf "Declaring trace as optimal interleaving\n%!";
+    Printf.printf "Declaring %s as optimal interleaving\n%!" traceName;
     declare_interleave_opt traceName traceList
   | DeclRemoveEndTests(traceName, traceList) ->
-    Printf.printf "Declaring trace by removing end tests\n%!";
+    Printf.printf "Declaring %s by removing end tests\n%!" traceName;
     declare_remove_end_tests traceName traceList
   | DeclSequence(traceName, traceList) ->
-    Printf.printf "Declaring trace as sequence\n%!";
+    Printf.printf "Declaring %s as sequence\n%!" traceName;
     declare_sequence traceName traceList
 
   | QueryEquivalent(traceList1, traceList2) ->

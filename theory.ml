@@ -172,11 +172,11 @@ let process_decl = function
     declare_symbols symbolList;
     check_atoms ()
   | DeclChannels channelList ->
-    Printf.printf "Declaring symbols\n%!";
+    Printf.printf "Declaring channels\n%!";
     declare_channels channelList;
     check_atoms ()
   | DeclEvChannels evchannelList ->
-    Printf.printf "Declaring symbols\n%!";
+    Printf.printf "Declaring channels\n%!";
     declare_evchannels evchannelList;
     check_atoms ()
   | DeclPrivate nameList ->
