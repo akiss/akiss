@@ -79,26 +79,26 @@ let appendto lref l = lref := List.append !lref l
 
 let addto lref e = appendto lref [e];;
 
-let rec declare_symbols symbolList =
+let declare_symbols symbolList =
   appendto fsymbols symbolList
 
-let rec declare_names nameList = 
+let declare_names nameList =
   appendto private_names nameList
 
-let rec declare_channels nameList =
+let declare_channels nameList =
   appendto channels nameList
 
-let rec declare_evchannels nameList =
+let declare_evchannels nameList =
   appendto channels nameList;
   appendto evchannels nameList
 
-let rec declare_vars varList = 
+let declare_vars varList =
   appendto vars varList
 
-let rec declare_rewrite t1 t2 = 
+let declare_rewrite t1 t2 =
   addto rewrite_rules ((parse_term t1), (parse_term t2))
 
-let rec declare_evrewrite t1 t2 = 
+let declare_evrewrite t1 t2 =
   addto evrewrite_rules ((parse_term t1), (parse_term t2))
 
 type atom_type =  
