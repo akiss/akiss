@@ -35,15 +35,6 @@ let input_line chan =
       Format.printf "input line > %S\n%!" line ;
     line
 
-let prefix s s' =
-  if String.length s > String.length s' then false else
-    try
-      for i = 0 to String.length s - 1 do
-        if s.[i] <> s'.[i] then failwith "false"
-      done ;
-      true
-    with Failure "false" -> false
-
 (** Printing Maude terms and modules *)
 
 let rec print chan = function
@@ -311,32 +302,6 @@ let rec parse_substitution tokens =
               (x,t) :: parse_substitution tokens
           | _ -> [x,t]
 
-let parse_variant tokens =
-  let expect = expect tokens in
-  expect (Genlex.Kwd "{") ;
-  let t = parse_term tokens in
-    expect (Genlex.Kwd ",") ;
-    let s = parse_substitution tokens in
-      expect (Genlex.Kwd "}") ;
-      t,s
-
-let rec parse_variants tokens =
-  match Stream.peek tokens with
-    | Some (Genlex.Kwd "{") ->
-        let v = parse_variant tokens in
-        let vs = parse_variants tokens in
-          v :: vs
-    | Some (Genlex.Ident "No") ->
-        expect tokens (Genlex.Ident "No") ;
-        expect tokens (Genlex.Ident "more") ;
-        expect tokens (Genlex.Ident "variants") ;
-        []
-    | Some t ->
-        if pdebug then Format.printf "pvs> skip %s\n%!" (string_of_token t) ;
-        Stream.junk tokens ;
-        parse_variants tokens
-    | None -> assert false
-
 let rec parse_unifiers tokens =
   match Stream.next tokens with
     | Genlex.Ident "Solution" ->
@@ -355,48 +320,6 @@ let rec parse_unifiers tokens =
     | t ->
         if pdebug then Format.printf "pus> skip %s\n%!" (string_of_token t) ;
         parse_unifiers tokens
-
-(** Variants *)
-
-let variants t rules =
-  assert (rules = []) ;
-  let esig = sig_of_term_list [t] in
-    run_maude
-      (fun chan ->
-         Format.fprintf chan "%a\n" (print_module rules esig) () ;
-         Format.fprintf chan "(get variants %a .)\n" print t)
-      (fun chan ->
-         while
-           not (Util.startswith ~prefix:"get variants" (input_line chan))
-         do () done ;
-         parse_variants (tokens chan))
-
-let variants t rules =
-  let v : (term * subst) list = variants t rules in
-  let { vars = vars } =
-    let all_terms = List.map (fun (t,s) -> t::List.map snd s) v in
-      sig_of_term_list (List.concat all_terms)
-  in
-  let vars = List.filter (fun name -> name.[0] = '#') vars in
-  let subst =
-    List.map (fun name -> name, Var (Util.fresh_variable ())) vars
-  in
-  let v =
-    List.map
-      (fun (t,sigma) ->
-         apply_subst t subst,
-         List.map (fun (x,t) -> x, apply_subst t subst) sigma)
-      v
-  in
-    if debug then begin
-      Format.printf "variants %s (%d solutions):\n"
-        (show_term t) (List.length v) ;
-      List.iter
-        (fun (t,s) ->
-           Format.printf " %s, %s\n" (show_term t) (show_subst s))
-        v
-    end ;
-    v
 
 (** Unification *)
 

@@ -105,7 +105,6 @@ and normalize t rules =
 (** TODO *)
 open Util
 let trconcat = List.concat
-let trmap = List.map
 
 type position = int list;;
 
