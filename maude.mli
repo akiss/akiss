@@ -17,9 +17,9 @@
 (* 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.              *)
 (****************************************************************************)
 
-val unifiers :
-  Term.term -> Term.term -> (Term.term * Term.term) list -> Term.subst list
-val matchers :
-  Term.term -> Term.term -> (Term.term * Term.term) list -> Term.subst list
-val equals : Term.term -> Term.term -> (Term.term * Term.term) list -> bool
-val normalize : Term.term -> (Term.term * Term.term) list -> Term.term
+open Term
+
+val unifiers : term -> term -> rules -> subst list
+val matchers : term -> term -> rules -> subst list
+val equals : term -> term -> rules -> bool
+val normalize : term -> rules -> term
