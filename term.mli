@@ -30,6 +30,7 @@ type varName = id
 type funName = id
 type term = Fun of funName * term list | Var of varName
 type subst = (varName * term) list
+type rules = (term * term) list
 
 val is_var : term -> bool
 val unbox_var : term -> varName

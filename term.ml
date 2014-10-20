@@ -45,6 +45,8 @@ type term =
 type subst =
     (varName * term) list
 
+type rules = (term * term) list
+
 let is_var term = match term with
   | Var(_) -> true
   | _ -> false

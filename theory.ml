@@ -239,9 +239,6 @@ let check_generalizations = !check_generalizations
 
 (** Rewriting toolbox *)
 
-type var = string
-type rules = (term*term) list
-type subst = (var*term) list
 module type REWRITING = sig
   val unifiers : term -> term -> rules -> subst list
   val normalize : term -> rules -> term
