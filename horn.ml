@@ -518,8 +518,8 @@ let rule_remove = function
   * statement as long as one derivation remains. *)
 let simplify_statement st =
   let hvars = vars_of_term_list (get_recipes st.head) in
-  let (<<) a a' =
-    (* a<<a' indicates that a can be discarded in favor of a'.
+  let (<<-) a a' =
+    (* a<<-a' indicates that a can be discarded in favor of a'.
      * By default we use the standard order on strings, but we tweak
      * it so that marked and necessary variables are kept, while making
      * sure that such atoms can be used to justify dropping others. *)
@@ -536,7 +536,7 @@ let simplify_statement st =
          let t = get_term a in
          let l = world_length (get_world a) in
            List.exists (fun a' ->
-                          recipe_var << unbox_var (get_recipe a') &&
+                          recipe_var <<- unbox_var (get_recipe a') &&
                           l = world_length (get_world a') &&
                           R.equals t (get_term a') []) st.body)
       st.body
