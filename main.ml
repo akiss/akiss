@@ -492,9 +492,6 @@ let processCommand = function
   | QueryInequivalent(traceList1, traceList2) ->
     query ~expected:false traceList1 traceList2
   | QuerySquare (traceList1, traceList2) ->
-    Printf.printf
-      "Checking fine grained equivalence of %s and %s\n%!"
-      (show_string_list traceList1) (show_string_list traceList2);
     square traceList1 traceList2
   | QueryEvSquare (traceList1, traceList2) ->
     Printf.printf
