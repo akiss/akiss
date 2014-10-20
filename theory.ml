@@ -298,3 +298,5 @@ module R = (val if ac || !ac_toolbox then begin
               Printf.printf "Using non-AC toolbox...\n" ;
               (module NonAC : REWRITING)
             end : REWRITING)
+
+let () = flush stdout; flush stderr
