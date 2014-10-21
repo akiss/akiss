@@ -54,4 +54,4 @@ I2 = interleave_opt A, B2;
 P = sequence Setup,I1;
 Q = sequence Setup,I2;
 
-equivalentft? P and Q;
+equivalentct? P and Q;
