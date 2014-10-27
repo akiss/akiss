@@ -1,7 +1,7 @@
 ML = ast.ml parser.ml lexer.ml util.ml term.ml \
 	 config.ml maude.ml lextam.ml parsetam.ml tamarin.ml \
 	 rewriting.ml theory.ml \
-	 base.ml horn.ml process.ml main.ml 
+	 base.ml horn.ml process.ml seed.ml main.ml
 MLI = $(wildcard $(ML:.ml=.mli)) parser.mli parsetam.mli
 OCAMLC = ocamlopt -g -annot
 OCAMLDEP = ocamldep -native

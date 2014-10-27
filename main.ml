@@ -25,84 +25,9 @@ open Process
 open Horn
 open Theory
 
-(** Compute the part of seed statements that comes from the theory. *)
-let context_statements symbol arity rules =
-  let w = Var(fresh_variable ()) in
-  let vYs = trmap fresh_variable (create_list () arity) in
-  let vZs = trmap fresh_variable (create_list () arity) in
-  let add_knows x y = Predicate("knows", [w; x; y]) in
-  let box_vars names = trmap (function x -> Var(x)) names in
-  let body sigma = List.map2 
-    (add_knows) 
-    (box_vars vYs) 
-    (trmap (function x -> apply_subst x sigma) (box_vars vZs))
-  in
-  let t = Fun(symbol, box_vars vZs) in
-  let v = R.variants t rules in
-    trmap
-    (function (t',sigma) ->
-      let clause =
-        new_clause
-          (Predicate("knows", 
-                     [w;
-                      Fun(symbol, box_vars vYs);
-                      t'
-                     ]),
-           body sigma)
-      in
-        (* Mark recipe variables in non-trivial variants of the plus clause. *)
-        if Theory.ac && symbol = "plus" && sigma <> [] then
-          try
-            let r =
-              match
-                List.find
-                  (function
-                     | Predicate("knows",[_;_;Fun("plus",_)]) -> true
-                     | _ -> false)
-                  (get_body clause)
-              with
-                | Predicate (_,[_;Var r;_]) -> r
-                | _ -> assert false
-            in
-            let p = fresh_string "P" in
-              apply_subst_st clause [r,Var p]
-          with Not_found ->
-            if not Horn.extra_static_marks then clause else
-              begin match
-                List.find
-                  (function
-                     | Predicate("knows",[_;_;Var _]) -> true
-                     | _ -> false)
-                  (get_body clause)
-              with
-                | Predicate (_,[_;Var r;_]) ->
-                    let p = fresh_string "P" in
-                      apply_subst_st clause [r,Var p]
-                | _ -> assert false
-              end
-        else
-          clause)
-    v
-
-let seed_statements trace rew =
-  let context_clauses =
-    List.concat
-      (List.map
-         (fun (f,a) ->
-            context_statements f a rew)
-         (List.sort (fun (_,a) (_,a') -> compare a a') Theory.fsymbols))
-  in
-  let trace_clauses =
-    knows_statements trace rew
-  in
-  let reach_clauses =
-    reach_statements trace rew
-  in
-    List.concat [context_clauses; trace_clauses; reach_clauses]
-
 let tests_of_trace t rew =
   verboseOutput "Constructing seed statements\n%!";
-  let seed = seed_statements t rew in
+  let seed = Seed.seed_statements t rew in
     verboseOutput "Constructing initial kb\n%!";
     let kb = initial_kb seed rew in
       verboseOutput "Saturating knowledge base\n%!";
@@ -433,7 +358,7 @@ let query_print traceName =
       Printf.printf "(total: %d statements)\n" !c
   in
   let t = trace_of_process(List.assoc traceName !processes) in
-  let kb_seed = seed_statements t Theory.rewrite_rules in
+  let kb_seed = Seed.seed_statements t Theory.rewrite_rules in
     Printf.printf
       "\n\nSeed statements of %s:\n%s\n\n%!"
       traceName (show_kb_list kb_seed);
