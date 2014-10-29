@@ -53,6 +53,7 @@ let reset_count new_count =
 
 let do_count () = 
   trace_counter := !trace_counter + 1;
+  normalOutput "\x0dComputing tests... (%d/%d)%!" !trace_counter !count_traces;
   verboseOutput
     "On the %d-th saturation out of %d\n%!"
     !trace_counter !count_traces
@@ -83,6 +84,7 @@ let query ?(expected=true) s t =
             tests_of_trace x Theory.rewrite_rules)
          ttraces)
   in
+  normalOutput "\n%!";
   let fail_stests = List.filter (fun x -> not (check_test_multi x ttraces)) stests in
   let fail_ttests = List.filter (fun x -> not (check_test_multi x straces)) ttests in
   if (List.length fail_stests) = 0 && (List.length fail_ttests) = 0 then begin
@@ -142,6 +144,7 @@ let square s t =
         ((tests_of_trace x Theory.rewrite_rules), x))
      lt
   in
+  normalOutput "\n%!";
   try
     ignore
       (List.iter
@@ -259,6 +262,7 @@ let evequiv s t =
          ((List.filter is_reach_test (tests_of_trace x Theory.rewrite_rules)), x))
       lt
   in 
+  normalOutput "\n%!";
     try
       ignore (trmap (fun x -> ev_check_one_to_more x ttests ) stests);
       ignore (trmap (fun x -> ev_check_one_to_more x stests ) ttests);

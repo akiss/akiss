@@ -33,6 +33,12 @@ let debugOutput a =
   else
     Format.ifprintf Format.std_formatter a
 
+let normalOutput a =
+  if !verbose_output || !debug_output then
+    Format.ifprintf Format.std_formatter a
+  else
+    Format.printf a
+
 (* TODO use the standard library:
  *  - List.rev is already tailrec
  *  - is many places, trmap is useless, reversing would be harmless
