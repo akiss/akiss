@@ -60,7 +60,7 @@ let do_count () =
 
 let query ?(expected=true) s t =
   verboseOutput
-    "Checking %sequivalence of %s and %s\n%!"
+    "Checking coarse trace %sequivalence of %s and %s\n%!"
     (if expected then "" else "in")
     (show_string_list s) (show_string_list t);
   let (straces : trace list) =
@@ -89,7 +89,7 @@ let query ?(expected=true) s t =
   let fail_ttests = List.filter (fun x -> not (check_test_multi x straces)) ttests in
   if (List.length fail_stests) = 0 && (List.length fail_ttests) = 0 then begin
     Printf.printf
-      "%s and %s are TRACE EQUIVALENT!\n%!"
+      "%s and %s are coarse trace equivalent!\n%!"
       (show_string_list s) (show_string_list t) ;
     if not expected then exit 1
   end else begin
@@ -154,7 +154,7 @@ let square s t =
       (List.iter
          (fun x -> check_one_to_more x stests Theory.rewrite_rules)
          ttests);
-    Printf.printf "%s and %s are trace equivalent\n%!"
+    Printf.printf "%s and %s are fine-grained trace equivalent\n%!"
       (show_string_list s) (show_string_list t)
   with
     | OneToMoreFail(tr, tests) -> 
