@@ -116,7 +116,7 @@ let rec show_term = function
       show_term (Fun("in", term_list))
   | Fun("!test!", term_list) ->
       show_term (Fun("test", term_list))
-  | Fun("world", term_list) -> "["^(show_term_list term_list)^"]"
+  | Fun("world", [w; ws]) -> show_term w ^ "." ^ show_term ws
   | Fun(f, l) ->
       (f ^
 	 (if List.length l != 0 then "(" else "") ^
