@@ -117,10 +117,37 @@ let knows_variantize (head, body) rules =
     | _ -> invalid_arg("variantize")
 ;;
 
+let knows_equationalize (head, body) rules =
+  let eqns = List.filter (function (Predicate(x, _)) -> x = "!equals!") body in
+  let lefts = trmap (function
+                      | (Predicate(_, [x;_])) -> x
+                      | _ -> invalid_arg("lefts")) eqns in
+  let rights = trmap (function
+                       | (Predicate(_, [_;y])) -> y
+                       | _ -> invalid_arg("rights")) eqns in
+  let t1 = Fun("!tuple!", lefts) in
+  let t2 = Fun("!tuple!", rights) in
+  let sigmas = R.unifiers t1 t2 rules in
+  let newbody = List.filter (function (Predicate(x, _)) -> x <> "!equals!") body in
+  let newatom sigma = function
+    | (Predicate(x, [y; z; t])) ->
+       Predicate(x, [apply_subst y sigma; z; apply_subst t sigma])
+    | _ -> invalid_arg("newatom") in
+  let newhead sigma = match head with
+    | Predicate("knows", [w; r; t]) ->
+       Predicate("knows", [apply_subst w sigma; r; apply_subst t sigma])
+    | _ -> invalid_arg("wrong head") in
+  let newclause sigma =
+    (newhead sigma, trmap (fun x -> newatom sigma x) newbody) in
+  trmap newclause sigmas
+;;
+
 let knows_statements tr rules =
   let kstatements = knows_statements_h 0 tr [] (Fun("empty", [])) [] in
     List.concat
-      (List.map (function x -> knows_variantize x rules) kstatements)
+      (List.map
+         (fun x -> knows_variantize x rules)
+         (List.concat (trmap (fun x -> knows_equationalize x rules) kstatements)))
 ;;
 
 (** {3 Computing reach statements from a trace} *)
