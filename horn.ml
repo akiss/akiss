@@ -1452,7 +1452,7 @@ let checks kb  =
   List.append (checks_reach kb) (checks_ridentical kb)
 
 let show_tests tests =
-  String.concat "\n\n" (trmap show_term tests)
+  String.concat "\n" (trmap show_term tests)
 
 let show_rew_rules rules =
   String.concat "\n" (trmap 

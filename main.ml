@@ -59,7 +59,7 @@ let do_count () =
     !trace_counter !count_traces
 
 let query ?(expected=true) s t =
-  verboseOutput
+  Printf.printf
     "Checking coarse trace %sequivalence of %s and %s\n%!"
     (if expected then "" else "in")
     (show_string_list s) (show_string_list t);
@@ -124,7 +124,7 @@ let check_one_to_more (tests1, trace1) list rew =
     raise (OneToMoreFail(trace1, tests1))
 
 let square s t =
-  verboseOutput
+  Printf.printf
     "Checking fine grained equivalence of %s and %s\n%!"
     (show_string_list s) (show_string_list t);
   let ls = List.concat (List.map (fun x -> List.assoc x !processes) s) in
@@ -237,7 +237,7 @@ let ev_check_one_to_more (tests1, trace1) list =
     raise (OneToMoreFail(trace1, tests1))
 
 let evequiv s t =
-  verboseOutput
+  Printf.printf
     "Checking forward indistinguishability for %s and %s\n%!"
     (show_string_list s) (show_string_list t);
   (* list of traces of s, then t *)
@@ -423,9 +423,6 @@ let processCommand = function
   | QuerySquare (traceList1, traceList2) ->
     square traceList1 traceList2
   | QueryEvSquare (traceList1, traceList2) ->
-    Printf.printf
-      "Checking forward indistinguishability of  %s and %s\n%!"
-      (show_string_list traceList1) (show_string_list traceList2);
     evequiv traceList1 traceList2
   | QueryPrint traceName ->
     Printf.printf "Printing information about %s\n%!" traceName;
