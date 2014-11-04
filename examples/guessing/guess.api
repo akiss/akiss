@@ -21,4 +21,4 @@ revealV = out(c, v).0;
 P1 = P :: revealW;
 P2 = P :: revealV;
 
-equivalentct? P1 and P2;
+inequivalentct? P1 and P2;
