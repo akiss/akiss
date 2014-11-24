@@ -168,31 +168,31 @@ let process_decl = function
         ]
 
   | DeclSymbols symbolList ->
-    Printf.printf "Declaring symbols\n%!";
+    verboseOutput "Declaring symbols\n%!";
     declare_symbols symbolList;
     check_atoms ()
   | DeclChannels channelList ->
-    Printf.printf "Declaring channels\n%!";
+    verboseOutput "Declaring channels\n%!";
     declare_channels channelList;
     check_atoms ()
   | DeclEvChannels evchannelList ->
-    Printf.printf "Declaring channels\n%!";
+    verboseOutput "Declaring channels\n%!";
     declare_evchannels evchannelList;
     check_atoms ()
   | DeclPrivate nameList ->
-    Printf.printf "Declaring private names\n%!";
+    verboseOutput "Declaring private names\n%!";
     declare_names nameList;
     check_atoms ()
   | DeclVar varList ->
-    Printf.printf "Declaring variables\n%!";
+    verboseOutput "Declaring variables\n%!";
     declare_vars varList;
     check_atoms ()
 
   | DeclRewrite(t1, t2) ->
-    Printf.printf "Declaring rewrite rule\n%!";
+    verboseOutput "Declaring rewrite rule\n%!";
     declare_rewrite t1 t2
   | DeclEvRewrite(t1, t2) ->
-    Printf.printf "Declaring rewrite rule\n%!";
+    verboseOutput "Declaring rewrite rule\n%!";
     declare_evrewrite t1 t2
   | _ -> failwith "not preamble"
 

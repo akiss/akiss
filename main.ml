@@ -401,19 +401,19 @@ open Ast
 let processCommand = function
 
   | DeclProcess(name, process) ->
-    Printf.printf "Declaring process %s\n%!" name;
+    verboseOutput "Declaring process %s\n%!" name;
     declare_process name process
   | DeclInterleave(traceName, traceList) ->
-    Printf.printf "Declaring %s as interleaving\n%!" traceName;
+    verboseOutput "Declaring %s as interleaving\n%!" traceName;
     declare_interleave traceName traceList
   | DeclInterleaveOpt(traceName, traceList) ->
-    Printf.printf "Declaring %s as optimal interleaving\n%!" traceName;
+    verboseOutput "Declaring %s as optimal interleaving\n%!" traceName;
     declare_interleave_opt traceName traceList
   | DeclRemoveEndTests(traceName, traceList) ->
-    Printf.printf "Declaring %s by removing end tests\n%!" traceName;
+    verboseOutput "Declaring %s by removing end tests\n%!" traceName;
     declare_remove_end_tests traceName traceList
   | DeclSequence(traceName, traceList) ->
-    Printf.printf "Declaring %s as sequence\n%!" traceName;
+    verboseOutput "Declaring %s as sequence\n%!" traceName;
     declare_sequence traceName traceList
 
   | QueryEquivalent(traceList1, traceList2) ->
