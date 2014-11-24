@@ -20,21 +20,18 @@
 (** Rewriting utilities for terms.
   * This module does not support AC connectives. *)
 
+open Term
+
 exception Not_unifiable
 exception Not_matchable
 
 (** Unification and matching for free terms *)
 
-val mgu : Term.term -> Term.term -> Term.subst
-val mgm : Term.term -> Term.term -> Term.subst
+val mgu : term -> term -> subst
+val mgm : term -> term -> subst
 
 (** Utilities for handling a (non-AC) theory *)
 
-val normalize : Term.term -> (Term.term*Term.term) list -> Term.term
-
-val variants :
-  Term.term ->
-  (Term.term * Term.term) list ->
-  (Term.term * Term.subst) list
-val unifiers :
-  Term.term -> Term.term -> (Term.term * Term.term) list -> Term.subst list
+val normalize : term -> (term * term) list -> term
+val variants : term -> rules -> (term * subst) list
+val unifiers : term -> term -> rules -> subst list
