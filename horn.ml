@@ -260,10 +260,13 @@ let fresh_statement f =
     apply_subst_st f sigma
 
 let dotfile =
-  let dotfile = open_out "akiss.dot" in
+  match Theory.dotfile with
+  | Some f ->
+    let dotfile = open_out f in
     Printf.fprintf dotfile "digraph G {\n" ;
     at_exit (fun () -> Printf.fprintf dotfile "}\n") ;
-    dotfile
+    Some dotfile
+  | None -> None
 
 let is_plus_clause = function
   | { head = Predicate ("knows",
@@ -358,6 +361,8 @@ let new_clause =
       in
       incr c ;
       let st = { id = !c ; age = age ; head = head ; body = body } in
+      begin match dotfile with
+      | Some dotfile ->
         Printf.fprintf dotfile
           "n%d [label=\"%s%d\" parents=%S clause=%S];\n"
           !c
@@ -383,7 +388,9 @@ let new_clause =
              Printf.fprintf dotfile "n%d -> n%d [color=%s];\n" id !c
                (match label with "ri" -> "red" | "eq" -> "blue" | _ -> "black"))
           parents ;
-        st
+      | None -> ()
+      end;
+      st
 
 (** Create anonymous/temporary statement.
   * This is currently only used in conseq. *)

@@ -25,6 +25,8 @@ open Parser
 open Term
 open Util
 
+let dotfile = ref None
+
 (** Flags set from the script using #set ac/xor.
   * - [ac] triggers special treatment of "plus" as AC connective.
   * - [xor] triggers normalization of identical statements in the form
@@ -38,7 +40,7 @@ let ac_toolbox = ref false
 let check_generalizations = ref false
 
 let usage = Printf.sprintf
-  "Usage: %s [-verbose] [-debug] < specification-file.api"
+  "Usage: %s [options] < specification-file.api"
   (Filename.basename Sys.argv.(0))
 
 let command_line_options_list = [
@@ -50,6 +52,8 @@ let command_line_options_list = [
    "Enable debug output");
   ("--debug", Arg.Unit (fun () -> debug_output := true),
    "Enable debug output");
+  ("--output-dot", Arg.String (fun s -> dotfile := Some s),
+   "<file>  Output statement graph to <file>");
   ("--ac-compatible", Arg.Set ac_toolbox,
    "Use the AC-compatible toolbox even on non-AC theories.");
   ("--check-generalizations", Arg.Set check_generalizations,
@@ -227,6 +231,7 @@ let () =
         !fsymbols
     with Not_found -> ("pair",2) :: !fsymbols
 
+let dotfile = !dotfile
 let xor = !xor
 let ac = !ac
 let fsymbols = !fsymbols

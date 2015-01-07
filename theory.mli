@@ -24,6 +24,7 @@ val addto : 'a list ref -> 'a -> unit
 (* This module parses arguments and standard input, then defines the
    following variables. *)
 
+val dotfile : string option
 val cmdlist : Ast.cmd list
 val xor : bool
 val ac : bool
