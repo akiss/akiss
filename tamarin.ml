@@ -75,7 +75,7 @@ let rec print chan = function
 (** Running and interacting with tamarin-prover *)
 let process print_query parse_result =
   let chan_out,chan_in =
-    Unix.open_process (Config.tamarin_binary ^ " variants")
+    Unix.open_process (Lazy.force Config.tamarin_binary ^ " variants")
   in
   let fin = Format.formatter_of_out_channel chan_in in
     if sdebug then print_query Format.std_formatter ;

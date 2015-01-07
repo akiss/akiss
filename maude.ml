@@ -150,7 +150,7 @@ let get_chans =
         !chans
       end else begin
         close () ;
-        let pair = Unix.open_process Config.maude_command in
+        let pair = Unix.open_process (Lazy.force Config.maude_command) in
           chans := pair ;
           countdown := 10000 ;
           pair

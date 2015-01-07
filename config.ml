@@ -23,7 +23,7 @@ let find_in_path x =
     Sys.file_exists
     (List.map (fun d -> Filename.concat d x) path)
 
-let maude_binary =
+let maude_binary = lazy (
   try
     find_in_path "maude"
   with
@@ -31,19 +31,24 @@ let maude_binary =
         Printf.eprintf "Cound not find maude in PATH!\n" ;
         Printf.eprintf "It is likely that tamarin-prover won't work.\n" ;
         exit 1
+)
 
-let full_maude =
+let full_maude = lazy (
   try
     find_in_path "full-maude.maude"
   with
     | Not_found ->
        Printf.eprintf "Could not find full-maude.maude in PATH!\n";
        exit 1
+)
 
-let maude_command =
+let maude_command = lazy (
+  let lazy maude_binary = maude_binary in
+  let lazy full_maude = full_maude in
   maude_binary ^ " -batch -no-banner -no-ansi-color " ^ full_maude
+)
 
-let tamarin_binary =
+let tamarin_binary = lazy (
   try
     find_in_path "tamarin-prover"
   with
@@ -52,3 +57,4 @@ let tamarin_binary =
         Printf.eprintf "You may need to add something like \
                         ~/.cabal/bin to it.\n" ;
         exit 1
+)
