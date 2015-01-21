@@ -13,6 +13,7 @@ lextam.mli
 parsetam.ml
 parsetam.mli
 lexer.ml
+lwt_compat.ml
 .depend
 akiss
 doc

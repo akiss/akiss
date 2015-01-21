@@ -25,6 +25,7 @@ val addto : 'a list ref -> 'a -> unit
    following variables. *)
 
 val dotfile : string option
+val jobs : int
 val cmdlist : Ast.cmd list
 val xor : bool
 val ac : bool

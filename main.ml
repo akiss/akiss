@@ -24,8 +24,12 @@ open Term
 open Process
 open Horn
 open Theory
+open Lwt_compat
+open Lwt
 
-let tests_of_trace t rew =
+let ppool, plwt = Nproc.create jobs
+
+let tests_of_trace_job t rew =
   verboseOutput "Constructing seed statements\n%!";
   let seed = Seed.seed_statements t rew in
     verboseOutput "Constructing initial kb\n%!";
@@ -34,8 +38,25 @@ let tests_of_trace t rew =
       saturate kb rew ;
       checks kb
 
-let check_test_multi test trace_list =
+let tests_of_trace t rew =
+  Nproc.submit ppool (tests_of_trace_job t) rew >>= fun x ->
+  match x with
+  | Some y -> return y
+  | None -> assert false
+
+let check_test_multi_job test trace_list =
   List.exists (fun x -> check_test x test Theory.rewrite_rules) trace_list
+
+let check_test_multi test trace_list =
+  Nproc.submit ppool (check_test_multi_job test) trace_list >>= fun x ->
+  match x with
+  | Some y -> return y
+  | None -> assert false
+
+let wait_pending2 x y =
+  Printf.printf "Waiting for pending jobs...%!";
+  let r = Lwt_unix.run (x >>= fun x -> y >>= fun y -> return (x, y)) in
+  Printf.printf "\n%!"; r
 
 (** Processes and traces *)
 
@@ -67,24 +88,27 @@ let query ?(expected=true) s t =
   let ttraces = List.concat (List.map (fun x -> List.assoc x !processes) t) in
   let () = reset_count ((List.length straces) + (List.length ttraces)) in
   let stests =
-    List.concat
-      (List.map
-         (fun x ->
-            do_count ();
-            tests_of_trace x Theory.rewrite_rules)
-         straces)
-  in
-  let ttests =
-    List.concat
-      (List.map
-         (fun x ->
-            do_count ();
-            tests_of_trace x Theory.rewrite_rules)
-         ttraces)
+    Lwt_list.map_p
+      (fun x ->
+       do_count ();
+       tests_of_trace x Theory.rewrite_rules)
+      straces >>= wrap1 List.concat
+  and ttests =
+    Lwt_list.map_p
+      (fun x ->
+       do_count ();
+       tests_of_trace x Theory.rewrite_rules)
+      ttraces >>= wrap1 List.concat
   in
   normalOutput "\n%!";
-  let fail_stests = List.filter (fun x -> not (check_test_multi x ttraces)) stests in
-  let fail_ttests = List.filter (fun x -> not (check_test_multi x straces)) ttests in
+  let fail_stests =
+    stests >>=
+      Lwt_list.filter_p (fun x -> check_test_multi x ttraces >>= wrap1 not)
+  and fail_ttests =
+    ttests >>=
+      Lwt_list.filter_p (fun x -> check_test_multi x straces >>= wrap1 not)
+  in
+  let fail_stests, fail_ttests = wait_pending2 fail_stests fail_ttests in
   if fail_stests = [] && fail_ttests = [] then begin
     Printf.printf
       "%s and %s are coarse trace equivalent!\n%!"
@@ -129,20 +153,20 @@ let square s t =
   let lt = List.concat (List.map (fun x -> List.assoc x !processes) t) in
   let () = reset_count ((List.length ls) + (List.length lt)) in
   let stests =
-    List.map
-      (fun x -> 
+    Lwt_list.map_p
+      (fun x ->
          do_count ();
-         ((tests_of_trace x Theory.rewrite_rules), x))
+         tests_of_trace x Theory.rewrite_rules >>= fun y -> return (y, x))
       ls
-  in
-  let ttests =
-   List.map
-     (fun x -> 
-        do_count ();
-        ((tests_of_trace x Theory.rewrite_rules), x))
-     lt
+  and ttests =
+    Lwt_list.map_p
+      (fun x ->
+       do_count ();
+       tests_of_trace x Theory.rewrite_rules >>= fun y -> return (y, x))
+      lt
   in
   normalOutput "\n%!";
+  let stests, ttests = wait_pending2 stests ttests in
   try
     ignore
       (List.iter
@@ -176,6 +200,7 @@ let stat_equiv frame1 frame2 rew =
   
   let tests1 = tests_of_trace t1 rew in
   let tests2 = tests_of_trace t2 rew in
+  let tests1, tests2 = wait_pending2 tests1 tests2 in
   (*  check_one_to_one  (tests1, t1) (tests2, t2) rew *)
 
   let fail1 = List.filter
@@ -247,19 +272,21 @@ let evequiv s t =
   in
   let () = reset_count ((List.length ls) + (List.length lt)) in
   let stests =
-    List.map
-      (fun x -> 
-         do_count ();
-         ((List.filter is_reach_test (tests_of_trace x Theory.rewrite_rules)), x))
+    Lwt_list.map_p
+      (fun x ->
+       do_count ();
+       tests_of_trace x Theory.rewrite_rules >>= fun y ->
+       return (List.filter is_reach_test y, x))
       ls
-  in
-  let ttests =
-    List.map
-      (fun x -> 
-         do_count ();
-         ((List.filter is_reach_test (tests_of_trace x Theory.rewrite_rules)), x))
+  and ttests =
+    Lwt_list.map_p
+      (fun x ->
+       do_count ();
+       tests_of_trace x Theory.rewrite_rules >>= fun y ->
+       return (List.filter is_reach_test y, x))
       lt
-  in 
+  in
+  let stests, ttests = wait_pending2 stests ttests in
   normalOutput "\n%!";
     try
       ignore (trmap (fun x -> ev_check_one_to_more x ttests ) stests);

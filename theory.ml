@@ -26,6 +26,7 @@ open Term
 open Util
 
 let dotfile = ref None
+let jobs = ref 1
 
 (** Flags set from the script using #set ac/xor.
   * - [ac] triggers special treatment of "plus" as AC connective.
@@ -54,6 +55,8 @@ let command_line_options_list = [
    "Enable debug output");
   ("--output-dot", Arg.String (fun s -> dotfile := Some s),
    "<file>  Output statement graph to <file>");
+  ("-j", Arg.Int (fun i -> jobs := i),
+   "<n>  Use <n> parallel jobs (if supported)");
   ("--ac-compatible", Arg.Set ac_toolbox,
    "Use the AC-compatible toolbox even on non-AC theories.");
   ("--check-generalizations", Arg.Set check_generalizations,
@@ -232,6 +235,7 @@ let () =
     with Not_found -> ("pair",2) :: !fsymbols
 
 let dotfile = !dotfile
+let jobs = !jobs
 let xor = !xor
 let ac = !ac
 let fsymbols = !fsymbols
