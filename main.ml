@@ -85,16 +85,16 @@ let query ?(expected=true) s t =
   normalOutput "\n%!";
   let fail_stests = List.filter (fun x -> not (check_test_multi x ttraces)) stests in
   let fail_ttests = List.filter (fun x -> not (check_test_multi x straces)) ttests in
-  if (List.length fail_stests) = 0 && (List.length fail_ttests) = 0 then begin
+  if fail_stests = [] && fail_ttests = [] then begin
     Printf.printf
       "%s and %s are coarse trace equivalent!\n%!"
       (show_string_list s) (show_string_list t) ;
     if not expected then exit 1
   end else begin
-    if (List.length fail_stests) <> 0 then
+    if fail_stests <> [] then
       Printf.printf "The following tests work on %s but not on %s:\n%s\n%!"
         (show_string_list s) (show_string_list t) (show_tests fail_stests);
-    if (List.length fail_ttests) <> 0 then
+    if fail_ttests <> [] then
       Printf.printf "The following tests work on %s but not on %s:\n%s\n%!"
         (show_string_list t) (show_string_list s) (show_tests fail_ttests);
     if expected then exit 1
@@ -183,7 +183,7 @@ let stat_equiv frame1 frame2 rew =
   let fail2 = List.filter
     (fun x -> not (check_test t1 x rew)) tests2 in
 
-  if ((List.length fail1 = 0) && (List.length fail2 = 0)) then true 
+  if fail1 = [] && fail2 = [] then true
   else
     (
       (* verboseOutput "Tests of frame1 that fail on frame2: \n %s \n" (show_tests fail1); *)

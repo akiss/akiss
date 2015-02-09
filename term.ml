@@ -103,8 +103,7 @@ let sig_of_term_list l =
     { vars = Util.unique vars ; names = Util.unique names ;
       params = Util.unique params ; tuples = Util.unique tuples }
 
-let is_ground t =
-  (List.length (vars_of_term t)) = 0
+let is_ground t = vars_of_term t = []
 
 let occurs var term =
   List.mem var (vars_of_term term)
@@ -119,9 +118,9 @@ let rec show_term = function
   | Fun("world", [w; ws]) -> show_term w ^ "." ^ show_term ws
   | Fun(f, l) ->
       (f ^
-	 (if List.length l != 0 then "(" else "") ^
+	 (if l <> [] then "(" else "") ^
 	 (show_term_list l) ^
-	 (if List.length l != 0 then ")" else "") )
+	 (if l <> [] then ")" else "") )
   | Var(v) -> v
 and show_term_list = function
   | [x] -> show_term x
