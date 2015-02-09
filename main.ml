@@ -63,11 +63,9 @@ let query ?(expected=true) s t =
     "Checking coarse trace %sequivalence of %s and %s\n%!"
     (if expected then "" else "in")
     (show_string_list s) (show_string_list t);
-  let (straces : trace list) =
-    List.concat (List.map (fun x -> List.assoc x !processes) s)
-  in
+  let straces = List.concat (List.map (fun x -> List.assoc x !processes) s) in
   let ttraces = List.concat (List.map (fun x -> List.assoc x !processes) t) in
-  let _ = reset_count ((List.length straces) + (List.length ttraces)) in
+  let () = reset_count ((List.length straces) + (List.length ttraces)) in
   let stests =
     List.concat
       (List.map
@@ -129,7 +127,7 @@ let square s t =
     (show_string_list s) (show_string_list t);
   let ls = List.concat (List.map (fun x -> List.assoc x !processes) s) in
   let lt = List.concat (List.map (fun x -> List.assoc x !processes) t) in
-  let _ = reset_count ((List.length ls) + (List.length lt)) in
+  let () = reset_count ((List.length ls) + (List.length lt)) in
   let stests =
     List.map
       (fun x -> 
@@ -247,7 +245,7 @@ let evequiv s t =
   let lt =
     List.concat (List.map (fun x -> List.assoc x !processes) t)
   in
-  let _ = reset_count ((List.length ls) + (List.length lt)) in
+  let () = reset_count ((List.length ls) + (List.length lt)) in
   let stests =
     List.map
       (fun x -> 
