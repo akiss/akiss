@@ -200,19 +200,20 @@ let stat_equiv frame1 frame2 rew =
   
   let tests1 = tests_of_trace t1 rew in
   let tests2 = tests_of_trace t2 rew in
-  let tests1, tests2 = wait_pending2 tests1 tests2 in
   (*  check_one_to_one  (tests1, t1) (tests2, t2) rew *)
 
-  let fail1 = List.filter
-    (fun x -> not (check_test t2 x rew)) tests1 in
-  let fail2 = List.filter
-    (fun x -> not (check_test t1 x rew)) tests2 in
+  let fail1 =
+    tests1 >>= Lwt_list.filter_p (fun x -> return (not (check_test t2 x rew)))
+  and fail2 =
+    tests2 >>= Lwt_list.filter_p (fun x -> return (not (check_test t1 x rew)))
+  in
 
-  if fail1 = [] && fail2 = [] then true
+  fail1 >>= fun fail1 -> fail2 >>= fun fail2 ->
+  if fail1 = [] && fail2 = [] then return true
   else
     (
       (* verboseOutput "Tests of frame1 that fail on frame2: \n %s \n" (show_tests fail1); *)
-      false
+      return false
     )
 
 let check_ev_ind_test trace1 trace2 test = 
@@ -224,17 +225,17 @@ let check_ev_ind_test trace1 trace2 test =
         let f2 = execute trace2 [] w Theory.rewrite_rules in
         let rf1 = restrict_frame_to_channels f1 trace1 Theory.evchannels in
         let rf2 = restrict_frame_to_channels f2 trace2 Theory.evchannels in
-        let r = stat_equiv rf1 rf2 Theory.evrewrite_rules in
+        stat_equiv rf1 rf2 Theory.evrewrite_rules >>= fun r ->
           if r then
             verboseOutput "static equivalence verified\n%!"
           else
             verboseOutput "static equivalence not verified\n%!";
-          r
+          return r
       with
-        | Process_blocked -> false
-        | Too_many_instructions -> false
-        | Not_a_recipe -> false
-        | Invalid_instruction -> false
+        | Process_blocked -> return false
+        | Too_many_instructions -> return false
+        | Not_a_recipe -> return false
+        | Invalid_instruction -> return false
         | Bound_variable -> invalid_arg "the process binds twice the same variable"
       end
   | _ -> invalid_arg("check_reach")
@@ -242,19 +243,19 @@ let check_ev_ind_test trace1 trace2 test =
 
 let ev_check_one_to_one (tests1, trace1) (tests2, trace2) =
   let fail1 =
-    List.filter
-      (fun x -> not (check_ev_ind_test trace1 trace2 x))
-      tests1
+    Lwt_list.filter_p
+      (fun x -> check_ev_ind_test trace1 trace2 x >>= wrap1 not) tests1
+  and fail2 =
+    Lwt_list.filter_p
+      (fun x -> check_ev_ind_test trace2 trace1 x >>= wrap1 not) tests2
   in
-  let fail2 =
-    List.filter
-      (fun x -> not (check_ev_ind_test trace2 trace1 x))
-      tests2
-  in
-    fail1 = [] && fail2 = []
+  fail1 >>= fun fail1 -> fail2 >>= fun fail2 ->
+  return (fail1 = [] && fail2 = [])
 
 let ev_check_one_to_more (tests1, trace1) list =
-  if List.exists (fun x -> ev_check_one_to_one (tests1, trace1) x ) list then
+  if List.exists
+       (fun x -> Lwt_unix.run (ev_check_one_to_one (tests1, trace1) x)) list
+  then
     ()
   else
     raise (OneToMoreFail(trace1, tests1))
