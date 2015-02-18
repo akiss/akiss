@@ -29,6 +29,20 @@ open Lwt
 
 let ppool, plwt = Nproc.create jobs
 
+let trace_counter = ref 0
+let count_traces = ref 0
+
+let reset_count new_count =
+  trace_counter := 0 ;
+  count_traces := new_count
+
+let do_count () =
+  trace_counter := !trace_counter + 1;
+  normalOutput "\x0dComputed tests %d/%d%!" !trace_counter !count_traces;
+  verboseOutput
+    "Finished %d-th saturation out of %d\n%!"
+    !trace_counter !count_traces
+
 let tests_of_trace_job t rew =
   verboseOutput "Constructing seed statements\n%!";
   let seed = Seed.seed_statements t rew in
@@ -38,10 +52,12 @@ let tests_of_trace_job t rew =
       saturate kb rew ;
       checks kb
 
-let tests_of_trace t rew =
+let tests_of_trace show_progress t rew =
   Nproc.submit ppool (tests_of_trace_job t) rew >>= fun x ->
   match x with
-  | Some y -> return y
+  | Some y ->
+     if show_progress then do_count ();
+     return y
   | None -> assert false
 
 let check_test_multi_job test trace_list =
@@ -54,7 +70,6 @@ let check_test_multi test trace_list =
   | None -> assert false
 
 let wait_pending2 x y =
-  Printf.printf "Waiting for pending jobs...%!";
   let r = Lwt_unix.run (x >>= fun x -> y >>= fun y -> return (x, y)) in
   Printf.printf "\n%!"; r
 
@@ -64,20 +79,6 @@ let processes = ref []
 
 let rec declare_process name process =
   addto processes (name, parse_process process !processes)
-
-let trace_counter = ref 0
-let count_traces = ref 0
-
-let reset_count new_count =
-  trace_counter := 0 ;
-  count_traces := new_count
-
-let do_count () = 
-  trace_counter := !trace_counter + 1;
-  normalOutput "\x0dComputing tests... (%d/%d)%!" !trace_counter !count_traces;
-  verboseOutput
-    "On the %d-th saturation out of %d\n%!"
-    !trace_counter !count_traces
 
 let query ?(expected=true) s t =
   Printf.printf
@@ -89,18 +90,13 @@ let query ?(expected=true) s t =
   let () = reset_count ((List.length straces) + (List.length ttraces)) in
   let stests =
     Lwt_list.map_p
-      (fun x ->
-       do_count ();
-       tests_of_trace x Theory.rewrite_rules)
+      (fun x -> tests_of_trace true x Theory.rewrite_rules)
       straces >>= wrap1 List.concat
   and ttests =
     Lwt_list.map_p
-      (fun x ->
-       do_count ();
-       tests_of_trace x Theory.rewrite_rules)
+      (fun x -> tests_of_trace true x Theory.rewrite_rules)
       ttraces >>= wrap1 List.concat
   in
-  normalOutput "\n%!";
   let fail_stests =
     stests >>=
       Lwt_list.filter_p (fun x -> check_test_multi x ttraces >>= wrap1 not)
@@ -155,17 +151,14 @@ let square s t =
   let stests =
     Lwt_list.map_p
       (fun x ->
-         do_count ();
-         tests_of_trace x Theory.rewrite_rules >>= fun y -> return (y, x))
+       tests_of_trace true x Theory.rewrite_rules >>= fun y -> return (y, x))
       ls
   and ttests =
     Lwt_list.map_p
       (fun x ->
-       do_count ();
-       tests_of_trace x Theory.rewrite_rules >>= fun y -> return (y, x))
+       tests_of_trace true x Theory.rewrite_rules >>= fun y -> return (y, x))
       lt
   in
-  normalOutput "\n%!";
   let stests, ttests = wait_pending2 stests ttests in
   try
     ignore
@@ -198,8 +191,8 @@ let stat_equiv frame1 frame2 rew =
   let t1 = trace_from_frame frame1 in
   let t2 = trace_from_frame frame2 in  
   
-  let tests1 = tests_of_trace t1 rew in
-  let tests2 = tests_of_trace t2 rew in
+  let tests1 = tests_of_trace false t1 rew in
+  let tests2 = tests_of_trace false t2 rew in
   (*  check_one_to_one  (tests1, t1) (tests2, t2) rew *)
 
   let fail1 =
@@ -275,20 +268,17 @@ let evequiv s t =
   let stests =
     Lwt_list.map_p
       (fun x ->
-       do_count ();
-       tests_of_trace x Theory.rewrite_rules >>= fun y ->
+       tests_of_trace true x Theory.rewrite_rules >>= fun y ->
        return (List.filter is_reach_test y, x))
       ls
   and ttests =
     Lwt_list.map_p
       (fun x ->
-       do_count ();
-       tests_of_trace x Theory.rewrite_rules >>= fun y ->
+       tests_of_trace true x Theory.rewrite_rules >>= fun y ->
        return (List.filter is_reach_test y, x))
       lt
   in
   let stests, ttests = wait_pending2 stests ttests in
-  normalOutput "\n%!";
     try
       ignore (trmap (fun x -> ev_check_one_to_more x ttests ) stests);
       ignore (trmap (fun x -> ev_check_one_to_more x stests ) ttests);
