@@ -40,7 +40,7 @@ endif
 
 -include .depend
 
-clean:
+clean::
 	rm -f parser.ml lexer.ml parser.mli lexer.mli
 	rm -f lextam.ml lextam.mli parsetam.ml parsetam.mli
 	rm -f lwt_compat.ml
@@ -115,3 +115,25 @@ validate:
 test_tamarin: $(wildcard *.ml)
 	ocamlopt unix.cmxa str.cmxa util.ml term.ml config.ml \
 	  maude.ml lextam.ml parsetam.ml tamarin.ml test_tamarin.ml -o test_tamarin
+
+# STATS
+
+STATS_TESTS = \
+  $(wildcard examples/everlasting-ind/*.api) \
+  $(wildcard examples/foo/*.api) \
+  $(wildcard examples/guessing/*.api) \
+  $(wildcard examples/needham-schroeder/*.api) \
+  $(wildcard examples/okamoto/*.api) \
+  $(wildcard examples/running-example/*.api) \
+  $(wildcard examples/strong-secrecy/*.api) \
+
+STATS_STATS = $(STATS_TESTS:.api=.stats)
+STATS_JOBS := 1
+
+stats: $(STATS_STATS)
+
+clean::
+	rm -f $(STATS_STATS)
+
+%.stats: %.api
+	/usr/bin/time -o $@ ./akiss -j $(STATS_JOBS) < $< > /dev/null 2>&1
