@@ -58,7 +58,7 @@ let command_line_options_list = [
   ("-j", Arg.Int (fun i -> jobs := i),
    "<n>  Use <n> parallel jobs (if supported)");
   ("--ac-compatible", Arg.Set ac_toolbox,
-   "Use the AC-compatible toolbox even on non-AC theories.");
+   "Use the AC-compatible toolbox even on non-AC theories (experimental, needs maude and tamarin)");
   ("--check-generalizations", Arg.Set check_generalizations,
    "Check that generalizations of kept statements are never dropped.")
 ]
