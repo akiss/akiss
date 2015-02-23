@@ -6,7 +6,7 @@ that two processes are trace equivalent, Akiss derives a complete set
 of tests for each trace of each process, using a saturation procedure
 that performs ordered resolution with selection.
 
-This is the "AC" version of Akiss, which supports one AC connective,
+As an experimental feature, this version supports one AC connective,
 namely "plus". It comes with modifications of the resolution rules that
 help reach saturation, mostly in the case where "plus" represents
 exclusive or.
@@ -15,23 +15,36 @@ exclusive or.
 
 You will need OCaml; version 3.12 is known to work.
 
-The AC version of Akiss also requires two external tools:
+The AC feature of Akiss also requires two external tools:
  * tamarin-prover (branch feature-ac-rewrite-rules)
  * maude (version 2.6)
+You shouldn't need them if you don't use the feature.
 
-To build, just run "make". If akiss does not detect tamarin and maude,
-you may need to adjust your PATH and/or edit the file "config.ml".
+For parallelization, Akiss needs the following library:
+ * nproc (https://github.com/MyLifeLabs/nproc)
+This dependency is optional; when it is not available, Akiss will run
+sequentially.
+
+To build, just run "make".
 
 # Usage
 
 Usage: akiss [options] < specification-file.api
-where available options are
-  --verbose        Enable verbose output
-  --debug          Enable debug output
-  --ac-compatible  Use the AC-compatible toolbox even on non-AC theories.
+  --verbose Enable verbose output
+  -verbose Enable verbose output
+  -debug Enable debug output
+  --debug Enable debug output
+  --output-dot <file>  Output statement graph to <file>
+  -j <n>  Use <n> parallel jobs (if supported)
+  --ac-compatible Use the AC-compatible toolbox even on non-AC theories
+                  (experimental, needs maude and tamarin)
+  --check-generalizations Check that generalizations of kept statements
+                          are never dropped.
+  -help  Display this list of options
+  --help  Display this list of options
 
 For example:
-./akiss --verbose < examples/strong-secrecy/blanchet.api 
+./akiss --verbose < examples/strong-secrecy/blanchet.api
 
 # Source tree
 
@@ -50,5 +63,8 @@ Here is a quick guide to the organization of the source code:
  * horn.ml: the saturation procedure itself
  * process.ml: processes and various operations on them,
      including the creation of protocol-related seed statements
- * main.ml: process second half of API file, create theory-related seed 
+ * seed.ml: generation of seed statements
+ * lwt_compat_pure.ml: compatibility layer for systems which lack
+     nproc
+ * main.ml: process second half of API file, create theory-related seed
      statements and and perform queries
