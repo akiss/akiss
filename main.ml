@@ -58,7 +58,7 @@ let tests_of_trace show_progress t rew =
   | Some y ->
      if show_progress then do_count ();
      return y
-  | None -> assert false
+  | None -> failwith "fatal error in tests_of_trace"
 
 let check_test_multi_job test trace_list =
   List.exists (fun x -> check_test x test Theory.rewrite_rules) trace_list

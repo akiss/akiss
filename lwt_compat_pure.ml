@@ -9,7 +9,14 @@ end
 
 module Nproc = struct
   let create n = (), ()
-  let submit () f x = try Some (f x) with _ -> None
+  let submit () f x =
+    try Some (f x)
+    with e ->
+      Printexc.print_backtrace stderr;
+      Printf.eprintf
+        "[err] Exception raised by task: %s\n"
+        (Printexc.to_string e);
+      None
 end
 
 module Lwt_unix = struct
