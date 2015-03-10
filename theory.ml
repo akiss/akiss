@@ -36,6 +36,7 @@ let ac = ref false
 let xor = ref false
 
 let ac_toolbox = ref false
+let tamarin_variants = ref false
 
 (** See in [Horn] for documentation. *)
 let check_generalizations = ref false
@@ -59,6 +60,8 @@ let command_line_options_list = [
    "<n>  Use <n> parallel jobs (if supported)");
   ("--ac-compatible", Arg.Set ac_toolbox,
    "Use the AC-compatible toolbox even on non-AC theories (experimental, needs maude and tamarin)");
+  ("--tamarin-variants", Arg.Set tamarin_variants,
+   "Use tamarin-prover to compute variants in seed statements");
   ("--check-generalizations", Arg.Set check_generalizations,
    "Check that generalizations of kept statements are never dropped.")
 ]
@@ -294,6 +297,21 @@ module NonAC : REWRITING = struct
 
 end
 
+module NonACTamarin : REWRITING = struct
+  let normalize = NonAC.normalize
+  let equals = NonAC.equals
+
+  let unifiers s t r =
+    if r = [] then
+      try [Rewriting.mgu s t] with
+      | Rewriting.Not_unifiable -> []
+    else
+      Tamarin.unifiers s t r
+
+  let matchers = NonAC.matchers
+  let variants = Tamarin.variants
+end
+
 module R = (val if ac || !ac_toolbox then begin
               if not ac && List.mem ("plus",2) fsymbols then begin
                 Printf.printf
@@ -303,6 +321,9 @@ module R = (val if ac || !ac_toolbox then begin
               end ;
               Printf.printf "Using AC-compatible toolbox...\n" ;
               (module AC : REWRITING)
+            end else if !tamarin_variants then begin
+              Printf.printf "Using tamarin-prover to compute variants in seed statements\n";
+              (module NonACTamarin : REWRITING)
             end else begin
               Printf.printf "Using non-AC toolbox...\n" ;
               (module NonAC : REWRITING)
