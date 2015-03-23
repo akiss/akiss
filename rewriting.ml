@@ -171,7 +171,7 @@ let rec one_rule old_sigma t p (lhs, rhs) =
   with Not_unifiable -> []
 ;;
 
-let rec all_rules old_sigma t p rules =
+let all_rules old_sigma t p rules =
     trconcat (trmap (function x -> one_rule old_sigma t p x) rules)
 ;;
 
