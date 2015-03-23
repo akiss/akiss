@@ -448,7 +448,12 @@ let processCommand = function
       "Printing trace list of %s\n%!"
       (show_string_list traceList);
     print_traces traceList
-
+  | QueryVariants tt ->
+    let t = parse_term tt in
+    Printf.printf
+      "Computing variants of %s\n%!" (show_term t);
+    let (tl, vl) = List.split (R.variants t Theory.rewrite_rules) in
+    Printf.printf "%s\n" (show_subst_list vl)
   | _ ->
     Printf.eprintf "Illegal declaration outside preamble!\n" ;
     exit 1

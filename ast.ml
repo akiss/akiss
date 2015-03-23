@@ -53,3 +53,4 @@ type cmd =
   | QueryEvSquare of (string list) * (string list)
   | QueryPrint of string
   | QueryPrintTraces of string list
+  | QueryVariants of tempTerm

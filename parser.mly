@@ -30,7 +30,7 @@ open Ast
 %token LeftP RightP LeftB RightB
 %token Arrow Equals Dot Slash Comma Semicolon
 %token Out In And Zero
-%token Equivalent Inequivalent Square EvSquare
+%token Equivalent Inequivalent Square EvSquare Variants
 %token Print PrintTraces
 %token Interleave Sequence InterleaveOpt RemoveEndTests
 %token InnerSequence InnerInterleave
@@ -69,6 +69,7 @@ command:
  | PrintTraces identifierList { QueryPrintTraces $2 }
  | Square identifierList And identifierList { QuerySquare ($2, $4) }
  | EvSquare identifierList And identifierList { QueryEvSquare ($2, $4) }
+ | Variants term { QueryVariants $2 }
 
 identifierList:
  | { [] }
