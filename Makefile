@@ -128,7 +128,6 @@ STATS_TESTS = \
   $(wildcard examples/strong-secrecy/*.api) \
 
 STATS_STATS = $(STATS_TESTS:.api=.stats)
-STATS_JOBS := 1
 
 stats: $(STATS_STATS)
 
@@ -136,4 +135,4 @@ clean::
 	rm -f $(STATS_STATS)
 
 %.stats: %.api
-	/usr/bin/time -o $@ ./akiss -j $(STATS_JOBS) < $< > /dev/null 2>&1
+	/usr/bin/time -o $@ ./akiss $(AKISS_OPTIONS) < $< > /dev/null 2>&1
