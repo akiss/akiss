@@ -8,7 +8,10 @@ module Lwt = struct
 end
 
 module Nproc = struct
-  let create n = (), ()
+  let create n =
+    if n > 1 then
+      Printf.eprintf "[warn] This version of akiss is compiled without parallel computation support!\n%!";
+    (), ()
   let submit () f x =
     try Some (f x)
     with e ->
