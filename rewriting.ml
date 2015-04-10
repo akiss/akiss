@@ -260,7 +260,7 @@ let rec normalize_under term_t positions rules =
 	    arg_list numbers)
 ;;
 
-let simplify_2 term_t vars_t (t1, sigma1, p1) (t2, sigma2, p2) rules = 
+let simplify_2 term_t vars_t (t1, sigma1, p1) (t2, sigma2, p2) rules =
   let s1 = Fun("!tuple!",
 	       trmap (function x -> apply_subst (Var x) sigma1) vars_t) in
   let s2 = Fun("!tuple!",
@@ -275,20 +275,46 @@ let simplify_2 term_t vars_t (t1, sigma1, p1) (t2, sigma2, p2) rules =
   with Not_unifiable -> None
 ;;
 
-let rec simplify_dumb term_t vars_t dumb rules =
-  match dumb with
-  | hd1 :: hd2 :: tl ->
-    (
-      match simplify_2 term_t vars_t hd1 hd2 rules with
-      | Some next_hd -> simplify_dumb term_t vars_t (next_hd :: tl) rules
-      | None -> hd1 :: (simplify_dumb term_t vars_t (hd2 :: tl) rules)
-    )
-  | _ -> dumb
+(* let rec simplify_dumb term_t vars_t dumb rules = *)
+(*   match dumb with *)
+(*   | hd1 :: hd2 :: tl -> *)
+(*     ( *)
+(*       match simplify_2 term_t vars_t hd1 hd2 rules with *)
+(*       | Some next_hd -> simplify_dumb term_t vars_t (next_hd :: tl) rules *)
+(*       | None -> hd1 :: (simplify_dumb term_t vars_t (hd2 :: tl) rules) *)
+(*     ) *)
+(*   | _ -> dumb *)
+(* ;; *)
+
+(* let simplify term_t vars_t next_dumb configuration rules = *)
+(*   simplify_dumb term_t vars_t next_dumb rules *)
+(* ;; *)
+
+
+let rec simplify_1 c clist term_t vars_t rules =
+(* simplify configuration each element of the configuration list clist *)
+(*  with the configuration c *)
+     match clist with
+     | hd :: tl ->
+       (
+         match simplify_2 term_t vars_t c hd rules with
+	 | Some simpc -> (simplify_1 simpc tl term_t vars_t rules)
+	 | None -> let (sc, sl) = (simplify_1 c tl term_t vars_t rules) in
+		   (sc, hd :: sl)
+       )
+     | _ -> (c, clist)
 ;;
 
-let simplify term_t vars_t next_dumb configuration rules =
-  simplify_dumb term_t vars_t next_dumb rules
+let rec simplify term_t vars_t config_list rules =
+    match config_list with
+    | hd :: tl -> 
+      let (simphd, simptl) = (simplify_1 hd tl term_t vars_t rules) in simphd :: (simplify term_t vars_t simptl rules)
+    | _ -> config_list
 ;;
+
+(* let simplify term_t vars_t next_dumb configuration rules = *)
+(*   simplify_0 term_t vars_t next_dumb rules *)
+(* ;; *)
 
 let show_position (p : position) : string =
   String.concat ""
@@ -304,15 +330,16 @@ let show_configuration (t, sigma, positions) =
 ;;
 
 let rec show_configurations c =
-  "[" ^ (String.concat ";\n" (trmap show_configuration c)) ^ "]"
+  "\n[\n" ^ (String.concat ";\n" (trmap show_configuration c)) ^ "\n]"
 ;;
 
 let rec iterate_all term_t vars_t configuration rules =
+  (* Printf.printf "Configurations : %s\n" (show_configurations configuration); *)
   let next_dumb = iterate_once configuration rules in
-  let next_simpl  = simplify term_t vars_t next_dumb configuration rules in
+  let next_simpl  = simplify term_t vars_t next_dumb rules in
   (
-    (* Printf.printf "Dumb: %s\n%!" (show_configurations next_dumb); *)
-    (* Printf.printf "Simpl: %s\n%!" (show_configurations next_simpl); *)
+     (* Printf.printf "Dumb:%s\n%!" (show_configurations next_dumb); *)
+     (* Printf.printf "Simpl:%s\n%!" (show_configurations next_simpl); *)
     List.append configuration 
       (if next_simpl = [] then 
 	  []
@@ -322,6 +349,7 @@ let rec iterate_all term_t vars_t configuration rules =
 ;;
 
 let basic_variants t rules =
+  (* Printf.printf "Compute variants of : %s\n" (show_term t); *)
   let vars_t = vars_of_term t in
   iterate_all t vars_t [(t, [], init_pos t)] rules
 
