@@ -37,6 +37,10 @@ let translate_symbol = function
   | "akissin" -> "!in!"
   | s -> s
 
+let translate_name x =
+  try Scanf.sscanf x "akissn%d" (fun x -> Printf.sprintf "!n!%d" x)
+  with Scanf.Scan_failure _ -> x
+
 %}
 
 
@@ -92,7 +96,7 @@ term:
      else
        Var id
    }
- | Quote Identifier Quote { Fun($2, []) }
+ | Quote Identifier Quote { Fun(translate_name $2, []) }
  | Identifier LeftP termlist RightP { Fun(translate_symbol $1, $3) }
  | term Plus term { Fun ("plus", [$1; $3]) }
  | LeftP term Plus term RightP { Fun("plus", [$2; $4]) }

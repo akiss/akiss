@@ -58,7 +58,7 @@ let rec print chan = function
       with Scanf.Scan_failure _ ->
         begin try
           Scanf.sscanf s "!n!%d"
-            (fun n -> assert false)
+            (fun n -> Format.fprintf chan "'akissn%d'" n)
         with Scanf.Scan_failure _ ->
           Format.fprintf chan "%s()" s
         end
