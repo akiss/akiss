@@ -135,4 +135,4 @@ clean::
 	rm -f $(STATS_STATS)
 
 %.stats: %.api
-	/usr/bin/time -o $@ ./akiss $(AKISS_OPTIONS) < $< > /dev/null 2>&1
+	/usr/bin/time sh -c "./akiss $(AKISS_OPTIONS) < $< > /dev/null 2>&1" > $@ 2>&1
