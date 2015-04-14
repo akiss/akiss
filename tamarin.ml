@@ -106,7 +106,7 @@ let print_sig chan rules =
     rules ;
   Format.fprintf chan ".\n"
 
-let variants t rules =
+let variants normalize t rules =
   if debug then
     Format.printf "<< tamarin variants: %s\n" (show_term t) ;
   let query chan =
@@ -121,7 +121,7 @@ let variants t rules =
             List.iter
               (fun s -> Printf.printf "result> %s\n" (show_subst s))
               substs ;
-          let norm x = Maude.normalize x rules in
+          let norm x = normalize x rules in
           let result =
             List.map (fun s -> norm (apply_subst t s), s) substs
           in
@@ -174,8 +174,8 @@ let unifiers s t =
     process query parse_unifiers
 
 (** Unification modulo AC + theory, using variants. *)
-let unifiers s t rules : subst list =
-  let v = variants (Fun("pair",[s;t])) rules in
+let unifiers normalize s t rules : subst list =
+  let v = variants normalize (Fun("pair",[s;t])) rules in
     List.concat
       (List.map
          (function
@@ -189,8 +189,8 @@ let unifiers s t rules : subst list =
          v)
 
 (** Final unification wrapper, eliminating tuples of size less than 2. *)
-let unifiers s t rules =
+let unifiers normalize s t rules =
   match s,t with
     | Fun("!tuple!",[]), Fun("!tuple!",[]) -> [[]]
-    | Fun("!tuple!",[s]), Fun("!tuple!",[t]) -> unifiers s t rules
-    | s,t -> unifiers s t rules
+    | Fun("!tuple!",[s]), Fun("!tuple!",[t]) -> unifiers normalize s t rules
+    | s,t -> unifiers normalize s t rules

@@ -19,5 +19,5 @@
 
 open Term
 
-val unifiers : term -> term -> rules -> subst list
-val variants : term -> rules -> (term * subst) list
+val unifiers : (term -> rules -> term) -> term -> term -> rules -> subst list
+val variants : (term -> rules -> term) -> term -> rules -> (term * subst) list

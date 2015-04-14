@@ -266,13 +266,13 @@ module AC : REWRITING = struct
   let equals = Maude.equals
   let unifiers s t r =
     if r = [] then Maude.unifiers s t [] else
-      let u1 = Tamarin.unifiers s t r in
+      let u1 = Tamarin.unifiers Maude.normalize s t r in
         assert (ac ||
                 let u2 = Rewriting.unifiers s t r in
                   List.length u1 = List.length u2) ;
         u1
   let matchers = Maude.matchers
-  let variants = Tamarin.variants
+  let variants = Tamarin.variants Maude.normalize
 end
 
 module NonAC : REWRITING = struct
@@ -308,10 +308,10 @@ module NonACTamarin : REWRITING = struct
       try [Rewriting.mgu s t] with
       | Rewriting.Not_unifiable -> []
     else
-      Tamarin.unifiers s t r
+      Tamarin.unifiers Rewriting.normalize s t r
 
   let matchers = NonAC.matchers
-  let variants = Tamarin.variants
+  let variants = Tamarin.variants Rewriting.normalize
 end
 
 module R = (val if ac || !ac_toolbox then begin
