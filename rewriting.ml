@@ -348,10 +348,23 @@ let rec iterate_all term_t vars_t configuration rules =
   )
 ;;
 
+(* memoization table, shared by basic_variants and recursive_variants *)
+let table = Hashtbl.create 100
+
+let memoize f t rules =
+  try
+    Hashtbl.find table (t, rules)
+  with Not_found ->
+    let r = f t rules in
+    Hashtbl.add table (t, rules) r;
+    r
+
 let basic_variants t rules =
   (* Printf.printf "Compute variants of : %s\n" (show_term t); *)
   let vars_t = vars_of_term t in
   iterate_all t vars_t [(t, [], init_pos t)] rules
+
+let basic_variants = memoize basic_variants
 
 let decompose t =
   match t with
@@ -368,20 +381,13 @@ end
 
 module S = Set.Make (ComparableVariant)
 
-let rec recursive_variants =
-  (* memoization table *)
-  let table = Hashtbl.create 100 in
-  fun t rules ->
-  try
-    Hashtbl.find table (t, rules)
-  with
-  | Not_found ->
+let rec recursive_variants t rules =
      match decompose t with
      | Some (prefix, u) ->
         (* we hope variants of prefix are already computed, and we
            compute variants of u and then combine them with those of
            prefix *)
-        let prefix_variants = recursive_variants prefix rules in
+        let prefix_variants = memoize recursive_variants prefix rules in
         let combined_variants =
           List.fold_left
             (fun accu (x1, s1, _) ->
@@ -415,15 +421,13 @@ let rec recursive_variants =
                accu (basic_variants (apply_subst u s1) rules))
             combined_variants prefix_variants
         in
-        let combined_variants = S.elements combined_variants in
-        Hashtbl.add table (t, rules) combined_variants;
-        combined_variants
+        S.elements combined_variants
      | None ->
         (* t is atomic, we use the basic algorithm *)
-        let r = basic_variants t rules in
-        Hashtbl.add table (t, rules) r;
-        r
+        basic_variants t rules
 ;;
+
+let recursive_variants = memoize recursive_variants
 
 let variants t rules =
   if !Config.recursive_variants then
