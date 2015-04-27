@@ -39,7 +39,7 @@ let translate_symbol = function
 
 let translate_name x =
   try Scanf.sscanf x "akissn%d" (fun x -> Printf.sprintf "!n!%d" x)
-  with Scanf.Scan_failure _ -> x
+  with Scanf.Scan_failure _ | End_of_file -> x
 
 %}
 
