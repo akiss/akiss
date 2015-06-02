@@ -37,18 +37,28 @@ let input_line chan =
 
 (** Printing Maude terms and modules *)
 
-let rec print chan = function
+let rec print chan t = match mterm t with
 
   | Fun ("!tuple!",l) ->
       let n = List.length l in
       let f = Format.sprintf "akiss%duple" n in
-        print chan (Fun (f,l))
+        print chan (termm @@ Fun (f,l))
   | Fun ("!test!",[]) ->
-      print chan (Fun ("akisstest",[]))
-  | Fun ("!out!",[Fun(c,[])]) ->
-      print chan (Fun ("akissout",[Fun ("akissch"^c,[])]))
-  | Fun ("!in!",[Fun(c,[]);t]) ->
-      print chan (Fun ("akissin",[Fun("akissch"^c,[]);t]))
+      print chan (termm @@ Fun ("akisstest",[]))
+  | Fun ("!out!", [t1]) ->
+     begin
+       match mterm t1 with
+       | Fun (c, []) ->
+          print chan (termm @@ Fun ("akissout", [termm @@ Fun ("akissch"^c, [])]))
+       | _ -> assert false
+     end
+  | Fun ("!in!",[t1; t]) ->
+     begin
+       match mterm t1 with
+       | Fun (c, []) ->
+          print chan (termm @@ Fun ("akissin", [termm @@ Fun("akissch"^c, []); t]))
+       | _ -> assert false
+     end
 
   | Fun (s,[]) | Var s ->
       begin try
@@ -243,7 +253,7 @@ let rec parse_term tokens =
               if pdebug then Format.printf "pt> #%d\n%!" i ;
               expect (Genlex.Kwd ":") ;
               expect (Genlex.Ident "Term") ;
-              Var ("#" ^ string_of_int i)
+              termm @@ Var ("#" ^ string_of_int i)
           | _ -> assert false
         end
     | Genlex.Ident "plus" ->
@@ -251,23 +261,23 @@ let rec parse_term tokens =
         let l = parse_list tokens in
           expect (Genlex.Kwd (")")) ;
           List.fold_left
-            (fun a b -> Fun ("plus",[a;b]))
+            (fun a b -> termm @@ Fun ("plus",[a;b]))
             (List.hd l) (List.tl l)
     | Genlex.Ident s ->
         if is_var s then begin
           expect (Genlex.Kwd ":") ;
           expect (Genlex.Ident "Term") ;
-          Var s
+          termm @@ Var s
         end else begin
           if pdebug then Format.printf "pt> arity(%s) = %!" s ;
           let a = arity s in
           let s = translate_symbol s in
           if pdebug then Format.printf "%d\n%!" a ;
-          if a = 0 then Fun (s,[]) else begin
+          if a = 0 then termm @@ Fun (s,[]) else begin
             expect (Genlex.Kwd "(") ;
             let l = parse_terms a tokens in
               expect (Genlex.Kwd ")") ;
-              Fun (s,l)
+              termm @@ Fun (s,l)
           end
         end
     | _ -> failwith "not a term"
@@ -342,7 +352,7 @@ let rename_in_subst v =
   in
   let vars = List.filter (fun name -> name.[0] = '#') vars in
   let subst =
-    List.map (fun name -> name, Var (Util.fresh_variable ())) vars
+    List.map (fun name -> name, termm @@ Var (Util.fresh_variable ())) vars
   in
     List.map
       (fun sigma ->
@@ -420,7 +430,7 @@ let normalize t rules =
   let { vars = vars } = sig_of_term_list [t'] in
   let vars = List.filter (fun name -> name.[0] = '#') vars in
   let subst =
-    List.map (fun name -> name, Var (Util.fresh_variable ())) vars
+    List.map (fun name -> name, termm @@ Var (Util.fresh_variable ())) vars
   in
   let t' = apply_subst t' subst in
     if debug then

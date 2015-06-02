@@ -38,9 +38,13 @@ type varName = id
 
 type funName = id
 
-type term =
+type mterm =
   | Fun of funName * term list
   | Var of varName
+and term = mterm
+
+let mterm t = t
+let termm t = t
 
 type subst =
     (varName * term) list

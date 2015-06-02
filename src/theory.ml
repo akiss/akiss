@@ -174,9 +174,9 @@ let process_decl = function
           "#set xor: only allowed at the beginning of the script!\n" ;
         exit 1
       end ;
-      let x = Var "X" and y = Var "Y" in
-      let (+) a b = Fun("plus",[a;b]) in
-      let zero = Fun("zero",[]) in
+      let x = termm @@ Var "X" and y = termm @@ Var "Y" in
+      let (+) a b = termm @@ Fun("plus", [a; b]) in
+      let zero = termm @@ Fun("zero",[]) in
       let (==) left right = left,right in
         rewrite_rules := [
           x+zero  == x ;

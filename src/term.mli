@@ -28,9 +28,16 @@ val private_names : string list ref
 type id = string
 type varName = id
 type funName = id
-type term = Fun of funName * term list | Var of varName
+type term
 type subst = (varName * term) list
 type rules = (term * term) list
+
+type mterm =
+  | Fun of funName * term list
+  | Var of varName
+
+val mterm : term -> mterm
+val termm : mterm -> term
 
 val is_var : term -> bool
 val unbox_var : term -> varName

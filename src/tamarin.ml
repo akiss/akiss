@@ -33,7 +33,7 @@ let input_line chan =
     line
 
 (** Printing *)
-let rec print chan = function
+let rec print chan t = match mterm t with
   | Fun ("plus",[a;b]) ->
       Format.fprintf chan "(%a+%a)" print a print b
 
@@ -43,10 +43,22 @@ let rec print chan = function
 
   | Fun ("!test!",[]) ->
       Format.fprintf chan "akisstest()"
-  | Fun ("!out!",[Fun(c,[])]) ->
-      Format.fprintf chan "akissout('%s')" c
-  | Fun ("!in!",[Fun(c,[]);t]) ->
-      Format.fprintf chan "akissin('%s',%a)" c print t
+
+  | Fun ("!out!", [t1]) ->
+     begin
+       match mterm t1 with
+       | Fun (c, []) ->
+          Format.fprintf chan "akissout('%s')" c
+       | _ -> assert false
+     end
+
+  | Fun ("!in!",[t1; t]) ->
+     begin
+       match mterm t1 with
+       | Fun (c, []) ->
+          Format.fprintf chan "akissin('%s',%a)" c print t
+       | _ -> assert false
+     end
 
   | Fun (s,[]) when List.mem s !private_names ->
       Format.fprintf chan "'%s'" s
@@ -175,10 +187,10 @@ let unifiers s t =
 
 (** Unification modulo AC + theory, using variants. *)
 let unifiers normalize s t rules : subst list =
-  let v = variants normalize (Fun("pair",[s;t])) rules in
+  let v = variants normalize (termm @@ Fun("pair",[s; t])) rules in
     List.concat
       (List.map
-         (function
+         (fun (t, sigma) -> match mterm t, sigma with
             | (Fun("pair",[ss;ts]),sigma) ->
                 begin match unifiers ss ts with
                   | [theta] -> [compose sigma theta]
@@ -190,7 +202,7 @@ let unifiers normalize s t rules : subst list =
 
 (** Final unification wrapper, eliminating tuples of size less than 2. *)
 let unifiers normalize s t rules =
-  match s,t with
+  match mterm s, mterm t with
     | Fun("!tuple!",[]), Fun("!tuple!",[]) -> [[]]
     | Fun("!tuple!",[s]), Fun("!tuple!",[t]) -> unifiers normalize s t rules
-    | s,t -> unifiers normalize s t rules
+    | _, _ -> unifiers normalize s t rules

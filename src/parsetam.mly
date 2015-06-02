@@ -26,7 +26,7 @@ open Term
 let freshen (sigma : subst) =
   let varlist = vars_of_term_list (List.map snd sigma) in
   let fresh_subst =
-    List.map (fun x -> (x, Var(Util.fresh_variable ()))) varlist
+    List.map (fun x -> (x, termm @@ Var(Util.fresh_variable ()))) varlist
   in
     List.map (fun (v,t) -> v, (apply_subst t fresh_subst)) sigma
 
@@ -92,18 +92,18 @@ term:
  | Identifier {
      let id = translate_symbol $1 in
      if (List.mem id !private_names) || (List.mem (id,0) !fsymbols) then
-       Fun(id,[])
+       termm @@ Fun(id,[])
      else
-       Var id
+       termm @@ Var id
    }
- | Quote Identifier Quote { Fun(translate_name $2, []) }
- | Identifier LeftP termlist RightP { Fun(translate_symbol $1, $3) }
- | term Plus term { Fun ("plus", [$1; $3]) }
- | LeftP term Plus term RightP { Fun("plus", [$2; $4]) }
+ | Quote Identifier Quote { termm @@ Fun(translate_name $2, []) }
+ | Identifier LeftP termlist RightP { termm @@ Fun(translate_symbol $1, $3) }
+ | term Plus term { termm @@ Fun ("plus", [$1; $3]) }
+ | LeftP term Plus term RightP { termm @@ Fun("plus", [$2; $4]) }
  | Less term Comma netermlist Greater {
      let pair item = function
        | None -> Some (item)
-       | Some tm -> Some (Fun("pair", [item; tm]))
+       | Some tm -> Some (termm @@ Fun("pair", [item; tm]))
      in
      match List.fold_right pair ($2::$4) None with
      | Some tm -> tm

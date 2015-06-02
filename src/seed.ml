@@ -32,13 +32,13 @@ let current_parameter oc =
 ;;
 
 let worldadd w t =
-  revworld (Fun("world", [t; revworld w]))
+  revworld (termm @@ Fun("world", [t; revworld w]))
 ;;
 
-let rec worldreplempty w wp =
-  match w with
+let rec worldreplempty w (wp : term) =
+  match mterm w with
     | Fun("empty", []) -> wp
-    | Fun("world", [f; r]) -> Fun("world", [f; worldreplempty r wp])
+    | Fun("world", [f; r]) -> termm @@ Fun("world", [f; worldreplempty r wp])
     | Var(_) -> invalid_arg("worldreplempty for var")
     | _ -> invalid_arg("worldreplempty")
 ;;
@@ -83,24 +83,24 @@ let rec knows_statements_h oc tr antecedents world clauses =
   match tr with
     | NullTrace -> List.rev clauses
     | Trace(Output(ch, t), remaining_trace) ->
-	let next_world = worldadd world (Fun("!out!", [Fun(ch, [])])) in
+	let next_world = worldadd world (termm @@ Fun("!out!", [termm @@ Fun(ch, [])])) in
 	let next_head = Predicate("knows",
-	       [worldreplempty next_world (Var(fresh_variable ()));
-		Fun(current_parameter oc, []);
+	       [worldreplempty next_world (termm @@ Var(fresh_variable ()));
+		termm @@ Fun(current_parameter oc, []);
 		t]) in
 	let new_clause = (next_head, antecedents) in
 	knows_statements_h (oc + 1) remaining_trace antecedents
 	  next_world (new_clause :: clauses)
     | Trace(Input(ch, v), remaining_trace) ->
-	let next_world = worldadd world (Fun("!in!", [Fun(ch, []); Var(v)])) in
+	let next_world = worldadd world (termm @@ Fun("!in!", [termm @@ Fun(ch, []); termm @@ Var(v)])) in
 	let ancedent = Predicate("knows", [world;
-				     Var(fresh_variable ());
-				     Var(v)]) in
+				     termm @@ Var(fresh_variable ());
+				     termm @@ Var(v)]) in
 	let next_antecedents = (List.append antecedents [ancedent]) in
 	knows_statements_h oc remaining_trace next_antecedents
 	  next_world clauses
     | Trace(Test(s, t), remaining_trace) ->
-	let next_world = worldadd world (Fun("!test!", [])) in
+	let next_world = worldadd world (termm @@ Fun("!test!", [])) in
 	knows_statements_h oc remaining_trace antecedents
 	  next_world clauses
 ;;
@@ -125,8 +125,8 @@ let knows_equationalize (head, body) rules =
   let rights = trmap (function
                        | (Predicate(_, [_;y])) -> y
                        | _ -> invalid_arg("rights")) eqns in
-  let t1 = Fun("!tuple!", lefts) in
-  let t2 = Fun("!tuple!", rights) in
+  let t1 = termm @@ Fun("!tuple!", lefts) in
+  let t2 = termm @@ Fun("!tuple!", rights) in
   let sigmas = R.unifiers t1 t2 rules in
   let newbody = List.filter (function (Predicate(x, _)) -> x <> "!equals!") body in
   let newatom sigma = function
@@ -143,7 +143,7 @@ let knows_equationalize (head, body) rules =
 ;;
 
 let knows_statements tr rules =
-  let kstatements = knows_statements_h 0 tr [] (Fun("empty", [])) [] in
+  let kstatements = knows_statements_h 0 tr [] (termm @@ Fun("empty", [])) [] in
     List.concat
       (List.map
          (fun x -> knows_variantize x rules)
@@ -156,7 +156,7 @@ let rec reach_statements_h tr antecedents world result =
   match tr with
     | NullTrace -> List.rev result
     | Trace(Output(ch, t), remaining_trace) ->
-	let next_world = worldadd world (Fun("!out!", [Fun(ch, [])])) in
+	let next_world = worldadd world (termm @@ Fun("!out!", [termm @@ Fun(ch, [])])) in
 	let new_clause = (Predicate(
 			    "reach",
 			    [next_world]),
@@ -164,10 +164,10 @@ let rec reach_statements_h tr antecedents world result =
 	reach_statements_h remaining_trace antecedents next_world
 	  (new_clause :: result)
     | Trace(Input(ch, v), remaining_trace) ->
-	let next_world = worldadd world (Fun("!in!", [Fun(ch, []); Var(v)])) in
+	let next_world = worldadd world (termm @@ Fun("!in!", [termm @@ Fun(ch, []); termm @@ Var(v)])) in
 	let antecedent = Predicate("knows", [world;
-					     Var(fresh_variable ());
-					     Var(v)]) in
+					     termm @@ Var(fresh_variable ());
+					     termm @@ Var(v)]) in
 	let next_antecedents = List.append antecedents [antecedent] in
 	let new_clause = (Predicate(
 			    "reach",
@@ -176,7 +176,7 @@ let rec reach_statements_h tr antecedents world result =
 	reach_statements_h remaining_trace next_antecedents next_world
 	  (new_clause :: result)
     | Trace(Test(s, t), remaining_trace) ->
-	let next_world = worldadd world (Fun("!test!", [])) in
+	let next_world = worldadd world (termm @@ Fun("!test!", [])) in
 	let antecedent = Predicate("!equals!", [s; t]) in
 	let next_antecedents = List.append antecedents [antecedent] in
 	let new_clause = (Predicate(
@@ -195,8 +195,8 @@ let reach_equationalize (head, body) rules =
   let rights = trmap (function
 			   | (Predicate(_, [_;y])) -> y
 			   | _ -> invalid_arg("rights")) eqns in
-  let t1 = Fun("!tuple!", lefts) in
-  let t2 = Fun("!tuple!", rights) in
+  let t1 = termm @@ Fun("!tuple!", lefts) in
+  let t2 = termm @@ Fun("!tuple!", rights) in
   let sigmas = R.unifiers t1 t2 rules in
   let newbody = List.filter (function (Predicate(x, _)) -> x <> "!equals!") body in
   let newatom sigma = function
@@ -229,7 +229,7 @@ let reach_variantize (head, body) rules =
 ;;
 
 let reach_statements tr rules =
-  let statements = reach_statements_h tr [] (Fun("empty", [])) [] in
+  let statements = reach_statements_h tr [] (termm @@ Fun("empty", [])) [] in
     List.concat
       (List.map
          (fun x -> reach_variantize x rules)
@@ -239,17 +239,17 @@ let reach_statements tr rules =
 
 (** Compute the part of seed statements that comes from the theory. *)
 let context_statements symbol arity rules =
-  let w = Var(fresh_variable ()) in
+  let w = termm @@ Var(fresh_variable ()) in
   let vYs = trmap fresh_variable (create_list () arity) in
   let vZs = trmap fresh_variable (create_list () arity) in
   let add_knows x y = Predicate("knows", [w; x; y]) in
-  let box_vars names = trmap (function x -> Var(x)) names in
+  let box_vars names = trmap (function x -> termm @@ Var(x)) names in
   let body sigma = List.map2
     (add_knows)
     (box_vars vYs)
     (trmap (function x -> apply_subst x sigma) (box_vars vZs))
   in
-  let t = Fun(symbol, box_vars vZs) in
+  let t = termm @@ Fun(symbol, box_vars vZs) in
   let v = R.variants t rules in
     trmap
     (function (t',sigma) ->
@@ -257,7 +257,7 @@ let context_statements symbol arity rules =
         new_clause
           (Predicate("knows",
                      [w;
-                      Fun(symbol, box_vars vYs);
+                      termm @@ Fun(symbol, box_vars vYs);
                       t'
                      ]),
            body sigma)
@@ -269,27 +269,47 @@ let context_statements symbol arity rules =
               match
                 List.find
                   (function
-                     | Predicate("knows",[_;_;Fun("plus",_)]) -> true
+                     | Predicate("knows",[_;_;t1]) ->
+                        begin
+                          match mterm t1 with
+                          | Fun("plus",_) -> true
+                          | _ -> false
+                        end
                      | _ -> false)
                   (get_body clause)
               with
-                | Predicate (_,[_;Var r;_]) -> r
+                | Predicate (_,[_;t1;_]) ->
+                   begin
+                     match mterm t1 with
+                     | Var r -> r
+                     | _ -> assert false
+                   end
                 | _ -> assert false
             in
             let p = fresh_string "P" in
-              apply_subst_st clause [r,Var p]
+              apply_subst_st clause [r,termm @@ Var p]
           with Not_found ->
             if not Horn.extra_static_marks then clause else
               begin match
                 List.find
                   (function
-                     | Predicate("knows",[_;_;Var _]) -> true
+                     | Predicate("knows",[_;_;t1]) ->
+                        begin
+                          match mterm t1 with
+                          | Var _ -> true
+                          | _ -> false
+                        end
                      | _ -> false)
                   (get_body clause)
               with
-                | Predicate (_,[_;Var r;_]) ->
-                    let p = fresh_string "P" in
-                      apply_subst_st clause [r,Var p]
+                | Predicate (_,[_;t1;_]) ->
+                   begin
+                     match mterm t1 with
+                     | Var r ->
+                        let p = fresh_string "P" in
+                        apply_subst_st clause [r, termm @@ Var p]
+                     | _ -> assert false
+                   end
                 | _ -> assert false
               end
         else

@@ -185,12 +185,12 @@ let get_body st = st.body
 
 (** {3 Conversions to and from terms} *)
 
-let atom_from_term term = match term with
+let atom_from_term term = match mterm term with
   | Fun(symbol, termlist) ->
       Predicate(symbol, termlist)
   | _ -> invalid_arg("atom_from_term")
 
-let statement_from_term ~orig term = match term with 
+let statement_from_term ~orig term = match mterm term with
   | Fun("!tuple!", head :: body) ->
       { orig with
           head = atom_from_term head ;
@@ -198,10 +198,10 @@ let statement_from_term ~orig term = match term with
   | _ -> invalid_arg "statement_from_term"
 
 let term_from_atom (Predicate(name, al)) =
-  Fun(name, al)
+  termm @@ Fun(name, al)
 
 let term_from_statement {head=head;body=body} =
-  Fun("!tuple!",  (term_from_atom head) :: (trmap term_from_atom body))
+  termm @@ Fun("!tuple!",  (term_from_atom head) :: (trmap term_from_atom body))
 
 (** {3 Printing} *)
 
@@ -211,7 +211,7 @@ let rec show_atom = function
   | Predicate(name, term_list) ->
       name ^ "(" ^ (show_term_list term_list) ^ ")"
 
-let rec world_length = function
+let rec world_length t = match mterm t with
   | Fun ("world",[_;w]) -> 1 + world_length w
   | Fun ("empty",[]) -> 0
   | Var _ -> 0
@@ -253,7 +253,7 @@ let apply_subst_st st sigma =
 
 let fresh_statement f =
   let allv = vars_of_horn_clause f in
-  let newv = trmap (fun v ->
+  let newv = trmap (fun v -> termm @@
                      if v.[0] = 'P' then Var (fresh_string "P") else
                        Var (fresh_variable ())) allv in
   let sigma = List.combine allv newv in
@@ -270,38 +270,70 @@ let dotfile =
 
 let is_plus_clause = function
   | { head = Predicate ("knows",
-               [Var w;
-                Fun ("plus",[Var rx; Var ry]);
-                Fun ("plus",[Var x; Var y])]) ;
+               [t1;
+                t2;
+                t3]) ;
 
-      body = [ Predicate("knows",[Var w1; Var r1; Var x1]) ;
-               Predicate("knows",[Var w2; Var r2; Var x2]) ] }
-      when (rx <> ry && x <> y) && w = w1 && w = w2 &&
-           ((rx,ry) = (r1,r2) || (rx,ry) = (r2,r1)) &&
-           ((x,y) = (x1,x2) || (x,y) = (x2,x1))
-    -> true
+      body = [ Predicate("knows",[t4; t5; t6]) ;
+               Predicate("knows",[t7; t8; t9]) ] } ->
+     begin
+       match mterm t1, mterm t2, mterm t3 with
+       | Var w, Fun ("plus", [t10; t11]), Fun ("plus", [t12; t13]) ->
+          begin
+            match
+              mterm t10, mterm t11, mterm t12, mterm t13,
+              mterm t4, mterm t5, mterm t6,
+              mterm t7, mterm t8, mterm t9
+            with
+            | Var rx, Var ry, Var x, Var y, Var w1, Var r1, Var x1, Var w2, Var r2, Var x2
+              when (rx <> ry && x <> y) && w = w1 && w = w2 &&
+                ((rx,ry) = (r1,r2) || (rx,ry) = (r2,r1)) &&
+                ((x,y) = (x1,x2) || (x,y) = (x2,x1))
+                                             -> true
+            | _ -> false
+          end
+       | _ -> false
+     end
   | _ -> false
 
 let deconstruct_plus_clause = function
   | (Predicate ("knows",
-                        [Var w;
-                         Fun ("plus",[Var rx; Var ry]);
-                         Fun ("plus",[Var x; Var y])]),
-      [ Predicate("knows",[Var w'; Var r'; Var x']) ;
-        Predicate("knows",[Var w''; Var r''; Var y'']) ])
-      when rx <> ry && x <> y && w = w' && w = w'' &&
-           ((rx = r' && ry = r'') || (rx = r'' && ry = r')) &&
-           ((x = x' && y = y'') || (x = y'' && y = x'))
-    ->
-      Some (r',r'',x',y'')
+                        [t1;
+                         t2;
+                         t3]),
+      [ Predicate("knows",[t4; t5; t6]) ;
+        Predicate("knows",[t7; t8; t9]) ]) ->
+     begin
+       match mterm t1, mterm t2, mterm t3 with
+       | Var w, Fun ("plus", [t10; t11]), Fun ("plus", [t12; t13]) ->
+          begin
+            match
+              mterm t10, mterm t11, mterm t12, mterm t13,
+              mterm t4, mterm t5, mterm t6,
+              mterm t7, mterm t8, mterm t9
+            with
+            | Var rx, Var ry, Var x, Var y, Var w', Var r', Var x', Var w'', Var r'', Var y''
+              when rx <> ry && x <> y && w = w' && w = w'' &&
+                ((rx = r' && ry = r'') || (rx = r'' && ry = r')) &&
+                ((x = x' && y = y'') || (x = y'' && y = x'))
+                                           -> Some (r',r'',x',y'')
+            | _ -> None
+          end
+       | _ -> None
+     end
   | _ -> None
 
 let is_zero_clause = function
-  | { head = Predicate ("knows",[_;Fun("zero",[]);Fun("zero",[])]) ;
-      body = [] } -> true
+  | { head = Predicate ("knows",[_; t1; t2]) ;
+      body = [] } ->
+     begin
+       match mterm t1, mterm t2 with
+       | Fun("zero",[]), Fun("zero",[]) -> true
+       | _ -> false
+     end
   | _ -> false
 
-let is_plus = function
+let is_plus x = match mterm x with
   | Fun ("plus",_) -> true
   | _ -> false
 
@@ -310,17 +342,25 @@ let isnt_plus x = not (is_plus x)
 let is_marked x = x.[0] = 'P'
 
 let rec has_rigid = function
-  | Fun ("plus",[a;b]) :: l -> has_rigid (a::b::l)
-  | Fun (_,_) :: _ -> true
-  | Var _ :: l -> has_rigid l
+  | t :: l ->
+     begin
+       match mterm t with
+       | Fun ("plus",[a;b]) -> has_rigid (a::b::l)
+       | Fun (_,_) -> true
+       | Var _ -> has_rigid l
+     end
   | [] -> false
 
 let has_rigid t = has_rigid [t]
 
 let rec nb_flexibles n = function
-  | Fun ("plus",[a;b]) :: l -> nb_flexibles n (a::b::l)
-  | Fun (_,_) :: l -> nb_flexibles n l
-  | Var _ :: l -> nb_flexibles (1+n) l
+  | t :: l ->
+     begin
+       match mterm t with
+       | Fun ("plus",[a;b]) -> nb_flexibles n (a::b::l)
+       | Fun (_,_) -> nb_flexibles n l
+       | Var _ -> nb_flexibles (1+n) l
+     end
   | [] -> n
 
 let nb_flexibles t = nb_flexibles 0 [t]
@@ -334,7 +374,10 @@ let new_clause =
     (* We return -1 when p should occur before q in the body,
      * 1 in the opposite case and 0 when it does no matter. *)
     match p,q with
-      | Predicate ("knows",[_;Var r1;t1]), Predicate ("knows",[_;Var r2;t2]) ->
+    | Predicate ("knows",[_;t10;t1]), Predicate ("knows",[_;t20;t2]) ->
+       begin
+         match mterm t10, mterm t20 with
+         | Var r1, Var r2 ->
           (* Prioritize terms that pass this test *)
           let check f x1 x2 k =
             match f x1, f x2 with
@@ -348,6 +391,8 @@ let new_clause =
                 check is_marked r1 r2 (fun () ->
                   check has_rigid t1 t2 (fun () ->
                     compare (nb_flexibles t1) (nb_flexibles t2)))))
+         | _ -> assert false
+       end
       | _ -> assert false
   in
   let c = ref 0 in
@@ -417,7 +462,7 @@ let same_statement s t =
   * assuming the two worlds come from the same statement, so that one
   * is necessarily a prefix of the other. *)
 let rec is_prefix_world small_world big_world = 
-  match (small_world, big_world) with
+  match (mterm small_world, mterm big_world) with
   | (Fun("empty", []), _) -> true
   | (Fun("world", [h; t]), Fun("world", [hp; tp])) ->
       assert (R.equals h hp []) ;
@@ -482,12 +527,20 @@ let rule_rename st =
    * It is guaranteed when we do not use conseq -- TODO cleanup for when
    * we use conseq. *)
   assert (match st.head with
-            | Predicate("identical",[_;Var _;Var _]) -> false
+            | Predicate("identical",[_;t1;t2]) ->
+               begin
+                 match mterm t1, mterm t2 with
+                 | Var _, Var _ -> false
+                 | _ -> true
+               end
             | _ -> true) ;
   let rec attempts = function
-    | (Predicate(_, [u; Var bx; Var x]),
-       Predicate(_, [uv; Var by; Var y])) :: _
-      when is_prefix_world u uv && x = y && bx <> by ->
+    | (Predicate(_, [u; t11; t12]),
+       Predicate(_, [uv; t21; t22])) :: options
+      when is_prefix_world u uv ->
+       begin
+         match mterm t11, mterm t12, mterm t21, mterm t22 with
+         | Var bx, Var x, Var by, Var y when x = y && bx <> by ->
         apply_subst_st
           { st with body =
               (* Since there must be at most one atom k(_,by,_)
@@ -495,11 +548,17 @@ let rule_rename st =
                * one element. This can easily be optimized. *)
               List.filter
                 (function
-                   | Predicate(_, [_; Var v; _]) ->
-                       v <> by
+                   | Predicate(_, [_; t; _]) ->
+                      begin
+                        match mterm t with
+                        | Var v -> v <> by
+                        | _ -> assert false
+                      end
                    | _ -> assert false)
                 st.body }
-          [(by, Var bx)]
+          [(by, termm @@ Var bx)]
+         | _ -> attempts options
+       end
     | _ :: options -> attempts options
     | [] -> st
   in
@@ -511,8 +570,12 @@ let rule_remove = function
       let body =
         List.filter
           (fun atom -> match atom with
-             | Predicate(_, [_; _; Var x]) ->
-                 List.mem x vars_to_keep
+             | Predicate(_, [_; _; t]) ->
+                begin
+                  match mterm t with
+                  | Var x -> List.mem x vars_to_keep
+                  | _ -> true
+                end
              | _ -> true)
           st.body
       in
@@ -579,7 +642,8 @@ let may_be_generalization fc kb =
      * keep only unifiers that map variables into sums of variables. *)
     let h f = term_from_atom f.head in
     let thetas = R.matchers (h fkb) (h fc) [] in
-    let rec is_sumvars = function
+    let rec is_sumvars x =
+      match mterm x with
       | Var _ -> true
       | Fun ("plus",[l;r]) -> is_sumvars l && is_sumvars r
       | _ -> false
@@ -633,8 +697,8 @@ let rec first f l e =
 let inst_w_t my_head head_kb exc =
   match (my_head, head_kb) with
     | (Predicate(_, [myw; _; myt]), Predicate(_, [wkb; _; tkb])) ->
-        let t1 = Fun("!tuple!", [myw; myt]) in
-        let t2 = Fun("!tuple!", [wkb; tkb]) in
+        let t1 = termm @@ Fun("!tuple!", [myw; myt]) in
+        let t2 = termm @@ Fun("!tuple!", [wkb; tkb]) in
           begin try
             (* debugOutput "Matching %s against %s\n%!" (show_term t1) (show_term t2); *)
             let sigma = Rewriting.mgm t2 t1 in
@@ -648,16 +712,17 @@ let inst_w_t my_head head_kb exc =
 let inst_w_t_ac my_head head_kb =
   match (my_head, head_kb) with
     | (Predicate(_, [myw; _; myt]), Predicate(_, [wkb; _; tkb])) ->
-	let t1 = Fun("!tuple!", [myw; myt]) in
-	let t2 = Fun("!tuple!", [wkb; tkb]) in
+	let t1 = termm @@ Fun("!tuple!", [myw; myt]) in
+	let t2 = termm @@ Fun("!tuple!", [wkb; tkb]) in
         (* debugOutput "Matching %s against %s\n%!" (show_term t1) (show_term t2); *)
         R.matchers t2 t1 []
         (* debugOutput "Result %s\n%!" (show_subst sigma); *)
     | _ -> invalid_arg("inst_w_t_ac")
 
-let rec factors = function
+let rec factors x =
+  match mterm x with
   | Fun ("plus",[a;b]) -> factors a @ factors b
-  | x -> [x]
+  | _ -> [x]
 
 (** Tell whether the deduction statement [st] may be an extension.
   * Currently we check that it is of the form
@@ -707,9 +772,12 @@ let consequence st kb rules =
   assert (is_solved st) ;
   let rec aux { head = head ; body = body } kb = 
     match head with
-      | Predicate("knows", [_; _; Fun(name, [])]) when (startswith name "!n!") ->
-          `Public_name, Fun(name, [])
       | Predicate("knows", [w; _; t]) ->
+         begin
+           match mterm t with
+           | Fun(name, []) when startswith name "!n!" ->
+              `Public_name, termm @@ Fun(name, [])
+           | _ ->
           begin try
             (* Base case: Axiom rule of conseq *)
             `Axiom, get_recipe (List.find (is_same_t_smaller_w head) body)
@@ -760,6 +828,7 @@ let consequence st kb rules =
                        `Res (x,traces), hx_subst)
                   kb Not_a_consequence
           end
+         end
       | _ -> invalid_arg("consequence")
   in
   let trace,r = aux st (only_knows (only_solved kb)) in
@@ -785,7 +854,7 @@ let consequence st kb rules =
         List.exists
           (fun f ->
              debugOutput "Trying term factor %s...\n" (show_term f) ;
-             let dummy = Fun("dummy",[]) in
+             let dummy = termm @@ Fun("dummy",[]) in
              let w = get_world st.head in
              let head' = Predicate ("knows",[w;dummy;f]) in
              let st' = { st with head = head' } in
@@ -825,12 +894,16 @@ let useful st =
 let normalize_identical f =
   if not (Theory.xor && normalize_identical) then f else
     match get_head f with
-      | Predicate("identical", [w;r;Fun("zero",[])])
-      | Predicate("identical", [w;Fun("zero",[]);r]) ->
-          { f with head = Predicate("identical", [w;r;Fun("zero",[])]) }
       | Predicate("identical", [w;r;r']) ->
+         begin
+           match mterm r, mterm r' with
+           | r, Fun("zero",[])
+           | Fun("zero",[]), r ->
+              { f with head = Predicate("identical", [w; termm r; termm @@ Fun("zero",[])]) }
+           | _ ->
           { f with head =
-              Predicate("identical", [w;Fun("plus",[r;r']);Fun("zero",[])]) }
+              Predicate("identical", [w; termm @@ Fun("plus",[r;r']); termm @@ Fun("zero",[])]) }
+         end
       | _ -> f
 
 (** Dealing with normalization aspects of newly deduced clauses.
@@ -959,22 +1032,27 @@ let initial_kb (seed : statement list) rules : Base.t =
 let mark r sigma =
   let r', sigma =
     try
-      match List.assoc r sigma with
+      match mterm @@ List.assoc r sigma with
         | Var r' -> r', sigma
         | _ -> assert false
-    with Not_found -> r, (r, Var r) :: sigma
+    with Not_found -> r, (r, termm @@ Var r) :: sigma
   in
-  let r'' = Var (fresh_string "P") in
+  let r'' = termm @@ Var (fresh_string "P") in
     List.map (fun (x,t) -> x, apply_subst t [r',r'']) sigma
 
 (** Restrict a csu based on plus-constraints *)
 let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
 
   (* Find the leftmost rigid (non-plus,non-var) subterm *)
-  let rec extract_rigid variables = function
-    | Fun ("plus",[x;y])::l -> extract_rigid variables (x::y::l)
-    | Fun (_,_) as t :: _ -> `Some t
-    | Var v :: l -> extract_rigid (v::variables) l
+  let rec extract_rigid variables x =
+    match x with
+    | t :: l ->
+       begin
+         match mterm t with
+         | Fun ("plus",[x;y]) -> extract_rigid variables (x::y::l)
+         | Fun (_,_) -> `Some t
+         | Var v -> extract_rigid (v::variables) l
+       end
     | [] -> `None variables
   in
 
@@ -1014,12 +1092,17 @@ let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
                  sigmas)
       | `Some t ->
           debugOutput "rigid subterm: %s\n" (show_term t) ;
-          let rec occurs t = function
-            | Var _ :: l -> occurs t l
-            | Fun ("plus",args) :: l ->
-                occurs t (List.rev_append args l)
-            | t' :: l ->
-                t = t' || occurs t l
+          let rec occurs t x =
+            match x with
+            | t1 :: l ->
+               begin
+                 match mterm t1 with
+                 | Var _ -> occurs t l
+                 | Fun ("plus",args) ->
+                    occurs t (List.rev_append args l)
+                 | _ ->
+                    t = t1 || occurs t l
+               end
             | [] -> false
           in
           let update_sigma sigma =
@@ -1064,10 +1147,15 @@ let propagate_constraint sigma =
   let theta =
     List.map
       (function
-         | (x, Var y) when is_marked x && not (is_marked y) ->
-             let y' = Var (fresh_string "P") in
-               [(y, y')]
-         | (x, Fun("plus",_)) when is_marked x -> raise Constraint_violation
+         | (x, t) when is_marked x ->
+            begin
+              match mterm t with
+              | Var y when not (is_marked y) ->
+                 let y' = termm @@ Var (fresh_string "P") in
+                 [(y, y')]
+              | Fun("plus",_) -> raise Constraint_violation
+              | _ -> []
+            end
          | _ -> [])
       sigma
   in
@@ -1179,8 +1267,8 @@ let equation fa fb =
 
               debugOutput "Equation:\n %s\n %s\n%!"
                 (show_statement fa) (show_statement fb) ;
-              let t1 = Fun("!tuple!", [t; ul]) in
-              let t2 = Fun("!tuple!", [tp; upl]) in
+              let t1 = termm @@ Fun("!tuple!", [t; ul]) in
+              let t2 = termm @@ Fun("!tuple!", [tp; upl]) in
               let sigmas = R.csu t1 t2 in
               let sigmas =
                 plus_restrict ~t (get_head fb, get_body fb) sigmas
@@ -1203,7 +1291,7 @@ let equation fa fb =
                     in
                       try
                         let assoc x sigma =
-                          try List.assoc x sigma with Not_found -> Var x
+                          try List.assoc x sigma with Not_found -> termm @@ Var x
                         in
                         let image v =
                           unique
@@ -1309,7 +1397,7 @@ let saturate kb rules =
 
 let namify_subst t =
   let vars = vars_of_term t in
-  let names = List.map (fun _ -> Fun(fresh_string "!n!", [])) vars in
+  let names = List.map (fun _ -> termm @@ Fun(fresh_string "!n!", [])) vars in
   let sigma = List.combine vars names in
   sigma
 
@@ -1344,10 +1432,7 @@ let for_each l (succ:'a list succ) (fail:cont) (f:'b -> 'a succ -> cont -> unit)
   in aux [] fail l
 
 let rec find_recipe_h atom kbs (succ:term succ) (fail:cont) =
-  match atom with
-    | Predicate("knows", [_; _; Fun(name, [])]) when startswith name "!n!" ->
-        succ (Fun(name, [])) fail
-    | _ ->
+  let cont () =
         for_some kbs succ fail
           (fun clause succ fail ->
              let sigmas = inst_w_t_ac atom (get_head clause) in
@@ -1363,6 +1448,15 @@ let rec find_recipe_h atom kbs (succ:term succ) (fail:cont) =
                            let rvar = unbox_var (get_recipe atom) in
                            let succ recipe k = succ (rvar,recipe) k in
                              find_recipe_h (apply_subst_atom atom sigma) kbs succ fail)))
+  in
+  match atom with
+  | Predicate("knows", [_; _; t]) ->
+    begin
+      match mterm t with
+      | Fun (name, []) when startswith name "!n!" -> succ (termm @@ Fun(name, [])) fail
+      | _ -> cont ()
+    end
+  | _ -> cont ()
 
 exception Recipe_found of term
 
@@ -1379,31 +1473,31 @@ let find_recipe atom kb =
     with Recipe_found r -> r
 
 let rec revworld_h (w : term) (a : term) : term =
-  match w with
+  match mterm w with
     | Fun("empty", []) -> a
-    | Var(_) -> Fun("world", [w; a])
-    | Fun("world", [h; t]) -> revworld_h t (Fun("world", [h; a]))
+    | Var(_) -> termm @@ Fun("world", [w; a])
+    | Fun("world", [h; t]) -> revworld_h t (termm @@ Fun("world", [h; a]))
     | _ -> invalid_arg("rev_worldh")
 
 let revworld w =
-  revworld_h w (Fun("empty", []))
+  revworld_h w (termm @@ Fun("empty", []))
 
 let rec recipize_h (tl : term) kb =
-  match tl with
-    | Fun("empty", []) -> Fun("empty", [])
+  match mterm tl with
+    | Fun("empty", []) -> termm @@ Fun("empty", [])
     | Fun("world", [t; w]) -> 
 	(
-	  match t with
+	  match mterm t with
 	    | Fun("!in!", [ch; tp]) ->
 		let atom = Predicate("knows", 
 				      [revworld w;
-				       Var(fresh_variable ()); tp]) in
+				       termm @@ Var(fresh_variable ()); tp]) in
 		let r = find_recipe atom kb in
-		Fun("world", [Fun("!in!", [ch; r]); recipize_h w kb])
+		termm @@ Fun("world", [termm @@ Fun("!in!", [ch; r]); recipize_h w kb])
 	    | Fun("!out!", [ch]) ->
-		Fun("world", [t; recipize_h w kb])
+		termm @@ Fun("world", [t; recipize_h w kb])
 	    | Fun("!test!", []) ->
-		Fun("world", [t; recipize_h w kb])
+		termm @@ Fun("world", [t; recipize_h w kb])
 	    | _ -> invalid_arg("recipize_h")
 	)
     | Var(_) -> invalid_arg("recipize_h with var")
@@ -1424,7 +1518,7 @@ let checks_reach kb =
        match (get_head x) with
          | Predicate("reach", [w]) ->
              debugOutput "TESTER: %s\n" (show_statement x) ;
-             Fun ("check_run", [revworld (recipize (namify w) kb)]) :: checks
+             (termm @@ Fun ("check_run", [revworld (recipize (namify w) kb)])) :: checks
          | _ -> checks)
     kb []
 
@@ -1440,12 +1534,17 @@ let checks_ridentical kb =
              let omega =
                List.map
                  (function
-                    | Predicate("knows", [_; Var(vX); Var(vx)]) -> 
-                        (vX, apply_subst (Var(vx)) sigma)
+                    | Predicate("knows", [_; t1; t2]) ->
+                       begin
+                         match mterm t1, mterm t2 with
+                         | Var vX, Var vx ->
+                            (vX, apply_subst (termm @@ Var(vx)) sigma)
+                         | _ -> invalid_arg("checks_ridentical")
+                       end
                     | _ -> invalid_arg("checks_ridentical"))
                  (get_body x)
              in
-             let resulting_test = Fun("check_identity", [new_w; 
+             let resulting_test = termm @@ Fun("check_identity", [new_w;
                                                          apply_subst r omega;
                                                          apply_subst rp omega]) in
                (* debugOutput "FROM: %s\nGOT:%s\n\n%!"

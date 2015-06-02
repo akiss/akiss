@@ -288,7 +288,7 @@ let param_count name =
 
 
 let rec apply_frame term frame =
-  match term with
+  match mterm term with
     | Fun(name, []) when is_parameter name ->
       (
 	try
@@ -296,9 +296,9 @@ let rec apply_frame term frame =
 	with _ -> raise Not_a_recipe
       )
     | Fun(f, tl) ->
-      Fun(f, trmap (fun x -> apply_frame x frame) tl)
+      termm @@ Fun(f, trmap (fun x -> apply_frame x frame) tl)
     | Var(x) ->
-      Var(x)
+      termm @@ Var(x)
 ;;
 
 let rec apply_subst_tr pr sigma = match pr with
@@ -323,35 +323,45 @@ let rec execute_h process frame instructions rules =
     (*   (show_trace process) *)
     (*   (show_term_list frame) *)
     (*   (show_term_list instructions); *)
-    match (process, instructions) with
+    match (process, mterm instructions) with
       | (NullTrace, Fun("empty", [])) -> frame
       | (NullTrace, _) -> raise Too_many_instructions
       | (_, Fun("empty", [])) -> frame
-      | (Trace(Input(ch, x), pr), Fun("world", [Fun("!in!", [chp; r]); ir])) ->
-	  if chp = Fun(ch, []) then
-	    execute_h (apply_subst_tr pr [(x, (apply_frame r frame))]) frame ir rules
-	  else
-	    raise Invalid_instruction
+      | (Trace(Input(ch, x), pr), Fun("world", [t1; ir])) ->
+         begin
+           match mterm t1 with
+           | Fun("!in!", [chp; r]) ->
+	      if mterm chp = Fun(ch, []) then
+	        execute_h (apply_subst_tr pr [(x, (apply_frame r frame))]) frame ir rules
+	      else
+	        raise Invalid_instruction
+           | _ -> raise Invalid_instruction
+         end
       | (Trace(Test(x, y), pr), Fun("world", _)) ->
 	  if R.equals x y rules then
 	    execute_h pr frame instructions rules
 	  else
 	    raise Process_blocked
-      | (Trace(Output(ch, x), pr), Fun("world", [Fun("!out!", [chp]); ir])) ->
-	  if chp = Fun(ch, []) then
-	    execute_h pr (List.append frame [x]) ir rules
-	  else
-	    raise Invalid_instruction
+      | (Trace(Output(ch, x), pr), Fun("world", [t1; ir])) ->
+         begin
+           match mterm t1 with
+           | Fun("!out!", [chp]) ->
+	      if mterm chp = Fun(ch, []) then
+	        execute_h pr (List.append frame [x]) ir rules
+	      else
+	        raise Invalid_instruction
+           | _ -> raise Invalid_instruction
+         end
       | _ -> raise Invalid_instruction
   )
 ;;
 
 let rec worldfilter_h f w a =
-  match w with
+  match mterm w with
     | Fun("empty", []) -> a
     | Fun("world", [h; t]) -> 
 	if f h then
-	  worldfilter_h f t (Fun("world", [h; a]))
+	  worldfilter_h f t (termm @@ Fun("world", [h; a]))
 	else
 	  worldfilter_h f t a
     | Var(_) -> invalid_arg("worldfilter_h variable")
@@ -359,7 +369,7 @@ let rec worldfilter_h f w a =
 ;;
 
 let worldfilter f w =
-  revworld (worldfilter_h f w (Fun("empty", [])))
+  revworld (worldfilter_h f w (termm @@ Fun("empty", [])))
 ;;
 
 let execute process frame instructions rules =
@@ -367,19 +377,19 @@ let execute process frame instructions rules =
     process
     frame
     (worldfilter 
-       (fun x -> match x with
+       (fun x -> match mterm x with
 	 | Fun("!test!", []) -> false
 	 | _ -> true)
        instructions)
     rules
 ;;
 
-let is_reach_test test = match test with
+let is_reach_test test = match mterm test with
   | Fun("check_run", _) -> true
   | _ -> false
 ;;
 
-let check_reach process test_reach rules = match test_reach with
+let check_reach process test_reach rules = match mterm test_reach with
   | Fun("check_run", [w]) ->
       (
 	(* debugOutput *)
@@ -401,7 +411,7 @@ let check_reach process test_reach rules = match test_reach with
   | _ -> invalid_arg("check_reach")
 ;;
 
-let is_ridentical_test test = match test with
+let is_ridentical_test test = match mterm test with
   | Fun("check_identity", [_; _; _]) -> true
   | _ -> false
 ;;
@@ -415,7 +425,7 @@ let rec trace_from_frame frame =
 ;;
 
 
-let check_ridentical process test_ridentical rules = match test_ridentical with
+let check_ridentical process test_ridentical rules = match mterm test_ridentical with
   | Fun("check_identity", [w; r; rp]) ->
     (
       try

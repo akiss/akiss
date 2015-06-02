@@ -83,7 +83,7 @@ let rec declare_process name process =
 module StringSet = Set.Make (String)
 
 let rec variables_of_term t =
-  match t with
+  match mterm t with
   | Var x -> StringSet.singleton x
   | Fun (_, ts) ->
      List.fold_left (fun accu t ->
@@ -261,7 +261,7 @@ let stat_equiv frame1 frame2 rew =
 
 let check_ev_ind_test trace1 trace2 test = 
   (* check that reach test from trace1 is reachable in trace2 and check static equiv of two resulting frames *)
-  match test with
+  match mterm test with
   | Fun("check_run", [w]) ->
       let f1 = execute trace1 [] w Theory.rewrite_rules in
       begin try

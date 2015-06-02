@@ -24,10 +24,10 @@ open Term
 exception Not_unifiable
 exception Not_matchable
 
-let rec subst_one x small = function
-  | Var(y) -> if x = y then small else Var(y)
+let rec subst_one x small t = match mterm t with
+  | Var(y) -> if x = y then small else termm @@ Var(y)
   | Fun(f, list) ->
-      Fun(f, List.map (function y -> subst_one x small y) list)
+      termm @@ Fun(f, List.map (function y -> subst_one x small y) list)
 
 let subst_one_in_list x small list =
   List.map (function y -> subst_one x small y) list
@@ -36,7 +36,7 @@ let subst_one_in_subst x small sigma =
   List.map (function (v, t) -> (v, (subst_one x small t))) sigma
 
 let rec unify_once s t sl tl sigma =
-  match (s, t) with
+  match (mterm s, mterm t) with
     | (Var(x), Var(y)) when x = y -> unify_list sl tl sigma
     | (Var(x), _) ->
 	(if occurs x t then
@@ -66,8 +66,8 @@ let rec new_or_same x t sigma =
   with Not_found -> (x, t) :: sigma
 
 let rec match_once pattern model pl ml sigma =
-  match (pattern, model) with
-    | (Var(x), t) -> match_list pl ml (new_or_same x t sigma)
+  match (mterm pattern, mterm model) with
+    | (Var(x), _) -> match_list pl ml (new_or_same x model sigma)
     | (Fun(f, pa), Fun(g, ma)) when ((f = g) && (List.length pa = List.length ma)) ->
 	match_list (List.append pa pl) (List.append ma ml) sigma
     | (_, _) -> raise Not_matchable
@@ -95,9 +95,9 @@ let rec top_normalize t rules =
     | s :: _ -> normalize s rules
 (* call this function to find the normal form of any term *)
 and normalize t rules =
-  match t with
+  match mterm t with
     | Fun(f, ta) ->
-	top_normalize (Fun(f, List.map (fun x -> normalize x rules) ta)) rules
+	top_normalize (termm @@ Fun(f, List.map (fun x -> normalize x rules) ta)) rules
     | Var(x) -> t
 
 (** Variants and unification modulo R *)
@@ -113,7 +113,7 @@ type mask =
   | FunMask of mask list
 ;;
 
-let rec mask_of = function
+let rec mask_of t = match mterm t with
   | Var(_) -> VarMask
   | Fun(_, tl) -> FunMask (trmap mask_of tl)
 ;;
@@ -122,7 +122,7 @@ let rec prepend n pl =
   trmap (function x -> n :: x) pl
 ;;
 
-let rec init_pos = function
+let rec init_pos t = match mterm t with
   | Var(_) -> []
   | Fun(_, tl) -> [] :: (trconcat (List.map2 prepend 
 				  (create_consecutive 0 (List.length tl))
@@ -133,7 +133,7 @@ let rec at_position t p =
   match p with
     | [] -> t
     | i :: rp -> (
-	match t with
+	match mterm t with
 	  | Var(_) -> invalid_arg("at_position")
 	  | Fun(f, tl) -> at_position (List.nth tl i) rp
       )
@@ -143,9 +143,9 @@ let rec repl_position t p s =
   match p with
     | [] -> s
     | i :: rp -> (
-	match t with
+	match mterm t with
 	  | Var(_) -> invalid_arg("at_position")
-	  | Fun(f, tl) -> Fun(f, List.map2
+	  | Fun(f, tl) -> termm @@ Fun(f, List.map2
 				(function x -> function y ->
 				   if x == i then
 				     repl_position y rp s
@@ -159,7 +159,7 @@ let rec repl_position t p s =
 let fresh_copy (l, r) =
   let vars = vars_of_term_list [l; r] in
   let new_vars = trmap (function x -> fresh_variable ()) vars in
-  let sigma = List.combine vars (trmap (function x -> (Var(x))) new_vars) in
+  let sigma = List.combine vars (trmap (function x -> termm @@ Var(x)) new_vars) in
   (apply_subst l sigma, apply_subst r sigma)
 ;;
 
@@ -216,7 +216,7 @@ let iterate_once configuration rules =
 let is_renaming sigma = 
   if List.exists (
     function (x, y) ->
-      match y with
+      match mterm y with
       | (Var _) -> false
       | _ -> true) sigma then
     false
@@ -244,7 +244,7 @@ let rec feed n positions =
 ;;
 
 let rec normalize_under term_t positions rules =
-  match term_t with
+  match mterm term_t with
   | Var(_) -> term_t
   | Fun(name, arg_list) ->
     match positions with
@@ -252,7 +252,7 @@ let rec normalize_under term_t positions rules =
       normalize term_t rules
     | _ ->
       let numbers = create_consecutive 0 (List.length arg_list) in
-      Fun(name, 
+      termm @@ Fun(name,
 	  List.map2
 	    (function term_s ->
 	      function n ->
@@ -261,10 +261,10 @@ let rec normalize_under term_t positions rules =
 ;;
 
 let simplify_2 term_t vars_t (t1, sigma1, p1) (t2, sigma2, p2) rules =
-  let s1 = Fun("!tuple!",
-	       trmap (function x -> apply_subst (Var x) sigma1) vars_t) in
-  let s2 = Fun("!tuple!",
-	       trmap (function x -> apply_subst (Var x) sigma2) vars_t) in
+  let s1 = termm @@ Fun("!tuple!",
+	       trmap (function x -> apply_subst (termm @@ Var x) sigma1) vars_t) in
+  let s2 = termm @@ Fun("!tuple!",
+	       trmap (function x -> apply_subst (termm @@ Var x) sigma2) vars_t) in
   try
     let sigma = mgu s1 s2 in
     if is_renaming sigma then
@@ -357,17 +357,17 @@ let variants = basic_variants
 
 let one_unifier ssigma sigmas tsigma sigmat svars tvars : subst list = 
   let vinter = list_intersect svars tvars in
-  let tpis = trmap (function x -> apply_subst (Var(x)) sigmas) vinter in
+  let tpis = trmap (function x -> apply_subst (termm @@ Var(x)) sigmas) vinter in
   let vpis = vars_of_term_list tpis in
-  let tpit = trmap (function x -> apply_subst (Var(x)) sigmat) vinter in
+  let tpit = trmap (function x -> apply_subst (termm @@ Var(x)) sigmat) vinter in
   let vpit = vars_of_term_list tpit in
-  let xs = trmap (function x -> Var(fresh_variable ())) vpis in
-  let ys = trmap (function x -> Var(fresh_variable ())) vpit in
+  let xs = trmap (function x -> termm @@ Var(fresh_variable ())) vpis in
+  let ys = trmap (function x -> termm @@ Var(fresh_variable ())) vpit in
   let pis = List.map2 (fun x y -> (x, y)) vpis xs in
   let pit = List.map2 (fun x y -> (x, y)) vpit ys in
-  let t1 = Fun("!tuple!", (apply_subst ssigma pis) ::
+  let t1 = termm @@ Fun("!tuple!", (apply_subst ssigma pis) ::
 		 (trmap (fun x -> apply_subst x pis) tpis)) in
-  let t2 = Fun("!tuple!", (apply_subst tsigma pit) ::
+  let t2 = termm @@ Fun("!tuple!", (apply_subst tsigma pit) ::
 		 (trmap (fun x -> apply_subst x pit) tpit)) in
   try
     let sigma = mgu t1 t2 in
