@@ -111,5 +111,5 @@ Q =  out(bb,pk(skE)) :: AnBy :: let va = no in let vb = yes in T;
 
 
 equivalentft? P and Q; //trace equivalent
-fwdequivalentft?  P and Q; //not forward indistinguishable
+not fwdequivalentft?  P and Q; //not forward indistinguishable
 

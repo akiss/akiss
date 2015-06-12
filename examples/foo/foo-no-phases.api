@@ -51,4 +51,4 @@ Setup = out(C, pk(kA)).out(C, pk(kB)).0;
 P = sequence Setup, AyesBno;
 Q = sequence Setup, AnoByes;
 
-equivalentft? P and Q;
+not equivalentft? P and Q;

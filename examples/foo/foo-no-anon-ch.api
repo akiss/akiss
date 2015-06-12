@@ -145,4 +145,4 @@ Q23 = sequence Setup, ByesP1, AnoP1, ByesP2, AnoP2, ByesP3, AnoP3, ByesP4, AnoP4
 
 Q24 = sequence Setup, ByesP1, ByesP2, AnoP1, AnoP2, ByesP3, AnoP3, ByesP4, AnoP4;
 
-equivalentft? P01, P02, P03, P04, P05, P06, P07, P08, P09, P10, P11, P12, P13, P14, P15, P16, P17, P18, P19, P20, P21, P22, P23, P24 and Q01, Q02, Q03, Q04, Q05, Q06, Q07, Q08, Q09, Q10, Q11, Q12, Q13, Q14, Q15, Q16, Q17, Q18, Q19, Q20, Q21, Q22, Q23, Q24;
+not equivalentft? P01, P02, P03, P04, P05, P06, P07, P08, P09, P10, P11, P12, P13, P14, P15, P16, P17, P18, P19, P20, P21, P22, P23, P24 and Q01, Q02, Q03, Q04, Q05, Q06, Q07, Q08, Q09, Q10, Q11, Q12, Q13, Q14, Q15, Q16, Q17, Q18, Q19, Q20, Q21, Q22, Q23, Q24;

@@ -26,4 +26,4 @@ PP = Setup :: BtoA :: TeardownReal;
 
 QQ = Setup :: BtoA :: TeardownFake;
 
-inequivalentct? PP and QQ;
+not equivalentct? PP and QQ;

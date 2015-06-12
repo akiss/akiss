@@ -46,5 +46,5 @@ Q =  out(bb,pk(skE)) :: (AnBy || BB) :: T;
 
 
 
-equivalentft? P and Q;
+not equivalentft? P and Q;
 // privacy cannot be proven because of vote replay attack

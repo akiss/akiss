@@ -56,7 +56,7 @@ rule token = parse
 	       | "fwdequivalentft?" { EvSquare (* :: main lexbuf *) }
 	       | "var" { Var (* :: main lexbuf *) }
 	       | "equivalentct?" { Equivalent (* :: main lexbuf *) }
-	       | "inequivalentct?" { Inequivalent (* :: main lexbuf *) }
+               | "not" { Not }
 	       | "variants?" { Variants (* :: main lexbuf *) }
 	       | "and" { And (* :: main lexbuf *) }
 	       | "/*" { comment 1 lexbuf }

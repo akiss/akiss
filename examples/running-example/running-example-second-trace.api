@@ -14,4 +14,4 @@ r1 = out(c, enc(a, k)).out(c, enc(b, k)).in(c, X).[X = enc(a, k)].out(c, ok).0;
 
 r2 = out(c, enc(a, k)).out(c, enc(b, k)).in(c, X).[X = enc(b, k)].out(c, ok).0;
 
-inequivalentct? s and r2;
+not equivalentct? s and r2;

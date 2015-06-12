@@ -92,4 +92,4 @@ Q6  =  out(bb,pk(skE)) :: BB :: Byes :: Ano ::let va = yes in let vb = no in T;
 
 
 //fwdequivalentft?  P1, P2, P3, P4, P5, P6 and Q1, Q2, Q3, Q4, Q5, Q6; //not forward indistinguishable
-fwdequivalentft? P1 and Q1; //shows the attack
+not fwdequivalentft? P1 and Q1; //shows the attack

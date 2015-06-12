@@ -33,6 +33,11 @@ type tempProcess =
   | TempEmpty
   | TempProcessRef of string
 		      
+type negatable_cmd =
+  | NegEquivalent of (string list) * (string list)
+  | NegSquare of (string list) * (string list)
+  | NegEvSquare of (string list) * (string list)
+
 type cmd =
   | SetXOR | SetAC
   | DeclSymbols of (string * int) list
@@ -47,10 +52,7 @@ type cmd =
   | DeclInterleaveOpt of string * (string list)
   | DeclRemoveEndTests of string * (string list)
   | DeclSequence of string * (string list)
-  | QueryEquivalent of (string list) * (string list)
-  | QueryInequivalent of (string list) * (string list)
-  | QuerySquare of (string list) * (string list)
-  | QueryEvSquare of (string list) * (string list)
+  | QueryNegatable of bool * negatable_cmd
   | QueryPrint of string
   | QueryPrintTraces of string list
   | QueryVariants of tempTerm

@@ -30,7 +30,7 @@ open Ast
 %token LeftP RightP LeftB RightB
 %token Arrow Equals Dot Slash Comma Semicolon
 %token Out In And Zero
-%token Equivalent Inequivalent Square EvSquare Variants
+%token Not Equivalent Square EvSquare Variants
 %token Print PrintTraces
 %token Interleave Sequence InterleaveOpt RemoveEndTests
 %token InnerSequence InnerInterleave
@@ -63,13 +63,16 @@ command:
  | Identifier Equals InterleaveOpt identifierList { DeclInterleaveOpt ($1, $4) }
  | Identifier Equals RemoveEndTests identifierList { DeclRemoveEndTests ($1, $4) }
  | Identifier Equals Sequence identifierList { DeclSequence ($1, $4) }
- | Equivalent identifierList And identifierList { QueryEquivalent ($2, $4) }
- | Inequivalent identifierList And identifierList { QueryInequivalent ($2, $4) }
  | Print Identifier { QueryPrint $2 }
  | PrintTraces identifierList { QueryPrintTraces $2 }
- | Square identifierList And identifierList { QuerySquare ($2, $4) }
- | EvSquare identifierList And identifierList { QueryEvSquare ($2, $4) }
  | Variants term { QueryVariants $2 }
+ | negatable { QueryNegatable (true, $1) }
+ | Not negatable { QueryNegatable (false, $2) }
+
+negatable:
+ | Equivalent identifierList And identifierList { NegEquivalent ($2, $4) }
+ | Square identifierList And identifierList { NegSquare ($2, $4) }
+ | EvSquare identifierList And identifierList { NegEvSquare ($2, $4) }
 
 identifierList:
  | { [] }

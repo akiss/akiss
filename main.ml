@@ -141,9 +141,10 @@ let check_one_to_more (tests1, trace1) list rew =
   else
     raise (OneToMoreFail(trace1, tests1))
 
-let square s t =
+let square ~expected s t =
   Printf.printf
-    "Checking fine grained equivalence of %s and %s\n%!"
+    "Checking fine grained %sequivalence of %s and %s\n%!"
+    (if expected then "" else "in")
     (show_string_list s) (show_string_list t);
   let ls = List.concat (List.map (fun x -> List.assoc x !processes) s) in
   let lt = List.concat (List.map (fun x -> List.assoc x !processes) t) in
@@ -170,7 +171,8 @@ let square s t =
          (fun x -> check_one_to_more x stests Theory.rewrite_rules)
          ttests);
     Printf.printf "%s and %s are fine-grained trace equivalent\n%!"
-      (show_string_list s) (show_string_list t)
+      (show_string_list s) (show_string_list t);
+    if not expected then exit 1
   with
     | OneToMoreFail(tr, tests) -> 
         Printf.printf
@@ -180,7 +182,8 @@ let square s t =
           "the trace %s has no equivalent trace on the other side\n%!"
           (show_trace tr);
         Printf.printf "its tests are\n%!%s\n%!"
-          (show_tests tests)
+          (show_tests tests);
+        if expected then exit 1
 
 let stat_equiv frame1 frame2 rew =
   
@@ -253,9 +256,10 @@ let ev_check_one_to_more (tests1, trace1) list =
   else
     raise (OneToMoreFail(trace1, tests1))
 
-let evequiv s t =
+let evequiv ~expected s t =
   Printf.printf
-    "Checking forward indistinguishability for %s and %s\n%!"
+    "Checking forward %sdistinguishability for %s and %s\n%!"
+    (if expected then "in" else "")
     (show_string_list s) (show_string_list t);
   (* list of traces of s, then t *)
   let ls =
@@ -284,7 +288,8 @@ let evequiv s t =
       ignore (trmap (fun x -> ev_check_one_to_more x stests ) ttests);
       Printf.printf
         "%s and %s are forward indistinguishable\n%!"
-        (show_string_list s) (show_string_list t)
+        (show_string_list s) (show_string_list t);
+      if not expected then exit 1
     with
       |	OneToMoreFail(tr, tests) -> 
           Printf.printf
@@ -295,7 +300,8 @@ let evequiv s t =
             (show_trace tr);
           Printf.printf
             "its tests are\n%!%s\n%!"
-            (show_tests tests)
+            (show_tests tests);
+          if expected then exit 1
 
 let trace_of_process (p : process) : trace =
   match p with
@@ -432,14 +438,13 @@ let processCommand = function
     verboseOutput "Declaring %s as sequence\n%!" traceName;
     declare_sequence traceName traceList
 
-  | QueryEquivalent(traceList1, traceList2) ->
-    query ~expected:true traceList1 traceList2
-  | QueryInequivalent(traceList1, traceList2) ->
-    query ~expected:false traceList1 traceList2
-  | QuerySquare (traceList1, traceList2) ->
-    square traceList1 traceList2
-  | QueryEvSquare (traceList1, traceList2) ->
-    evequiv traceList1 traceList2
+  | QueryNegatable (expected, NegEquivalent (traceList1, traceList2)) ->
+    query ~expected traceList1 traceList2
+  | QueryNegatable (expected, NegSquare (traceList1, traceList2)) ->
+    square ~expected traceList1 traceList2
+  | QueryNegatable (expected, NegEvSquare (traceList1, traceList2)) ->
+    evequiv ~expected traceList1 traceList2
+
   | QueryPrint traceName ->
     Printf.printf "Printing information about %s\n%!" traceName;
     query_print traceName

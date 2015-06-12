@@ -30,4 +30,4 @@ Setup = in(C,s1).in(C,s2).out(C,pk(ka)).out(C,pk(kb)).in(C,z).0;
 PP = Setup :: BtoA1;
 QQ = Setup :: BtoA2;
 
-inequivalentct? PP and QQ;
+not equivalentct? PP and QQ;

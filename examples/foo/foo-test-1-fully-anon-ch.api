@@ -37,4 +37,4 @@ P = sequence Setup, AyesP1, AyesP2, BnoP1, BnoP2, AyesP3, AyesP4, BnoP3, BnoP4;
 
 Q = sequence Setup, AnoP1, AnoP2, ByesP1, ByesP2, AnoP3, AnoP4, ByesP3, ByesP4;
 
-inequivalentct? P and Q;
+not equivalentct? P and Q;

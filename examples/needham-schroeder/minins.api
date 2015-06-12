@@ -43,7 +43,7 @@ PP = Setup :: P :: TeardownReal;
 
 QQ = Setup :: P :: TeardownFake;
 
-inequivalentct? PP and QQ;
+not equivalentct? PP and QQ;
 
 // Test that works on PP but not on QQ:
 // check_identity(
