@@ -348,7 +348,7 @@ let rec iterate_all term_t vars_t configuration rules =
   )
 ;;
 
-(* memoization table, shared by basic_variants and recursive_variants *)
+(* memoization table *)
 let table = Hashtbl.create 100
 
 let memoize f t rules =
@@ -366,74 +366,7 @@ let basic_variants t rules =
 
 let basic_variants = memoize basic_variants
 
-let decompose t =
-  match t with
-  | Fun ("!tuple!", args) ->
-     (match List.rev args with
-      | x :: xs -> Some (Fun ("!tuple!", List.rev xs), x)
-      | [] -> None)
-  | _ -> None
-
-module ComparableVariant = struct
-  type t = term * subst * int list list
-  let compare (x1, _, _) (x2, _, _) = Pervasives.compare x1 x2
-end
-
-module S = Set.Make (ComparableVariant)
-
-let rec recursive_variants t rules =
-     match decompose t with
-     | Some (prefix, u) ->
-        (* we hope variants of prefix are already computed, and we
-           compute variants of u and then combine them with those of
-           prefix *)
-        let prefix_variants = memoize recursive_variants prefix rules in
-        let combined_variants =
-          List.fold_left
-            (fun accu (x1, s1, _) ->
-             List.fold_left
-               (fun accu (x2, s2, _) ->
-                let i = list_intersect (List.map fst s1) (List.map fst s2) in
-                if i = [] then
-                  let s = compose s1 s2 in
-                  let x1 = apply_subst x1 s2 and x2 = apply_subst x2 s1 in
-                  match x1 with
-                  | Fun ("!tuple!", xs) ->
-                     let x = Fun ("!tuple!", List.rev (x2 :: List.rev xs)) in
-                     S.add (x, s, []) accu
-                  | _ -> assert false
-                else accu)
-               accu (basic_variants u rules))
-            S.empty prefix_variants
-        in
-        let combined_variants =
-          List.fold_left
-            (fun accu (x1, s1, _) ->
-             List.fold_left
-               (fun accu (x2, s2, _) ->
-                let s = compose s1 s2 in
-                let x1 = apply_subst x1 s2 in
-                match x1 with
-                | Fun ("!tuple!", xs) ->
-                   let x = Fun ("!tuple!", List.rev (x2 :: List.rev xs)) in
-                   S.add (x, s, []) accu
-                | _ -> assert false)
-               accu (basic_variants (apply_subst u s1) rules))
-            combined_variants prefix_variants
-        in
-        S.elements combined_variants
-     | None ->
-        (* t is atomic, we use the basic algorithm *)
-        basic_variants t rules
-;;
-
-let recursive_variants = memoize recursive_variants
-
-let variants t rules =
-  if !Config.recursive_variants then
-    recursive_variants t rules
-  else
-    basic_variants t rules
+let variants = basic_variants
 
 let one_unifier ssigma sigmas tsigma sigmat svars tvars : subst list = 
   let vinter = list_intersect svars tvars in

@@ -62,8 +62,6 @@ let command_line_options_list = [
    "Use the AC-compatible toolbox even on non-AC theories (experimental, needs maude and tamarin)");
   ("--tamarin-variants", Arg.Set tamarin_variants,
    "Use tamarin-prover to compute variants in seed statements");
-  ("--recursive-variants", Arg.Set Config.recursive_variants,
-   "Use (experimental) recursive variants algorithm");
   ("--check-generalizations", Arg.Set check_generalizations,
    "Check that generalizations of kept statements are never dropped.")
 ]

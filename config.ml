@@ -58,5 +58,3 @@ let tamarin_binary = lazy (
                         ~/.cabal/bin to it.\n" ;
         exit 1
 )
-
-let recursive_variants = ref false
