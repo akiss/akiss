@@ -76,8 +76,16 @@ let rec show_process process =
 open Ast
 
 let rec parse_action = function
-  | TempActionOut(ch, t) -> Output(ch, parse_term t)
-  | TempActionIn(ch, x) -> Input(ch, x)
+  | TempActionOut(ch, t) ->
+     if List.mem ch !channels then
+       Output(ch, parse_term t)
+     else
+       Printf.ksprintf failwith "Undeclared channel: %s" ch
+  | TempActionIn(ch, x) ->
+     if List.mem ch !channels then
+       Input(ch, x)
+     else
+       Printf.ksprintf failwith "Undeclared channel: %s" ch
   | TempActionTest(s, t) -> Test(parse_term s, parse_term t)
 ;;
 
