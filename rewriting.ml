@@ -348,23 +348,10 @@ let rec iterate_all term_t vars_t configuration rules =
   )
 ;;
 
-(* memoization table *)
-let table = Hashtbl.create 100
-
-let memoize f t rules =
-  try
-    Hashtbl.find table (t, rules)
-  with Not_found ->
-    let r = f t rules in
-    Hashtbl.add table (t, rules) r;
-    r
-
 let basic_variants t rules =
   (* Printf.printf "Compute variants of : %s\n" (show_term t); *)
   let vars_t = vars_of_term t in
   iterate_all t vars_t [(t, [], init_pos t)] rules
-
-let basic_variants = memoize basic_variants
 
 let variants = basic_variants
 
