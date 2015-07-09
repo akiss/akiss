@@ -25,9 +25,9 @@ rewrite snd(pair(xx, yy)) -> yy;
 // A = out(C, aenc(pair(na, a), pk(k), r1)).in(C, y).[snd(snd(adec(y,ka)))=d].out(C, aenc(fst(snd(adec(y,ka))), pk(k), r2)).0;
 
 
-AtoB = out(C, aenc(pair(na, a), pk(kb), r1)).in(C, y1).[snd(snd(adec(y,ka)))=d].out(C, aenc(fst(snd(adec(y1,ka))), pk(kb), r2)).0;
+AtoB = out(C, aenc(pair(na, a), pk(kb), r1)).in(C, y1).[snd(snd(adec(y1,ka)))=d].out(C, aenc(fst(snd(adec(y1,ka))), pk(kb), r2)).0;
 
-AtoD = out(C, aenc(pair(na, a), pk(kd), r1)).in(C, y2).[snd(snd(adec(y,ka)))=d].out(C, aenc(fst(snd(adec(y2,ka))), pk(kd), r2)).0;
+AtoD = out(C, aenc(pair(na, a), pk(kd), r1)).in(C, y2).[snd(snd(adec(y2,ka)))=d].out(C, aenc(fst(snd(adec(y2,ka))), pk(kd), r2)).0;
 
 
 BtoA = in(C, y0).[snd(adec(y0, kb)) = a].out(C, aenc(pair(fst(adec(y0, kb)), pair(nb, b)), pk(ka), r3)).0;
@@ -44,4 +44,4 @@ PP = Setup :: P :: TeardownReal;
 
 QQ = Setup :: P :: TeardownFake;
 
-not equivalentct? PP and QQ;
+equivalentct? PP and QQ;

@@ -80,6 +80,37 @@ let processes = ref []
 let rec declare_process name process =
   addto processes (name, parse_process process !processes)
 
+module StringSet = Set.Make (String)
+
+let rec variables_of_term t =
+  match t with
+  | Var x -> StringSet.singleton x
+  | Fun (_, ts) ->
+     List.fold_left (fun accu t ->
+       StringSet.union accu (variables_of_term t)
+     ) StringSet.empty ts
+
+let rec variables_of_trace t =
+  match t with
+  | NullTrace -> StringSet.empty
+  | Trace (a, t) ->
+     let xs = variables_of_trace t in
+     match a with
+     | Input (_, x) -> StringSet.remove x xs
+     | Output (_, t) -> StringSet.union xs (variables_of_term t)
+     | Test (t1, t2) ->
+        let xs1 = variables_of_term t1 in
+        let xs2 = variables_of_term t2 in
+        StringSet.(union xs (union xs1 xs2))
+
+let check_free_variables t =
+  let xs = variables_of_trace t in
+  if not (StringSet.is_empty xs) then begin
+    Printf.printf "Process has free variables: %s.\n%!"
+      (String.concat ", " (StringSet.elements xs));
+    exit 2
+  end
+
 let query ?(expected=true) s t =
   Printf.printf
     "Checking coarse trace %sequivalence of %s and %s\n%!"
@@ -87,6 +118,8 @@ let query ?(expected=true) s t =
     (show_string_list s) (show_string_list t);
   let straces = List.concat (List.map (fun x -> List.assoc x !processes) s) in
   let ttraces = List.concat (List.map (fun x -> List.assoc x !processes) t) in
+  let () = List.iter check_free_variables straces in
+  let () = List.iter check_free_variables ttraces in
   let () = reset_count ((List.length straces) + (List.length ttraces)) in
   let stests =
     Lwt_list.map_p
@@ -148,6 +181,8 @@ let square ~expected s t =
     (show_string_list s) (show_string_list t);
   let ls = List.concat (List.map (fun x -> List.assoc x !processes) s) in
   let lt = List.concat (List.map (fun x -> List.assoc x !processes) t) in
+  let () = List.iter check_free_variables ls in
+  let () = List.iter check_free_variables lt in
   let () = reset_count ((List.length ls) + (List.length lt)) in
   let stests =
     Lwt_list.map_p
@@ -268,6 +303,8 @@ let evequiv ~expected s t =
   let lt =
     List.concat (List.map (fun x -> List.assoc x !processes) t)
   in
+  let () = List.iter check_free_variables ls in
+  let () = List.iter check_free_variables lt in
   let () = reset_count ((List.length ls) + (List.length lt)) in
   let stests =
     Lwt_list.map_p
