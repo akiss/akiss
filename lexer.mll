@@ -35,52 +35,52 @@ let upper = ['A' - 'Z']
 let letter = lower | upper
 let letters = letter ((letter | digit) * )
 rule token = parse
-               | "0" { Zero (* :: main lexbuf *) }
-	       | "let" { Let (* :: main lexbuf *) }
-           | "#set xor" { XOR }
-           | "#set ac;"  { AC }
-           | "#set ac+;" { AC }
-	       | "symbols" { Symbols (* :: main lexbuf *) }
-	       | "private" { Private (* :: main lexbuf *) }
-	       | "channels" { Channels (* :: main lexbuf *) }
-	       | "evchannels" { EvChannels (* :: main lexbuf *) }
-	       | "::" { InnerSequence (* :: main lexbuf *) }
-	       | "||" { InnerInterleave (* :: main lexbuf *) }
-	       | "interleave" { Interleave (* :: main lexbuf *) }
-	       | "interleave_opt" { InterleaveOpt (* :: main lexbuf *) }
-	       | "remove_end_tests" { RemoveEndTests (* :: main lexbuf *) }
-	       | "print_traces" { PrintTraces (* :: main lexbuf *) }
-	       | "sequence" { Sequence (* :: main lexbuf *) }
-	       | "print" { Print (* :: main lexbuf *) }
-	       | "equivalentft?" { Square (* :: main lexbuf *) }
-	       | "fwdequivalentft?" { EvSquare (* :: main lexbuf *) }
-	       | "var" { Var (* :: main lexbuf *) }
-	       | "equivalentct?" { Equivalent (* :: main lexbuf *) }
-               | "not" { Not }
-	       | "variants?" { Variants (* :: main lexbuf *) }
-	       | "and" { And (* :: main lexbuf *) }
-	       | "/*" { comment 1 lexbuf }
-	       | "//" { line_comment lexbuf (* :: main lexbuf *) }
-	       | "/" { Slash (* :: main lexbuf *) }
-	       | "," { Comma (* :: main lexbuf *) }
-	       | ";" { Semicolon (* :: main lexbuf *) }
-	       | "var" { Var (* :: main lexbuf *) }
-	       | "rewrite" { Rewrite (* :: main lexbuf *) }
-	       | "evrewrite" { EvRewrite (* :: main lexbuf *) }
-	       | "->" { Arrow (* :: main lexbuf *) }
-	       | "=" { Equals (* :: main lexbuf *) }
-	       | "out" { Out (* :: main lexbuf *) }
-	       | "in" { In (* :: main lexbuf *) }
-	       | "[" { LeftB (* :: main lexbuf *) }
-	       | "]" { RightB (* :: main lexbuf *) }
-	       | "(" { LeftP (* :: main lexbuf *) }
-	       | ")" { RightP (* :: main lexbuf *) }
-	       | "." { Dot (* :: main lexbuf *) }
-               | digits as n { Int(int_of_string n) (* :: main lexbuf *) }
-	       | letters as s { Identifier s (* :: main lexbuf *) }
-	       | '\n' { incr_linenum lexbuf; token lexbuf }
-	       | eof { EOF (* [] *) }
-	       | _ { token lexbuf }
+    | "0" { Zero }
+    | "let" { Let }
+    | "#set xor" { XOR }
+    | "#set ac;"  { AC }
+    | "#set ac+;" { AC }
+    | "symbols" { Symbols }
+    | "private" { Private }
+    | "channels" { Channels }
+    | "evchannels" { EvChannels }
+    | "::" { InnerSequence }
+    | "||" { InnerInterleave }
+    | "interleave" { Interleave }
+    | "interleave_opt" { InterleaveOpt }
+    | "remove_end_tests" { RemoveEndTests }
+    | "print_traces" { PrintTraces }
+    | "sequence" { Sequence }
+    | "print" { Print }
+    | "equivalentft?" { Square }
+    | "fwdequivalentft?" { EvSquare }
+    | "var" { Var }
+    | "equivalentct?" { Equivalent }
+    | "not" { Not }
+    | "variants?" { Variants }
+    | "and" { And }
+    | "/*" { comment 1 lexbuf }
+    | "//" { line_comment lexbuf }
+    | "/" { Slash }
+    | "," { Comma }
+    | ";" { Semicolon }
+    | "var" { Var }
+    | "rewrite" { Rewrite }
+    | "evrewrite" { EvRewrite }
+    | "->" { Arrow }
+    | "=" { Equals }
+    | "out" { Out }
+    | "in" { In }
+    | "[" { LeftB }
+    | "]" { RightB }
+    | "(" { LeftP }
+    | ")" { RightP }
+    | "." { Dot }
+    | digits as n { Int(int_of_string n) }
+    | letters as s { Identifier s }
+    | '\n' { incr_linenum lexbuf; token lexbuf }
+    | eof { EOF }
+    | _ { token lexbuf }
 and comment depth = parse
     | '\n' { incr_linenum lexbuf; comment depth lexbuf }
     | "/*" { comment (depth + 1) lexbuf }
