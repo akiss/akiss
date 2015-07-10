@@ -11,26 +11,21 @@
 //
 symbols adec/2, aenc/3, pk/1, fst/1, snd/1, pair/2, a/0, b/0, d/0, kd/0, ok/0;
 
-private na, nb, ka, kb, fk,r1,r2,r3;
+private na, nb, ka, kb, fk,r1b,r2b,r1d,r2d,r3;
 
-channels C;
+channels C, Cab, Cad, Cb;
 
-var x, y, y1, y2, z, xx, yy, zz, x0, y0, z0, k;
+var y1, y2, z, xx, yy, zz, y0, k, r1, r2;
 
 rewrite adec(aenc(xx, pk(yy), zz), yy) -> xx;
 rewrite fst(pair(xx, yy)) -> xx;
 rewrite snd(pair(xx, yy)) -> yy;
 
 
-// A = out(C, aenc(pair(na, a), pk(k), r1)).in(C, y).[snd(snd(adec(y,ka)))=d].out(C, aenc(fst(snd(adec(y,ka))), pk(k), r2)).0;
+AtoB = out(Cab, aenc(pair(na, a), pk(kb), r1b)).in(Cab, y1).[snd(snd(adec(y1,ka)))=b].out(Cab, aenc(fst(snd(adec(y1,ka))), pk(kb), r2b)).0;
+AtoD = out(Cad, aenc(pair(na, a), pk(kd), r1d)).in(Cad, y2).[snd(snd(adec(y2,ka)))=d].out(Cad, aenc(fst(snd(adec(y2,ka))), pk(kd), r2d)).0;
 
-
-AtoB = out(C, aenc(pair(na, a), pk(kb), r1)).in(C, y1).[snd(snd(adec(y1,ka)))=b].out(C, aenc(fst(snd(adec(y1,ka))), pk(kb), r2)).0;
-
-AtoD = out(C, aenc(pair(na, a), pk(kd), r1)).in(C, y2).[snd(snd(adec(y2,ka)))=d].out(C, aenc(fst(snd(adec(y2,ka))), pk(kd), r2)).0;
-
-
-BtoA = in(C, y0).[snd(adec(y0, kb)) = a].out(C, aenc(pair(fst(adec(y0, kb)), pair(nb, b)), pk(ka), r3)).0;
+BtoA = in(Cb, y0).[snd(adec(y0, kb)) = a].out(Cb, aenc(pair(fst(adec(y0, kb)), pair(nb, b)), pk(ka), r3)).0;
 
 Setup = out(C,pk(ka)).out(C,pk(kb)).0;
 
