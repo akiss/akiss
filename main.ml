@@ -90,26 +90,38 @@ let rec variables_of_term t =
        StringSet.union accu (variables_of_term t)
      ) StringSet.empty ts
 
+exception MultiplyBoundVariable of string
+
+(** Computes fvs, bvs, where fvs is the set of free variables and bvs
+    the set of bound variables. *)
 let rec variables_of_trace t =
   match t with
-  | NullTrace -> StringSet.empty
+  | NullTrace -> StringSet.empty, StringSet.empty
   | Trace (a, t) ->
-     let xs = variables_of_trace t in
+     let fvs, bvs = variables_of_trace t in
      match a with
-     | Input (_, x) -> StringSet.remove x xs
-     | Output (_, t) -> StringSet.union xs (variables_of_term t)
+     | Input (_, x) ->
+        if StringSet.mem x bvs then
+          (* the Barendregt convention is not honoured *)
+          raise (MultiplyBoundVariable x);
+       StringSet.remove x fvs, StringSet.add x bvs
+     | Output (_, t) -> StringSet.union fvs (variables_of_term t), bvs
      | Test (t1, t2) ->
         let xs1 = variables_of_term t1 in
         let xs2 = variables_of_term t2 in
-        StringSet.(union xs (union xs1 xs2))
+        StringSet.(union fvs (union xs1 xs2)), bvs
 
 let check_free_variables t =
-  let xs = variables_of_trace t in
-  if not (StringSet.is_empty xs) then begin
-    Printf.printf "Process has free variables: %s.\n%!"
-      (String.concat ", " (StringSet.elements xs));
+  try
+    let xs, _ = variables_of_trace t in
+    if not (StringSet.is_empty xs) then begin
+      Printf.eprintf "Process has free variables: %s.\n%!"
+        (String.concat ", " (StringSet.elements xs));
+      exit 2
+    end
+  with MultiplyBoundVariable x ->
+    Printf.eprintf "Variable %s is bound multiple times.\n%!" x;
     exit 2
-  end
 
 let query ?(expected=true) s t =
   Printf.printf
