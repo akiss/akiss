@@ -40,9 +40,6 @@ val show_trace : trace -> string
 
 (** {3 Parsing} *)
 
-val sequence_traces : process list -> process
-val split_endingtests : trace -> trace * trace
-val interleave_opt_traces : process -> process
 val parse_process : Ast.tempProcess -> (string * process) list -> process
 
 (** {2 Executing and testing processes} *)

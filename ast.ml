@@ -48,10 +48,6 @@ type cmd =
   | DeclRewrite of tempTerm * tempTerm
   | DeclEvRewrite of tempTerm * tempTerm
   | DeclProcess of string * tempProcess
-  | DeclInterleave of string * (string list)
-  | DeclInterleaveOpt of string * (string list)
-  | DeclRemoveEndTests of string * (string list)
-  | DeclSequence of string * (string list)
   | QueryNegatable of bool * negatable_cmd
   | QueryPrint of string
   | QueryPrintTraces of string list

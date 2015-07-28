@@ -32,7 +32,6 @@ open Ast
 %token Out In And Zero
 %token Not Equivalent Square EvSquare Variants
 %token Print PrintTraces
-%token Interleave Sequence InterleaveOpt RemoveEndTests
 %token InnerSequence InnerInterleave
 %token EOF
 
@@ -59,10 +58,6 @@ command:
  | Rewrite term Arrow term { DeclRewrite ($2, $4) }
  | EvRewrite term Arrow term { DeclEvRewrite ($2, $4) }
  | Identifier Equals process { DeclProcess ($1, $3) }
- | Identifier Equals Interleave identifierList { DeclInterleave ($1, $4) }
- | Identifier Equals InterleaveOpt identifierList { DeclInterleaveOpt ($1, $4) }
- | Identifier Equals RemoveEndTests identifierList { DeclRemoveEndTests ($1, $4) }
- | Identifier Equals Sequence identifierList { DeclSequence ($1, $4) }
  | Print Identifier { QueryPrint $2 }
  | PrintTraces identifierList { QueryPrintTraces $2 }
  | Variants term { QueryVariants $2 }

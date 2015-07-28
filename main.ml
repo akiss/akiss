@@ -357,55 +357,6 @@ let trace_of_process (p : process) : trace =
     | [t] -> t
     | _ -> invalid_arg "trace_of_process: not a trace"
 
-let interleave_opt tnl =
-  let tl =
-    List.map (fun x -> trace_of_process(List.assoc x !processes)) tnl
-  in
-  interleave_opt_traces tl
-
-let remove_end_tests_traces (tlist : trace list) =
-  List.map (fun x -> fst (split_endingtests x)) tlist
-
-let remove_end_tests tnl =
-  let tl =
-    List.map (fun x -> trace_of_process(List.assoc x !processes)) tnl
-  in
-  remove_end_tests_traces tl
-
-let rec interleave_two_traces s t =
-  match (s, t) with
-    | (NullTrace, _) -> [t]
-    | (_, NullTrace) -> [s]
-    | (Trace(a, sn), Trace(b, tn)) ->
-	List.append
-	  (List.map (fun x -> Trace(a, x)) (interleave_two_traces sn t))
-	  (List.map (fun x -> Trace(b, x)) (interleave_two_traces s tn))
-
-let rec interleave_traces (tlist : trace list) : trace list =
-  match tlist with
-    | [] -> [NullTrace]
-    | hd :: [] -> [hd]
-    | hd :: hdp :: tl ->
-	List.concat
-	  (List.map
-	     (fun x -> interleave_traces (x :: tl))
-	     (interleave_two_traces hd hdp))
-
-let interleave tnl =
-  let tl =
-    List.map (fun x -> trace_of_process(List.assoc x !processes)) tnl
-  in
-  interleave_traces tl
-
-let declare_interleave traceName traceList =
-  addto processes (traceName, interleave traceList)
-
-let declare_interleave_opt traceName traceList =
-  addto processes (traceName, interleave_opt traceList)
-
-let declare_remove_end_tests traceName traceList =
-  addto processes (traceName, remove_end_tests traceList)
-
 let print_trace_list (tlist : trace list) = 
   Printf.printf "%s\n%!" (String.concat "\n" (trmap show_trace tlist))
 
@@ -413,13 +364,6 @@ let print_traces tnl =
   Printf.printf "Printing the list of traces of %s\n%!" (String.concat ", " tnl);
   let tl = List.concat (trmap (fun x -> (List.assoc x !processes)) tnl) in
   print_trace_list tl
-
-let sequence tnl =
-  let tl = List.map (fun x -> List.assoc x !processes) tnl in
-  sequence_traces tl
-
-let declare_sequence traceName traceList =
-  addto processes (traceName, sequence traceList)
 
 let query_print traceName =
   let print_kbs ?(filter=fun _ -> true) s =
@@ -474,18 +418,6 @@ let processCommand = function
   | DeclProcess(name, process) ->
     verboseOutput "Declaring process %s\n%!" name;
     declare_process name process
-  | DeclInterleave(traceName, traceList) ->
-    verboseOutput "Declaring %s as interleaving\n%!" traceName;
-    declare_interleave traceName traceList
-  | DeclInterleaveOpt(traceName, traceList) ->
-    verboseOutput "Declaring %s as optimal interleaving\n%!" traceName;
-    declare_interleave_opt traceName traceList
-  | DeclRemoveEndTests(traceName, traceList) ->
-    verboseOutput "Declaring %s by removing end tests\n%!" traceName;
-    declare_remove_end_tests traceName traceList
-  | DeclSequence(traceName, traceList) ->
-    verboseOutput "Declaring %s as sequence\n%!" traceName;
-    declare_sequence traceName traceList
 
   | QueryNegatable (expected, NegEquivalent (traceList1, traceList2)) ->
     query ~expected traceList1 traceList2

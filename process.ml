@@ -165,17 +165,6 @@ let interleave_opt_two_traces s t =
   trmap (fun x -> (prepend_trace (prepend_trace x se) te)) list
 ;;
 
-let rec interleave_opt_traces (tlist : trace list) : trace list =
-  match tlist with 
-    | [] -> [NullTrace]
-    | hd :: [] -> [hd]
-    | hd :: hdp :: tl ->
-	List.concat
-	  (List.map
-	     (fun x -> interleave_opt_traces (x :: tl))
-	     (interleave_opt_two_traces hd hdp))
-;;
-
 let rec interleave_opt_trace_process (t : trace) (p : trace list) : trace list =
   match p with
   | [] -> []

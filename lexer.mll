@@ -46,11 +46,7 @@ rule token = parse
     | "evchannels" { EvChannels }
     | "::" { InnerSequence }
     | "||" { InnerInterleave }
-    | "interleave" { Interleave }
-    | "interleave_opt" { InterleaveOpt }
-    | "remove_end_tests" { RemoveEndTests }
     | "print_traces" { PrintTraces }
-    | "sequence" { Sequence }
     | "print" { Print }
     | "equivalentft?" { Square }
     | "fwdequivalentft?" { EvSquare }
