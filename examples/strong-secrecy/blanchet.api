@@ -47,11 +47,11 @@ B2 = in(c, X).
      out(c, enc(Z2,snd(snd(msg(adec(X,ekB)))))).0;
 
 // Computing the interleavings of the 2 roles
-I1 = interleave_opt A, B1;
-I2 = interleave_opt A, B2;
+I1 = A || B1;
+I2 = A || B2;
 
 
-P = sequence Setup,I1;
-Q = sequence Setup,I2;
+P = Setup :: I1;
+Q = Setup :: I2;
 
 equivalentct? P and Q;

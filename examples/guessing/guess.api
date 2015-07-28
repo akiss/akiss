@@ -13,7 +13,7 @@ tA = out(c, enc(n, w)).0;
 
 tB = in(c, x).out(c, enc(h(dec(x, w)), w)).0;
 
-P = interleave tA, tB;
+P = tA || tB;
 
 revealW = out(c, w).0;
 revealV = out(c, v).0;

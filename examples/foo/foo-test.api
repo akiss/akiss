@@ -34,27 +34,27 @@ BnoP2 = out(C, unblind(xBno, bBno)).0;
 BnoP3 = out(C, rBno).0;
 
 
-Phase1AyesBno = interleave AyesP1, BnoP1;
-Phase2AyesBno = interleave AyesP2, BnoP2;
-Phase3AyesBno = interleave AyesP3, BnoP3;
+Phase1AyesBno = AyesP1 || BnoP1;
+Phase2AyesBno = AyesP2 || BnoP2;
+Phase3AyesBno = AyesP3 || BnoP3;
 
-AyesBno1 = sequence Phase1AyesBno, Ayeschecks, Bnochecks, Phase2AyesBno, Phase3AyesBno;
-AyesBno2 = sequence Phase1AyesBno, Bnochecks, Ayeschecks, Phase2AyesBno, Phase3AyesBno;
+AyesBno1 = Phase1AyesBno :: Ayeschecks :: Bnochecks :: Phase2AyesBno :: Phase3AyesBno;
+AyesBno2 = Phase1AyesBno :: Bnochecks :: Ayeschecks :: Phase2AyesBno :: Phase3AyesBno;
 
 
-Phase1AnoByes = interleave AnoP1, ByesP1;
-Phase2AnoByes = interleave AnoP2, ByesP2;
-Phase3AnoByes = interleave AnoP3, ByesP3;
+Phase1AnoByes = AnoP1 || ByesP1;
+Phase2AnoByes = AnoP2 || ByesP2;
+Phase3AnoByes = AnoP3 || ByesP3;
 
-AnoByes1 = sequence Phase1AnoByes, Anochecks, Byeschecks, Phase2AnoByes, Phase3AnoByes;
-AnoByes2 = sequence Phase1AnoByes, Byeschecks, Anochecks, Phase2AnoByes, Phase3AnoByes;
+AnoByes1 = Phase1AnoByes :: Anochecks :: Byeschecks :: Phase2AnoByes :: Phase3AnoByes;
+AnoByes2 = Phase1AnoByes :: Byeschecks :: Anochecks :: Phase2AnoByes :: Phase3AnoByes;
 
 Setup = out(C, pk(kA)).out(C, pk(kB)).0;
 
-P1 = sequence Setup, AyesBno1;
-P2 = sequence Setup, AyesBno2;
+P1 = Setup :: AyesBno1;
+P2 = Setup :: AyesBno2;
 
-Q1 = sequence Setup, AnoByes1;
-Q2 = sequence Setup, AnoByes2;
+Q1 = Setup :: AnoByes1;
+Q2 = Setup :: AnoByes2;
 
 equivalentft? P1, P2 and Q1, Q2;

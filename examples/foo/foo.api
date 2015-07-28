@@ -55,15 +55,15 @@ Phase2AyesBno = AyesP2 || BnoP2;
 Phase3AyesBno = AyesP3 || BnoP3;
 
 // protocol for A voting 'yes' and B voting 'no'
-AyesBno = sequence Phase1AyesBno, Phase2AyesBno, Phase3AyesBno;
+AyesBno = Phase1AyesBno :: Phase2AyesBno :: Phase3AyesBno;
 
 // Interleaving each of the phases separately
-Phase1AnoByes = interleave_opt AnoP1, ByesP1;
-Phase2AnoByes = interleave_opt AnoP2, ByesP2;
-Phase3AnoByes = interleave_opt AnoP3, ByesP3;
+Phase1AnoByes = AnoP1 || ByesP1;
+Phase2AnoByes = AnoP2 || ByesP2;
+Phase3AnoByes = AnoP3 || ByesP3;
 
 // protocol for A voting 'no' and B voting 'yes'
-AnoByes = sequence Phase1AnoByes, Phase2AnoByes, Phase3AnoByes;
+AnoByes = Phase1AnoByes :: Phase2AnoByes :: Phase3AnoByes;
 
 // publishing public keys
 Setup = out(C, pk(kA)).out(C, pk(kB)).0;

@@ -33,8 +33,8 @@ ByesP4 = out(C, rByes).0;
 
 Setup = out(C, pk(kA)).out(C, pk(kB)).0;
 
-P = sequence Setup, AyesP1, AyesP2, BnoP1, BnoP2, AyesP3, AyesP4, BnoP3, BnoP4;
+P = Setup :: AyesP1 :: AyesP2 :: BnoP1 :: BnoP2 :: AyesP3 :: AyesP4 :: BnoP3 :: BnoP4;
 
-Q = sequence Setup, AnoP1, AnoP2, ByesP1, ByesP2, ByesP3, ByesP4, AnoP3, AnoP4;
+Q = Setup :: AnoP1 :: AnoP2 :: ByesP1 :: ByesP2 :: ByesP3 :: ByesP4 :: AnoP3 :: AnoP4;
 
 equivalentct? P and Q;

@@ -42,14 +42,14 @@ B = in(c, X).
 
 
 // Computing the interleavings of the 2 roles
-I = interleave_opt A, B;
+I = A || B;
 
 
 // Outputting either real or random secrets
 Real = out(c,sa).out(c,sb).0;
 Random = out(c,ra).out(c,rb).0;
 
-P = sequence Setup,I,Real;
-Q = sequence Setup,I,Random;
+P = Setup :: I :: Real;
+Q = Setup :: I :: Random;
 
 equivalentft? P and Q;

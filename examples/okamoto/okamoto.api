@@ -42,23 +42,23 @@ BnoP2 = out(C, unblind(xBno, bBno)).out(T, pair(no, pair(rBno, tdcommit(no, rBno
 
 
 // Interleaving each of the phases separately
-Phase1AyesBno = interleave_opt AyesP1, BnoP1;
-Phase2AyesBno = interleave_opt AyesP2, BnoP2;
+Phase1AyesBno = AyesP1 || BnoP1;
+Phase2AyesBno = AyesP2 || BnoP2;
 
 // protocol for A voting 'yes' and B voting 'no'
-AyesBno = sequence Phase1AyesBno, Phase2AyesBno;
+AyesBno = Phase1AyesBno :: Phase2AyesBno;
 
 // Interleaving each of the phases separately
-Phase1AnoByes = interleave_opt AnoP1, ByesP1;
-Phase2AnoByes = interleave_opt AnoP2, ByesP2;
+Phase1AnoByes = AnoP1 || ByesP1;
+Phase2AnoByes = AnoP2 || ByesP2;
 
 // protocol for A voting 'no' and B voting 'yes'
-AnoByes = sequence Phase1AnoByes, Phase2AnoByes;
+AnoByes = Phase1AnoByes :: Phase2AnoByes;
 
 // publishing public keys
 Setup = out(C, pk(kA)).out(C, pk(kB)).0;
 
-P = sequence Setup, AyesBno;
-Q = sequence Setup, AnoByes;
+P = Setup :: AyesBno;
+Q = Setup :: AnoByes;
 
 equivalentft? P and Q;
