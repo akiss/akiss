@@ -27,6 +27,7 @@ open Ast
 %token <int> Int
 %token XOR AC
 %token Symbols Private Var Rewrite EvRewrite Channels EvChannels Let
+%token PrivChannels
 %token LeftP RightP LeftB RightB
 %token Arrow Equals Dot Slash Comma Semicolon
 %token Out In And Zero
@@ -54,6 +55,7 @@ command:
  | Private namelist { DeclPrivate $2 }
  | Channels namelist { DeclChannels $2 }
  | EvChannels namelist { DeclEvChannels $2 }
+ | PrivChannels namelist { DeclPrivChannels $2 }
  | Var namelist { DeclVar $2 }
  | Rewrite term Arrow term { DeclRewrite ($2, $4) }
  | EvRewrite term Arrow term { DeclEvRewrite ($2, $4) }

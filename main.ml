@@ -128,8 +128,8 @@ let query ?(expected=true) s t =
     "Checking coarse trace %sequivalence of %s and %s\n%!"
     (if expected then "" else "in")
     (show_string_list s) (show_string_list t);
-  let straces = List.concat (List.map (fun x -> List.assoc x !processes) s) in
-  let ttraces = List.concat (List.map (fun x -> List.assoc x !processes) t) in
+  let straces = List.concat (List.map (fun x -> traces @@ List.assoc x !processes) s) in
+  let ttraces = List.concat (List.map (fun x -> traces @@ List.assoc x !processes) t) in
   let () = List.iter check_free_variables straces in
   let () = List.iter check_free_variables ttraces in
   let () = reset_count ((List.length straces) + (List.length ttraces)) in
@@ -191,8 +191,8 @@ let square ~expected s t =
     "Checking fine grained %sequivalence of %s and %s\n%!"
     (if expected then "" else "in")
     (show_string_list s) (show_string_list t);
-  let ls = List.concat (List.map (fun x -> List.assoc x !processes) s) in
-  let lt = List.concat (List.map (fun x -> List.assoc x !processes) t) in
+  let ls = List.concat (List.map (fun x -> traces @@ List.assoc x !processes) s) in
+  let lt = List.concat (List.map (fun x -> traces @@ List.assoc x !processes) t) in
   let () = List.iter check_free_variables ls in
   let () = List.iter check_free_variables lt in
   let () = reset_count ((List.length ls) + (List.length lt)) in
@@ -310,10 +310,10 @@ let evequiv ~expected s t =
     (show_string_list s) (show_string_list t);
   (* list of traces of s, then t *)
   let ls =
-    List.concat (List.map (fun x -> List.assoc x !processes) s)
+    List.concat (List.map (fun x -> traces @@ List.assoc x !processes) s)
   in
   let lt =
-    List.concat (List.map (fun x -> List.assoc x !processes) t)
+    List.concat (List.map (fun x -> traces @@ List.assoc x !processes) t)
   in
   let () = List.iter check_free_variables ls in
   let () = List.iter check_free_variables lt in
@@ -362,7 +362,7 @@ let print_trace_list (tlist : trace list) =
 
 let print_traces tnl =
   Printf.printf "Printing the list of traces of %s\n%!" (String.concat ", " tnl);
-  let tl = List.concat (trmap (fun x -> (List.assoc x !processes)) tnl) in
+  let tl = List.concat (trmap (fun x -> (traces @@ List.assoc x !processes)) tnl) in
   print_trace_list tl
 
 let query_print traceName =
@@ -376,7 +376,7 @@ let query_print traceName =
         s ;
       Printf.printf "(total: %d statements)\n" !c
   in
-  let t = trace_of_process(List.assoc traceName !processes) in
+  let t = trace_of_process(traces @@ List.assoc traceName !processes) in
   let kb_seed = Seed.seed_statements t Theory.rewrite_rules in
     Printf.printf
       "\n\nSeed statements of %s:\n%s\n\n%!"
@@ -396,7 +396,7 @@ let query_print traceName =
       print_kbs ~filter:is_deduction_st (Base.not_solved kb) ;
       let tests = checks kb in
         Printf.printf "\n\nTests:\n%s\n\n%!" (show_tests tests);
-        let trace = trace_of_process (List.assoc traceName !processes) in
+        let trace = trace_of_process (traces @@ List.assoc traceName !processes) in
           Printf.printf
             "Running reach self tests: %s\n\
              Running ridentical self tests: %s\n\n%!"

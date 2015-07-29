@@ -32,6 +32,8 @@ type trace =
 
 type process = trace list
 
+type symbProcess
+
 (** {3 Printing} *)
 
 val str_of_tr : term option -> varName
@@ -40,7 +42,8 @@ val show_trace : trace -> string
 
 (** {3 Parsing} *)
 
-val parse_process : Ast.tempProcess -> (string * process) list -> process
+val parse_process : Ast.tempProcess -> (string * symbProcess) list -> symbProcess
+val traces : symbProcess -> process
 
 (** {2 Executing and testing processes} *)
 

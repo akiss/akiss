@@ -81,6 +81,8 @@ let cmdlist =
 
 let evchannels = ref []
 
+let privchannels = ref []
+
 let rewrite_rules = ref []
 
 let evrewrite_rules = ref []
@@ -102,6 +104,9 @@ let declare_evchannels nameList =
   appendto channels nameList;
   appendto evchannels nameList
 
+let declare_privchannels nameList =
+  appendto privchannels nameList
+
 let declare_vars varList =
   appendto vars varList
 
@@ -113,6 +118,7 @@ let declare_evrewrite t1 t2 =
 
 type atom_type =  
   | Channel
+  | PrivChannel
   | Name
   | Symbol of int
   | Variable
@@ -136,6 +142,7 @@ let check_atoms () =
     List.concat [
       List.map (fun (x, y) -> (x, Symbol(y))) !fsymbols;
       List.map (fun x -> (x, Channel)) !channels;
+      List.map (fun x -> (x, PrivChannel)) !privchannels;
       List.map (fun x -> (x, Variable)) !vars;
       List.map (fun x -> (x, Name)) !private_names;
     ] in
@@ -188,6 +195,10 @@ let process_decl = function
   | DeclEvChannels evchannelList ->
     verboseOutput "Declaring channels\n%!";
     declare_evchannels evchannelList;
+    check_atoms ()
+  | DeclPrivChannels privchannelList ->
+    verboseOutput "Declaring private channels\n%!";
+    declare_privchannels privchannelList;
     check_atoms ()
   | DeclPrivate nameList ->
     verboseOutput "Declaring private names\n%!";
@@ -245,6 +256,7 @@ let fsymbols = !fsymbols
 let channels = !channels
 let private_names = !private_names
 let evchannels = !evchannels
+let privchannels = !privchannels
 let rewrite_rules = !rewrite_rules
 let evrewrite_rules = !evrewrite_rules
 let check_generalizations = !check_generalizations

@@ -31,6 +31,7 @@ val xor : bool
 val ac : bool
 val fsymbols : (string * int) list
 val evchannels : string list
+val privchannels : string list
 val rewrite_rules : rules
 val evrewrite_rules : rules
 val check_generalizations : bool

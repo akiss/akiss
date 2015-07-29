@@ -44,6 +44,7 @@ type cmd =
   | DeclPrivate of string list
   | DeclChannels of string list
   | DeclEvChannels of string list
+  | DeclPrivChannels of string list
   | DeclVar of string list
   | DeclRewrite of tempTerm * tempTerm
   | DeclEvRewrite of tempTerm * tempTerm

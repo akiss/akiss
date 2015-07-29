@@ -79,10 +79,14 @@ let rec parse_action = function
   | TempActionOut(ch, t) ->
      if List.mem ch !channels then
        Output(ch, parse_term t)
+     else if List.mem ch Theory.privchannels then
+       Output(ch, parse_term t)
      else
        Printf.ksprintf failwith "Undeclared channel: %s" ch
   | TempActionIn(ch, x) ->
      if List.mem ch !channels then
+       Input(ch, x)
+     else if List.mem ch Theory.privchannels then
        Input(ch, x)
      else
        Printf.ksprintf failwith "Undeclared channel: %s" ch
@@ -204,6 +208,131 @@ let replace_var_in_process x t process =
   trmap (fun trace -> (replace_var_in_trace x t trace)) process
 ;;
 
+type symbProcess =
+  | SymbNul
+  | SymbAct of action
+  | SymbSeq of symbProcess * symbProcess
+  | SymbPar of symbProcess * symbProcess
+
+let rec show_symb = function
+  | SymbNul -> "0"
+  | SymbAct a -> show_action a
+  | SymbSeq (p1, p2) -> "(seq " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
+  | SymbPar (p1, p2) -> "(par " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
+
+let rec replace_var_in_symb x t p =
+  match p with
+  | SymbNul -> SymbNul
+  | SymbAct (Input (_, _)) -> p
+  | SymbAct (Output (c, term)) ->
+     SymbAct (Output (c, replace_var_in_term x t term))
+  | SymbAct (Test (term1, term2)) ->
+     let term1 = replace_var_in_term x t term1 in
+     let term2 = replace_var_in_term x t term2 in
+     SymbAct (Test (term1, term2))
+  | SymbSeq (p1, p2) ->
+     let p1 = replace_var_in_symb x t p1 in
+     let p2 = replace_var_in_symb x t p2 in
+     SymbSeq (p1, p2)
+  | SymbPar (p1, p2) ->
+     let p1 = replace_var_in_symb x t p1 in
+     let p2 = replace_var_in_symb x t p2 in
+     SymbPar (p1, p2)
+
+let rec symb_of_temp process processes =
+  match process with
+  | TempEmpty -> SymbNul
+  | TempAction a -> SymbAct (parse_action a)
+  | TempSequence (p1, p2) ->
+     let p1 = symb_of_temp p1 processes in
+     let p2 = symb_of_temp p2 processes in
+     SymbSeq (p1, p2)
+  | TempInterleave (p1, p2) ->
+     let p1 = symb_of_temp p1 processes in
+     let p2 = symb_of_temp p2 processes in
+     SymbPar (p1, p2)
+  | TempLet (x, tt, process) ->
+     let t = parse_term tt in
+     let p = symb_of_temp process processes in
+     replace_var_in_symb x t p
+  | TempProcessRef (name) ->
+     List.assoc name processes
+
+let rec simplify = function
+  | SymbNul -> SymbNul
+  | SymbAct a -> SymbAct a
+  | SymbSeq (p1, p2) ->
+     (match simplify p1, simplify p2 with
+     | SymbNul, p -> p
+     | p, SymbNul -> p
+     | p1, p2 -> SymbSeq (p1, p2))
+  | SymbPar (p1, p2) ->
+     (match simplify p1, simplify p2 with
+     | SymbNul, p -> p
+     | p, SymbNul -> p
+     | p1, p2 -> SymbPar (p1, p2))
+
+let rec delta = function
+  | SymbNul -> []
+  | SymbAct a -> [ a, SymbNul ]
+  | SymbSeq (p1, p2) ->
+     List.fold_left (fun accu (a, p) ->
+       (a, simplify (SymbSeq (p, p2))) :: accu
+     ) [] (delta p1)
+  | SymbPar (p1, p2) ->
+     let s1 =
+       List.fold_left (fun accu (a, p) ->
+         (a, simplify (SymbPar (p, p2))) :: accu
+       ) [] (delta p1)
+     in
+     let s2 =
+       List.fold_left (fun accu (a, p) ->
+         (a, simplify (SymbPar (p1, p))) :: accu
+       ) s1 (delta p2)
+     in
+     s2
+
+type action_classification =
+  | PublicAction
+  | PrivateInput of id * id
+  | PrivateOutput of id * term
+
+let classify_action = function
+  | Test (_, _) -> PublicAction
+  | Input (c, x) ->
+     if List.mem c Theory.privchannels
+     then PrivateInput (c, x) else PublicAction
+  | Output (c, t) ->
+     if List.mem c Theory.privchannels
+     then PrivateOutput (c, t) else PublicAction
+
+module Trace = struct type t = trace let compare = Pervasives.compare end
+module TraceSet = Set.Make (Trace)
+
+let rec traces p =
+  let r =
+    List.fold_left (fun accu (a, q) ->
+      match classify_action a with
+      | PublicAction ->
+         TraceSet.fold (fun q accu ->
+           TraceSet.add (Trace (a, q)) accu
+         ) (traces q) accu
+      | PrivateInput (_, _) -> accu
+      | PrivateOutput (c, t) ->
+         List.fold_left (fun accu (a, q) ->
+           match classify_action a with
+           | PrivateInput (c', x) when c = c' ->
+              TraceSet.fold (fun q accu ->
+                TraceSet.add q accu
+              ) (traces (replace_var_in_symb x t q)) accu
+           | _ -> accu
+         ) accu (delta q)
+    ) TraceSet.empty (delta p)
+  in
+  if TraceSet.is_empty r then TraceSet.singleton NullTrace else r
+
+let traces p = TraceSet.elements @@ traces p
+
 let rec parse_process (process : tempProcess)
     (processes : (string * trace list) list) : trace list =
   match process with
@@ -224,6 +353,9 @@ let rec parse_process (process : tempProcess)
   | TempProcessRef(name) ->
     List.assoc name processes
 ;;
+
+let parse_process p ps =
+  simplify @@ symb_of_temp p ps
 
 (** {2 Executing and testing processes} *)
 

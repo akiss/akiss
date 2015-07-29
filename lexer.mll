@@ -44,6 +44,7 @@ rule token = parse
     | "private" { Private }
     | "channels" { Channels }
     | "evchannels" { EvChannels }
+    | "privchannels" { PrivChannels }
     | "::" { InnerSequence }
     | "||" { InnerInterleave }
     | "print_traces" { PrintTraces }

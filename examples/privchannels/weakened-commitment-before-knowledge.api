@@ -1,0 +1,15 @@
+symbols pair/2, hash/1, ACK/0;
+private ia, Ra;
+channels c, opub;
+privchannels o;
+var x, xx, zz;
+
+PoutRa = out(o, Ra) || out(opub, Ra);
+PoutHash = out(c, pair(ia, hash(pair(ia, Ra)))) :: in(o, x) :: PoutRa;
+
+PoutACK = (out(opub, ACK) :: in(o, zz)) || out(o, ACK);
+Pin = in(c, xx) :: PoutACK;
+
+P = PoutHash || Pin;
+
+print_traces P;
