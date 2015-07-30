@@ -210,26 +210,29 @@ let replace_var_in_process x t process =
 
 type symbProcess =
   | SymbNul
-  | SymbAct of action
+  | SymbAct of action list (* non-empty list *)
   | SymbSeq of symbProcess * symbProcess
   | SymbPar of symbProcess * symbProcess
 
 let rec show_symb = function
   | SymbNul -> "0"
-  | SymbAct a -> show_action a
+  | SymbAct a -> "(act " ^ String.concat " " (List.map show_action a) ^ ")"
   | SymbSeq (p1, p2) -> "(seq " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
   | SymbPar (p1, p2) -> "(par " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
+
+let replace_var_in_act x t a =
+  match a with
+  | Input (_, _) -> a
+  | Output (c, term) -> Output (c, replace_var_in_term x t term)
+  | Test (term1, term2) ->
+     let term1 = replace_var_in_term x t term1 in
+     let term2 = replace_var_in_term x t term2 in
+     Test (term1, term2)
 
 let rec replace_var_in_symb x t p =
   match p with
   | SymbNul -> SymbNul
-  | SymbAct (Input (_, _)) -> p
-  | SymbAct (Output (c, term)) ->
-     SymbAct (Output (c, replace_var_in_term x t term))
-  | SymbAct (Test (term1, term2)) ->
-     let term1 = replace_var_in_term x t term1 in
-     let term2 = replace_var_in_term x t term2 in
-     SymbAct (Test (term1, term2))
+  | SymbAct a -> SymbAct (List.map (replace_var_in_act x t) a)
   | SymbSeq (p1, p2) ->
      let p1 = replace_var_in_symb x t p1 in
      let p2 = replace_var_in_symb x t p2 in
@@ -242,7 +245,7 @@ let rec replace_var_in_symb x t p =
 let rec symb_of_temp process processes =
   match process with
   | TempEmpty -> SymbNul
-  | TempAction a -> SymbAct (parse_action a)
+  | TempAction a -> SymbAct [parse_action a]
   | TempSequence (p1, p2) ->
      let p1 = symb_of_temp p1 processes in
      let p2 = symb_of_temp p2 processes in
@@ -272,6 +275,29 @@ let rec simplify = function
      | p, SymbNul -> p
      | p1, p2 -> SymbPar (p1, p2))
 
+let rec optimize_tests p =
+  unlinearize SymbNul (compress_tests [] [] (linearize p))
+
+and linearize = function
+  | SymbNul -> []
+  | SymbAct _ as a -> [a]
+  | SymbSeq (p1, p2) -> linearize p1 @ linearize p2
+  | SymbPar (p1, p2) -> [SymbPar (optimize_tests p1, optimize_tests p2)]
+
+and unlinearize res = function
+  | [] -> res
+  | x :: xs -> unlinearize (SymbSeq (x, res)) xs
+
+and compress_tests res accu = function
+  | [] -> if accu = [] then res else SymbAct accu :: res
+  | SymbAct [Test (_, _) as a] :: xs ->
+     compress_tests res (a :: accu) xs
+  | SymbAct [Input (_, _) | Output (_, _) as a] :: xs ->
+     compress_tests (SymbAct (a :: accu) :: res) [] xs
+  | p :: xs ->
+     let res = if accu = [] then res else SymbAct accu :: res in
+     compress_tests (p :: res) [] xs
+
 let rec delta = function
   | SymbNul -> []
   | SymbAct a -> [ a, SymbNul ]
@@ -298,16 +324,22 @@ type action_classification =
   | PrivateOutput of id * term
 
 let classify_action = function
-  | Test (_, _) -> PublicAction
-  | Input (c, x) ->
+  | [] -> assert false
+  | Test (_, _) :: _ -> PublicAction
+  | Input (c, x) :: _ ->
      if List.mem c Theory.privchannels
      then PrivateInput (c, x) else PublicAction
-  | Output (c, t) ->
+  | Output (c, t) :: _ ->
      if List.mem c Theory.privchannels
      then PrivateOutput (c, t) else PublicAction
 
 module Trace = struct type t = trace let compare = Pervasives.compare end
 module TraceSet = Set.Make (Trace)
+
+let rec trace_prepend a t =
+  match a with
+  | [] -> t
+  | x :: xs -> trace_prepend xs (Trace (x, t))
 
 let rec traces p =
   let r =
@@ -315,7 +347,7 @@ let rec traces p =
       match classify_action a with
       | PublicAction ->
          TraceSet.fold (fun q accu ->
-           TraceSet.add (Trace (a, q)) accu
+           TraceSet.add (trace_prepend a q) accu
          ) (traces q) accu
       | PrivateInput (_, _) -> accu
       | PrivateOutput (c, t) ->
@@ -331,7 +363,8 @@ let rec traces p =
   in
   if TraceSet.is_empty r then TraceSet.singleton NullTrace else r
 
-let traces p = TraceSet.elements @@ traces p
+let traces p =
+  TraceSet.elements @@ traces @@ simplify @@ optimize_tests p
 
 let rec parse_process (process : tempProcess)
     (processes : (string * trace list) list) : trace list =
