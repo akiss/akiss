@@ -93,119 +93,8 @@ let rec parse_action = function
   | TempActionTest(s, t) -> Test(parse_term s, parse_term t)
 ;;
 
-let rec replace_tail first second = match first with
-  | Trace(a, next) -> Trace(a, replace_tail next second)
-  | NullTrace -> second
-;;
-
-let rec sequence_traces (tll : trace list list) : trace list =
-  match tll with
-    | head :: tail ->
-	trmap
-	  (fun (x, y) -> replace_tail x y)
-	  (combine head (sequence_traces tail))
-    | [] -> [NullTrace]
-;;
-
-(* let rec parse_trace = function *)
-(*   | [] -> NullTrace *)
-(*   | a :: t -> Trace(parse_action a, parse_trace t) *)
-(* ;; *)
-
-let rec split_opt s = 
-  match s with
-    | NullTrace -> (NullTrace, NullTrace)
-    | Trace(a, rest) ->
-	(
-	  match a with
-	    | Input(_, _) as i -> (Trace(i, NullTrace), rest)
-	    | Output(_, _) as o -> (Trace(o, NullTrace), rest)
-	    | Test(_, _) as t ->
-		(
-		  let (f, l) = split_opt rest in
-		  (Trace(t, f), l)
-		)
-	)
-;;
-
-let rec prepend_trace t to_what =
-  match t with
-    | NullTrace -> to_what
-    | Trace(a, rest) -> Trace(a, prepend_trace rest to_what)
-;;
-
-let rec interleave_opt_two_non_testending_traces s t =
-  match (s, t) with
-    | (NullTrace, _) -> [t]
-    | (_, NullTrace) -> [s]
-    | (_, _) ->
-	(
-	  let (sf, sl) = split_opt s in
-	  let (tf, tl) = split_opt t in
-	  List.append
-	    (trmap (fun x -> prepend_trace sf x) (interleave_opt_two_non_testending_traces sl t))
-	    (trmap (fun x -> prepend_trace tf x) (interleave_opt_two_non_testending_traces s tl))
-	)
-;;
-
-let rec split_endingtests s =
-  match s with
-    | NullTrace -> (NullTrace, NullTrace)
-    | Trace(Test(_) as a, rest) ->
-	(
-	  match split_endingtests rest with
-	    | (NullTrace, t) -> (NullTrace, Trace(a, t))
-	    | (r, t) -> (Trace(a, r), t)
-	)
-    | Trace(a, rest) ->
-	let (r, t) = split_endingtests rest in
-	(Trace(a, r), t)	    
-;;
-
-let interleave_opt_two_traces s t =
-  let (sb, se) = split_endingtests s in
-  let (tb, te) = split_endingtests t in
-  let list = interleave_opt_two_non_testending_traces sb tb in
-  trmap (fun x -> (prepend_trace (prepend_trace x se) te)) list
-;;
-
-let rec interleave_opt_trace_process (t : trace) (p : trace list) : trace list =
-  match p with
-  | [] -> []
-  | hd :: tl ->
-      List.concat
-        [(interleave_opt_two_traces t hd); interleave_opt_trace_process t tl]
-;;
-
-let rec interleave_opt_two_processes (tl1 : trace list) (tl2 : trace list) : trace list =
-  match tl1 with
-  | [] -> []
-  | hd :: tl ->
-      List.concat
-        [interleave_opt_trace_process hd tl2; interleave_opt_two_processes tl tl2]
-;;
-
 let replace_var_in_term x t term =
   apply_subst term [(x, t)]
-;;
-
-let rec replace_var_in_trace x t trace = 
-  match trace with
-  | NullTrace -> NullTrace
-  | Trace(Input(c, var), rest) -> 
-    if x = var then
-      trace
-    else
-      Trace(Input(c, var),
-	    replace_var_in_trace x t rest)
-  | Trace(Output(id, term), rest) -> Trace(Output(id, replace_var_in_term x t term),
-					   replace_var_in_trace x t rest)
-  | Trace(Test(term1, term2), rest) -> Trace(Test(replace_var_in_term x t term1, replace_var_in_term x t term2),
-					     replace_var_in_trace x t rest)
-;;
-
-let replace_var_in_process x t process = 
-  trmap (fun trace -> (replace_var_in_trace x t trace)) process
 ;;
 
 type symbProcess =
@@ -365,27 +254,6 @@ let rec traces p =
 
 let traces p =
   TraceSet.elements @@ traces @@ simplify @@ optimize_tests p
-
-let rec parse_process (process : tempProcess)
-    (processes : (string * trace list) list) : trace list =
-  match process with
-  | TempEmpty -> [ NullTrace ]
-  | TempAction(a) -> [ Trace(parse_action a, NullTrace) ]
-  | TempSequence(t1, t2) -> 
-    let p1 = parse_process t1 processes in
-    let p2 = parse_process t2 processes in
-    sequence_traces [p1; p2]
-  | TempInterleave(t1, t2) ->
-    let p1 = parse_process t1 processes in
-    let p2 = parse_process t2 processes in
-    interleave_opt_two_processes p1 p2
-  | TempLet(x, tt, process) ->
-    let t = parse_term tt in
-    let p = parse_process process processes in
-    replace_var_in_process x t p
-  | TempProcessRef(name) ->
-    List.assoc name processes
-;;
 
 let parse_process p ps =
   simplify @@ symb_of_temp p ps
