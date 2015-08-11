@@ -231,6 +231,7 @@ let rec trace_prepend a t =
   | x :: xs -> trace_prepend xs (Trace (x, t))
 
 let rec traces p =
+  let d = delta p in
   let r =
     List.fold_left (fun accu (a, q) ->
       match classify_action a with
@@ -240,15 +241,21 @@ let rec traces p =
          ) (traces q) accu
       | PrivateInput (_, _) -> accu
       | PrivateOutput (c, t) ->
-         List.fold_left (fun accu (a, q) ->
+         List.fold_left (fun accu (a, _) ->
            match classify_action a with
            | PrivateInput (c', x) when c = c' ->
-              TraceSet.fold (fun q accu ->
-                TraceSet.add q accu
-              ) (traces (replace_var_in_symb x t q)) accu
+              List.fold_left (fun accu (a, q) ->
+                match classify_action a with
+                | PrivateInput (c', x') when x = x' ->
+                   assert (c = c');
+                  TraceSet.fold (fun q accu ->
+                    TraceSet.add q accu
+                  ) (traces (replace_var_in_symb x t q)) accu
+                | _ -> accu
+              ) accu (delta q)
            | _ -> accu
-         ) accu (delta q)
-    ) TraceSet.empty (delta p)
+         ) accu d
+    ) TraceSet.empty d
   in
   if TraceSet.is_empty r then TraceSet.singleton NullTrace else r
 
