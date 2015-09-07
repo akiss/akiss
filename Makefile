@@ -126,6 +126,7 @@ STATS_TESTS = \
   $(wildcard examples/okamoto/*.api) \
   $(wildcard examples/running-example/*.api) \
   $(wildcard examples/strong-secrecy/*.api) \
+  $(wildcard examples/privchannels/*.api) \
 
 STATS_STATS = $(STATS_TESTS:.api=.stats)
 
