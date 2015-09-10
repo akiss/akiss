@@ -56,6 +56,7 @@ commandlist:
      
 command:
  | XOR { SetXOR }
+ | AC { SetAC }
  | Symbols symbollist { DeclSymbols $2 }
  | Private namelist { DeclPrivate $2 }
  | Channels namelist { DeclChannels $2 }
