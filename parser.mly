@@ -36,6 +36,11 @@ open Ast
 %token InnerSequence InnerInterleave
 %token EOF
 
+%left In
+%left InnerSequence
+%left InnerInterleave
+%right Dot
+
 %start main
 
 %type <Ast.cmd list> main

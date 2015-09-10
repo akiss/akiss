@@ -26,7 +26,7 @@ var x;
  equivalentft? P2 and Q2ab,Q2ba,Q2bb;
 
 
- P3 = ( (in(p,x).out(c,a)) || out(c,b) ) :: out(p,a);
+ P3 = in(p,x).out(c,a) || out(c,b) :: out(p,a);
 
  print_traces P3;
 
