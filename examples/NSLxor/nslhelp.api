@@ -25,7 +25,7 @@ Tinit = out(C,pub(a)).out(C,pub(b)).0;
 r1 = Tinit :: out(C,aenc(pair(plus(na,plus(pub(b),pub(i))), pub(a)),pub(b))) :: out(C,yes);
 r2 = Tinit :: out(C,aenc(pair(plus(na,plus(pub(b),pub(i))), pub(a)),pub(b))) :: out(C,no); 
 
-inequivalentct? r1 and r2;
+not equivalentct? r1 and r2;
 
 // Scenario with more explicit tests
 
@@ -52,7 +52,7 @@ r1 = out(C,aenc(pair(plus(na,plus(pub(b),pub(i))), pub(a)),pub(b))) ::
 r2 = out(C,aenc(pair(plus(na,plus(pub(b),pub(i))), pub(a)),pub(b))) ::
      RoleBfsthelp :: RoleAIsndhelp :: out(C,no); 
 
-inequivalentct? r1 and r2;
+not equivalentct? r1 and r2;
 
 // AKISS finds the attack:
 // The following tests work on r1 but not on r2:

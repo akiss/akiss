@@ -37,4 +37,4 @@ RoleBfst =
 r1 = Tinit :: RoleAIfst :: RoleBfst :: RoleAIsnd :: out(C,yes);
 r2 = Tinit :: RoleAIfst :: RoleBfst :: RoleAIsnd :: out(C,no);
 
-inequivalentct? r1 and r2;
+not equivalentct? r1 and r2;

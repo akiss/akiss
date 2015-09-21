@@ -31,4 +31,4 @@ RoleBsndno  = in(C,Z).[adec(Z,b)=nb].out(C,h(pair(no,nb))).0;
 r1 = Tinit :: RoleAIfst :: RoleBfst :: RoleAIsnd  :: RoleBsndyes;
 r2 = Tinit :: RoleAIfst :: RoleBfst :: RoleAIsnd  :: RoleBsndno;
 
-inequivalentct? r1 and r2;
+not equivalentct? r1 and r2;
