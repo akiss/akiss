@@ -34,10 +34,11 @@ let lower = ['a' - 'z']
 let upper = ['A' - 'Z']
 let letter = lower | upper
 let letters = letter (('.'| letter | digit) * )
+let version = digit ('.' | digit)*
 
 rule token = parse
    | "maude tool: 'maude'" {Line1}
-   | " checking version: 2.6. OK." {Line2}
+   | " checking version: " version ". OK." {Line2}
    | " checking installation: OK." {Line3}
    | "Finished." { Finished }
    | "#" { Sharp }
