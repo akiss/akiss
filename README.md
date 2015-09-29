@@ -37,26 +37,123 @@ sequentially.
 To build, just run `make`.
 
 
+Statistics / tests
+------------------
+
+To run tests and collect statistics, run `make stats`. This will run
+Akiss on a selection of examples from the `examples` directory. For
+each `file.api` file processed, a `file.stats` file will be created
+with statistics. The Makefile will pass the `AKISS_OPTIONS` variable
+as arguments to the `akiss` executable, so you can for example run it
+with 4 jobs with the following command:
+
+    make stats AKISS_OPTIONS="-j 4"
+
+
 Usage
 -----
 
-    Usage: akiss [options] < specification-file.api
-      --verbose Enable verbose output
-      -verbose Enable verbose output
-      -debug Enable debug output
-      --debug Enable debug output
-      --output-dot <file>  Output statement graph to <file>
-      -j <n>  Use <n> parallel jobs (if supported)
-      --ac-compatible Use the AC-compatible toolbox even on non-AC theories
-                      (experimental, needs maude and tamarin)
-      --check-generalizations Check that generalizations of kept statements
-                              are never dropped.
-      -help  Display this list of options
-      --help  Display this list of options
+Usage:
+
+    akiss [options] < specification-file.api
+
+ * `--verbose`,`-verbose`: enable verbose output
+ * `--debug`, `-debug`: enable debug output
+ * `--output-dot <file>`: output statement graph to <file>
+ * `-j <n>`: use `<n>` parallel jobs (if supported)
+ * `--ac-compatible`: use the AC-compatible toolbox even on non-AC
+   theories (experimental, needs maude and tamarin)
+ * `--tamarin-variants`: use tamarin to compute variants in seed
+   statements
+ * `--check-generalizations`: check that generalizations of kept
+   statements are never dropped
+ * `--help`, `-help`: display this list of options
 
 For example:
 
-    ./akiss --verbose < examples/strong-secrecy/blanchet.api
+    akiss --verbose < examples/strong-secrecy/blanchet.api
+
+
+A quick overview of specification files
+---------------------------------------
+
+Specification files consist of:
+
+ * a preamble declaring used symbols and their arity, private names
+   (public names are symbols of arity 0), channels and variables;
+ * an equational theory;
+ * process definitions;
+ * queries.
+
+### Preamble
+
+The preamble is straightforward. Each item is a comma-separated list
+of syntactic elements used in the file. Here is an example of
+preamble:
+
+    symbols pair/2, fst/1, snd/1, a/0, b/0;
+    channels c;
+    evchannels bb;
+    privchannels p;
+    var x, y, z;
+
+There are three kinds of channels: regular ones, everlasting ones and
+private ones. Regular channels represent channels used during a
+session of a protocol. Everlasting channels represent channels that
+can be read after the session is over. Private channels cannot be read
+by the adversary, and always result in silent communication.
+
+### Equational theory
+
+The equational theory is a list of rewrite rules. Akiss will work
+modulo this theory. For example:
+
+    rewrite fst(pair(x, y)) -> x;
+    rewrite snd(pair(x, y)) -> y;
+
+Rewrite rules can be everlasting, i.e. apply after a session of the
+protocol is over:
+
+    evrewrite fst(pair(x, y)) -> x;
+    evrewrite snd(pair(x, y)) -> y;
+
+### Processes
+
+Following the equational theory is a list of process
+declarations. They respect the following grammar:
+
+    declaration ::= process_name = process;
+
+    action ::=   in(channel, variable)
+               | out(channel, term)
+               | [term = term]
+
+    process ::=   0 | process_name | action
+                | action . process
+                | "let" variable = term "in" process
+                | process :: process
+                | process || process
+                | ( process )
+
+The operator precedence is: `"in"` < `::` < `||` < `.`.
+
+### Queries
+
+Akiss can answer to a variety of queries, the main ones being:
+
+ * `[not] equivalentct? P and Q;`: checks coarse-grain
+   [in]equivalence of `P` and `Q`.
+ * `[not] equavalentft? P and Q;`: checks fine-grain
+   [in]equivalence of `P` and `Q`.
+ * `[not] fwdequivalentft? P and Q;`: checks forward [in]equivalence
+   of `P` and `Q`.
+ * `print_traces P;`: The core of Akiss works on traces. After a
+   process is parsed according to the high-level grammar given above,
+   it is first expanded into a set of traces before running the core
+   algorithm of Akiss.  For examples, `P1 || P2` results in all
+   interleavings of `P1` and `P2`.  The `print_traces` query prints
+   those traces.
+ * `variants? t;`: prints the variants of term `t`.
 
 
 Source tree
