@@ -1,18 +1,36 @@
 Akiss
 =====
 
-Akiss is a tool for checking trace equivalence of security protocols.
-It works in the so-called symbolic model, representing protocols by
-processes in the applied pi-calculus, and allowing the user to describe
-various security primitives by an equational theory. In order to show
-that two processes are trace equivalent, Akiss derives a complete set
-of tests for each trace of each process, using a saturation procedure
-that performs ordered resolution with selection.
+Akiss is a verification tool for checking trace equivalence of
+security protocols. It works in the so-called symbolic model,
+representing protocols by processes in the applied pi-calculus, and
+allowing the user to describe various security primitives by an
+equational theory. In order to show that two processes are trace
+equivalent, Akiss derives a complete set of tests for each trace of
+each process, using a saturation procedure that performs Horn clause
+resolution with selection.
 
-As an experimental feature, this version supports one AC connective,
-namely "plus". It comes with modifications of the resolution rules that
-help reach saturation, mostly in the case where "plus" represents
-exclusive or.
+A detailed description of the underlying theory is available in the
+following papers:
+
+  * Rohit Chadha, Ștefan Ciobâcă, and Steve
+    Kremer. [Automated verification of equivalence properties of cryptographic protocols](http://www.loria.fr/~skremer/Papers/CCK-esop12.pdf). In
+    Programming Languages and Systems ---Proceedings of the 21th
+    European Symposium on Programming (ESOP'12), pp. 108–127, Lecture
+    Notes in Computer Science 7211, Springer, Tallinn, Estonia,
+    March 2012.
+
+  * Rohit Chadha, Vincent Cheval, Ștefan Ciobâcă, and Steve
+    Kremer. [Automated Verification of Equivalence Properties of Cryptographic Protocols (long version)]
+    (https://hal.inria.fr/inria-00632564/file/equivalence.pdf). INRIA HAL Technical Report.
+
+The notion of everlasting indistinguishability is introduced in
+
+  * Myrto Arapinis, Véronique Cortier, Steve Kremer, and Mark
+    D. Ryan. [Practical Everlasting Privacy](http://www.loria.fr/~skremer/Papers/ACKR-post13.pdf). In
+    Proceedings of the 2nd Conference on Principles of Security and
+    Trust (POST'13), pp. 21–40, Lecture Notes in Computer Science
+    7796, Springer, Rome, Italy, March 2013.
 
 
 Build
@@ -20,14 +38,15 @@ Build
 
 You will need OCaml; version 4.01 is known to work.
 
-The AC feature of Akiss also requires two external tools:
+An experimental feature of Akiss for AC operators also requires two
+external tools:
 
  * [tamarin-prover](http://www.infsec.ethz.ch/research/software/tamarin.html) (branch feature-ac-rewrite-rules)
  * [maude](http://maude.cs.illinois.edu/w/index.php?title=The_Maude_System) (version 2.6 or 2.7)
 
 You shouldn't need them if you don't use the feature.
 
-For parallelization, Akiss needs the following library:
+For parallelising the saturation process, Akiss needs the following library:
 
  * [nproc](https://github.com/MyLifeLabs/nproc)
 
@@ -81,7 +100,7 @@ Specification files consist of:
 
  * a preamble declaring used symbols and their arity, private names
    (public names are symbols of arity 0), channels and variables;
- * an equational theory;
+ * the definition of an equational theory;
  * process definitions;
  * queries.
 
@@ -97,11 +116,12 @@ preamble:
     privchannels p;
     var x, y, z;
 
-There are three kinds of channels: regular ones, everlasting ones and
-private ones. Regular channels represent channels used during a
-session of a protocol. Everlasting channels represent channels that
-can be read after the session is over. Private channels cannot be read
-by the adversary, and always result in silent communication.
+There are three kinds of channels: regular, private and everlasting
+channels. Regular channels represent channels used during a session of
+a protocol. Private channels cannot be read by the adversary, and
+always result in silent communication. Everlasting channels represent
+channels whose transmitted data remains available when verifying
+everlasting indistinguishability.
 
 ### Equational theory
 
@@ -111,15 +131,16 @@ modulo this theory. For example:
     rewrite fst(pair(x, y)) -> x;
     rewrite snd(pair(x, y)) -> y;
 
-Rewrite rules can be everlasting, i.e. apply after a session of the
-protocol is over:
+Rewrite rules can be everlasting, i.e. they are used after the
+interaction between the protocol and the adversary is finished when
+verifying everlasting indistinguishability.
 
     evrewrite fst(pair(x, y)) -> x;
     evrewrite snd(pair(x, y)) -> y;
 
 ### Processes
 
-Following the equational theory is a list of process
+The equational theory is followed by a list of process
 declarations. They respect the following grammar:
 
     declaration ::= process_name = process;
