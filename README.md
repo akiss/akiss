@@ -151,7 +151,7 @@ declarations. They respect the following grammar:
 
     process ::=   0 | process_name | action
                 | action . process
-                | "let" variable = term "in" process
+                | let variable = term in process
                 | process :: process
                 | process || process
                 | ( process )
