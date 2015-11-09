@@ -100,8 +100,10 @@ let rec knows_statements_h oc tr antecedents world clauses =
 	knows_statements_h oc remaining_trace next_antecedents
 	  next_world clauses
     | Trace(Test(s, t), remaining_trace) ->
-	let next_world = worldadd world (Fun("!test!", [])) in
-	knows_statements_h oc remaining_trace antecedents
+    	let next_world = worldadd world (Fun("!test!", [])) in
+    	let antecedent = Predicate("!equals!", [s; t]) in
+    	let next_antecedents = List.append antecedents [antecedent] in
+	knows_statements_h oc remaining_trace next_antecedents
 	  next_world clauses
 ;;
 
