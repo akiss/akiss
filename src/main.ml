@@ -386,16 +386,16 @@ let query_print traceName =
         "Initial knowledge base of %s:\n\n%s%!"
         traceName (show_kb kb);
       saturate kb Theory.rewrite_rules ;
-      Printf.printf "\n\nAfter saturation:\n" ;
+      Printf.printf "\n\nSolved statements after saturation:\n\n" ;
       print_kbs (Base.solved kb) ;
-      Printf.printf "\n" ;
+      Printf.printf "\nUnsolved statements after saturation:\n\n" ;
       print_kbs (Base.not_solved kb) ;
-      Printf.printf "\n\nKnows solved statements in saturation:\n" ;
+      Printf.printf "\n\nKnows solved statements in saturation:\n\n" ;
       print_kbs ~filter:is_deduction_st (Base.solved kb) ;
-      Printf.printf "\n\nKnows unsolved statements in saturation:\n" ;
+      Printf.printf "\n\nKnows unsolved statements in saturation:\n\n" ;
       print_kbs ~filter:is_deduction_st (Base.not_solved kb) ;
       let tests = checks kb in
-        Printf.printf "\n\nTests:\n%s\n\n%!" (show_tests tests);
+        Printf.printf "\n\nTests:\n\n%s\n\n%!" (show_tests tests);
         let trace = trace_of_process (traces @@ List.assoc traceName !processes) in
           Printf.printf
             "Running reach self tests: %s\n\
