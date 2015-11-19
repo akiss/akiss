@@ -7,10 +7,12 @@
 
 // Signature xor and h
 
-symbols plus/2, zero/0, h/1;
-private kA1, kB1, r1, k1;
-channels C;
-var X,Y,Y2,Z2;
+symbols plus/2, zero/0, enc/2, dec/2;
+private KM,DATA,IMP,EXP,KPART;
+channels c;
+var x,xkey,xkek,xkek1,xkek2,xtype,xtype1,xtype2,xtype3,xtypet,xtypef,xkpNew1,xkpNew2,xkpNew3,xkpOld2,xkpOld3,X,Y,Xen,Xd,Yd,Xi,Yi,Xe,Ye,X2,X3,Xt,Yt,Zt,Xf,Yf,Zf;
+
+rewrite dec(enc(X, Y), Y) -> X;
 
 // We model RFID tags that authenticate with a reader
 // in the following way:
@@ -37,14 +39,22 @@ var X,Y,Y2,Z2;
 // Note also that we use new kA1 (i.e. k1) instead of kA1 to model the fact that
 // the key has been updated after the first session.
 
-Tinit = out(C,r1).out(C,h(plus(kA1,r1))).out(C,plus(kA1,k1)).0;
-TtagA2 = in(C,Y2).out(C,h(plus(k1,Y2))).in(C,Z2).0;
-TtagB2 = in(C,Y2).out(C,h(plus(kB1,Y2))).in(C,Z2).0;
 
-r1 = Tinit :: TtagA2;
-r2 = Tinit :: TtagB2;
+Encipher = in(c,x).in(c,Xen).out(c,enc(x,dec(Xen,plus(KM,DATA)))).0;
+Decipher = in(c,Xd).in(c,Yd).out(c,dec(Xd,dec(Yd,plus(KM,DATA)))).0;
+KeyImport = in(c,Xi).in(c,xtype).in(c,Yi).out(c,enc(plus(dec(Yi,plus(KM,IMP)),xtype),plus(KM,xtype))).0;
+KeyExport = in(c,Xe).in(c,xtype).in(c,Ye).out(c,enc(dec(Xe,plus(KM,xtype)),plus(dec(Ye,plus(KM,EXP)),xtype))).0;
+KeyPartImport1 = in(c,xkpNew1).in(c,xtype1).out(c,enc(xkpNew1,plus(plus(KM,xtype1),KPART))).0;
+KeyPartImport2 = in(c,xkpNew2).in(c,xtype2).in(c,X2).out(c,enc(plus(xkpNew2,dec(X2,plus(plus(KM,xtype2),KPART))),plus(plus(KM,xtype2),KPART))).0;
+KeyPartImport3 = in(c,xkpNew3).in(c,xtype3).in(c,X3).out(c,enc(plus(xkpNew3,dec(X3,plus(plus(KM,xtype3),KPART))),plus(KM,xtype3))).0;
+KeyTranslate = in(c,Xt).in(c,xtypet).in(c,Yt).out(c,dec(Xt,plus(dec(Yt,KM),xtypet))).0;
+KeyTranslateF = in(c,Xf).in(c,xtypef).in(c,Yf).in(c,Zf).out(c,enc(dec(Yf,plus(dec(Yf,plus(KM,IMP)),xtypef)),plus(dec(Zf,plus(KM,EXP)),xtypef))).0;
 
-not equivalentct? r1 and r2;
+
+r1 =  KeyTranslate;
+r2 =  KeyTranslate;
+
+equivalentct? r1 and r2;
 
 // AKISS concludes within 30s, returning two tests that correspond exactly
 // to the attack mentioned above. This is actually the same test that can be

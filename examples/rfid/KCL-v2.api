@@ -32,4 +32,4 @@ TtagB2 = out(C,plus(idB,r4)). out(C,plus(h(Y,kB),r4)).0;
 r1 = TtagA1 :: TtagA2;
 r2 = TtagA1 :: TtagB2;
 
-inequivalentct? r1 and r2;
+not equivalentct? r1 and r2;

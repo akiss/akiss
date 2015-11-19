@@ -21,4 +21,4 @@ T1 = out(C,plus(u,a)).out(C,plus(b,u)).out(C,c).
 T2 = out(C,plus(u,a)).out(C,plus(b,u)).out(C,c).
      in(C,X).[X = plus(plus(b,a),c)].0;
 
-inequivalentct? T1 and T2; 
+not equivalentct? T1 and T2; 

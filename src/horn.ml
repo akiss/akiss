@@ -45,7 +45,7 @@ end
 
 (** Canonization and yellow/flexible-flexible marking are critical. *)
 let canonize = true
-let yellow_marking = true
+let yellow_marking = false
 
 (** Having canonical forms for non-deduction statements is not known to
   * affect termination but we may need it for the final theorem. *)
@@ -65,6 +65,9 @@ let conseq_plus = true
   * redundancies. This seems safe but is not yet justified by the theory. *)
 let normalize_identical = false
 
+(** Do not normalize at all **)
+let renormalize_term = true
+
 (** Instead of normalizing, drop non normal clauses.
   * This is not justified by the theory. *)
 let drop_non_normal = false
@@ -73,11 +76,15 @@ let drop_non_normal = false
  * and elimination of 0. This is not compatible with the current theory
  * because the marked literals are solved. Fortunately, it only seems
  * necessary when canonisation is disabled. *)
-let extra_static_marks = false
+let extra_static_marks = true
 
 (** [eqrefl_opt] avoids trivial uses of equation that essentially
   * generate reflexive id(R,R) statements. It is not very useful. *)
 let eqrefl_opt = true
+
+
+(** [opti_sort] add additionnal sorting to select the predicate *)
+let opti_sort = true
 
 let print_flags () =
   if !debug_output then
@@ -90,11 +97,13 @@ let print_flags () =
       \  canonize: %b (all %b)\n\
       \  yellow: %b\n\
       \  extra static: %b\n\
-      \  eqrefl_opt: %b\n"
+      \  eqrefl_opt: %b\n\
+      \  opti_sort: %b\n
+      \  renormalize_term: %b\n"
       Theory.ac Theory.xor
       conseq_axiom conseq conseq_plus
       asym_eq canonize canonize_all
-      yellow_marking extra_static_marks eqrefl_opt
+      yellow_marking extra_static_marks eqrefl_opt opti_sort renormalize_term
 
 (** {2 Predicates and clauses, conversions and printing} *)
 
@@ -255,6 +264,7 @@ let fresh_statement f =
   let allv = vars_of_horn_clause f in
   let newv = trmap (fun v ->
                      if v.[0] = 'P' then Var (fresh_string "P") else
+                     if v.[0] = 'Q' then Var (fresh_string "Q") else
                        Var (fresh_variable ())) allv in
   let sigma = List.combine allv newv in
     apply_subst_st f sigma
@@ -307,7 +317,9 @@ let is_plus = function
 
 let isnt_plus x = not (is_plus x)
 
-let is_marked x = x.[0] = 'P'
+let is_marked x =  x.[0] = 'P' || x.[0] = 'Q'
+
+let is_dyn_marked x = x.[0] = 'P'
 
 let rec has_rigid = function
   | Fun ("plus",[a;b]) :: l -> has_rigid (a::b::l)
@@ -335,6 +347,7 @@ let new_clause =
      * 1 in the opposite case and 0 when it does no matter. *)
     match p,q with
       | Predicate ("knows",[_;Var r1;t1]), Predicate ("knows",[_;Var r2;t2]) ->
+		if(opti_sort) then begin
           (* Prioritize terms that pass this test *)
           let check f x1 x2 k =
             match f x1, f x2 with
@@ -343,11 +356,19 @@ let new_clause =
               | _, true -> 1
               | false, false -> k ()
           in
-            check is_var t1 t2 (fun () ->
-              check isnt_plus t1 t2 (fun () ->
-                check is_marked r1 r2 (fun () ->
-                  check has_rigid t1 t2 (fun () ->
-                    compare (nb_flexibles t1) (nb_flexibles t2)))))
+		check is_dyn_marked r1 r2 (fun () ->
+              check is_var t1 t2 (fun () ->
+                check isnt_plus t1 t2 (fun () ->
+                 (* check has_rigid t1 t2 (fun () -> because two rigid is too much anyway*)
+                    compare (nb_flexibles t1) (nb_flexibles t2))))(* ) *) end
+		else
+			begin
+			match is_dyn_marked r1, is_dyn_marked r2 with
+			| true, true -> 0
+			| true, _ -> -1
+			| _, true -> 1
+			| false, false -> 0
+		end
       | _ -> assert false
   in
   let c = ref 0 in
@@ -525,7 +546,7 @@ let rule_remove = function
   * statement as long as one derivation remains. *)
 let simplify_statement st =
   let hvars = vars_of_term_list (get_recipes st.head) in
-  let (<<-) a a' =
+  let (<--) a a' =
     (* a<<-a' indicates that a can be discarded in favor of a'.
      * By default we use the standard order on strings, but we tweak
      * it so that marked and necessary variables are kept, while making
@@ -543,7 +564,7 @@ let simplify_statement st =
          let t = get_term a in
          let l = world_length (get_world a) in
            List.exists (fun a' ->
-                          recipe_var <<- unbox_var (get_recipe a') &&
+                          recipe_var <-- unbox_var (get_recipe a') &&
                           l = world_length (get_world a') &&
                           R.equals t (get_term a') []) st.body)
       st.body
@@ -843,14 +864,14 @@ let normalize_identical f =
   * and are re-normalized. *)
 let normalize_new_statement rules f =
   let process t =
-    let t' = R.normalize t rules in
-      if not (R.equals t t' []) then begin
+    let t' = if renormalize_term then R.normalize t rules else t in
+      if drop_non_normal && not (R.equals t t' []) then begin
         debugOutput "Non-normal term in clause #%d.\n" (get_id f) ;
         None
       end else
         Some t'
   in
-  let renorm r = R.normalize r rules in
+  let renorm r = if renormalize_term then R.normalize r rules else r in
   let process = function
     | Predicate ("knows",[w;r;t]) ->
         begin match process t, process w with
@@ -910,7 +931,7 @@ let update (kb : Base.t) rules (f : statement) : unit =
 
   if useful fc then
   if is_deduction_st fc && is_solved fc then
-    if Theory.xor && (may_be_extension fc || may_be_generalization fc kb) then
+    if false && Theory.xor && (may_be_extension fc || may_be_generalization fc kb) then
       Base.add fc rules kb
     else
     try
@@ -935,7 +956,7 @@ let update (kb : Base.t) rules (f : statement) : unit =
       (* If we ran conseq, no need to check whether the clause is already
        * in the knowledge base. It may be that conseq_plus should be put there
        * too. *)
-      let needs_check = not (conseq_axiom && conseq) in
+      let needs_check = (* not (conseq_axiom && conseq) : because conseq may fail on finding the conseq recipe *) Theory.xor in
         Base.add ~needs_check fc rules kb
   else
     Base.add fc rules kb
@@ -1067,7 +1088,7 @@ let propagate_constraint sigma =
          | (x, Var y) when is_marked x && not (is_marked y) ->
              let y' = Var (fresh_string "P") in
                [(y, y')]
-         | (x, Fun("plus",_)) when is_marked x -> raise Constraint_violation
+   (**      | (x, Fun("plus",_)) when is_marked x -> raise Constraint_violation : all constraints are already checked in resolution and equation and this one is wrong **)
          | _ -> [])
       sigma
   in
@@ -1084,6 +1105,12 @@ let rec process_constraints = function
         | Constraint_violation -> process_constraints sigmas
       end
   | [] -> []
+
+(** On the validation tests 3h instead of 4h **)
+let unifiable t1 t2 =
+	match (t1,t2) with
+	| (Fun(p,_),Fun(q,_)) when p <> q -> false 
+	| _ -> true
 
 (** Check and propagate constraints, and generate new dynamic constraints. *)
 let plus_restrict ~t c sigmas =
@@ -1103,9 +1130,12 @@ let resolution master slave =
 
     (* Fail immediately if solutions would violate marking. *)
     if is_marked (unbox_var (get_recipe atom)) &&
-       is_plus (get_recipe slave.head)
+       (*is_plus (get_recipe slave.head)*)
+	is_plus_clause slave
     then [] else
-
+    (* Fail without calling maude when there is no unifier*)
+    if not (unifiable (get_term atom) (get_term ( slave.head)))
+    then [] else
     let sigmas = csu_atom atom slave.head in
     let length = List.length sigmas in
     if !debug_output && length > 0 then begin
@@ -1172,10 +1202,11 @@ let equation fa fb =
         | (Predicate("knows", [ul; r; t]),
            Predicate("knows", [upl; rp; tp])) ->
 
+
             (* Optimization: skip equation when both recipes are sums.
              * This greatly reduces execution time as well as the number of
              * generated tests. *)
-            if asym_eq && (is_plus r) && (is_plus rp) then [] else begin
+            if not (unifiable t tp) || (asym_eq && ((is_plus_clause fa) || (is_plus_clause fb))) then [] else begin
 
               debugOutput "Equation:\n %s\n %s\n%!"
                 (show_statement fa) (show_statement fb) ;

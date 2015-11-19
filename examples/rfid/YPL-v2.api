@@ -55,4 +55,4 @@ TtagB2 = in(C,Y2).
 r1 = Tinit :: TtagA2;
 r2 = Tinit :: TtagB2;
 
-inequivalentct? r1 and r2;
+not equivalentct? r1 and r2;

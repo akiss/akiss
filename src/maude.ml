@@ -178,7 +178,8 @@ let is_var s =
   s.[0] = '#' ||
   s.[0] = 'x' ||
   s.[0] = 'X' ||
-  s.[0] = 'P' ||
+    s.[0] = 'P' ||
+    s.[0] = 'Q' ||  
   List.mem s !vars
 
 let arity f =

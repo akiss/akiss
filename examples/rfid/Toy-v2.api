@@ -13,4 +13,4 @@ var X, Y, Z;
 same = in(C,X).out(C,plus(h(X),idA)).in(C,Y).out(C,plus(h(Y),idA));
 diff = in(C,X).out(C,plus(h(X),idA)).in(C,Y).out(C,plus(h(Y),idB));
 
-inequivalentct? same and diff;
+not equivalentct? same and diff;

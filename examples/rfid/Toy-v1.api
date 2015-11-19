@@ -12,6 +12,6 @@ var X, Y, Z;
 same = in(C,X).out(C,plus(X,idA)).in(C,Y).out(C,plus(Y,idA));
 diff = in(C,X).out(C,plus(X,idA)).in(C,Y).out(C,plus(Y,idB));
 
-inequivalentct? same and diff;
+not equivalentct? same and diff;
 
 // So far this test does not pass!

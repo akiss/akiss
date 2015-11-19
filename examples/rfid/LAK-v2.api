@@ -29,7 +29,7 @@ Treader2 = out(C,r2).in(C,Y2).in(C,Z2).[Z2=h(plus(r2,plus(Y2,kA)))].0;
 r1 = Tinit :: Treader1;
 r2 = Tinit :: Treader2;
 
-inequivalentct? r1 and r2;
+not equivalentct? r1 and r2;
 
 // AKISS finds an attack in a few minutes.
 // The attack works as follows:

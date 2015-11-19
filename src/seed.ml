@@ -265,21 +265,18 @@ let context_statements symbol arity rules =
            body sigma)
       in
         (* Mark recipe variables in non-trivial variants of the plus clause. *)
-        if Theory.ac && symbol = "plus" && sigma <> [] then
+        if Theory.xor && symbol = "plus" && sigma <> [] then
           try
-            let r =
-              match
-                List.find
+            let liste_r =
+                List.map
                   (function
-                     | Predicate("knows",[_;_;Fun("plus",_)]) -> true
-                     | _ -> false)
+                     | Predicate("knows",[_;Var r;_]) -> r
+                     | _ -> assert false)
                   (get_body clause)
-              with
-                | Predicate (_,[_;Var r;_]) -> r
-                | _ -> assert false
             in
-            let p = fresh_string "P" in
-              apply_subst_st clause [r,Var p]
+		List.fold_left (fun cl r ->
+            let p = fresh_string "Q" in
+              apply_subst_st cl [r,Var p])clause liste_r
           with Not_found ->
             if not Horn.extra_static_marks then clause else
               begin match
@@ -290,7 +287,7 @@ let context_statements symbol arity rules =
                   (get_body clause)
               with
                 | Predicate (_,[_;Var r;_]) ->
-                    let p = fresh_string "P" in
+                    let p = fresh_string "Q" in
                       apply_subst_st clause [r,Var p]
                 | _ -> assert false
               end

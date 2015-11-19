@@ -29,4 +29,4 @@ TtagB2 = in(C,X).out(C,plus(idB,r4)).out(C,plus(h(X,kB),r4)).0;
 r1 = Tinit :: TtagA2;
 r2 = Tinit :: TtagB2;
 
-inequivalentct? r1 and r2;
+not equivalentct? r1 and r2;

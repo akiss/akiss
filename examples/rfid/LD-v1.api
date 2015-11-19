@@ -37,7 +37,7 @@ TtagB2 = in(C,X).out(C,h(plus(X,alphaB))).0;
 r1 = Tinit :: TtagA2;
 r2 = Tinit :: TtagB2;
 
-inequivalentct? r1 and r2;
+not equivalentct? r1 and r2;
 
 // Akiss concludes in less than a minute. It reports a known attack as well as
 // a different test:

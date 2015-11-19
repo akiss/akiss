@@ -54,7 +54,7 @@ TtagB2 = in(C,Y2).out(C,h(plus(kB1,plus(Y2,kB)))).0;
 r1 = (Treader || TtagA1) :: TtagA2;
 r2 = (Treader || TtagA1) :: TtagB2;
 
-inequivalentct? r1 and r2;
+not equivalentct? r1 and r2;
 
 // 22/02/2013: AKISS finds the attack - sume - 40 interleavings (around 25 min).
 
