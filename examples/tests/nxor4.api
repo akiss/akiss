@@ -14,7 +14,7 @@ rewrite plus(X,X) -> zero;
 s1 = out(C,a).out(C,plus(a,b));
 r1 = out(C,a).out(C,plus(a,c));
 
-inequivalentct? s1 and r1;
+not equivalentct? s1 and r1;
 
 // 26/11/2013: AKISS concludes within 18s
 // The following tests work on r1 but not on s1:
