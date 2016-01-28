@@ -12,7 +12,9 @@ rm -f $dir/parser.mli $dir/parsetam.mli
 rm -f $dir/lwt_compat.ml
 chmod -w $dir/*
 
-cp $* $dir
+for i in $* ; do
+  cp ../$i $dir
+done
 
 cd $dir
 make || exit 1
