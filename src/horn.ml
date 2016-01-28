@@ -583,48 +583,6 @@ let canonical_form statement =
   else
     simplify_statement statement
 
-(* Check whether fc is a xor-generalization of a clause already in kb.
- * We are looking for n-step generalizations, where a 1-step generalization
- * would be a statement f of the form H <- Gamma, k_w(X,x)
- * where fc = H\theta <- Gamma\theta, k_w\theta(Xi,x_i)
- * for   theta = [X1+..+Xn/X,x1+..+xn/x].
- * Performing a precise check would be costly, and a rough approximation
- * is actually enough. At the moment it is still quite expensive, so we
- * disable this sanity check by default. When enabled it shows that the
- * current strategy always considers generalizations first, and so the check
- * always passes. *)
-let may_be_generalization fc kb =
-  if not Theory.check_generalizations then false else
-  let check_gen_of fkb =
-    (* Match (modulo AC) the head of fkb with that of fc,
-     * keep only unifiers that map variables into sums of variables. *)
-    let h f = term_from_atom f.head in
-    let thetas = R.matchers (h fkb) (h fc) [] in
-    let rec is_sumvars = function
-      | Var _ -> true
-      | Fun ("plus",[l;r]) -> is_sumvars l && is_sumvars r
-      | _ -> false
-    in
-    let thetas =
-      List.filter
-        (fun theta ->
-           List.for_all (fun (x,t) -> is_sumvars t) theta &&
-           List.exists (fun (x,t) -> not (is_var t)) theta)
-        thetas
-    in
-      if thetas <> [] then begin
-        debugOutput
-          "Clause %d may be a generalization of %d\n"
-          fc.id fkb.id ;
-        failwith "found gen"
-      end
-  in
-    try
-      Base.fold (fun fkb () -> check_gen_of fkb) kb () ;
-      false
-    with
-      | Failure "found gen" -> true
-
 (* TODO AC term equality for t and tp? not if conseq stays syntactic in draft
  * not needed for worlds because we don't even need to look at their terms *)
 let is_same_t_smaller_w atom1 atom2 = match (atom1, atom2) with
@@ -679,32 +637,6 @@ let inst_w_t_ac my_head head_kb =
 let rec factors = function
   | Fun ("plus",[a;b]) -> factors a @ factors b
   | x -> [x]
-
-(** Tell whether the deduction statement [st] may be an extension.
-  * Currently we check that it is of the form
-  * k(_,_+R,_+x) <= ..., k(_,R,x), ...
-  * The test could be made more precise by checking that R and x
-  * are fresh in the rest of the clause. It also seems that we can
-  * restrict extensions to a single such pair (R,x). *)
-let may_be_extension st =
-  let h = st.head in
-  let rs = factors (get_recipe h) in
-  let xs = factors (get_term h) in
-    if List.length rs = 1 || List.length xs = 1 then false else
-      let rs = List.filter is_var rs in
-      let xs = List.filter is_var xs in
-      let pairs = Util.combine rs xs in
-      let found =
-        List.exists
-          (fun (r,x) ->
-             List.exists
-               (function
-                  | Predicate ("knows",[_;r';x']) -> r = r' && x = x'
-                  | _ -> false)
-               st.body)
-          pairs
-      in
-        found
 
 (** Formatter for printing conseq traces, which are essentially derivations. *)
 let rec print_trace chan = function
@@ -931,9 +863,6 @@ let update (kb : Base.t) rules (f : statement) : unit =
 
   if useful fc then
   if is_deduction_st fc && is_solved fc then
-    if false && Theory.xor && (may_be_extension fc || may_be_generalization fc kb) then
-      Base.add fc rules kb
-    else
     try
       let recipe = consequence fc kb rules in
       let world = get_world fc.head in
