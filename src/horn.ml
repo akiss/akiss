@@ -43,19 +43,11 @@ end
 
 (** {2 Flags} *)
 
-(** Canonization and yellow/flexible-flexible marking are critical. *)
+(** Canonize solved statements. *)
 let canonize = true
-let yellow_marking = false
 
-(** Having canonical forms for non-deduction statements is not known to
-  * affect termination but we may need it for the final theorem. *)
+(** Also canonize non-deduction statements. *)
 let canonize_all = false
-
-(** With AC, doing conseq against the plus clause is known to break
-  * completeness, unless conseq is not used against extension-like clauses. *)
-let conseq_axiom = true
-let conseq = true
-let conseq_plus = true
 
 (** When dealing with xor, normalize i(R,R') into i(R+R',0) to avoid
   * redundancies. This seems safe but is not yet justified by the theory. *)
@@ -78,27 +70,23 @@ let extra_static_marks = true
   * generate reflexive id(R,R) statements. It is not very useful. *)
 let eqrefl_opt = true
 
-
 (** [opti_sort] add additionnal sorting to select the predicate *)
 let opti_sort = true
 
 let print_flags () =
+  assert (not Theory.ac || Theory.xor) ;
   if !debug_output then
     Format.printf
       "Parameters:\n\
-      \  ac: %b\n\
       \  xor: %b\n\
-      \  conseq: axiom=%b res=%b plus=%b\n\
       \  canonize: %b (all %b)\n\
-      \  yellow: %b\n\
       \  extra static: %b\n\
       \  eqrefl_opt: %b\n\
       \  opti_sort: %b\n
       \  renormalize_term: %b\n"
-      Theory.ac Theory.xor
-      conseq_axiom conseq conseq_plus
+      Theory.xor
       canonize canonize_all
-      yellow_marking extra_static_marks eqrefl_opt opti_sort renormalize_term
+      extra_static_marks eqrefl_opt opti_sort renormalize_term
 
 (** {2 Predicates and clauses, conversions and printing} *)
 
@@ -651,7 +639,6 @@ let rec print_trace chan = function
   * instead of the new useless deduction statement.
   * See Definition 14 and Lemma 2 in the paper. *)
 let consequence st kb rules =
-  if not conseq_axiom then raise Not_a_consequence ;
   assert (is_solved st) ;
   let rec aux { head = head ; body = body } kb = 
     match head with
@@ -663,7 +650,6 @@ let consequence st kb rules =
             `Axiom, get_recipe (List.find (is_same_t_smaller_w head) body)
           with
             | Not_found ->
-                if not conseq then raise Not_a_consequence else
                 (* Inductive case: Res rule
                  * Find a (solved, well-formed) statement [x]
                  * whose head is matched by [head] and such that
@@ -681,8 +667,6 @@ let consequence st kb rules =
                      (*   (show_statement (head, body)); *)
                      (* debugOutput "Against %s\n%!" *)
                      (*   (show_statement x); *)
-                     if (not conseq_plus) && is_plus_clause x then
-                       raise Not_a_consequence ;
                      let sigma = inst_w_t head (get_head x) Not_a_consequence in
                      let subresults =
                        List.map
@@ -878,10 +862,8 @@ let update (kb : Base.t) rules (f : statement) : unit =
           Base.add newclause rules kb
     with Not_a_consequence ->
       (* If we ran conseq, no need to check whether the clause is already
-       * in the knowledge base. It may be that conseq_plus should be put there
-       * too. *)
-      let needs_check = (* not (conseq_axiom && conseq) : because conseq may fail on finding the conseq recipe *) Theory.xor in
-        Base.add ~needs_check fc rules kb
+       * in the knowledge base. *)
+      Base.add ~needs_check:false fc rules kb
   else
     Base.add fc rules kb
 
@@ -931,32 +913,7 @@ let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
           debugOutput
             "rigid subterm: none, size %d\n"
             (List.length variables) ;
-          if not yellow_marking then sigmas else
-            List.concat
-              (List.map
-                 (fun sigma ->
-                    (* Mark any recipe that is associated with a sum,
-                     * but allow for all such choices,
-                     * except if [size<=3] and one recipe is mapped to
-                     * a single variable. *)
-                    let x' = List.assoc x sigma in
-                    let y' = List.assoc y sigma in
-                      (* Check that none of the recipes x' or y'
-                       * is exactly one of the original variables,
-                       * ie. we are looking at the split x+(y+z). *)
-                      if List.length variables = 3 &&
-                         List.exists
-                           (fun v ->
-                              let v' = List.assoc v sigma in
-                                x' = v' || y' = v')
-                           variables
-                      then [ sigma ] else
-                        match is_plus x', is_plus y' with
-                          | true,true -> [ mark rx sigma ; mark ry sigma ]
-                          | true,false -> [ mark rx sigma ]
-                          | false,true -> [ mark ry sigma ]
-                          | false,false -> [ sigma ])
-                 sigmas)
+          sigmas
       | `Some t ->
           debugOutput "rigid subterm: %s\n" (show_term t) ;
           let rec occurs t = function
