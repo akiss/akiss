@@ -26,8 +26,15 @@ module R = struct
 
   include Theory.R
 
+  (** Quick non-unifiability test
+    * to avoid costly calls to external unification procedure. *)
+  let may_be_unifiable t1 t2 =
+    match (t1,t2) with
+      | (Fun(p,_),Fun(q,_)) when p <> q -> false
+      | _ -> true
+
   let csu u v =
-    let sols = unifiers u v [] in
+    let sols = if may_be_unifiable u v then unifiers u v [] else [] in
     let n = List.length sols in
       if n>0 then debugOutput "Found %d solution(s)\n" n ;
       sols
@@ -990,12 +997,6 @@ let rec process_constraints = function
       end
   | [] -> []
 
-(** On the validation tests 3h instead of 4h **)
-let unifiable t1 t2 =
-	match (t1,t2) with
-	| (Fun(p,_),Fun(q,_)) when p <> q -> false 
-	| _ -> true
-
 (** Check and propagate constraints, and generate new dynamic constraints. *)
 let plus_restrict ~t c sigmas =
   plus_restrict ~t c (process_constraints sigmas)
@@ -1016,9 +1017,6 @@ let resolution master slave =
     if is_marked (unbox_var (get_recipe atom)) &&
        (*is_plus (get_recipe slave.head)*)
 	is_plus_clause slave
-    then [] else
-    (* Fail without calling maude when there is no unifier*)
-    if not (unifiable (get_term atom) (get_term ( slave.head)))
     then [] else
     let sigmas = csu_atom atom slave.head in
     let length = List.length sigmas in
@@ -1094,7 +1092,6 @@ let equation fa fb =
             (* Optimization: skip equation when both recipes are sums.
              * This greatly reduces execution time as well as the number of
              * generated tests. *)
-            if not (unifiable t tp) then [] else begin
 
               debugOutput "Equation:\n %s\n %s\n%!"
                 (show_statement fa) (show_statement fb) ;
@@ -1162,7 +1159,7 @@ let equation fa fb =
                     (String.concat ","
                        (List.map (fun st -> "#"^string_of_int st.id) clauses)) ;
                 clauses
-end
+
           | _ -> invalid_arg("equation")
     else
       []
