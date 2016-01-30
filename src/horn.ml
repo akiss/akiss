@@ -1074,24 +1074,14 @@ let equation fa fb =
   then
 
     (* The rule is called only once per (unordered) pair.
-     * In case one of the clauses is the plus clause, it should
-     * always be [fb] -- we swap if it's not the case.
      * We have to treat one clause against itself, in which case it needs
-     * to be refreshed. Those cases were all trivial in the original Akiss
-     * but not modulo AC. *)
-    let fa,fb =
-      if is_plus_clause fa then fb,fa else fa,fb
-    in
+     * to be refreshed; such cases were all trivial in the original Akiss
+     * but not with xor. *)
     let fa = if fa.id = fb.id then fresh_statement fa else fa in
 
       match get_head fa, get_head fb with
         | (Predicate("knows", [ul; r; t]),
            Predicate("knows", [upl; rp; tp])) ->
-
-
-            (* Optimization: skip equation when both recipes are sums.
-             * This greatly reduces execution time as well as the number of
-             * generated tests. *)
 
               debugOutput "Equation:\n %s\n %s\n%!"
                 (show_statement fa) (show_statement fb) ;
