@@ -108,7 +108,7 @@ type predicateName = id
   *   "knows" of arity 3 (world, recipe, term);
   *   "identical" and "ridentical" of arity 3 (world, recipe, recipe);
   *   "reach" of arity 1 (world). *)
-type atom = 
+type atom =
   | Predicate of predicateName * term list
 
 type statement = {
@@ -187,7 +187,7 @@ let atom_from_term term = match term with
       Predicate(symbol, termlist)
   | _ -> invalid_arg("atom_from_term")
 
-let statement_from_term ~orig term = match term with 
+let statement_from_term ~orig term = match term with
   | Fun("!tuple!", head :: body) ->
       { orig with
           head = atom_from_term head ;
@@ -236,7 +236,7 @@ let show_statement st =
 
 (** {3 Unification and substitutions} *)
 
-let csu_atom a1 a2 = 
+let csu_atom a1 a2 =
   R.csu (term_from_atom a1) (term_from_atom a2)
 
 let apply_subst_atom atom sigma = match atom with
@@ -429,7 +429,7 @@ let same_statement s t =
 (** [is_prefix_world w w'] checks whether [w] is a prefix of [w'],
   * assuming the two worlds come from the same statement, so that one
   * is necessarily a prefix of the other. *)
-let rec is_prefix_world small_world big_world = 
+let rec is_prefix_world small_world big_world =
   match (small_world, big_world) with
   | (Fun("empty", []), _) -> true
   | (Fun("world", [h; t]), Fun("world", [hp; tp])) ->
@@ -587,7 +587,7 @@ exception Not_a_consequence
   * in order, and returns the result of the first call that succeeds.
   * If all calls fail, re-raise the exception raised by the last call. *)
 let rec first f l e =
-  match l with 
+  match l with
     | [] -> raise e
     | h :: t ->
 	try
@@ -648,7 +648,7 @@ let rec print_trace chan = function
   * See Definition 14 and Lemma 2 in the paper. *)
 let consequence st kb rules =
   assert (is_solved st) ;
-  let rec aux { head = head ; body = body } kb = 
+  let rec aux { head = head ; body = body } kb =
     match head with
       | Predicate("knows", [_; _; Fun(name, [])]) when (startswith name "!n!") ->
           `Public_name, Fun(name, [])
@@ -867,7 +867,7 @@ let update (kb : Base.t) rules (f : statement) : unit =
            Replaced by: %s\n\n%!"
           (show_statement fc)
           (show_statement f)
-          (show_statement newclause); 
+          (show_statement newclause);
         if not (drop_reflexive && is_reflexive newclause) then
           Base.add newclause rules kb
     with Not_a_consequence ->
@@ -1083,72 +1083,72 @@ let equation fa fb =
         | (Predicate("knows", [ul; r; t]),
            Predicate("knows", [upl; rp; tp])) ->
 
-              debugOutput "Equation:\n %s\n %s\n%!"
-                (show_statement fa) (show_statement fb) ;
-              let t1 = Fun("!tuple!", [t; ul]) in
-              let t2 = Fun("!tuple!", [tp; upl]) in
-              let sigmas = R.csu t1 t2 in
-              let sigmas =
-                plus_restrict ~t (get_head fb, get_body fb) sigmas
-              in
-              let sigmas =
-                (* Performing equation on twice the same clause is useless
-                 * if the unifier is trivial, ie. when it is essentially a
-                 * renaming. In those cases the resulting identical atom is
-                 * an instance of reflexivity.
-                 * The only non trivial cases should come from the plus clause,
-                 * but not all of its unifiers are non-trivial. *)
-                if eqrefl_opt && fa.id = fb.id then
-                  let nontrivial sigma =
-                    let v1 = vars_of_term t1 in
-                    let v2 = vars_of_term t2 in
-                    let rec unique = function
-                      | x::y::l ->
-                          if x=y then unique (y::l) else x :: unique (y::l)
-                      | l -> l
-                    in
-                      try
-                        let assoc x sigma =
-                          try List.assoc x sigma with Not_found -> Var x
-                        in
-                        let image v =
-                          unique
-                            (List.sort String.compare
-                               (List.map
-                                  (fun x -> unbox_var (assoc x sigma))
-                                  v))
-                        in
-                        let v'1 = image v1 in
-                        let v'2 = image v2 in
-                          assert (List.length v1 = List.length v2) ;
-                          not (List.length v'1 = List.length v1 && v'1 = v'2)
-                      with Invalid_argument "unbox_var" -> true
+            debugOutput "Equation:\n %s\n %s\n%!"
+              (show_statement fa) (show_statement fb) ;
+            let t1 = Fun("!tuple!", [t; ul]) in
+            let t2 = Fun("!tuple!", [tp; upl]) in
+            let sigmas = R.csu t1 t2 in
+            let sigmas =
+              plus_restrict ~t (get_head fb, get_body fb) sigmas
+            in
+            let sigmas =
+              (* Performing equation on twice the same clause is useless
+               * if the unifier is trivial, ie. when it is essentially a
+               * renaming. In those cases the resulting identical atom is
+               * an instance of reflexivity.
+               * The only non trivial cases should come from the plus clause,
+               * but not all of its unifiers are non-trivial. *)
+              if eqrefl_opt && fa.id = fb.id then
+                let nontrivial sigma =
+                  let v1 = vars_of_term t1 in
+                  let v2 = vars_of_term t2 in
+                  let rec unique = function
+                    | x::y::l ->
+                        if x=y then unique (y::l) else x :: unique (y::l)
+                    | l -> l
                   in
-                  let sigmas' = List.filter nontrivial sigmas in
-                  let l' = List.length sigmas' in
-                    if l' < List.length sigmas then
-                      debugOutput "Non-trivial solutions: %d\n" l' ;
-                    sigmas'
-                else
-                  sigmas
-              in
-              let newhead = Predicate("identical", [ul; r; rp]) in
-              let newbody = List.append (get_body fb) (get_body fa) in
-              let clauses =
-                List.map
-                  (fun sigma ->
-                     let st =
-                       apply_subst_atom newhead sigma,
-                       List.map (fun x -> apply_subst_atom x sigma) newbody
-                     in
-                       new_clause ~label:"eq" ~parents:[fa;fb] st)
-                  sigmas
-              in
-                if sigmas <> [] then
-                  debugOutput "Generated clauses %s.\n"
-                    (String.concat ","
-                       (List.map (fun st -> "#"^string_of_int st.id) clauses)) ;
-                clauses
+                    try
+                      let assoc x sigma =
+                        try List.assoc x sigma with Not_found -> Var x
+                      in
+                      let image v =
+                        unique
+                          (List.sort String.compare
+                             (List.map
+                                (fun x -> unbox_var (assoc x sigma))
+                                v))
+                      in
+                      let v'1 = image v1 in
+                      let v'2 = image v2 in
+                        assert (List.length v1 = List.length v2) ;
+                        not (List.length v'1 = List.length v1 && v'1 = v'2)
+                    with Invalid_argument "unbox_var" -> true
+                in
+                let sigmas' = List.filter nontrivial sigmas in
+                let l' = List.length sigmas' in
+                  if l' < List.length sigmas then
+                    debugOutput "Non-trivial solutions: %d\n" l' ;
+                  sigmas'
+              else
+                sigmas
+            in
+            let newhead = Predicate("identical", [ul; r; rp]) in
+            let newbody = List.append (get_body fb) (get_body fa) in
+            let clauses =
+              List.map
+                (fun sigma ->
+                   let st =
+                     apply_subst_atom newhead sigma,
+                     List.map (fun x -> apply_subst_atom x sigma) newbody
+                   in
+                     new_clause ~label:"eq" ~parents:[fa;fb] st)
+                sigmas
+            in
+              if sigmas <> [] then
+                debugOutput "Generated clauses %s.\n"
+                  (String.concat ","
+                     (List.map (fun st -> "#"^string_of_int st.id) clauses)) ;
+              clauses
 
           | _ -> invalid_arg("equation")
     else
@@ -1176,7 +1176,7 @@ let rec ridentical fa fb =
                    List.map (fun x -> apply_subst_atom x sigma) newbody
                  in
                  let result = new_clause ~label:"ri" ~parents:[fa;fb] result in
-                   debugOutput "\n\nRID FROM: %s\nRID AND : %s\nRID GOT: %s\n\n%!" 
+                   debugOutput "\n\nRID FROM: %s\nRID AND : %s\nRID GOT: %s\n\n%!"
                      (show_statement fa)
                      (show_statement fb)
                      (show_statement result);
@@ -1297,11 +1297,11 @@ let revworld w =
 let rec recipize_h (tl : term) kb =
   match tl with
     | Fun("empty", []) -> Fun("empty", [])
-    | Fun("world", [t; w]) -> 
+    | Fun("world", [t; w]) ->
 	(
 	  match t with
 	    | Fun("!in!", [ch; tp]) ->
-		let atom = Predicate("knows", 
+		let atom = Predicate("knows",
 				      [revworld w;
 				       Var(fresh_variable ()); tp]) in
 		let r = find_recipe atom kb in
@@ -1315,7 +1315,7 @@ let rec recipize_h (tl : term) kb =
     | Var(_) -> invalid_arg("recipize_h with var")
     | _ -> invalid_arg("recipize_h")
 
-let recipize tl kb = 
+let recipize tl kb =
   debugOutput "Recipizing %s\n" (show_term tl);
   let result = recipize_h (revworld tl) kb in
   (
@@ -1324,7 +1324,7 @@ let recipize tl kb =
   )
 
 (** Extract all successful reachability tests from a knowledge base. *)
-let checks_reach kb = 
+let checks_reach kb =
   Base.fold_solved
     (fun x checks ->
        match (get_head x) with
@@ -1346,12 +1346,12 @@ let checks_ridentical kb =
              let omega =
                List.map
                  (function
-                    | Predicate("knows", [_; Var(vX); Var(vx)]) -> 
+                    | Predicate("knows", [_; Var(vX); Var(vx)]) ->
                         (vX, apply_subst (Var(vx)) sigma)
                     | _ -> invalid_arg("checks_ridentical"))
                  (get_body x)
              in
-             let resulting_test = Fun("check_identity", [new_w; 
+             let resulting_test = Fun("check_identity", [new_w;
                                                          apply_subst r omega;
                                                          apply_subst rp omega]) in
                (* debugOutput "FROM: %s\nGOT:%s\n\n%!"
@@ -1368,10 +1368,10 @@ let show_tests tests =
   String.concat "\n" (trmap show_term tests)
 
 let show_rew_rules rules =
-  String.concat "\n" (trmap 
+  String.concat "\n" (trmap
     (
       fun x ->
 	match x with
 	| (l, r) -> (show_term l)^" -> "^(show_term r);
-    ) 
+    )
     rules)
