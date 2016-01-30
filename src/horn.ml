@@ -43,6 +43,11 @@ end
 
 (** {2 Flags} *)
 
+(** Drop "reflexive" statements, i.e. identical and ridentical statements
+  * with two equal recipes in their head. This seems harmless but is not
+  * justified in the theory. *)
+let drop_reflexive = false
+
 (** When dealing with xor, normalize i(R,R') into i(R+R',0) to avoid
   * redundancies. This seems safe but is not yet justified by the theory. *)
 let normalize_identical = false
@@ -61,8 +66,9 @@ let drop_non_normal = false
 let extra_static_marks = true
 
 (** [eqrefl_opt] avoids trivial uses of equation that essentially
-  * generate reflexive id(R,R) statements. It is not very useful. *)
-let eqrefl_opt = true
+  * generate reflexive id(R,R) statements. It is not very useful,
+  * and is not accounted for in the theory. *)
+let eqrefl_opt = false
 
 (** [opti_sort] add additionnal sorting to select the predicate *)
 let opti_sort = true
@@ -732,22 +738,22 @@ let consequence st kb rules =
     end else
       r'
 
-(** Avoid reflexive identities.
+(** Detect reflexive identities.
   * Note: even with the simplification of non-solved clauses, there are
   * some cases that we are missing,
   * eg. identical(C[R1],C[R2]) <-- k(R1,T), k(R2,T)
   * and variants of it with one recipe being broken in two parts, etc. *)
-let useful st =
+let is_reflexive st =
   match st.head with
     | Predicate("knows", _) -> true
     | Predicate("reach", _) -> true
     | Predicate("identical", [_; r; rp])
     | Predicate("ridentical", [_; r; rp]) ->
         if r = rp then begin
-          debugOutput "Clause #%d is not useful.\n" st.id ;
+          debugOutput "Clause #%d is reflexive, not useful.\n" st.id ;
           false
         end else true
-    | _ -> invalid_arg "useful"
+    | _ -> invalid_arg "is_reflexive"
 
 let normalize_identical f =
   if not (Theory.xor && normalize_identical) then f else
@@ -837,7 +843,7 @@ let update (kb : Base.t) rules (f : statement) : unit =
         normalize_new_statement rules f
   with None -> () | Some fc ->
 
-  if useful fc then
+  if drop_reflexive && is_reflexive fc then () else
   if is_deduction_st fc && is_solved fc then
     try
       let recipe = consequence fc kb rules in
@@ -855,7 +861,7 @@ let update (kb : Base.t) rules (f : statement) : unit =
           (show_statement fc)
           (show_statement f)
           (show_statement newclause); 
-        if useful newclause then
+        if not (drop_reflexive && is_reflexive newclause) then
           Base.add newclause rules kb
     with Not_a_consequence ->
       (* If we ran conseq, no need to check whether the clause is already
