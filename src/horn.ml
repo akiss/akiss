@@ -51,10 +51,6 @@ let yellow_marking = false
   * affect termination but we may need it for the final theorem. *)
 let canonize_all = false
 
-(** Asymmetric equation: forbid sum recipes on both sides of equation.
-  * It speeds things up and reduces the number of tests. *)
-let asym_eq = true
-
 (** With AC, doing conseq against the plus clause is known to break
   * completeness, unless conseq is not used against extension-like clauses. *)
 let conseq_axiom = true
@@ -93,7 +89,6 @@ let print_flags () =
       \  ac: %b\n\
       \  xor: %b\n\
       \  conseq: axiom=%b res=%b plus=%b\n\
-      \  asym equation: %b\n\
       \  canonize: %b (all %b)\n\
       \  yellow: %b\n\
       \  extra static: %b\n\
@@ -102,7 +97,7 @@ let print_flags () =
       \  renormalize_term: %b\n"
       Theory.ac Theory.xor
       conseq_axiom conseq conseq_plus
-      asym_eq canonize canonize_all
+      canonize canonize_all
       yellow_marking extra_static_marks eqrefl_opt opti_sort renormalize_term
 
 (** {2 Predicates and clauses, conversions and printing} *)
@@ -1114,7 +1109,11 @@ let resolution master slave =
   * It returns [] if it fails to produce any new clause. *)
 let equation fa fb =
 
-  if is_deduction_st fa && is_deduction_st fb then
+  if
+    is_deduction_st fa && is_deduction_st fb &&
+    (* When dealing with xor, forbid Equation if one clause is f0+. *)
+    (not Theory.xor || not (is_plus_clause fa || is_plus_clause fb))
+  then
 
     (* The rule is called only once per (unordered) pair.
      * In case one of the clauses is the plus clause, it should
@@ -1135,7 +1134,7 @@ let equation fa fb =
             (* Optimization: skip equation when both recipes are sums.
              * This greatly reduces execution time as well as the number of
              * generated tests. *)
-            if not (unifiable t tp) || (asym_eq && ((is_plus_clause fa) || (is_plus_clause fb))) then [] else begin
+            if not (unifiable t tp) then [] else begin
 
               debugOutput "Equation:\n %s\n %s\n%!"
                 (show_statement fa) (show_statement fb) ;
