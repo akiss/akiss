@@ -904,8 +904,8 @@ let mark r sigma =
   let r'' = Var (fresh_string "P") in
     List.map (fun (x,t) -> x, apply_subst t [r',r'']) sigma
 
-(** Restrict a csu based on plus-constraints *)
-let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
+(** Generate dynamic marking after a Resolution+ rule. *)
+let generate_dynamic_marking sigmas ~t ~rx ~x ~ry ~y =
 
   (* Find the leftmost rigid (non-plus,non-var) subterm *)
   let rec extract_rigid variables = function
@@ -961,45 +961,22 @@ let plus_restrict sigmas ~t ~rx ~x ~ry ~y =
     end ;
     sigmas
 
-let plus_restrict ~t (slave_head,slave_body) sigmas =
-  if sigmas = [] then sigmas else
-    match deconstruct_plus_clause (slave_head,slave_body) with
-      | None -> sigmas
-      | Some (rx,ry,x,y) ->
-          plus_restrict sigmas ~t ~rx ~x ~ry ~y
-
-exception Constraint_violation
-
-(** Propagate constraints on one unifier, raise [Constraint_violation] if the
-  * unifier violates some constraint. *)
-let propagate_constraint sigma =
-  let theta =
-    List.map
-      (function
-         | (x, Var y) when is_marked x && not (is_marked y) ->
-             let y' = Var (fresh_string "P") in
-               [(y, y')]
-   (**      | (x, Fun("plus",_)) when is_marked x -> raise Constraint_violation : all constraints are already checked in resolution and equation and this one is wrong **)
-         | _ -> [])
-      sigma
+(** Propagate marking on a collection of unifiers. *)
+let propagate_marking =
+  let propagate sigma =
+    let theta =
+      List.map
+        (function
+           | (x, Var y) when x.[0] <> y.[0] ->
+               let y' = Var (fresh_string (String.make 1 x.[0])) in
+                 [(y,y')]
+           | _ -> [])
+        sigma
+    in
+    let theta = List.concat theta in
+      List.map (fun (x,t) -> x, apply_subst t theta) sigma
   in
-  let theta = List.concat theta in
-    List.map (fun (x,t) -> x, apply_subst t theta) sigma
-
-(** Propagate constraints on a collection of unifiers, drop unifiers that
-  * violate constraints. *)
-let rec process_constraints = function
-  | sigma::sigmas ->
-      begin try
-        propagate_constraint sigma :: process_constraints sigmas
-      with
-        | Constraint_violation -> process_constraints sigmas
-      end
-  | [] -> []
-
-(** Check and propagate constraints, and generate new dynamic constraints. *)
-let plus_restrict ~t c sigmas =
-  plus_restrict ~t c (process_constraints sigmas)
+  fun l -> List.map propagate l
 
 (** [resolution d_kb (master,slave)] attempts to perform a resolution step
   * between clauses [master] and [slave] by matching the head of [slave]
@@ -1019,6 +996,7 @@ let resolution master slave =
 	is_plus_clause slave
     then [] else
     let sigmas = csu_atom atom slave.head in
+    let sigmas = propagate_marking sigmas in
     let length = List.length sigmas in
     if !debug_output && length > 0 then begin
       debugOutput "Resolution?\n FROM: %s\n AND : %s\n\n"
@@ -1030,7 +1008,12 @@ let resolution master slave =
         sigmas
     end ;
     let sigmas =
-      plus_restrict ~t:(get_term atom) (slave.head,slave.body) sigmas
+      if sigmas = [] then sigmas else
+        match deconstruct_plus_clause (slave.head,slave.body) with
+          | None -> sigmas
+          | Some (rx,ry,x,y) ->
+              generate_dynamic_marking sigmas
+                ~t:(get_term atom) ~rx ~x ~ry ~y
     in
     let () =
       if !debug_output && List.length sigmas < length then begin
@@ -1088,9 +1071,7 @@ let equation fa fb =
             let t1 = Fun("!tuple!", [t; ul]) in
             let t2 = Fun("!tuple!", [tp; upl]) in
             let sigmas = R.csu t1 t2 in
-            let sigmas =
-              plus_restrict ~t (get_head fb, get_body fb) sigmas
-            in
+            let sigmas = propagate_marking sigmas in
             let sigmas =
               (* Performing equation on twice the same clause is useless
                * if the unifier is trivial, ie. when it is essentially a
