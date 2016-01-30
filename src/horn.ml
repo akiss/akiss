@@ -43,12 +43,6 @@ end
 
 (** {2 Flags} *)
 
-(** Canonize solved statements. *)
-let canonize = true
-
-(** Also canonize non-deduction statements. *)
-let canonize_all = false
-
 (** When dealing with xor, normalize i(R,R') into i(R+R',0) to avoid
   * redundancies. This seems safe but is not yet justified by the theory. *)
 let normalize_identical = false
@@ -79,13 +73,11 @@ let print_flags () =
     Format.printf
       "Parameters:\n\
       \  xor: %b\n\
-      \  canonize: %b (all %b)\n\
       \  extra static: %b\n\
       \  eqrefl_opt: %b\n\
       \  opti_sort: %b\n
       \  renormalize_term: %b\n"
       Theory.xor
-      canonize canonize_all
       extra_static_marks eqrefl_opt opti_sort renormalize_term
 
 (** {2 Predicates and clauses, conversions and printing} *)
@@ -243,14 +235,18 @@ let apply_subst_st st sigma =
         head = apply_subst_atom st.head sigma ;
         body = trmap (fun x -> apply_subst_atom x sigma) st.body }
 
-let fresh_statement f =
+let fresh_statement ~keep_marks f =
   let allv = vars_of_horn_clause f in
   let newv = trmap (fun v ->
+                     if not keep_marks then Var (fresh_variable ()) else
                      if v.[0] = 'P' then Var (fresh_string "P") else
                      if v.[0] = 'Q' then Var (fresh_string "Q") else
                        Var (fresh_variable ())) allv in
   let sigma = List.combine allv newv in
     apply_subst_st f sigma
+
+let remove_marking f = fresh_statement ~keep_marks:false f
+let fresh_statement f = fresh_statement ~keep_marks:true f
 
 let dotfile =
   match Theory.dotfile with
@@ -558,8 +554,7 @@ let simplify_statement st =
     if useless = [] then st else { st with body = body }
 
 let canonical_form statement =
-  if (canonize_all || is_deduction_st statement) &&
-     is_solved statement then
+  if is_deduction_st statement && is_solved statement then
     let f = iterate rule_remove (iterate rule_rename statement) in
       debugOutput "Canonized: %s\n" (show_statement f) ;
       f
@@ -834,8 +829,10 @@ let update (kb : Base.t) rules (f : statement) : unit =
   let f = fresh_statement f in
 
   match
-    (* Canonize, normalize again and keep only normal clauses. *)
-    if not canonize then Some f else
+    if Theory.xor then
+      Some (if is_solved f then remove_marking f else f)
+    else
+      (* Canonize, normalize again and keep only normal clauses. *)
       let f = canonical_form f in
         normalize_new_statement rules f
   with None -> () | Some fc ->
