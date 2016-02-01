@@ -872,8 +872,9 @@ let update (kb : Base.t) rules (f : statement) : unit =
           Base.add newclause rules kb
     with Not_a_consequence ->
       (* If we ran conseq, no need to check whether the clause is already
-       * in the knowledge base. *)
-      Base.add ~needs_check:false fc rules kb
+       * in the knowledge base.
+       * This optim seems incorrect with xor. TODO make sure why. *)
+      Base.add ~needs_check:Theory.xor fc rules kb
   else
     Base.add fc rules kb
 
