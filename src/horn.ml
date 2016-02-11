@@ -59,18 +59,12 @@ let drop_reflexive = false
   * redundancies. This seems safe but is not yet justified by the theory. *)
 let normalize_identical = false
 
-(** Do not normalize at all **)
-let renormalize_term = true
-
-(** Instead of normalizing, drop non normal clauses.
-  * This is not justified by the theory. *)
-let drop_non_normal = false
-
-(* Mark last two variants of "plus", corresponding to the introduction
- * and elimination of 0. This is not compatible with the current theory
- * because the marked literals are solved. Fortunately, it only seems
- * necessary when canonisation is disabled. *)
-let extra_static_marks = true
+(** In the saturation algorithm with xor, we drop newly generated
+  * clauses if their skeleton is not normal, and we renormalize
+  * recipes. These options would probably make sense for the regular
+  * procedure too. **)
+let drop_non_normal_skel = Theory.xor
+let renormalize_recipes = Theory.xor
 
 (** [eqrefl_opt] avoids trivial uses of equation that essentially
   * generate reflexive id(R,R) statements. It is not very useful,
@@ -86,12 +80,12 @@ let print_flags () =
     Format.printf
       "Parameters:\n\
       \  xor: %b\n\
-      \  extra static: %b\n\
       \  eqrefl_opt: %b\n\
-      \  opti_sort: %b\n
-      \  renormalize_term: %b\n"
+      \  opti_sort: %b\n\
+      \  drop non-normal skel: %b\n\
+      \  renormalize_recipes: %b\n"
       Theory.xor
-      extra_static_marks eqrefl_opt opti_sort renormalize_term
+      eqrefl_opt opti_sort drop_non_normal_skel renormalize_recipes
 
 (** {2 Predicates and clauses, conversions and printing} *)
 
@@ -745,14 +739,18 @@ let normalize_identical f =
   * and are re-normalized. *)
 let normalize_new_statement rules f =
   let process t =
-    let t' = if renormalize_term then R.normalize t rules else t in
-      if drop_non_normal && not (R.equals t t' []) then begin
-        debugOutput "Non-normal term in clause #%d.\n" (get_id f) ;
-        None
-      end else
-        Some t'
+    if drop_non_normal_skel then
+      let t' = R.normalize t rules in
+        if not (R.equals t t' []) then begin
+          debugOutput "Non-normal term in clause #%d.\n" (get_id f) ;
+          None
+        end else
+          (* Return t' rather than t because it is more canonical. *)
+          Some t'
+    else
+      Some t
   in
-  let renorm r = if renormalize_term then R.normalize r rules else r in
+  let renorm r = if renormalize_recipes then R.normalize r rules else r in
   let process = function
     | Predicate ("knows",[w;r;t]) ->
         begin match process t, process w with
@@ -970,10 +968,9 @@ let resolution master slave =
     (* Fail immediately if slave's head isn't a knows statement. *)
     if not (is_deduction_st slave) then [] else
 
-    (* Fail immediately if solutions would violate marking. *)
+    (* Forbid resolution against f0+ clause if selected atom is marked. *)
     if is_marked (unbox_var (get_recipe atom)) &&
-       (*is_plus (get_recipe slave.head)*)
-	is_plus_clause slave
+       is_plus_clause slave
     then [] else
     let sigmas = csu_atom atom slave.head in
     let sigmas = propagate_marking sigmas in

@@ -23,8 +23,6 @@ open Term
 
 (** {2 Flags} *)
 
-val extra_static_marks : bool
-
 (** {2 Predicates and clauses, conversions and printing} *)
 
 type predicateName = id
