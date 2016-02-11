@@ -849,6 +849,23 @@ let update (kb : Base.t) rules (f : statement) : unit =
   * seed statements S of a ground trace T. *)
 let initial_kb (seed : statement list) rules : Base.t =
   let kb = Base.create () in
+  let seed =
+    if not Theory.xor then seed else
+      let xor_variants,seed =
+        List.partition
+          (fun f ->
+             match get_head f with
+               | Predicate("knows",[_;Fun("plus",_);_]) -> true
+               | _ -> false)
+          seed
+      in
+        List.iter
+          (fun f ->
+             debugOutput "Initializing kb with clause %s.\n" (show_statement f) ;
+             Base.add f rules kb)
+          xor_variants ;
+        seed
+  in
     List.iter (update kb rules) seed ;
     kb
 

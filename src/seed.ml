@@ -251,48 +251,41 @@ let context_statements symbol arity rules =
     (box_vars vYs)
     (trmap (function x -> apply_subst x sigma) (box_vars vZs))
   in
+  if Theory.xor && symbol = "plus" then
+    (* World variable *)
+    let w = Var "X" in
+    (* Recipe variables, marked or not *)
+    let r1 = Var "X1" in
+    let r2 = Var "X2" in
+    let p1 = Var "Q1" in
+    let p2 = Var "Q2" in
+    (* Message variables *)
+    let x1 = Var "X11" in
+    let x2 = Var "X12" in
+    let x3 = Var "X13" in
+    (* Syntactic sugar *)
+    let (+) a b = Fun("plus",[a;b]) in
+    let knows r x = Predicate("knows",[w;r;x]) in
+    let (<=) h t = Horn.new_clause (h,t) in
+      (* Kinit statements for xor *)
+      [ knows (r1+r2) (x1+x2)
+          <= [ knows r1 x1 ; knows r2 x2 ] ;
+        knows (p1+p2) x1
+          <= [ knows p1 (x1+x2) ; knows p2 x2 ] ;
+        knows (p1+p2) (x1+x2)
+          <= [ knows p1 (x1+x3) ; knows p2 (x2+x3) ] ]
+  else
   let t = Fun(symbol, box_vars vZs) in
   let v = R.variants t rules in
     trmap
     (function (t',sigma) ->
-      let clause =
         new_clause
           (Predicate("knows",
                      [w;
                       Fun(symbol, box_vars vYs);
                       t'
                      ]),
-           body sigma)
-      in
-        (* Mark recipe variables in non-trivial variants of the plus clause. *)
-        if Theory.xor && symbol = "plus" && sigma <> [] then
-          try
-            let liste_r =
-                List.map
-                  (function
-                     | Predicate("knows",[_;Var r;_]) -> r
-                     | _ -> assert false)
-                  (get_body clause)
-            in
-		List.fold_left (fun cl r ->
-            let p = fresh_string "Q" in
-              apply_subst_st cl [r,Var p])clause liste_r
-          with Not_found ->
-            if not Horn.extra_static_marks then clause else
-              begin match
-                List.find
-                  (function
-                     | Predicate("knows",[_;_;Var _]) -> true
-                     | _ -> false)
-                  (get_body clause)
-              with
-                | Predicate (_,[_;Var r;_]) ->
-                    let p = fresh_string "Q" in
-                      apply_subst_st clause [r,Var p]
-                | _ -> assert false
-              end
-        else
-          clause)
+           body sigma))
     v
 
 (** Compute everything *)
