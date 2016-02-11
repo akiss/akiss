@@ -911,7 +911,7 @@ let generate_dynamic_marking sigmas ~t ~rx ~x ~ry ~y =
             | Fun ("plus",args) :: l ->
                 occurs t (List.rev_append args l)
             | t' :: l ->
-                t = t' || occurs t l
+                R.equals t t' [] || occurs t l
             | [] -> false
           in
           let update_sigma sigma =
