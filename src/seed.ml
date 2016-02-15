@@ -267,13 +267,14 @@ let context_statements symbol arity rules =
     let (+) a b = Fun("plus",[a;b]) in
     let knows r x = Predicate("knows",[w;r;x]) in
     let (<=) h t = Horn.new_clause (h,t) in
+    let (<==) h t = Horn.new_clause ~vip:true (h,t) in
       (* Kinit statements for xor *)
       [ knows (r1+r2) (x1+x2)
           <= [ knows r1 x1 ; knows r2 x2 ] ;
         knows (p1+p2) x1
-          <= [ knows p1 (x1+x2) ; knows p2 x2 ] ;
+          <== [ knows p1 (x1+x2) ; knows p2 x2 ] ;
         knows (p1+p2) (x1+x2)
-          <= [ knows p1 (x1+x3) ; knows p2 (x2+x3) ] ]
+          <== [ knows p1 (x1+x3) ; knows p2 (x2+x3) ] ]
   else
   let t = Fun(symbol, box_vars vZs) in
   let v = R.variants t rules in

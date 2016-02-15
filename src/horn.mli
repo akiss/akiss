@@ -41,7 +41,7 @@ val apply_subst_st : statement -> subst -> statement
 (** {3 Unification and substitutions} *)
 
 val new_clause :
-  ?label:string -> ?parents:statement list -> atom * atom list -> statement
+  ?label:string -> ?vip:bool -> ?parents:statement list -> atom * atom list -> statement
 
 (** {3 Knowledge bases} *)
 

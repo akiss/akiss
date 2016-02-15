@@ -109,7 +109,8 @@ type statement = {
   id : int ;
   age : int ;
   head : atom ;
-  body : atom list
+  body : atom list ;
+  vip : bool
 }
 
 let is_deduction_st = function
@@ -130,7 +131,7 @@ let is_ridentical_st = function
 
 (** A statement is solved if all its premises have a variable as their last
   * argument. *)
-let is_solved {body=body} =
+let is_solved_body body =
   List.for_all
     (function
        | Predicate("knows", [_; rx; x]) ->
@@ -138,6 +139,7 @@ let is_solved {body=body} =
            is_var x
        | _ -> invalid_arg("is_solved"))
     body
+let is_solved {body} = is_solved_body body
 
 let rec vars_of_atom = function
   | Predicate(_, term_list) -> vars_of_term_list term_list
@@ -252,7 +254,10 @@ let fresh_statement ~keep_marks f =
   let sigma = List.combine allv newv in
     apply_subst_st f sigma
 
-let remove_marking f = fresh_statement ~keep_marks:false f
+let remove_marking f =
+  let f' = fresh_statement ~keep_marks:false f in
+    { f' with vip = false }
+
 let fresh_statement f = fresh_statement ~keep_marks:true f
 
 let dotfile =
@@ -358,7 +363,7 @@ let new_clause =
       | _ -> assert false
   in
   let c = ref 0 in
-    fun ?(label="") ?(parents=([]:statement list)) (head,body) ->
+    fun ?(label="") ?(vip=false) ?(parents=([]:statement list)) (head,body) ->
       let body = List.sort compare body in
       let age =
         List.fold_left
@@ -367,7 +372,7 @@ let new_clause =
           parents
       in
       incr c ;
-      let st = { id = !c ; age = age ; head = head ; body = body } in
+      let st = { id = !c ; age ; head ; body ; vip } in
       begin match dotfile with
       | Some dotfile ->
         Printf.fprintf dotfile
@@ -402,7 +407,7 @@ let new_clause =
 (** Create anonymous/temporary statement.
   * This is currently only used in conseq. *)
 let anon_statement head body =
-  { id = -1 ; age = -1 ; head = head ; body = body }
+  { id = -1 ; age = -1 ; head = head ; body = body ; vip = false }
 
 (** Check that a term is a normal form. *)
 let is_normal tm rules =
@@ -795,6 +800,8 @@ let update (kb : Base.t) rules (f : statement) : unit =
     | None -> ()
     | Some f ->
 
+  let vip = f.vip in
+
   (** Freshen only now to avoid freshening the (many) non-normal clauses
     * that the procedure generates. We don't want to do it too late, though:
     * freshening should come before normalization to preserve the (weak)
@@ -811,7 +818,7 @@ let update (kb : Base.t) rules (f : statement) : unit =
   with None -> () | Some fc ->
 
   if drop_reflexive && is_reflexive fc then () else
-  if is_deduction_st fc && is_solved fc then
+  if is_deduction_st fc && is_solved fc && not vip then
     try
       let recipe = consequence fc kb rules in
       let world = get_world fc.head in
@@ -1012,8 +1019,11 @@ let resolution master slave =
                     slave.body
                     (List.filter (fun x -> (x <> atom)) master.body))
              in
-               new_clause ~label:"res"
-                 ~parents:[master;slave] (head,body)
+               new_clause
+                 ~label:"res"
+                 ~vip:master.vip
+                 ~parents:[master;slave]
+                 (head,body)
            in
              debugOutput "RESO: %s\n\n"
                (show_statement result);
