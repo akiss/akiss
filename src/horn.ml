@@ -809,7 +809,7 @@ let update (kb : Base.t) rules (f : statement) : unit =
   let f = fresh_statement f in
 
   match
-    if Theory.xor then
+    if Theory.xor then let f = simplify_statement f in
       Some (if is_solved f then remove_marking f else f)
     else
       (* Canonize, normalize again and keep only normal clauses. *)
