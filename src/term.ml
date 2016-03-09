@@ -116,6 +116,8 @@ let rec show_term = function
   | Fun("!test!", term_list) ->
       show_term (Fun("test", term_list))
   | Fun("world", [w; ws]) -> show_term w ^ "." ^ show_term ws
+  | Fun("zero",[]) -> "0"
+  | Fun("plus",[t1;t2]) -> (show_term t1)^"+"^(show_term t1)
   | Fun(f, l) ->
       (f ^
 	 (if l <> [] then "(" else "") ^

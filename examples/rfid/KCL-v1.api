@@ -5,7 +5,7 @@
 #set xor;
 
 // Signature: xor and hash
-symbols plus/2, zero/0, h/2;
+symbols h/2;
 
 private idA, idB, kA, kB, r1, r2, r4;
 channels C;

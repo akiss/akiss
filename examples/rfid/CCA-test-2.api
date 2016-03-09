@@ -7,7 +7,7 @@
 
 // Signature xor and h
 
-symbols plus/2, zero/0, enc/2, dec/2;
+symbols enc/2, dec/2;
 private KM,DATA,IMP,EXP,KPART;
 channels c;
 var x,xkey,xkek,xkek1,xkek2,xtype,xtype1,xtype2,xtype3,xtypet,xtypef,xkpNew1,xkpNew2,xkpNew3,xkpOld2,xkpOld3,X,Y,Xen,Xd,Yd,Xi,Yi,Xe,Ye,X2,X3,Xt,Yt,Zt,Xf,Yf,Zf;

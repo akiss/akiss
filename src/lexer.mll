@@ -61,6 +61,7 @@ rule token = parse
     | "/" { Slash }
     | "," { Comma }
     | ";" { Semicolon }
+    | "+" { Plus }
     | "var" { Var }
     | "rewrite" { Rewrite }
     | "evrewrite" { EvRewrite }

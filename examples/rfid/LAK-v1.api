@@ -5,7 +5,7 @@
 
 #set xor;
 
-symbols plus/2, zero/0, h/1;
+symbols h/1;
 private kA, kB, k0, r0, r1, r2;
 channels C;
 var X,Y,Y2,Z2;

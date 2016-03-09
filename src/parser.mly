@@ -30,7 +30,7 @@ open Ast
 %token PrivChannels
 %token LeftP RightP LeftB RightB
 %token Arrow Equals Dot Slash Comma Semicolon
-%token Out In And Zero
+%token Out In And Zero Plus
 %token Not Equivalent Square EvSquare Variants
 %token Print PrintTraces
 %token InnerSequence InnerInterleave
@@ -50,11 +50,11 @@ open Ast
 main:
  | commandlist EOF { $1 }
 
-commandlist:
+     commandlist:
  | { [] }
  | command Semicolon commandlist { $1 :: $3 }
      
-command:
+     command:
  | XOR { SetXOR }
  | AC { SetAC }
  | Symbols symbollist { DeclSymbols $2 }
@@ -72,20 +72,20 @@ command:
  | negatable { QueryNegatable (true, $1) }
  | Not negatable { QueryNegatable (false, $2) }
 
-negatable:
+     negatable:
  | Equivalent identifierList And identifierList { NegEquivalent ($2, $4) }
  | Square identifierList And identifierList { NegSquare ($2, $4) }
  | EvSquare identifierList And identifierList { NegEvSquare ($2, $4) }
 
-identifierList:
+     identifierList:
  | { [] }
  | neidentifierList { $1 }
 
-neidentifierList:
+     neidentifierList:
  | Identifier { [$1] }
  | Identifier Comma neidentifierList { $1 :: $3 }
 
-process:
+     process:
  | Zero { TempEmpty }
  | action { TempAction($1) }
  | action Dot process { TempSequence(TempAction($1), $3) }
@@ -95,44 +95,47 @@ process:
  | LeftP process RightP { $2 }
  | Identifier { TempProcessRef($1) }
 
-action:
+     action:
  | In LeftP Identifier Comma Identifier RightP { TempActionIn($3, $5) }
  | Out LeftP Identifier Comma term RightP { TempActionOut($3, $5) }
  | LeftB term Equals term RightB { TempActionTest ($2, $4) }
 
-term:
+     term:
  | Identifier { TempTermCons ($1, []) }
  | Identifier LeftP termlist RightP { TempTermCons ($1, $3) }
+ | term Plus term { TempTermCons ("plus", [$1;$3]) }
+ | LeftP term Plus term RightP { TempTermCons ("plus", [$2;$4]) }
+ | Zero {TempTermCons ("zero",[]) } 
 
-termlist:
+     termlist:
  | { [] }
  | netermlist { $1 }
 
-netermlist:
+     netermlist:
  | term { [ $1 ] }
  | term Comma netermlist { $1 :: $3 }
 
-symbollist:
+     symbollist:
  | { [] }
  | nesymbollist { $1 }
 
-nesymbollist:
+     nesymbollist:
  | symbol { [ $1 ] }
  | symbol Comma nesymbollist { $1 :: $3 }
 
-symbol:
+     symbol:
  | Identifier Slash Int { ($1, $3) }
  | Identifier Slash Zero { ($1, 0) }
 
-namelist:
+     namelist:
  | { [] }
  | nenamelist { $1 }
 
-nenamelist:
+     nenamelist:
  | name { [ $1 ] }
  | name Comma nenamelist { $1 :: $3 }
 
-name:
+     name:
  | Identifier { $1 }
 
 %%

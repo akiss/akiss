@@ -2,7 +2,7 @@
 
 #set xor;
 
-symbols plus/2, zero/0, h/2, pair/2, fst/1, snd/1;
+symbols h/2, pair/2, fst/1, snd/1;
 private idA, idB, r2, r4, kA, kB,ok;
 channels C;
 var X, Y, Z;

@@ -3,7 +3,6 @@
 // for instance choose X=Y, observe the difference of identifiers after a xor
 
 #set xor;
-symbols plus/2, zero/0;
 
 private idA, idB;
 channels C;

@@ -10,7 +10,7 @@
 
 #set xor;
 
-symbols plus/2, zero/0, h/1;
+symbols h/1;
 private k0, k1, k2, r,alphaB;
 channels C;
 var X, Y, Z;

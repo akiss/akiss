@@ -182,8 +182,9 @@ let process_decl = function
           x+zero  == x ;
           x+x     == zero ;
           x+(x+y) == y
-        ]
-
+        ];
+      declare_symbols ["plus",2;"zero",0];
+      check_atoms ()
   | DeclSymbols symbolList ->
     verboseOutput "Declaring symbols\n%!";
     declare_symbols symbolList;

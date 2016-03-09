@@ -8,7 +8,7 @@
 
 // Signature: xor and hash
 
-symbols plus/2, zero/0, h/2;
+symbols h/2;
 private idA, idB, r2, r4, kA, kB, ok;
 channels C;
 var X, Y, Z;
