@@ -97,12 +97,26 @@ VALIDATION = $(TESTS) \
 			 examples/NSLxor/nsl.api \
 			 examples/NSLxor/NSL-xor-1a.api
 
+CCS = examples/ccs/YPL-tag.api \
+  examples/ccs/OTYT-tag.api \
+  examples/ccs/NSL-xor-auth.api \
+  examples/ccs/LD-tag.api \
+  examples/ccs/LAK-tag.api \
+  examples/ccs/LAK-auth.api \
+  examples/ccs/KCL-tag.api \
+  examples/ccs/KCL-running.api \
+  examples/ccs/KCL-tag-correction.api \
+  examples/ccs/KCL-running-correction.api
+
 RUN = OCAMLRUNPARAM=b ./akiss -verbose
 
 .PHONY: test actest dhtest validate
 
 test:
 	./runtests.sh test$(NAME) "$(TESTS)"
+
+ccs:
+	./runtests.sh ccs$(NAME) "$(CCS)"
 
 actest:
 	./runtests.sh actest$(NAME) "$(AC_TESTS) $(AC_NOTESTS)"
