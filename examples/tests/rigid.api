@@ -4,7 +4,7 @@
 // is incompatible with the dynamic marking technique developed
 // for handling xor.
 
-symbols plus/2, zero/0, ok/0, ko/0;
+symbols ok/0, ko/0;
 
 private a, b, c, u;
 

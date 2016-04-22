@@ -1,4 +1,4 @@
-symbols plus/2, zero/0, pair/2, fst/1, snd/1, e/1, pow/2;
+symbols pair/2, fst/1, snd/1, e/1, pow/2;
 
 private n1, n2, n3, n;
 channels C;

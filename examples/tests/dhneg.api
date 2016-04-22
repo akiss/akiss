@@ -1,6 +1,6 @@
 #set ac+;
 
-symbols plus/2, zero/0, e/1, pow/2, g/0;
+symbols e/1, pow/2, g/0;
 
 private n1, n2, n3;
 channels C;

@@ -2,7 +2,7 @@
 
 // Signature xor
 
-symbols plus/2, zero/0, c/0;
+symbols c/0;
 
 private a, b, ok;
 channels C;

@@ -1,7 +1,7 @@
 #set xor;
 
 // Signature xor and h
-symbols plus/2, zero/0, h/2;
+symbols h/2;
 
 private  ida,idb,ka,kb,r1,r2,r3;
 channels C;

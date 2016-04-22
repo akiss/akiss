@@ -1,6 +1,6 @@
 #set xor;
 
-symbols plus/2, zero/0, enc/2, dec/2;
+symbols enc/2, dec/2;
 
 private a, ok;
 channels C;
