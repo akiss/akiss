@@ -74,6 +74,12 @@ let eqrefl_opt = false
 (** [opti_sort] add additionnal sorting to select the predicate *)
 let opti_sort = true
 
+(* Use of Shift rule*)
+let apply_shift_rule = Theory.xor
+
+(* Use of Conseq *)
+let use_conseq = (not Theory.xor) || false
+
 let print_flags () =
   assert (not Theory.ac || Theory.xor) ;
   if !debug_output then
@@ -83,9 +89,10 @@ let print_flags () =
       \  eqrefl_opt: %b\n\
       \  opti_sort: %b\n\
       \  drop non-normal skel: %b\n\
-      \  renormalize_recipes: %b\n"
+      \  renormalize_recipes: %b\n\
+      \  conseq: %b\n"
       Theory.xor
-      eqrefl_opt opti_sort drop_non_normal_skel renormalize_recipes
+      eqrefl_opt opti_sort drop_non_normal_skel renormalize_recipes use_conseq
 
 (** {2 Predicates and clauses, conversions and printing} *)
 
@@ -531,6 +538,37 @@ let rule_remove = function
         { st with body = body }
   | st -> st
 
+let rule_shift st = 
+  let rec variable_first t =
+	match t with 
+	| Fun("plus", [Var(x); u]) -> t
+	| Fun("plus", [x;Var(y)]) -> Fun( "plus", [Var(y);x])
+	| Fun("plus", [x; u])-> 
+		begin match variable_first u with
+		| Fun("plus", [Var(z); u]) -> Fun( "plus", [Var(z); Fun("plus", [x ; u])])
+		| _ -> t
+		end
+	| _ ->  t in
+  let rec get_recipe y l =
+	match l with
+	| [] -> assert(false)
+	| Predicate("knows", [u;rx; Var(x)]) ::q -> if Var(x) = y then rx else get_recipe y q
+	| _ -> assert(false) in
+  match st.head with
+  | Predicate("knows", [w; r ; Fun("plus", [ l ; t ])]) ->
+	begin match (variable_first (Fun("plus", [ l ; t ]))) with
+		| Fun("plus", [ Var(x); t ]) -> begin let stt = {st with head = Predicate("knows", [w; Fun("plus",[get_recipe (Var(x)) (st.body); r]); t])} in 
+			debugOutput "shift + on the statement: %s \n" (show_statement stt); stt;
+			 end
+		| _ -> st
+	end
+  | Predicate("knows", [w; r ; Var(x)]) ->
+	begin let stt = {st with head = Predicate("knows", [w; Fun("plus",[get_recipe (Var(x)) (st.body); r]); Fun("zero",[])])} in 
+			debugOutput "shift 0 on the statement: %s \n" (show_statement stt); stt;
+			 end
+  | _ -> st
+
+
 (** For statements that are not canonized we still apply some simplifications
   * to avoid explosions: if a term is derived using several recipes, we can
   * remove derivations for which the recipe does not occur elsewhere in the
@@ -542,15 +580,15 @@ let simplify_statement st =
      * By default we use the standard order on strings, but we tweak
      * it so that marked and necessary variables are kept, while making
      * sure that such atoms can be used to justify dropping others. *)
-    if List.mem a hvars || is_marked a then false else
-      if List.mem a' hvars || is_marked a' then true else
+    if List.mem a hvars (*|| is_marked a*) then false else
+      if List.mem a' hvars (*|| is_marked a'*) then true else
         a<a'
   in
   let useless,body =
     List.partition
       (fun a ->
          let recipe_var = unbox_var (get_recipe a) in
-         not (is_marked recipe_var) &&
+        (* not (is_marked recipe_var) && *)
          not (List.mem recipe_var hvars) &&
          let t = get_term a in
          let l = world_length (get_world a) in
@@ -567,7 +605,9 @@ let simplify_statement st =
 
 let canonical_form statement =
   if is_deduction_st statement && is_solved statement then
-    let f = iterate rule_remove (iterate rule_rename statement) in
+    let f = if Theory.xor then 
+        iterate rule_shift (simplify_statement statement) 
+      else iterate rule_remove (iterate rule_rename statement) in
       debugOutput "Canonized: %s\n" (show_statement f) ;
       f
   else
@@ -809,7 +849,7 @@ let update (kb : Base.t) rules (f : statement) : unit =
   let f = fresh_statement f in
 
   match
-    if Theory.xor then let f = simplify_statement f in
+    if Theory.xor then let f = canonical_form f in
       Some (if is_solved f then remove_marking f else f)
     else
       (* Canonize, normalize again and keep only normal clauses. *)
@@ -818,7 +858,7 @@ let update (kb : Base.t) rules (f : statement) : unit =
   with None -> () | Some fc ->
 
   if drop_reflexive && is_reflexive fc then () else
-  if is_deduction_st fc && is_solved fc && not vip then
+  if is_deduction_st fc && is_solved fc && not vip && use_conseq then
     try
       let recipe = consequence fc kb rules in
       let world = get_world fc.head in
