@@ -1,0 +1,36 @@
+// RFID protocol OTYT'06
+//scenario: one honest session followed by TagA (resp. TagB)
+
+
+#set xor;
+
+symbols h/1;
+private kA, kB, r1, k1;
+channels C;
+var X,Y;
+
+
+//  Alice-Bob notation
+// Reader and Tag know the key kX and its value will be updated an the end
+// of each session
+//   R --> T: r1
+//   T --> R: h(kX + r1)
+//   R --> T: kX + k1 (k1 fresh key)
+//   both update their key kX with k1.
+
+// Tinit models the messages outputted during an honest session between the tag A and the reader
+// TtagA models the role of Tag played by A
+// TtagB models the role of Tag played by B
+
+// Note also that in process TtagA we use k1 instead of kA to model the fact that
+// the key has been updated after the first session.
+
+Tinit = out(C,r1).out(C,h(plus(kA,r1))).out(C,plus(kA,k1)).0;
+TtagA = in(C,X).out(C,h(plus(k1,X))).in(C,Y).0;
+TtagB = in(C,X).out(C,h(plus(kB,X))).in(C,Y).0;
+
+Psame = Tinit :: TtagA;
+Pdiff = Tinit :: TtagB;
+
+not equivalentct? Psame and Pdiff;
+

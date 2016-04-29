@@ -1,0 +1,37 @@
+// RFID protocol LD'07
+// scenario: one honest session followed by TagA (resp. TagB)
+
+#set xor;
+
+symbols h/1, pair/2, fst/1, snd/1;
+private k0, k1, k2, r, alphaB;
+channels C;
+var X, Y, Z;
+
+rewrite fst(pair(X,Y)) -> X;
+rewrite snd(pair(X,Y)) -> Y;
+
+
+//  Alice-Bob notation
+// R knows k0, ki, and k_{i+1}
+// T knows alpha = k0+ki
+// R --> T: r
+// T --> R: h(r+alpha)
+// R computes a = ki + k_{i+1} and b = h(a+k0+ki)
+// R --> T: <a,b>
+// T updates alpha <-- alpha +a if b = h(a+alpha)
+
+// Tinit models the messages outputted during an honest session between the tag A and the reader
+// TtagA models the role of Tag played by A
+// TtagB models the role of Tag played by B
+
+Tinit = out(C,r).out(C,h(plus(r,plus(k0, k1)))).out(C,pair(plus(k1,k2),h(plus(k0,k2)))).0;
+
+TtagA = in(C,X).out(C,h(plus(X,plus(k0, k2)))).in(C,Y).0;
+TtagB = in(C,X).out(C,h(plus(X,alphaB))).in(C,Y).0;
+
+Psame = Tinit :: TtagA;
+Pdiff = Tinit :: TtagB;
+
+not equivalentct? Psame and Pdiff;
+

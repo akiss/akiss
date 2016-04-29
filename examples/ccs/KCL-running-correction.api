@@ -1,0 +1,31 @@
+// RFID protocol KCL07
+// Running example
+
+#set xor;
+
+symbols h/2, pair/2, fst/1, snd/1;
+private idA, idB, r2, r4, kA, kB;
+channels C;
+var X, Y;
+
+rewrite fst(pair(X,Y)) -> X;
+rewrite snd(pair(X,Y)) -> Y;
+
+//  Alice-Bob notation
+//   R --> T: r1
+//   T --> R: <idA+r2, h(r1+r2,kA)>
+
+// An attacker can initiate two sessions with the same nonce
+// and will be able to tell if the two sessions are against
+// the same tag or not. Indeed, by xoring the two components
+// of the pair one gets idX+h(r1).
+
+
+TtagA1 = in(C,Y).out(C,pair(plus(idA,r2),h(plus(Y,r2),kA))).0;
+TtagA2 = in(C,X).out(C,pair(plus(idA,r4),h(plus(X,r4),kA))).0;
+TtagB2 = in(C,X).out(C,pair(plus(idB,r4),h(plus(X,r4),kB))).0;
+
+Psame = TtagA1 :: TtagA2;
+Pdiff = TtagA1 :: TtagB2;
+
+equivalentct? Psame and Pdiff;
