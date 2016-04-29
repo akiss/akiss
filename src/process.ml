@@ -84,12 +84,13 @@ let rec parse_action = function
      else
        Printf.ksprintf failwith "Undeclared channel: %s" ch
   | TempActionIn(ch, x) ->
-     if List.mem ch !channels then
-       Input(ch, x)
-     else if List.mem ch Theory.privchannels then
-       Input(ch, x)
-     else
-       Printf.ksprintf failwith "Undeclared channel: %s" ch
+    if List.mem ch !channels || List.mem ch Theory.privchannels  then
+      if List.mem x !vars then
+	Input(ch, x)
+      else
+	Printf.ksprintf failwith "Undeclared variable: %s" x
+    else
+      Printf.ksprintf failwith "Undeclared channel: %s" ch
   | TempActionTest(s, t) -> Test(parse_term s, parse_term t)
 ;;
 
