@@ -78,7 +78,7 @@ let opti_sort = true
 let apply_shift_rule = Theory.xor
 
 (* Use of Conseq *)
-let use_conseq = (not Theory.xor) || false
+let use_conseq = (not Theory.xor) || true
 
 let print_flags () =
   assert (not Theory.ac || Theory.xor) ;
