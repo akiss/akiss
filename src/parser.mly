@@ -31,7 +31,7 @@ open Ast
 %token LeftP RightP LeftB RightB
 %token Arrow Equals Dot Slash Comma Semicolon
 %token Out In And Zero Plus
-%token Not Equivalent Square EvSquare Variants
+%token Not Equivalent Square EvSquare Variants Unifiers Normalize
 %token Print PrintTraces
 %token InnerSequence InnerInterleave
 %token EOF
@@ -69,6 +69,8 @@ main:
  | Print Identifier { QueryPrint $2 }
  | PrintTraces identifierList { QueryPrintTraces $2 }
  | Variants term { QueryVariants $2 }
+ | Unifiers term term { QueryUnifiers ($2, $3) }
+ | Normalize term { QueryNormalize $2 }     
  | negatable { QueryNegatable (true, $1) }
  | Not negatable { QueryNegatable (false, $2) }
 
