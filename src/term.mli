@@ -51,6 +51,7 @@ val show_term : term -> varName
 val show_term_list : term list -> varName
 val show_subst : subst -> string
 val show_subst_list : subst list -> string
+val show_variant_list: (term * subst) list -> string
 
 val apply_subst : term -> subst -> term
 val bound : varName -> subst -> bool

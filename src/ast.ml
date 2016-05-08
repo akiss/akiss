@@ -53,3 +53,5 @@ type cmd =
   | QueryPrint of string
   | QueryPrintTraces of string list
   | QueryVariants of tempTerm
+  | QueryUnifiers of tempTerm * tempTerm
+  | QueryNormalize of tempTerm

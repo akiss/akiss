@@ -42,9 +42,16 @@ let full_maude = lazy (
        exit 1
 )
 
+
 let maude_command = lazy (
   let lazy maude_binary = maude_binary in
-  let lazy full_maude = full_maude in
+  maude_binary ^ " -batch -no-banner -no-ansi-color "
+)
+
+  
+let full_maude_command = lazy (
+  let lazy maude_binary = maude_binary in
+  let lazy full_maude = full_maude in 
   maude_binary ^ " -batch -no-banner -no-ansi-color " ^ full_maude
 )
 

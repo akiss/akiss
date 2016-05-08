@@ -20,6 +20,6 @@
 open Term
 
 val unifiers : term -> term -> rules -> subst list
-val matchers : term -> term -> rules -> subst list
-val equals : term -> term -> rules -> bool
-val normalize : term -> rules -> term
+val variants : term -> rules -> (term * subst) list
+(* val normalize : term -> rules -> term *)
+(* val equals : term -> term -> rules -> bool *)

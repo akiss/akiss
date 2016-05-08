@@ -159,6 +159,16 @@ let rec show_subst_list sl =
   | x :: l -> ( (show_subst x) ^ "," ^ (show_subst_list l) )
   | [] -> ""
 
+let show_variant (t,s) =
+  (show_term t)^": "^(show_subst s)
+  
+    
+let rec show_variant_list vl =
+  match vl with
+  | [v] -> show_variant v
+  | v :: l -> ( (show_variant v) ^ ", " ^ (show_variant_list l) )
+  | [] -> ""
+    
 let compose (sigma : subst) (tau : subst) =
   trmap (function x -> (x, apply_subst (apply_subst (Var(x)) sigma) tau))
     (List.append (fst (List.split sigma)) (fst (List.split tau)))
