@@ -55,6 +55,8 @@ rule token = parse
     | "equivalentct?" { Equivalent }
     | "not" { Not }
     | "variants?" { Variants }
+    | "unifiers?" { Unifiers }
+    | "normalize?" { Normalize }
     | "and" { And }
     | "/*" { comment 1 lexbuf }
     | "//" { line_comment lexbuf }
