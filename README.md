@@ -38,11 +38,10 @@ Build
 
 You will need OCaml; version 4.01 is known to work.
 
-An experimental feature of Akiss for AC operators also requires two
-external tools:
+An experimental feature of Akiss for AC operators also requires a
+external tool:
 
- * [tamarin-prover](http://www.infsec.ethz.ch/research/software/tamarin.html) (branch feature-ac-rewrite-rules)
- * [maude](http://maude.cs.illinois.edu/w/index.php?title=The_Maude_System) (version 2.6 or 2.7)
+ * [maude](http://maude.cs.illinois.edu/w/index.php?title=The_Maude_System) (version 2.7)
 
 You shouldn't need them if you don't use the feature.
 
@@ -175,6 +174,8 @@ Akiss can answer to a variety of queries, the main ones being:
    interleavings of `P1` and `P2`.  The `print_traces` query prints
    those traces.
  * `variants? t;`: prints the variants of term `t`.
+ * `unifiers? t1 t2;`: prints equational unifiers of terms `t1` and `t2`.
+ * `normalize? t;`: prints the normal form of term `t`.
 
 
 Source tree
@@ -186,7 +187,7 @@ Here is a quick guide to the organization of the source code:
  * `ast.ml`, `parser.mly`, `lexer.mll`: parsing of API files
  * `config.ml`: detects external tools
  * `term.ml`: term structure and basic operations on them
- * `maude.ml`: interface with maude
+ * `lexmaude.mll`, `parsemaude.mly`, `maude.ml`: interface with maude
  * `lextam.mll`, `parsetam.mly`, `tamarin.ml`: interface with tamarin
  * `rewriting.ml`: unification and variants for non-AC theories
  * `theory.ml`: process first half of API file, setting up the theory and
