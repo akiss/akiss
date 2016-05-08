@@ -438,12 +438,31 @@ let processCommand = function
     let t = parse_term tt in
     Printf.printf
       "Computing variants of %s\n%!" (show_term t);
-    let (tl, vl) = List.split (R.variants t Theory.rewrite_rules) in
+
+    let vl = (R.variants t Theory.rewrite_rules) in
     let varst = vars_of_term t in
     let vl_cleaned =
-      List.map ( fun subst -> restrict subst varst ) vl in 
-    Printf.printf "%s\n" (show_subst_list vl_cleaned);
+      List.map ( fun (vt, subst) -> (vt, restrict subst varst ) ) vl in 
+		     
+    Printf.printf "%s\n" (show_variant_list vl_cleaned);
     Printf.printf "%i Variants Found\n" (List.length vl_cleaned)
+  | QueryUnifiers (tt1, tt2) -> 
+    let t1 = parse_term tt1 in
+    let t2 = parse_term tt2 in
+    Printf.printf
+      "Computing unifiers of %s and %s\n%!" (show_term t1) (show_term t2);
+    let sl = (R.unifiers t1 t2 Theory.rewrite_rules) in
+    let v = vars_of_term_list [t1;t2] in
+    let sl_cleaned =
+      List.map ( fun subst -> restrict subst v ) sl in 
+    Printf.printf "%s\n" (show_subst_list sl_cleaned);
+    Printf.printf "%i Unifiers Found\n" (List.length sl_cleaned)
+  | QueryNormalize tt -> 
+    let t = parse_term tt in
+    Printf.printf
+      "Computing normal form of %s\n%!" (show_term t);
+    let tn = (R.normalize t Theory.rewrite_rules) in
+    Printf.printf "%s\n" (show_term tn);
   | _ ->
     Printf.eprintf "Illegal declaration outside preamble!\n" ;
     exit 1
