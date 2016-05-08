@@ -273,17 +273,19 @@ module type REWRITING = sig
 end
 
 module AC : REWRITING = struct
-  let normalize = Maude.normalize
-  let equals = Maude.equals
+  let normalize = Fullmaude.normalize
+  let equals = Fullmaude.equals
   let unifiers s t r =
-    if r = [] then Maude.unifiers s t [] else
-      let u1 = Tamarin.unifiers Maude.normalize s t r in
-        assert (ac ||
+    if r = [] then Fullmaude.unifiers s t [] else
+      (* let u1 = Tamarin.unifiers Fullmaude.normalize s t r in *)
+      let u1 = Maude.unifiers s t r in
+      assert (ac ||
                 let u2 = Rewriting.unifiers s t r in
                   List.length u1 = List.length u2) ;
         u1
-  let matchers = Maude.matchers
-  let variants = Tamarin.variants Maude.normalize
+  let matchers = Fullmaude.matchers
+  (* let variants = Tamarin.variants Fullmaude.normalize *)
+  let variants = Maude.variants
 end
 
 module NonAC : REWRITING = struct
