@@ -1,5 +1,5 @@
-// RFID protocol KCL07
-// Running example
+// RFID protocol KCL07 (modified)
+// Running example, modified to obtain unlinkability
 
 #set xor;
 
@@ -21,9 +21,9 @@ rewrite snd(pair(X,Y)) -> Y;
 // of the pair one gets idX+h(r1).
 
 
-TtagA1 = in(C,Y).out(C,pair(plus(idA,r2),h(plus(Y,r2),kA))).0;
-TtagA2 = in(C,X).out(C,pair(plus(idA,r4),h(plus(X,r4),kA))).0;
-TtagB2 = in(C,X).out(C,pair(plus(idB,r4),h(plus(X,r4),kB))).0;
+TtagA1 = in(C,Y).out(C,pair(idA+r2,h(Y+r2,kA))).0;
+TtagA2 = in(C,X).out(C,pair(idA+r4,h(X+r4,kA))).0;
+TtagB2 = in(C,X).out(C,pair(idB+r4,h(X+r4,kB))).0;
 
 Psame = TtagA1 :: TtagA2;
 Pdiff = TtagA1 :: TtagB2;

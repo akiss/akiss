@@ -20,7 +20,6 @@ rewrite snd(pair(X,Y)) -> Y;
 // the same tag or not. Indeed, by xoring the two components
 // of the pair one gets idX+h(r1).
 
-
 TtagA1 = in(C,Y).out(C,pair(idA+r2,h(Y,kA)+r2)).0;
 TtagA2 = in(C,X).out(C,pair(idA+r4,h(X,kA)+r4)).0;
 TtagB2 = in(C,X).out(C,pair(idB+r4,h(X,kB)+r4)).0;

@@ -30,8 +30,8 @@ rewrite snd(pair(X,Y)) -> Y;
 // We would like to know whether it is possible for the reader to reach the end
 // of the session whereas TagA has not yet started.
 
-Tinit = out(C,r0).out(C,pair(r1,h(plus(r0,plus(r1,kA))))).out(C,h(plus(plus(h(plus(r0,plus(r1,kA))),kA),r0))).0;
-Treader = out(C,r2).in(C,X).[snd(X)=h(plus(r2,plus(fst(X),kA)))].0;
+Tinit = out(C,r0).out(C,pair(r1,h(r0+(r1+kA)))).out(C,h(h(r0+r1+kA)+kA+r0)).0;
+Treader = out(C,r2).in(C,X).[snd(X)=h(r2+fst(X)+kA)].0;
 
 P = Tinit :: Treader;
 Q = Tinit :: Treader :: out(C,zero);

@@ -30,12 +30,12 @@ RoleAIfst = out(C,aenc(pair(na,pub(a)),pub(i))).0;
 
 RoleAIsnd =
   in(C,X).
-  [plus(fst(adec(X,a)),pub(i)) = na].
+  [fst(adec(X,a))+pub(i) = na].
   out(C,aenc(snd(adec(X,a)),pub(i))).0;
 
 RoleBAfst =
   in(C,Y).[snd(adec(Y,b)) = pub(a)].
-  out(C,aenc(pair(plus(fst(adec(Y,b)),pub(b)),nb),snd(adec(Y,b)))).0;
+  out(C,aenc(pair(fst(adec(Y,b))+pub(b),nb),snd(adec(Y,b)))).0;
 
 RoleBAsnd = in(C,Z).[adec(Z,b)=nb].0;
 

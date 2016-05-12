@@ -1,5 +1,5 @@
 // RFID protocol KCL07
-// scenario: one honest session followed by TagA (resp. TagB)
+// Scenario: one honest session followed by TagA (resp. TagB)
 
 #set xor;
 
@@ -15,15 +15,14 @@ rewrite snd(pair(X,Y)) -> Y;
 //   R --> T: r1
 //   T --> R: <idA+r2, h(r1,kA)+r2>
 
+// Tinit models the messages outputted during an honest session
+// between the tag A and the reader.
+// TtagA models the role of Tag played by A.
+// TtagB models the role of Tag played by B.
 
-// Tinit models the messages outputted during an honest session between the tag A and the reader
-// TtagA models the role of Tag played by A
-// TtagB models the role of Tag played by B
-
-
-Tinit = out(C,r1).out(C,pair(plus(idA,r2),plus(h(r1,kA),r2))).0;
-TtagA = in(C,X).out(C,pair(plus(idA,r4),plus(h(X,kA),r4))).0;
-TtagB = in(C,X).out(C,pair(plus(idB,r4),plus(h(X,kB),r4))).0;
+Tinit = out(C,r1).out(C,pair(idA+r2,h(r1,kA)+r2)).0;
+TtagA = in(C,X).out(C,pair(idA+r4,h(X,kA)+r4)).0;
+TtagB = in(C,X).out(C,pair(idB+r4,h(X,kB)+r4)).0;
 
 Psame = Tinit :: TtagA;
 Pdiff = Tinit :: TtagB;

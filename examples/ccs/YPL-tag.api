@@ -27,10 +27,10 @@ var X,Y;
 // Note also that in process TtagA we use "new kA1" and "new kA2" instead of kA1 and kA2 to model
 // the fact that the keys have been updated after the first session.
 
-Tinit = out(C,r1).out(C,h(plus(kA1,plus(r1,kA)))).out(C,h(kA2)).0;
+Tinit = out(C,r1).out(C,h(kA1+r1+kA)).out(C,h(kA2)).0;
 
-TtagA = in(C,X).out(C,h(plus(kA1,plus(h(kA2),plus(X,kA))))).in(C,Y).[Y=h(plus(kA2,h(plus(kA1,plus(r1,kA)))))].0;
-TtagB = in(C,X).out(C,h(plus(kB1,plus(X,kB)))).in(C,Y).[Y=h(kB2)].0;
+TtagA = in(C,X).out(C,h(kA1+h(kA2)+X+kA)).in(C,Y).[Y=h(kA2+h(kA1+r1+kA))].0;
+TtagB = in(C,X).out(C,h(kB1+X+kB)).in(C,Y).[Y=h(kB2)].0;
 
 Psame = Tinit :: TtagA;
 Pdiff = Tinit :: TtagB;
