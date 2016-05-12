@@ -52,7 +52,7 @@ let letters = letter (('.'| letter | digit) * )
   | "variant unify" { VariantUnify }
   | "get variants" { GetVariants }
   | "rewrites: " digits " in " digits "ms cpu (" digits "ms real) ("
-  digits " rewrites/second)" { Rewritesline }
+    (digits | "~") " rewrites/second)" { Rewritesline }
   | "in" {  In }
   | digits "ms" { Ms }
   | "cpu" { Cpu }
