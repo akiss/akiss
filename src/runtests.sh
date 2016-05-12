@@ -14,7 +14,7 @@ rm -f $dir/lwt_compat.ml
 chmod -w $dir/*
 
 for i in $* ; do
-  cp ../$i $dir
+  cp $i $dir
 done
 
 cd $dir
@@ -27,7 +27,7 @@ for i in $* ; do
   cd $i.test
   echo -n "Running test $i... "
   date > log
-  OCAMLRUNPARAM=b time ../akiss -verbose -debug >> log 2> time < ../$i
+  OCAMLRUNPARAM=b time ../akiss $AKISSOPTS -verbose -debug >> log 2> time < ../$i
   ret=$?
   echo Exit $ret >> log
   date >> log
