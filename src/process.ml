@@ -103,12 +103,14 @@ type symbProcess =
   | SymbAct of action list (* non-empty list *)
   | SymbSeq of symbProcess * symbProcess
   | SymbPar of symbProcess * symbProcess
+  | SymbAlt of symbProcess * symbProcess
 
 let rec show_symb = function
   | SymbNul -> "0"
   | SymbAct a -> "(act " ^ String.concat " " (List.map show_action a) ^ ")"
   | SymbSeq (p1, p2) -> "(seq " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
   | SymbPar (p1, p2) -> "(par " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
+  | SymbAlt (p1, p2) -> "(alt " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
 
 let replace_var_in_act x t a =
   match a with
@@ -131,6 +133,10 @@ let rec replace_var_in_symb x t p =
      let p1 = replace_var_in_symb x t p1 in
      let p2 = replace_var_in_symb x t p2 in
      SymbPar (p1, p2)
+  | SymbAlt (p1, p2) ->
+     let p1 = replace_var_in_symb x t p1 in
+     let p2 = replace_var_in_symb x t p2 in
+     SymbAlt (p1, p2)
 
 let rec symb_of_temp process processes =
   match process with
@@ -144,6 +150,10 @@ let rec symb_of_temp process processes =
      let p1 = symb_of_temp p1 processes in
      let p2 = symb_of_temp p2 processes in
      SymbPar (p1, p2)
+  | TempChoice (p1, p2) ->
+     let p1 = symb_of_temp p1 processes in
+     let p2 = symb_of_temp p2 processes in
+     SymbAlt (p1, p2)
   | TempLet (x, tt, process) ->
      let t = parse_term tt in
      let p = symb_of_temp process processes in
@@ -164,6 +174,11 @@ let rec simplify = function
      | SymbNul, p -> p
      | p, SymbNul -> p
      | p1, p2 -> SymbPar (p1, p2))
+  | SymbAlt (p1, p2) ->
+     (match simplify p1, simplify p2 with
+     | SymbNul, p -> p
+     | p, SymbNul -> p
+     | p1, p2 -> SymbAlt (p1, p2))
 
 let rec optimize_tests p =
   unlinearize SymbNul (compress_tests [] [] (linearize p))
@@ -173,6 +188,7 @@ and linearize = function
   | SymbAct _ as a -> [a]
   | SymbSeq (p1, p2) -> linearize p1 @ linearize p2
   | SymbPar (p1, p2) -> [SymbPar (optimize_tests p1, optimize_tests p2)]
+  | SymbAlt (p1, p2) -> [SymbAlt (optimize_tests p1, optimize_tests p2)]
 
 and unlinearize res = function
   | [] -> res
@@ -195,6 +211,7 @@ let rec delta = function
      List.fold_left (fun accu (a, p) ->
        (a, simplify (SymbSeq (p, p2))) :: accu
      ) [] (delta p1)
+  | SymbAlt (p1, p2) -> delta p1 @ delta p2
   | SymbPar (p1, p2) ->
      let s1 =
        List.fold_left (fun accu (a, p) ->

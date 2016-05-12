@@ -33,12 +33,13 @@ open Ast
 %token Out In And Zero Plus
 %token Not Equivalent Square EvSquare Variants Unifiers Normalize
 %token Print PrintTraces
-%token InnerSequence InnerInterleave
+%token InnerSequence InnerInterleave InnerChoice
 %token EOF
 
 %left In
 %left InnerSequence
 %left InnerInterleave
+%left InnerChoice
 %right Dot
 
 %start main
@@ -94,6 +95,7 @@ main:
  | Let Identifier Equals term In process { TempLet($2, $4, $6) }
  | process InnerSequence process { TempSequence($1, $3) }
  | process InnerInterleave process { TempInterleave($1, $3) }
+ | process InnerChoice process { TempChoice($1, $3) }
  | LeftP process RightP { $2 }
  | Identifier { TempProcessRef($1) }
 

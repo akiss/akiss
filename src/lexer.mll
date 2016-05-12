@@ -47,6 +47,7 @@ rule token = parse
     | "privchannels" { PrivChannels }
     | "::" { InnerSequence }
     | "||" { InnerInterleave }
+    | "++" { InnerChoice }
     | "print_traces" { PrintTraces }
     | "print" { Print }
     | "equivalentft?" { Square }
