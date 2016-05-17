@@ -4,9 +4,9 @@
 #set xor;
 
 symbols h/2, pair/2, fst/1, snd/1;
-private idA, idB, r2, r4, kA, kB;
-channels C;
-var X, Y;
+private idA, idB, r1, r2, r3, r4, kA, kB;
+channels CR, C;
+var X, Y, Z;
 
 rewrite fst(pair(X,Y)) -> X;
 rewrite snd(pair(X,Y)) -> Y;
@@ -20,12 +20,13 @@ rewrite snd(pair(X,Y)) -> Y;
 // the same tag or not. Indeed, by xoring the two components
 // of the pair one gets idX+h(r1).
 
-
+Treader1 = out(CR,r1).in(CR,Z).([snd(Z)=h(r1+idA+fst(Z),kA)].out(CR,0).0 ++ [snd(Z)=h(r1+idB+fst(Z),kB)].out(CR,0).0);
+Treader2 = out(CR,r3).in(CR,Z).([snd(Z)=h(r3+idA+fst(Z),kA)].out(CR,0).0 ++ [snd(Z)=h(r3+idB+fst(Z),kB)].out(CR,0).0);
 TtagA1 = in(C,Y).out(C,pair(idA+r2,h(Y+r2,kA))).0;
 TtagA2 = in(C,X).out(C,pair(idA+r4,h(X+r4,kA))).0;
 TtagB2 = in(C,X).out(C,pair(idB+r4,h(X+r4,kB))).0;
 
-Psame = TtagA1 || TtagA2;
-Pdiff = TtagA1 || TtagB2;
+Psame = (TtagA1 || Treader1):: (TtagA2 || Treader2);
+Pdiff = (TtagA1 || Treader1):: (TtagB2 || Treader2);
 
 equivalentct? Psame and Pdiff;

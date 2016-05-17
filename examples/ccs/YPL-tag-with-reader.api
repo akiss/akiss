@@ -1,0 +1,39 @@
+// RFID protocol YPL'05
+//scenario: one honest session followed by TagA (resp. TagB)
+
+#set xor;
+
+symbols h/1;
+private kA1, kA2, kA, kB1, kB2, kB, r1;
+channels C, CR;
+var X,Y,Z;
+
+// We model RFID tags that authenticate with a reader
+// in the following way:
+
+//  Alice-Bob notation
+// Reader and Tag know k1,k2,k and the values k1 and k2 are updated
+// after a successfull session.
+//   R --> T: r1
+//   T --> R: h(k1 + r1 + k)
+//   R --> T:  h(k2)
+//   both update their keys k1,k2 as follows:
+//   new k1 = k1 + h(k2)
+//   new k2 = k2 + h(k1 + r1 + k)
+
+// Tinit models the messages outputted during an honest session between the tag A and the reader
+// TtagA models the role of Tag played by A
+// TtagB models the role of Tag played by B
+// Note also that in process TtagA we use "new kA1" and "new kA2" instead of kA1 and kA2 to model
+// the fact that the keys have been updated after the first session.
+
+Treader = out(CR,r2).in(CR,Z).([Z=h(kA1+h(kA2)+r2+kA)].out(CR,h(kA2+h(kA1+r1+kA))).0; ++ [Z=h(kB1+r2+kB)].out(CR,h(kB2)).0;)
+Tinit = out(C,r1).out(C,h(kA1+r1+kA)).out(C,h(kA2)).0;
+
+TtagA = in(C,X).out(C,h(kA1+h(kA2)+X+kA)).in(C,Y).[Y=h(kA2+h(kA1+r1+kA))].0;
+TtagB = in(C,X).out(C,h(kB1+X+kB)).in(C,Y).[Y=h(kB2)].0;
+
+Psame = Tinit :: (TtagA || Treader);
+Pdiff = Tinit :: (TtagB || Treader);
+
+not equivalentct? Psame and Pdiff;

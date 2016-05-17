@@ -1,0 +1,36 @@
+// RFID protocol LAK'06
+// scenario: one honest session followed by TagA (resp. TagB)
+
+#set xor;
+
+symbols h/1,pair/2, fst/1, snd/1;
+private kA, kB, k0, r0, r1, r2;
+channels C, CR;
+var X,Y;
+
+rewrite fst(pair(X,Y)) -> X;
+rewrite snd(pair(X,Y)) -> Y;
+
+
+//  Alice-Bob notation
+// R --> T: r0
+// T --> R: <r1, h(r0+r1+k)>
+// R --> T: h(h(r0+r1+k)+k+r0)
+// R and T update their key k with h(k)
+
+// Tinit models the messages outputted during an honest session between the reader and tag A
+// TtagA models the role of Tag played by A. The key that is used is h(kA).
+// TtagB models the role of Tag played by B. The key that is used is kB.
+
+
+//Treader1 = out(CR,r0).in(CR,Z).([snd(Z)=h(r0+fst(Z)+kA)].out(CR,h(Z+kA+r0)).0; ++ [snd(Z)=h(r0+fst(Z)+kB)].out(CR,h(Z+kB+r0)).0;)
+Treader2 = out(CR,r2).in(CR,Z).([snd(Z)=h(r2+fst(Z)+h(kA))].out(CR,h(Z+h(kA)+r2)).0; ++ [snd(Z)=h(r2+fst(Z)+kB)].out(CR,h(Z+kB+r2)).0;)
+Tinit = out(C,r0).out(C,pair(r1,h(r0+(r1+kA)))).out(C,h(h(r0+r1+kA)+kA+r0).0;
+TtagA = in(C,X).out(C,pair(r3,h(X+r2+h(kA)))).in(C,Y).[Y=h(h(X+r3+h(kA))+h(kA)+X)].0;
+TtagB = in(C,X).out(C,pair(r3,h(X+r2+kB)).in(C,Y).[Y=h(h(X+r3+kB)+kB+X)].0;
+
+Psame = Tinit :: (TtagA || Treader2);
+Pdiff = Tinit :: (TtagB || Treader2);
+
+
+equivalentct? Psame and Pdiff;
