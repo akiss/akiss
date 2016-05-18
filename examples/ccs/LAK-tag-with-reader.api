@@ -4,9 +4,9 @@
 #set xor;
 
 symbols h/1,pair/2, fst/1, snd/1;
-private kA, kB, k0, r0, r1, r2;
+private kA, kB, k0, r0, r1, r2, r3;
 channels C, CR;
-var X,Y;
+var X,Y,Z;
 
 rewrite fst(pair(X,Y)) -> X;
 rewrite snd(pair(X,Y)) -> Y;
@@ -24,10 +24,10 @@ rewrite snd(pair(X,Y)) -> Y;
 
 
 //Treader1 = out(CR,r0).in(CR,Z).([snd(Z)=h(r0+fst(Z)+kA)].out(CR,h(Z+kA+r0)).0; ++ [snd(Z)=h(r0+fst(Z)+kB)].out(CR,h(Z+kB+r0)).0;)
-Treader2 = out(CR,r2).in(CR,Z).([snd(Z)=h(r2+fst(Z)+h(kA))].out(CR,h(Z+h(kA)+r2)).0; ++ [snd(Z)=h(r2+fst(Z)+kB)].out(CR,h(Z+kB+r2)).0;)
-Tinit = out(C,r0).out(C,pair(r1,h(r0+(r1+kA)))).out(C,h(h(r0+r1+kA)+kA+r0).0;
+Treader2 = out(CR,r2).in(CR,Z).([snd(Z)=h(r2+fst(Z)+h(kA))].out(CR,h(Z+h(kA)+r2)) ++ [snd(Z)=h(r2+fst(Z)+kB)].out(CR,h(Z+kB+r2)));
+Tinit = out(C,r0).out(C,pair(r1,h(r0+(r1+kA)))).out(C,h(h(r0+r1+kA)+kA+r0)).0;
 TtagA = in(C,X).out(C,pair(r3,h(X+r2+h(kA)))).in(C,Y).[Y=h(h(X+r3+h(kA))+h(kA)+X)].0;
-TtagB = in(C,X).out(C,pair(r3,h(X+r2+kB)).in(C,Y).[Y=h(h(X+r3+kB)+kB+X)].0;
+TtagB = in(C,X).out(C,pair(r3,h(X+r2+kB))).in(C,Y).[Y=h(h(X+r3+kB)+kB+X)].0;
 
 Psame = Tinit :: (TtagA || Treader2);
 Pdiff = Tinit :: (TtagB || Treader2);

@@ -4,7 +4,7 @@
 #set xor;
 
 symbols h/1;
-private kA1, kA2, kA, kB1, kB2, kB, r1;
+private kA1, kA2, kA, kB1, kB2, kB, r1, r2;
 channels C, CR;
 var X,Y,Z;
 
@@ -27,7 +27,7 @@ var X,Y,Z;
 // Note also that in process TtagA we use "new kA1" and "new kA2" instead of kA1 and kA2 to model
 // the fact that the keys have been updated after the first session.
 
-Treader = out(CR,r2).in(CR,Z).([Z=h(kA1+h(kA2)+r2+kA)].out(CR,h(kA2+h(kA1+r1+kA))).0; ++ [Z=h(kB1+r2+kB)].out(CR,h(kB2)).0;)
+Treader = out(CR,r2).in(CR,Z).([Z=h(kA1+h(kA2)+r2+kA)].out(CR,h(kA2+h(kA1+r1+kA))) ++ [Z=h(kB1+r2+kB)].out(CR,h(kB2)));
 Tinit = out(C,r1).out(C,h(kA1+r1+kA)).out(C,h(kA2)).0;
 
 TtagA = in(C,X).out(C,h(kA1+h(kA2)+X+kA)).in(C,Y).[Y=h(kA2+h(kA1+r1+kA))].0;

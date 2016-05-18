@@ -4,7 +4,7 @@
 #set xor;
 
 symbols h/1, pair/2, fst/1, snd/1;
-private k0, k1, k2, r, kB0, kB1, kB2;
+private k0, k1, k2, k3, r1, r2, kB0, kB1, kB2;
 channels C, CR;
 var X, Y, Z;
 
@@ -25,8 +25,8 @@ rewrite snd(pair(X,Y)) -> Y;
 // TtagA models the role of Tag played by A
 // TtagB models the role of Tag played by B
 
-Treader = out(CR,r2).in(CR,Z).([Z=k0+k2].out(CR,pair(k2+k3,h(k0+k2))).0 ++ [Z=kB0+kB1].out(CR,pair(kB1+kB2,h(kB0+kB2))).0);
-Tinit = out(C,r).out(C,h(r+(k0+k1))).out(C,pair(k1+k2,h(k0+k2))).0;
+Treader = out(CR,r2).in(CR,Z).([Z=h(r2+k0+k2)].out(CR,pair(k2+k3,h(k0+k2))) ++ [Z=h(r2+kB0+kB1)].out(CR,pair(kB1+kB2,h(kB0+kB2))));
+Tinit = out(C,r1).out(C,h(r1+(k0+k1))).out(C,pair(k1+k2,h(k0+k2))).0;
 
 TtagA = in(C,X).out(C,h(X+(k0+k2))).in(C,Y).0;
 TtagB = in(C,X).out(C,h(X+kB0+kB1)).in(C,Y).0;

@@ -22,9 +22,9 @@ rewrite snd(pair(X,Y)) -> Y;
 // TtagA models the role of Tag played by A. The key that is used is h(kA).
 // TtagB models the role of Tag played by B. The key that is used is kB.
 
-Tinit = out(C,r0).out(C,pair(r1,h(r0+(r1+kA)))).out(C,h(h(r0+r1+kA)+kA+r0).0;
+Tinit = out(C,r0).out(C,pair(r1,h(r0+(r1+kA)))).out(C,h(h(r0+r1+kA)+kA+r0)).0;
 TtagA = in(C,X).out(C,pair(r2,h(X+r2+h(kA)))).in(C,Y).[Y=h(h(X+r2+h(kA))+h(kA)+X)].0;
-TtagB = in(C,X).out(C,pair(r2,h(X+r2+kB)).in(C,Y).[Y=h(h(X+r2+kB)+kB+X)].0;
+TtagB = in(C,X).out(C,pair(r2,h(X+r2+kB))).in(C,Y).[Y=h(h(X+r2+kB)+kB+X)].0;
 
 Psame = Tinit :: TtagA;
 Pdiff = Tinit :: TtagB;
