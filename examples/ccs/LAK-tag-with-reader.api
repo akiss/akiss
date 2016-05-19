@@ -1,5 +1,5 @@
 // RFID protocol LAK'06
-// scenario: one honest session followed by TagA (resp. TagB)
+// scenario: one honest session followed by TagA (resp. TagB) in parallel with an instance of the reader.
 
 #set xor;
 
@@ -23,14 +23,13 @@ rewrite snd(pair(X,Y)) -> Y;
 // TtagB models the role of Tag played by B. The key that is used is kB.
 
 
-//Treader1 = out(CR,r0).in(CR,Z).([snd(Z)=h(r0+fst(Z)+kA)].out(CR,h(Z+kA+r0)).0; ++ [snd(Z)=h(r0+fst(Z)+kB)].out(CR,h(Z+kB+r0)).0;)
-Treader2 = out(CR,r2).in(CR,Z).([snd(Z)=h(r2+fst(Z)+h(kA))].out(CR,h(Z+h(kA)+r2)) ++ [snd(Z)=h(r2+fst(Z)+kB)].out(CR,h(Z+kB+r2)));
+Treader = out(CR,r2).in(CR,Z).([snd(Z)=h(r2+fst(Z)+h(kA))].out(CR,h(Z+h(kA)+r2)) ++ [snd(Z)=h(r2+fst(Z)+kB)].out(CR,h(Z+kB+r2)));
 Tinit = out(C,r0).out(C,pair(r1,h(r0+(r1+kA)))).out(C,h(h(r0+r1+kA)+kA+r0)).0;
 TtagA = in(C,X).out(C,pair(r3,h(X+r2+h(kA)))).in(C,Y).[Y=h(h(X+r3+h(kA))+h(kA)+X)].0;
 TtagB = in(C,X).out(C,pair(r3,h(X+r2+kB))).in(C,Y).[Y=h(h(X+r3+kB)+kB+X)].0;
 
-Psame = Tinit :: (TtagA || Treader2);
-Pdiff = Tinit :: (TtagB || Treader2);
+Psame = Tinit :: (TtagA || Treader);
+Pdiff = Tinit :: (TtagB || Treader);
 
 
 equivalentct? Psame and Pdiff;

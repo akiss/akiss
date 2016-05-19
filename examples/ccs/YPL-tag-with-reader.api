@@ -1,5 +1,5 @@
 // RFID protocol YPL'05
-//scenario: one honest session followed by TagA (resp. TagB)
+//scenario: one honest session followed by TagA (resp. TagB) in parallel with one instance of the reader
 
 #set xor;
 

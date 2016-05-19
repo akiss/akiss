@@ -36,8 +36,6 @@ RoleBA =
   out(C2,aenc(pair(fst(adec(Y,b))+pub(b),nb),snd(adec(Y,b)))).
   in(C2,Z).[adec(Z,b)=nb].0;
 
-// Test only the relevant interleaving
-
 P = Tinit :: ( RoleAI || (RoleBA :: out(C2,0)));
 Q = Tinit :: ( RoleAI || RoleBA);
 

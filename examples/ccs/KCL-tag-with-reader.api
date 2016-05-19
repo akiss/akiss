@@ -1,5 +1,5 @@
 // RFID protocol KCL07
-// Scenario: one honest session followed by TagA (resp. TagB)
+// Scenario: two successive session, one session with TagA and the reader followed by TagA (resp. TagB) with the reader.
 
 #set xor;
 

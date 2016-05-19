@@ -1,5 +1,5 @@
 // RFID protocol LD'07
-// scenario: one honest session followed by TagA (resp. TagB)
+// scenario: one honest session followed by TagA (resp. TagB) in parallel with an instance of the reader
 
 #set xor;
 
