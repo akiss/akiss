@@ -133,6 +133,7 @@ let query ?(expected=true) s t =
   let () = List.iter check_free_variables straces in
   let () = List.iter check_free_variables ttraces in
   let () = reset_count ((List.length straces) + (List.length ttraces)) in
+  verboseOutput "Checking %d traces...\n%!" !count_traces;
   let stests =
     Lwt_list.map_p
       (fun x -> tests_of_trace true x Theory.rewrite_rules)
