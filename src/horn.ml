@@ -1174,6 +1174,7 @@ let rec ridentical fa fb =
           debugOutput
             "ridentical trying to combine %s with %s\n%!"
             (show_statement fa) (show_statement fb);
+          if(world_length u <> world_length up) then [] else begin
           let sigmas = R.csu u up in
             List.map
               (fun sigma ->
@@ -1190,6 +1191,7 @@ let rec ridentical fa fb =
                      (show_statement result);
                    result)
               sigmas
+          end
       | Predicate("reach",_),Predicate("identical",_) -> ridentical fb fa
       | _ -> []
 
