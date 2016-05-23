@@ -13,21 +13,21 @@ resolution with selection.
 A detailed description of the underlying theory is available in the
 following papers:
 
-  * Rohit Chadha, Ștefan Ciobâcă, and Steve
-    Kremer. [Automated verification of equivalence properties of cryptographic protocols](http://www.loria.fr/~skremer/Papers/CCK-esop12.pdf). In
+  * Rohit Chadha, Ștefan Ciobâcă, and Steve Kremer.
+    [Automated verification of equivalence properties of cryptographic protocols](http://www.loria.fr/~skremer/Papers/CCK-esop12.pdf). In
     Programming Languages and Systems ---Proceedings of the 21th
     European Symposium on Programming (ESOP'12), pp. 108–127, Lecture
     Notes in Computer Science 7211, Springer, Tallinn, Estonia,
     March 2012.
 
-  * Rohit Chadha, Vincent Cheval, Ștefan Ciobâcă, and Steve
-    Kremer. [Automated Verification of Equivalence Properties of Cryptographic Protocols (long version)]
-    (https://hal.inria.fr/inria-00632564/file/equivalence.pdf). INRIA HAL Technical Report.
+  * Rohit Chadha, Vincent Cheval, Ștefan Ciobâcă, and Steve Kremer.
+    [Automated Verification of Equivalence Properties of Cryptographic Protocols (long version)](https://hal.inria.fr/inria-00632564/file/equivalence.pdf).
+    INRIA HAL Technical Report.
 
 The notion of everlasting indistinguishability is introduced in
 
-  * Myrto Arapinis, Véronique Cortier, Steve Kremer, and Mark
-    D. Ryan. [Practical Everlasting Privacy](http://www.loria.fr/~skremer/Papers/ACKR-post13.pdf). In
+  * Myrto Arapinis, Véronique Cortier, Steve Kremer, and Mark D. Ryan.
+    [Practical Everlasting Privacy](http://www.loria.fr/~skremer/Papers/ACKR-post13.pdf). In
     Proceedings of the 2nd Conference on Principles of Security and
     Trust (POST'13), pp. 21–40, Lecture Notes in Computer Science
     7796, Springer, Rome, Italy, March 2013.
@@ -38,12 +38,13 @@ Build
 
 You will need OCaml; version 4.01 is known to work.
 
-An experimental feature of Akiss for AC operators also requires a
-external tool:
+An experimental version of Akiss supporting the xor operator
+also requires both Maude and Full Maude:
 
  * [maude](http://maude.cs.illinois.edu/w/index.php?title=The_Maude_System) (version 2.7)
 
-You shouldn't need them if you don't use the feature.
+You shouldn't need it if you don't use the feature. See XOR.md for more
+information on that branch.
 
 For parallelising the saturation process, Akiss needs the following library:
 
