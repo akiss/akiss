@@ -28,4 +28,4 @@ TtagB2 = in(C,X).out(C,pair(idB+r4,h(X+r4,kB))).0;
 Psame = TtagA1 || TtagA2;
 Pdiff = TtagA1 || TtagB2;
 
-equivalentct? Psame and Pdiff;
+equivalentft? Psame and Pdiff;

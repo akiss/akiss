@@ -27,4 +27,4 @@ TtagB = in(C,X).out(C,pair(idB+r4,h(X+r4,kB))).0;
 Psame = Tinit :: TtagA;
 Pdiff = Tinit :: TtagB;
 
-equivalentct? Psame and Pdiff;
+equivalentft? Psame and Pdiff;

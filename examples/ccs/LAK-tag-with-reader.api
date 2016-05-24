@@ -32,4 +32,4 @@ Psame = Tinit :: (TtagA || Treader);
 Pdiff = Tinit :: (TtagB || Treader);
 
 
-equivalentct? Psame and Pdiff;
+equivalentft? Psame and Pdiff;

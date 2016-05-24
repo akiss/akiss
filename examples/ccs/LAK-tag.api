@@ -30,4 +30,4 @@ Psame = Tinit :: TtagA;
 Pdiff = Tinit :: TtagB;
 
 
-equivalentct? Psame and Pdiff;
+equivalentft? Psame and Pdiff;
