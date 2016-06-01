@@ -20,9 +20,10 @@ following papers:
     Notes in Computer Science 7211, Springer, Tallinn, Estonia,
     March 2012.
 
-  * Rohit Chadha, Vincent Cheval, Ștefan Ciobâcă, and Steve
-    Kremer. [Automated Verification of Equivalence Properties of Cryptographic Protocols (long version)]
-    (https://hal.inria.fr/inria-00632564/file/equivalence.pdf). INRIA HAL Technical Report.
+  * Rohit Chadha, Vincent Cheval, Ștefan Ciobâcă, and Steve Kremer.
+	[Automated verification of equivalence properties of cryptographic
+	protocol.](https://hal.inria.fr/hal-01306561/document)
+	ACM Transactions on Computational Logic, 2016. To appear.
 
 The notion of everlasting indistinguishability is introduced in
 
