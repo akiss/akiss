@@ -41,6 +41,7 @@ type negatable_cmd =
 
 type cmd =
   | SetXOR | SetAC
+  | SetPOR
   | DeclSymbols of (string * int) list
   | DeclPrivate of string list
   | DeclChannels of string list

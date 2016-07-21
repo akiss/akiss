@@ -277,8 +277,95 @@ let rec traces p =
   in
   if TraceSet.is_empty r then TraceSet.singleton NullTrace else r
 
+(** Computing the set of traces with partial order reduction
+  *
+  * We implement the compressed strategy of Baelde, Hirschi & Delaune
+  * for the subset of processes that is supported for it. *)
+
+let rec canonize = function
+  | SymbSeq (SymbAct [],q) -> assert false
+  | SymbSeq (SymbAct [a],q) -> SymbSeq (SymbAct [a], q)
+  | SymbSeq (SymbAct l,q) ->
+      List.fold_left
+        (fun q a -> SymbSeq (SymbAct [a], q))
+        q l
+  | SymbAct l -> canonize (SymbSeq (SymbAct l, SymbNul))
+  | (SymbPar _ | SymbNul) as p -> p
+  | SymbSeq _ | SymbAlt _ -> failwith "unsupported"
+
+let traces_por p =
+  assert (Theory.privchannels = []) ;
+  let prepend_traces a trace_set =
+    TraceSet.fold
+      (fun tr accu ->
+         TraceSet.add (trace_prepend [a] tr) accu)
+      trace_set
+      TraceSet.empty
+  in
+  let rec traces async sync =
+    match async with
+      | p :: async ->
+          (* While there are async processes, execute them in a fixed
+           * and arbitrary order: break parallels, execute outputs
+           * as well as tests *)
+          begin match canonize p with
+            | SymbNul ->
+                traces async sync
+            | SymbPar (q1,q2) ->
+                traces (q1::q2::async) sync
+            | SymbSeq (SymbAct [Output (c,t) as a], q) ->
+                prepend_traces a (traces (q::async) sync)
+            | SymbSeq (SymbAct [Test (t,t') as a], q) ->
+                TraceSet.union
+                  (prepend_traces a (traces (q::async) sync))
+                  (traces async sync)
+            | SymbSeq (SymbAct [Input _], q) ->
+                traces async (p::sync)
+            | _ ->
+                failwith
+                  (Printf.sprintf "unsupported async proc: %s" (show_symb p))
+          end
+      | [] ->
+          (* Focus a process, execute it until focus can be released *)
+          let rec focus p sync =
+            match canonize p with
+              | SymbSeq (SymbAct [Input (c,x) as a], q) ->
+                  prepend_traces a (focus q sync)
+              | SymbSeq (SymbAct [Test (t,t') as a], q) ->
+                  (* In case the test fails, the continuation is null
+                   * so we have an improper block: no need to explore further
+                   * traces. *)
+                  prepend_traces a (focus q sync)
+              | SymbNul ->
+                  (* Obvious improper block *)
+                  TraceSet.singleton NullTrace
+              | SymbPar (_,_)
+              | SymbSeq (SymbAct [Output _], _) ->
+                  (* In case of Par, this could be improper
+                   * but we don't care and it won't happen in practice. *)
+                  traces [p] sync
+              | _ ->
+                  failwith
+                    (Printf.sprintf "unsupported sync proc: %s" (show_symb p))
+          in
+          let rec all_foci prev trace_set = function
+            | p::next ->
+                let trace_set =
+                  TraceSet.union trace_set (focus p (List.rev_append prev next))
+                in
+                  all_foci (p::prev) trace_set next
+            | [] -> trace_set
+          in
+          let trace_set = all_foci [] TraceSet.empty sync in
+            if TraceSet.is_empty trace_set then
+              TraceSet.singleton NullTrace
+            else trace_set
+  in
+    traces [p] []
+
 let traces p =
-  TraceSet.elements @@ traces @@ simplify @@ optimize_tests p
+  let traces = if Theory.por then traces_por else traces in
+    TraceSet.elements @@ traces @@ simplify @@ optimize_tests p
 
 let parse_process p ps =
   simplify @@ symb_of_temp p ps

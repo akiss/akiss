@@ -38,6 +38,9 @@ let xor = ref false
 let ac_toolbox = ref false
 let tamarin_variants = ref false
 
+(** Experimental POR optimization *)
+let por = ref false
+
 (** See in [Horn] for documentation. *)
 let check_generalizations = ref false
 
@@ -185,6 +188,8 @@ let process_decl = function
         ];
       declare_symbols ["plus",2;"zero",0];
       check_atoms ()
+  | SetPOR ->
+      por := true
   | DeclSymbols symbolList ->
     verboseOutput "Declaring symbols\n%!";
     declare_symbols symbolList;
@@ -253,6 +258,7 @@ let dotfile = !dotfile
 let jobs = !jobs
 let xor = !xor
 let ac = !ac
+let por = !por
 let fsymbols = !fsymbols
 let channels = !channels
 let private_names = !private_names
