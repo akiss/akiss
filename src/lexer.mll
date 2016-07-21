@@ -49,6 +49,7 @@ rule token = parse
     | "::" { InnerSequence }
     | "||" { InnerInterleave }
     | "++" { InnerChoice }
+    | ">>" { InnerPhase }
     | "print_traces" { PrintTraces }
     | "print" { Print }
     | "equivalentft?" { Square }

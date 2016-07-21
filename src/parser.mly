@@ -34,10 +34,11 @@ open Ast
 %token Out In And Zero Plus
 %token Not Equivalent Square EvSquare Variants Unifiers Normalize
 %token Print PrintTraces
-%token InnerSequence InnerInterleave InnerChoice
+%token InnerSequence InnerInterleave InnerChoice InnerPhase
 %token EOF
 
 %left In
+%left InnerPhase
 %left InnerSequence
 %left InnerInterleave
 %left InnerChoice
@@ -98,6 +99,7 @@ main:
  | process InnerSequence process { TempSequence($1, $3) }
  | process InnerInterleave process { TempInterleave($1, $3) }
  | process InnerChoice process { TempChoice($1, $3) }
+ | process InnerPhase process { TempPhase($1, $3) }
  | LeftP process RightP { $2 }
  | Identifier { TempProcessRef($1) }
 

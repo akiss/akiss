@@ -30,6 +30,7 @@ type tempProcess =
   | TempAction of tempAction
   | TempInterleave of tempProcess * tempProcess
   | TempChoice of tempProcess * tempProcess
+  | TempPhase of tempProcess * tempProcess
   | TempLet of string * tempTerm * tempProcess
   | TempEmpty
   | TempProcessRef of string

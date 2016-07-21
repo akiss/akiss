@@ -104,6 +104,7 @@ type symbProcess =
   | SymbSeq of symbProcess * symbProcess
   | SymbPar of symbProcess * symbProcess
   | SymbAlt of symbProcess * symbProcess
+  | SymbPhase of symbProcess * symbProcess
 
 let rec show_symb = function
   | SymbNul -> "0"
@@ -111,6 +112,7 @@ let rec show_symb = function
   | SymbSeq (p1, p2) -> "(seq " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
   | SymbPar (p1, p2) -> "(par " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
   | SymbAlt (p1, p2) -> "(alt " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
+  | SymbPhase (p1, p2) -> "(phase " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
 
 let replace_var_in_act x t a =
   match a with
@@ -137,6 +139,10 @@ let rec replace_var_in_symb x t p =
      let p1 = replace_var_in_symb x t p1 in
      let p2 = replace_var_in_symb x t p2 in
      SymbAlt (p1, p2)
+  | SymbPhase (p1, p2) ->
+     let p1 = replace_var_in_symb x t p1 in
+     let p2 = replace_var_in_symb x t p2 in
+     SymbPhase (p1, p2)
 
 let rec symb_of_temp process processes =
   match process with
@@ -154,6 +160,10 @@ let rec symb_of_temp process processes =
      let p1 = symb_of_temp p1 processes in
      let p2 = symb_of_temp p2 processes in
      SymbAlt (p1, p2)
+  | TempPhase (p1, p2) ->
+     let p1 = symb_of_temp p1 processes in
+     let p2 = symb_of_temp p2 processes in
+     SymbPhase (p1, p2)
   | TempLet (x, tt, process) ->
      let t = parse_term tt in
      let p = symb_of_temp process processes in
@@ -179,6 +189,7 @@ let rec simplify = function
      | SymbNul, p -> p
      | p, SymbNul -> p
      | p1, p2 -> SymbAlt (p1, p2))
+  | SymbPhase _ as p -> p
 
 let rec optimize_tests p =
   unlinearize SymbNul (compress_tests [] [] (linearize p))
@@ -189,6 +200,7 @@ and linearize = function
   | SymbSeq (p1, p2) -> linearize p1 @ linearize p2
   | SymbPar (p1, p2) -> [SymbPar (optimize_tests p1, optimize_tests p2)]
   | SymbAlt (p1, p2) -> [SymbAlt (optimize_tests p1, optimize_tests p2)]
+  | SymbPhase (p1, p2) -> [SymbPhase (optimize_tests p1, optimize_tests p2)]
 
 and unlinearize res = function
   | [] -> res
@@ -224,6 +236,10 @@ let rec delta = function
        ) s1 (delta p2)
      in
      s2
+  | SymbPhase (p1, p2) ->
+      List.rev_append
+        (List.map (fun (a,p) -> a, SymbPhase (p,p2)) (delta p1))
+        (delta p2)
 
 type action_classification =
   | PublicAction
@@ -289,19 +305,20 @@ let rec canonize = function
       List.fold_left
         (fun q a -> SymbSeq (SymbAct [a], q))
         q l
+  | SymbSeq (p, SymbNul) -> canonize p
   | SymbAct l -> canonize (SymbSeq (SymbAct l, SymbNul))
   | (SymbPar _ | SymbNul) as p -> p
-  | SymbSeq _ | SymbAlt _ -> failwith "unsupported"
+  | SymbSeq _ | SymbAlt _ | SymbPhase _ -> failwith "unsupported"
+
+let prepend_traces a trace_set =
+  TraceSet.fold
+    (fun tr accu ->
+       TraceSet.add (trace_prepend [a] tr) accu)
+    trace_set
+    TraceSet.empty
 
 let traces_por p =
   assert (Theory.privchannels = []) ;
-  let prepend_traces a trace_set =
-    TraceSet.fold
-      (fun tr accu ->
-         TraceSet.add (trace_prepend [a] tr) accu)
-      trace_set
-      TraceSet.empty
-  in
   let rec traces async sync =
     match async with
       | p :: async ->
@@ -362,6 +379,26 @@ let traces_por p =
             else trace_set
   in
     traces [p] []
+
+(** Extend traces_por with shallow support for phases *)
+let traces_por p =
+  match p with
+    | SymbPhase (p1,p2) ->
+        let s1 = traces_por p1 in
+        let rec aux = function
+          | NullTrace -> traces_por p2
+          | Trace (Input _ as a, t) ->
+              TraceSet.union
+                (traces_por p2)
+                (prepend_traces a (aux t))
+          | Trace (a,t) ->
+              prepend_traces a (aux t)
+        in
+          TraceSet.fold
+            (fun t s ->
+               TraceSet.union s (aux t))
+            s1 TraceSet.empty
+    | _ -> traces_por p
 
 let traces p =
   let traces = if Theory.por then traces_por else traces in
