@@ -1369,7 +1369,7 @@ let checks_ridentical kb =
                resulting_test :: checks
          | _ -> checks)
     kb []
-
+    
 (** Extract all successful tests from a (saturated) knowledge base. *)
 let checks kb  =
   List.append (checks_reach kb) (checks_ridentical kb)

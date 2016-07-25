@@ -53,6 +53,8 @@ rule token = parse
     | "print_traces" { PrintTraces }
     | "print" { Print }
     | "equivalentft?" { Square }
+    | "includedft?" { Incft }
+    | "includedct?" { Incct }
     | "fwdequivalentft?" { EvSquare }
     | "var" { Var }
     | "equivalentct?" { Equivalent }

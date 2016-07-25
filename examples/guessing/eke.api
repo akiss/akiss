@@ -54,4 +54,7 @@ revealV = out(c, v).0;
 P1 =  P :: revealW;
 P2 =  P :: revealV;
 
-equivalentft? P1 and P2;
+
+includedft? P1 in P2;
+
+// equivalentft? P1 and P2;

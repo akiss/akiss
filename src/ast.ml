@@ -39,6 +39,9 @@ type negatable_cmd =
   | NegEquivalent of (string list) * (string list)
   | NegSquare of (string list) * (string list)
   | NegEvSquare of (string list) * (string list)
+  | NegIncFt of (string list) * (string list)
+  | NegIncCt of (string list) * (string list)
+
 
 type cmd =
   | SetXOR | SetAC

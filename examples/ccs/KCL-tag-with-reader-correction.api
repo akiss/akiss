@@ -30,3 +30,4 @@ Psame = (TtagA1 || Treader1):: (TtagA2 || Treader2);
 Pdiff = (TtagA1 || Treader1):: (TtagB2 || Treader2);
 
 equivalentft? Psame and Pdiff;
+
