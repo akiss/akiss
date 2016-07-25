@@ -165,6 +165,41 @@ let query ?(expected=true) s t =
     if expected then exit 1
   end
 
+
+let inclusion_ct ?(expected=true) s t =
+  Printf.printf
+    "Checking coarse trace %sinclusion of %s in %s\n%!"
+    (if expected then "" else "non")
+    (show_string_list s) (show_string_list t);
+  let straces = List.concat (List.map (fun x -> traces @@ List.assoc x !processes) s) in
+  let ttraces = List.concat (List.map (fun x -> traces @@ List.assoc x !processes) t) in
+  let () = List.iter check_free_variables straces in
+  let () = List.iter check_free_variables ttraces in
+  let () = reset_count (List.length straces) in
+  let stests =
+    Lwt_list.map_p
+      (fun x -> tests_of_trace true x Theory.rewrite_rules)
+      straces >>= wrap1 List.concat
+  in
+    let fail_stests =
+    stests >>=
+      Lwt_list.filter_p (fun x -> check_test_multi x ttraces >>= wrap1 not)
+  and fail_ttests = return []
+  in
+  let fail_stests, fail_ttests = wait_pending2 fail_stests fail_ttests in
+  if fail_stests = [] then begin
+    Printf.printf
+      "%s is coarse trace included in %s!\n%!"
+      (show_string_list s) (show_string_list t) ;
+    if not expected then exit 1
+  end else begin
+    if fail_stests <> [] then
+      Printf.printf "The following tests work on %s but not on %s:\n%s\n%!"
+        (show_string_list s) (show_string_list t) (show_tests fail_stests);
+    if expected then exit 1
+  end
+
+    
 exception OneToMoreFail of trace * term list
 
 let check_one_to_one (tests1, trace1) (tests2, trace2) rew =
@@ -232,6 +267,52 @@ let square ~expected s t =
           (show_tests tests);
         if expected then exit 1
 
+
+
+let inclusion_ft ~expected s t =
+  Printf.printf
+    "Checking fine grained %sinclusion of %s in %s\n%!"
+    (if expected then "" else "non")
+    (show_string_list s) (show_string_list t);
+  let ls = List.concat (List.map (fun x -> traces @@ List.assoc x !processes) s) in
+  let lt = List.concat (List.map (fun x -> traces @@ List.assoc x !processes) t) in
+  let () = List.iter check_free_variables ls in
+  let () = List.iter check_free_variables lt in
+  let () = reset_count (List.length ls) in
+  let stests =
+    Lwt_list.map_p
+      (fun x ->
+       tests_of_trace true x Theory.rewrite_rules >>= fun y -> return (y, x))
+      ls
+  and ttests =
+    Lwt_list.map_p
+      (fun x ->
+	return [] >>= fun y -> return (y, x))
+      lt
+  in
+  let stests, ttests = wait_pending2 stests ttests in
+  try
+    ignore
+      (List.iter
+         (fun x -> check_one_to_more x ttests Theory.rewrite_rules)
+         stests);
+    Printf.printf "%s is fine-grained trace included in %s\n%!"
+      (show_string_list s) (show_string_list t);
+    if not expected then exit 1
+  with
+    | OneToMoreFail(tr, tests) -> 
+        Printf.printf
+          "cannot establish trace inclusion of %s in %s\n%!" 
+          (show_string_list s) (show_string_list t);
+        Printf.printf
+          "the trace %s has no equivalent trace on the other side\n%!"
+          (show_trace tr);
+        Printf.printf "its tests are\n%!%s\n%!"
+          (show_tests tests);
+        if expected then exit 1
+
+
+	  
 let stat_equiv frame1 frame2 rew =
   
   verboseOutput
@@ -425,6 +506,10 @@ let processCommand = function
     square ~expected traceList1 traceList2
   | QueryNegatable (expected, NegEvSquare (traceList1, traceList2)) ->
     evequiv ~expected traceList1 traceList2
+  | QueryNegatable (expected, NegIncFt (traceList1, traceList2)) ->
+    inclusion_ft ~expected traceList1 traceList2
+  | QueryNegatable (expected, NegIncCt (traceList1, traceList2)) ->
+    inclusion_ct ~expected traceList1 traceList2
 
   | QueryPrint traceName ->
     Printf.printf "Printing information about %s\n%!" traceName;

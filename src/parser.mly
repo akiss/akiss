@@ -31,7 +31,7 @@ open Ast
 %token LeftP RightP LeftB RightB
 %token Arrow Equals Dot Slash Comma Semicolon
 %token Out In And Zero
-%token Not Equivalent Square EvSquare Variants
+%token Not Equivalent Square EvSquare Variants Incft Incct
 %token Print PrintTraces
 %token InnerSequence InnerInterleave
 %token EOF
@@ -76,6 +76,8 @@ negatable:
  | Equivalent identifierList And identifierList { NegEquivalent ($2, $4) }
  | Square identifierList And identifierList { NegSquare ($2, $4) }
  | EvSquare identifierList And identifierList { NegEvSquare ($2, $4) }
+ | Incft identifierList In identifierList { NegIncFt ($2, $4) }
+ | Incct identifierList In identifierList { NegIncCt ($2, $4) }
 
 identifierList:
  | { [] }

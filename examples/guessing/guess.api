@@ -21,4 +21,7 @@ revealV = out(c, v).0;
 P1 = P :: revealW;
 P2 = P :: revealV;
 
-not equivalentct? P1 and P2;
+// not equivalentft? P1 and P2;
+
+not includedft? P1 in P2;
+
