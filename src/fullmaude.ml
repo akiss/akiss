@@ -183,8 +183,9 @@ let is_var s =
   List.mem s !vars
 
 let arity f =
-  if is_var f then 0 else
+  try
     List.assoc f !cursig
+  with Not_found -> 0
 
 let parse_var tokens =
   match Stream.next tokens with
@@ -197,8 +198,8 @@ let parse_var tokens =
     | _ -> assert false
 
 let string_of_token = function
-  | (Genlex.Kwd k) -> "K("^k^")"
-  | (Genlex.Ident k) -> "I("^k^")"
+  | Genlex.Kwd k -> Printf.sprintf "K(%s)" k
+  | Genlex.Ident k -> Printf.sprintf "I(%s)" k
   | _ -> "?"
 
 let string_of_peek t =
@@ -255,7 +256,7 @@ let rec parse_term tokens =
             (fun a b -> Fun ("plus",[a;b]))
             (List.hd l) (List.tl l)
     | Genlex.Ident s ->
-        if is_var s then begin
+        if Stream.peek tokens = Some (Genlex.Kwd ":") then begin
           expect (Genlex.Kwd ":") ;
           expect (Genlex.Ident "Term") ;
           Var s
