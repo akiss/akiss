@@ -85,37 +85,12 @@ VALIDATION = $(TESTS) \
 			 ../examples/NSLxor/nsl.api \
 			 ../examples/NSLxor/NSL-xor-1a.api
 
-# Case studies
-CCS = \
-  ../examples/ccs/YPL-tag.api \
-  ../examples/ccs/YPL-tag-with-reader.api \
-  ../examples/ccs/OTYT-tag.api \
-  ../examples/ccs/OTYT-tag-with-reader.api \
-  ../examples/ccs/NSL-xor-auth.api \
-  ../examples/ccs/NSL-xor-auth-all-interleavings.api \
-  ../examples/ccs/LD-tag.api \
-  ../examples/ccs/LD-tag-with-reader.api \
-  ../examples/ccs/LAK-tag.api \
-  ../examples/ccs/LAK-tag-with-reader.api \
-  ../examples/ccs/LAK-auth.api \
-  ../examples/ccs/LAK-auth-with-updated-reader.api \
-  ../examples/ccs/KCL-tag.api \
-  ../examples/ccs/KCL-tags.api \
-  ../examples/ccs/KCL-tag-with-reader.api \
-  ../examples/ccs/KCL-running.api \
-  ../examples/ccs/KCL-tag-correction.api \
-  ../examples/ccs/KCL-running-correction.api \
-  ../examples/ccs/KCL-tag-with-reader-correction.api
-
 RUN = OCAMLRUNPARAM=b ./akiss -verbose
 
 .PHONY: test actest dhtest validate
 
 test:
 	./runtests.sh test$(NAME) "$(TESTS)"
-
-ccs:
-	./runtests.sh ccs$(NAME) "$(CCS)"
 
 validate:
 	./runtests.sh val$(NAME)  $(VALIDATION)
