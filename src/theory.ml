@@ -177,7 +177,7 @@ let process_decl = function
           "#set xor: only allowed at the beginning of the script!\n" ;
         exit 1
       end ;
-      let x = Var "X" and y = Var "Y" in
+      let x = Var "#X" and y = Var "#Y" in
       let (+) a b = Fun("plus",[a;b]) in
       let zero = Fun("zero",[]) in
       let (==) left right = left,right in
@@ -185,8 +185,9 @@ let process_decl = function
           x+zero  == x ;
           x+x     == zero ;
           x+(x+y) == y
-        ];
+        ];  
       declare_symbols ["plus",2;"zero",0];
+      declare_vars ["#X";"#Y"];
       check_atoms ()
   | SetPOR ->
       por := true
