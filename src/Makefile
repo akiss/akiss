@@ -60,52 +60,30 @@ doc: $(ML)
 # Basic tests, with and without xor
 TESTS = \
   ../examples/running-example/running-example-both-traces.api \
-  ../examples/tests/xor3.api \
-  ../examples/tests/statxor.api ../examples/tests/nstatxor.api \
-  ../examples/tests/xorsym.api \
-  ../examples/tests/rigid.api 
+  ../examples/xor/misc/xor3.api \
+  ../examples/xor/misc/statxor.api ../examples/xor/misc/nstatxor.api \
+  ../examples/xor/misc/xorsym.api \
+  ../examples/xor/misc/rigid.api 
 
 # Basic tests + RFID tests without Toy-v1 + NSLxor tests,
 # without duplicates
 VALIDATION = $(TESTS) \
-			 ../examples/rfid/KCL-v1.api \
-			 ../examples/rfid/KCL-v2.api \
-			 ../examples/rfid/KCL-v3.api \
-			 ../examples/rfid/KCL-v4.api \
-			 ../examples/rfid/KCL-h1.api \
-			 ../examples/rfid/KCL-h1bis.api \
-			 ../examples/rfid/LAK-v1.api \
-			 ../examples/rfid/LAK-v2.api \
-			 ../examples/rfid/LD-v1.api \
-			 ../examples/rfid/OTYT-v1.api \
-			 ../examples/rfid/YPL-v1.api \
-			 ../examples/rfid/YPL-v2.api \
-			 ../examples/rfid/YPL-v3.api \
-			 ../examples/NSLxor/nslhelp.api \
-			 ../examples/NSLxor/nsl.api \
-			 ../examples/NSLxor/NSL-xor-1a.api
-
-# Case studies
-CCS = \
-  ../examples/ccs/YPL-tag.api \
-  ../examples/ccs/YPL-tag-with-reader.api \
-  ../examples/ccs/OTYT-tag.api \
-  ../examples/ccs/OTYT-tag-with-reader.api \
-  ../examples/ccs/NSL-xor-auth.api \
-  ../examples/ccs/NSL-xor-auth-all-interleavings.api \
-  ../examples/ccs/LD-tag.api \
-  ../examples/ccs/LD-tag-with-reader.api \
-  ../examples/ccs/LAK-tag.api \
-  ../examples/ccs/LAK-tag-with-reader.api \
-  ../examples/ccs/LAK-auth.api \
-  ../examples/ccs/LAK-auth-with-updated-reader.api \
-  ../examples/ccs/KCL-tag.api \
-  ../examples/ccs/KCL-tags.api \
-  ../examples/ccs/KCL-tag-with-reader.api \
-  ../examples/ccs/KCL-running.api \
-  ../examples/ccs/KCL-tag-correction.api \
-  ../examples/ccs/KCL-running-correction.api \
-  ../examples/ccs/KCL-tag-with-reader-correction.api
+			 ../examples/xor/rfid/KCL-v1.api \
+			 ../examples/xor/rfid/KCL-v2.api \
+			 ../examples/xor/rfid/KCL-v3.api \
+			 ../examples/xor/rfid/KCL-v4.api \
+			 ../examples/xor/rfid/KCL-h1.api \
+			 ../examples/xor/rfid/KCL-h1bis.api \
+			 ../examples/xor/rfid/LAK-v1.api \
+			 ../examples/xor/rfid/LAK-v2.api \
+			 ../examples/xor/rfid/LD-v1.api \
+			 ../examples/xor/rfid/OTYT-v1.api \
+			 ../examples/xor/rfid/YPL-v1.api \
+			 ../examples/xor/rfid/YPL-v2.api \
+			 ../examples/xor/rfid/YPL-v3.api \
+			 ../examples/xor/NSLxor/nslhelp.api \
+			 ../examples/xor/NSLxor/nsl.api \
+			 ../examples/xor/NSLxor/NSL-xor-1a.api
 
 RUN = OCAMLRUNPARAM=b ./akiss -verbose
 
@@ -113,9 +91,6 @@ RUN = OCAMLRUNPARAM=b ./akiss -verbose
 
 test:
 	./runtests.sh test$(NAME) "$(TESTS)"
-
-ccs:
-	./runtests.sh ccs$(NAME) "$(CCS)"
 
 validate:
 	./runtests.sh val$(NAME)  $(VALIDATION)
