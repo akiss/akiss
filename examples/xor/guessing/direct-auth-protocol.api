@@ -1,0 +1,55 @@
+// Direct Authentication Protocol as decribed in Gong's paper (1993)
+// Protecting Poorly Chosen Secrets from Guessing Attacks (page 13)
+
+// A -> B: ra, {pubA}pw
+// B -> A: {B, A, nb1, nb2, cb, {ra}pw}pubA
+// A -> B: {nb1, k + nb2}pw
+// B -> A: {f1(ra),rb}k
+// A -> B: {f2(rb)}k
+
+// pw is a poorly choosen secret between A and B
+
+#set xor;
+#set por;
+
+
+
+symbols  senc/2, sdec/2, pair/2, fst/1, snd/1, f1/1, f2/1, aenc/2, adec/2, pk/1, A/0, B/0;
+private pw, nb1,nb2, ra, rb, pfresh, ska, cb, k;
+channels C,CA, CB;
+var X, Y, X0, X1, X2, X3, X4, X5, X6, Yra, Y2, Ypub, Y3, Y4, Yk, X7;
+
+rewrite adec(aenc(X,pk(Y)),Y) -> X;
+rewrite senc(sdec(X,Y),Y) -> X;
+rewrite sdec(senc(X,Y),Y) -> X;
+rewrite fst(pair(X,Y)) -> X;
+rewrite snd(pair(X,Y)) -> Y;
+rewrite pair(fst(X),snd(X)) ->X;
+
+
+// Role A 
+
+A =  out(CA,pair(ra,senc(pk(ska),pw))).
+          in(CA, X0). let X = adec(X0,ska) in [fst(X) = B]. [fst(snd(X)) = A].
+	  let X3 = fst(snd(snd(X))) in let X4 = fst(snd(snd(snd(X)))) in let X5 = fst(snd(snd(snd(snd(X))))) in let X6 = fst(snd(snd(snd(snd(snd(X)))))) in
+	  [X6 = senc(ra,pw)].
+          out(CA, senc(pair(X3,k + X4),pw)). in(CA, X7). [fst(sdec(X7,k)) = f1(ra)]. out(CA, senc(f2(snd(sdec(X7,k))),k)).0;
+
+
+// Role B
+
+B = in(CB,Y).let Yra = fst(Y) in  let Y2 = snd(Y) in let Ypub = sdec(Y2,pw) in
+        out(CB,aenc(pair(B,pair(A,pair(nb1,pair(nb2,pair(cb,senc(Yra,pw)))))),Ypub)).
+        in(CB,Y3) .  [fst(sdec(Y3,pw)) = nb1].
+        let Yk = snd(sdec(Y3,pw)) + nb2 in out(CB, senc(pair(f1(Yra),rb), Yk)).
+	in(CB,Y4).[Y4 = senc(f2(rb),k)].0;
+	
+
+
+P = A || B;
+
+Pw = (P   >> out(C,pw));
+
+Pfresh = (P  >> out(C,pfresh));
+
+includedct? Pw in Pfresh;

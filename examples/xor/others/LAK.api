@@ -1,0 +1,39 @@
+// RFID protocol LAK'06
+// Authentication property
+// P and Q are similar. They only differ by the fact that
+// Q will emit an additional message "zero" if it executes until the end.
+// If such a message equivalence will not hold and this will witness an authentication problem
+// since reader will be able to execute (apparently with tag A) whereas tagA did not start any session.
+#set xor;
+
+symbols h/1, pair/2, fst/1, snd/1;
+private kA, r0, r1, r2;
+channels C,CR;
+var X,Y;
+
+rewrite fst(pair(X,Y)) -> X;
+rewrite snd(pair(X,Y)) -> Y;
+
+
+//  Alice-Bob notation
+// R --> T: r0
+// T --> R: <r1, h(r0+r1+k)>
+// R --> T: h(h(r0+r1+k)+k+r0)
+// R and T update their key k with h(k)
+
+// Tinit models the two first messages outputted during an honest session between
+// the reader and tag A. We assume that the reader does not reached the end of
+// the session and therefore it does not update the key.
+// Treader models a session of reader talking to Tag A. The key that is used is kA
+// We would like to know whether it is possible for the reader to reach the end
+// of the session whereas TagA has not yet started.
+
+Tinit = out(C,r0).out(C,pair(r1,h(r0+(r1+kA)))).0;
+
+Treader = out(CR,r2).in(CR,X).[snd(X)=h(r2+fst(X)+kA)].out(CR,h(snd(X)+kA+r2)).0;
+
+P = Tinit :: Treader :: out(CR,0);
+Q = Tinit :: Treader;
+
+not includedct? P in Q;
+

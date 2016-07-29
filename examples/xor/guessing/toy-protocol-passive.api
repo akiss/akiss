@@ -1,0 +1,36 @@
+// Toy protocol as decribed in Gong's paper (1993)
+// Protecting Poorly Chosen Secrets from Guessing Attacks (page 7)
+
+// 1. A -> B: {c1,c2,n}_k1
+// 2. B  -> A : {c2+f(n)}_k2
+
+// Message 1 is an encryption with the public key k1
+// Message 2 is an encryption with a symmetric key derived from a password.
+
+
+#set xor;
+#set por;
+
+symbols  senc/2, sdec/2, pair/2, fst/1, snd/1, f/1, g/1,aenc/2, adec/2, pk/1, A/0;
+private pw, c1, c2, n, sk1, pfresh;
+channels C;
+var X, Y, X1, X2;
+
+rewrite adec(aenc(X,pk(Y)),Y) -> X;
+rewrite senc(sdec(X,Y),Y) -> X;
+rewrite sdec(senc(X,Y),Y) -> X;
+rewrite fst(pair(X,Y)) -> X;
+rewrite snd(pair(X,Y)) -> Y;
+
+
+P =
+  out(C,pk(sk1)).
+  let X1 = aenc(pair(c1,pair(c2,n)),pk(sk1)) in out(C,X1).
+  let X2 = senc(c2 + f(n), pw) in out(C,X2).0;
+
+
+Pw = (P >> out(C,pw));
+
+Pfresh = (P >> out(C,pfresh));
+
+includedct? Pw in Pfresh;

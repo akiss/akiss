@@ -1,0 +1,36 @@
+// RFID protocol YPL'05
+
+#set xor;
+
+symbols h/1;
+private kA1, kA2, kA, kB1, kB2, kB, r1, r2;
+channels C, CR, CT;
+var X,Y,Z;
+
+// We model RFID tags that authenticate with a reader
+// in the following way:
+
+//  Alice-Bob notation
+// Reader and Tag know k1,k2,k and the values k1 and k2 are updated
+// after a successfull session.
+//   R --> T: r1
+//   T --> R: h(k1 + r1 + k)
+//   R --> T:  h(k2)
+//   both update their keys k1,k2 as follows:
+//   new k1 = k1 + h(k2)
+//   new k2 = k2 + h(k1 + r1 + k)
+
+// Note that in process TtagA we use "new kA1" and "new kA2" instead of kA1 and kA2 to model
+// the fact that the keys have been updated after the first session.
+
+Tinit = out(C,r1).out(C,h(kA1+r1+kA)).out(C,h(kA2)).0;
+
+Treader = out(CR,r2).in(CR,Z).([Z=h(kA1+h(kA2)+r2+kA)].out(CR,h(kA2+h(kA1+r1+kA))) ++ [Z=h(kB1+r2+kB)].out(CR,h(kB2)));
+
+TtagA = in(CT,X).out(CT,h(kA1+h(kA2)+X+kA)).0;
+TtagB = in(CT,X).out(CT,h(kB1+X+kB)).0;
+
+Psame = Tinit :: (TtagA || Treader);
+Pdiff = Tinit :: (TtagB || Treader);
+
+not includedct? Psame in Pdiff;
