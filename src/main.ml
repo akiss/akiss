@@ -536,7 +536,9 @@ let processCommand = function
     let sl_cleaned =
       List.map ( fun subst -> restrict subst v ) sl in 
     Printf.printf "%s\n" (show_subst_list sl_cleaned);
-    Printf.printf "%i Unifiers Found\n" (List.length sl_cleaned)
+    Printf.printf "%i Unifier%s Found\n"
+      (List.length sl_cleaned)
+      (if (List.length sl_cleaned) > 1 then "s" else "") 
   | QueryNormalize tt -> 
     let t = parse_term tt in
     Printf.printf
