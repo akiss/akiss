@@ -100,7 +100,6 @@ main:
      
      result:
  | unifierPreamble unifierList { `Unify $2 }
- | NoUnifiers  { `Unify [] }
  | variantPreamble variantList { `Variants $2 }
  | reducePreamble Rewritesline Result resultTerm {`Norm $4 }
  | equalsPreamble Rewritesline Result Bool Colon bool { `Equal $6 }
@@ -109,6 +108,7 @@ main:
  | VariantUnify In Identifier Colon term EqualUnify term Dot {}
 
      unifierList:
+ | NoUnifiers Rewritesline {[]}  
  | NoMoreUnifiers Rewritesline {[]}  
  | Unifier Sharp Number Rewritesline substitution unifierList
      {(freshensubst $5)::$6}

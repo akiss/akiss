@@ -37,7 +37,7 @@ let letters = letter (('.'| letter | digit) * )
 
   rule token = parse
   | "Maude> ==========================================" { Line1 }
-  | "No unifier." { NoUnifiers }
+  | "No unifiers." { NoUnifiers }
   | "No more unifiers." { NoMoreUnifiers }
   | "No more variants." { NoMoreVariants }
   | "Unifier" { Unifier }
@@ -76,4 +76,5 @@ let letters = letter (('.'| letter | digit) * )
   | letters as s { Identifier s }
   | '\n' { incr_linenum lexbuf; token lexbuf }
   | "Bye." { Bye }
+  | eof { EOF }
   | _ { token lexbuf }
