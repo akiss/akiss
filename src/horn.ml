@@ -31,6 +31,7 @@ module R = struct
   let may_be_unifiable t1 t2 =
     match (t1,t2) with
       | (Fun(p,_),Fun(q,_)) when p <> q -> false
+	| (Fun(_,[_;_;Fun(f,_)]),Fun(_,[_;_;Fun(g,_)])) when f<>g -> false
       | _ -> true
 
   let csu u v =
@@ -80,19 +81,23 @@ let apply_shift_rule = Theory.xor
 (* Use of Conseq *)
 let use_conseq = (not Theory.xor) || true
 
+let use_hardcoded_f0plus = Theory.xor && true
+
 let print_flags () =
-  assert (not Theory.ac || Theory.xor) ;
+  (*assert (not Theory.ac || Theory.xor) ;*)
   if !debug_output then
     Format.printf
       "Parameters:\n\
+      \  ac: %b\n\
       \  xor: %b\n\
       \  eqrefl_opt: %b\n\
       \  opti_sort: %b\n\
       \  drop non-normal skel: %b\n\
       \  renormalize_recipes: %b\n\
-      \  conseq: %b\n"
-      Theory.xor
-      eqrefl_opt opti_sort drop_non_normal_skel renormalize_recipes use_conseq
+      \  conseq: %b\n\
+      \  hard coded unification f0+: %b\n"
+      Theory.ac Theory.xor
+      eqrefl_opt opti_sort drop_non_normal_skel renormalize_recipes use_conseq use_hardcoded_f0plus
 
 (** {2 Predicates and clauses, conversions and printing} *)
 
@@ -241,6 +246,59 @@ let show_statement st =
 
 let csu_atom a1 a2 =
   R.csu (term_from_atom a1) (term_from_atom a2)
+
+	
+
+let csu_atom_debug dbg a1 a2 =
+	let rec explode_term t =
+		match t with
+		| Fun("plus",[l;r]) -> let (v1,t1) = explode_term l in let (v2,t2) = explode_term r in (v1@v2,t1@t2)
+		| Var(x) -> ([x],[])
+		| Fun(f,l)-> ([],[Fun(f,l)]) in
+	let rec exponential terms sigmalist = 
+		match terms with
+		| t :: q ->
+			let rec addaux term lst =
+				match lst with
+				| (t11,t12) :: q -> (term::t11,t12)::(t11,term::t12)::(addaux term q)
+				| [] -> [] in
+			addaux t (exponential q sigmalist)
+		| [] -> sigmalist in
+	let rec sum_from l =
+		match l with
+		| [x] -> x
+		| x :: m -> Fun("plus",[x ; (sum_from m)])
+		| [] -> assert false in
+	let rec addvar w world x1 x2 rx x11 x12 x lst =
+		let xa = fresh_variable () and xb = fresh_variable () in
+		match lst with
+		| (t11,t12) :: q ->
+			(if t12 = [] then [] else [(w,world);(rx, Fun("plus",[Var(x1);Var(x2)])); (x11 , sum_from (Var(x)::t11)); (x12 , sum_from t12)] )
+			:: (if t11 = [] then [] else [(w,world);(rx, Fun("plus",[Var(x1);Var(x2)])); (x11 , sum_from (t11)); (x12 , sum_from (Var(x)::t12))])
+			:: [(w,world);(rx, Fun("plus",[Var(x1);Var(x2)])); (x11 , sum_from (Var(xa)::t11)); (x12 , sum_from (Var(xb)::t12));(x,Fun("plus",[Var(xa);Var(xb)]))]
+			:: (addvar w world x1 x2 rx x11 x12 x q)
+		| [] -> [] in
+	if dbg
+	then begin (*debugOutput "Unification : %s = %s \n" (show_term (term_from_atom a1)) (show_term (term_from_atom a2));*)
+			match (a1,a2) with 
+			| (Predicate("knows",[world;Var(rx);t]),Predicate("knows",[Var(w);Fun("plus",[Var(x1);Var(x2)]);Fun("plus",[Var(x11);Var(x12)])])) -> 
+				begin List.filter (fun x -> x <> []) (
+				match explode_term t with
+				| ([],a1::a2::l) -> List.map 
+					(fun (l1,l2) -> 
+						if l1 = [] || l2 = [] 
+						then [] 
+						else [(w,world);(rx, Fun("plus",[Var(x1);Var(x2)])); (x11 , sum_from l1 ); (x12 , sum_from l2)])
+					(exponential (a2::l) [([a1],[])])
+				| ([],l) -> []
+				| ([x],a::l) -> 
+					if List.mem x ( vars_of_term_list (a::l)) 
+					then begin debugOutput "warning \n"; csu_atom  a1 a2 end
+					else addvar w world x1 x2 rx x11 x12 x (exponential l [([a],[])])
+				| _ ->  csu_atom a1 a2 ) end 
+			| _ -> assert(false) end
+	else
+		csu_atom a1 a2
 
 let apply_subst_atom atom sigma = match atom with
   | Predicate(name, term_list) ->
@@ -895,7 +953,7 @@ let update (kb : Base.t) rules (f : statement) : unit =
 let initial_kb (seed : statement list) rules : Base.t =
   let kb = Base.create () in
   let seed =
-    if not Theory.xor then seed else
+    if not Theory.ac then seed else
       let xor_variants,seed =
         List.partition
           (fun f ->
@@ -1019,7 +1077,7 @@ let resolution master slave =
     if is_marked (unbox_var (get_recipe atom)) &&
        is_plus_clause slave
     then [] else
-    let sigmas = csu_atom atom slave.head in
+    let sigmas = csu_atom_debug (is_plus_clause slave && use_hardcoded_f0plus) atom slave.head in
     let sigmas = propagate_marking sigmas in
     let length = List.length sigmas in
     if !debug_output && length > 0 then begin
@@ -1080,7 +1138,7 @@ let equation fa fb =
   if
     is_deduction_st fa && is_deduction_st fb &&
     (* When dealing with xor, forbid Equation if one clause is f0+. *)
-    (not Theory.xor || not (is_plus_clause fa || is_plus_clause fb))
+    (not Theory.ac || not (is_plus_clause fa || is_plus_clause fb))
   then
 
     (* The rule is called only once per (unordered) pair.

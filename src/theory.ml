@@ -280,17 +280,34 @@ module type REWRITING = sig
 end
 
 module AC : REWRITING = struct
-  let normalize = Fullmaude.normalize
-  let equals = Fullmaude.equals
+  let normalize t rules =
+	try Rewriting.normalize t rules with
+	| Rewriting.No_easy_match -> Fullmaude.normalize t rules
+
+  let equals s t rules = if rules <> [] 
+	then Fullmaude.equals s t rules
+	else Rewriting.equals_ac s t 
+ 
   let unifiers s t r =
-    if r = [] then Fullmaude.unifiers s t [] else
+    if r = [] then begin 
+	try [Rewriting.mgu s t] with
+		| Rewriting.Not_unifiable -> [] 
+		| Rewriting.No_easy_unifier -> begin
+			debugOutput "Maude is called: %s =?= %s \n" (show_term s)(show_term t);
+			Fullmaude.unifiers s t [] end
+	end
+	else
       (* let u1 = Tamarin.unifiers Fullmaude.normalize s t r in *)
       let u1 = Maude.unifiers s t r in
       assert (ac ||
                 let u2 = Rewriting.unifiers s t r in
                   List.length u1 = List.length u2) ;
         u1
-  let matchers = Fullmaude.matchers
+  let matchers s t rules =
+    assert (rules = []) ;
+    try [Rewriting.mgmac s t] with
+      | Rewriting.Not_matchable -> []
+      | Rewriting.No_easy_match -> Fullmaude.matchers s t rules
   (* let variants = Tamarin.variants Fullmaude.normalize *)
   let variants = Maude.variants
 end

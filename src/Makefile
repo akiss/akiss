@@ -68,22 +68,26 @@ TESTS = \
 # Basic tests + RFID tests without Toy-v1 + NSLxor tests,
 # without duplicates
 VALIDATION = $(TESTS) \
-			 ../examples/xor/rfid/KCL-v1.api \
-			 ../examples/xor/rfid/KCL-v2.api \
-			 ../examples/xor/rfid/KCL-v3.api \
-			 ../examples/xor/rfid/KCL-v4.api \
-			 ../examples/xor/rfid/KCL-h1.api \
-			 ../examples/xor/rfid/KCL-h1bis.api \
-			 ../examples/xor/rfid/LAK-v1.api \
-			 ../examples/xor/rfid/LAK-v2.api \
-			 ../examples/xor/rfid/LD-v1.api \
-			 ../examples/xor/rfid/OTYT-v1.api \
-			 ../examples/xor/rfid/YPL-v1.api \
-			 ../examples/xor/rfid/YPL-v2.api \
-			 ../examples/xor/rfid/YPL-v3.api \
+			 ../examples/xor/rfid/KCL.api \
+			 ../examples/xor/rfid/KCL-running.api \
+			 ../examples/xor/rfid/KCL-fixed.api \
+			 ../examples/xor/rfid/LAK.api \
+			 ../examples/xor/rfid/LD.api \
+			 ../examples/xor/rfid/OTYT.api \
+			 ../examples/xor/rfid/YPL.api \
 			 ../examples/xor/NSLxor/nslhelp.api \
 			 ../examples/xor/NSLxor/nsl.api \
-			 ../examples/xor/NSLxor/NSL-xor-1a.api
+			 ../examples/xor/NSLxor/NSL-xor-1a.api \
+			 ../examples/xor/guessing/toy-protocol.api \
+			 ../examples/xor/guessing/toy-protocol-passive.api \
+			 ../examples/xor/guessing/secret-public-key-protocol.api \
+			 ../examples/xor/guessing/secret-public-key-protocol-passive.api \
+			 ../examples/xor/guessing/nonce-protocol.api \
+			 ../examples/xor/guessing/nonce-protocol-passive.api \
+			 ../examples/xor/guessing/gong-pwA-passive.api \
+			 ../examples/xor/guessing/gong-pwB-passive.api \
+			 ../examples/xor/guessing/direct-auth-protocol.api \
+			 ../examples/xor/guessing/direct-auth-protocol-passive.api 
 
 RUN = OCAMLRUNPARAM=b ./akiss -verbose
 

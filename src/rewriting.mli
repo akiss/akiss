@@ -24,11 +24,15 @@ open Term
 
 exception Not_unifiable
 exception Not_matchable
+exception No_easy_unifier
+exception No_easy_match
 
 (** Unification and matching for free terms *)
 
 val mgu : term -> term -> subst
 val mgm : term -> term -> subst
+val mgmac : term -> term -> subst
+val equals_ac : term -> term -> bool
 
 (** Utilities for handling a (non-AC) theory *)
 

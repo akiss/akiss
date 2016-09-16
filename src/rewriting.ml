@@ -18,11 +18,14 @@
 (****************************************************************************)
 
 open Term
+open Util
 
 (** Unification and matching *)
 
 exception Not_unifiable
 exception Not_matchable
+exception No_easy_unifier
+exception No_easy_match
 
 let rec subst_one x small = function
   | Var(y) -> if x = y then small else Var(y)
@@ -35,6 +38,23 @@ let subst_one_in_list x small list =
 let subst_one_in_subst x small sigma =
   List.map (function (v, t) -> (v, (subst_one x small t))) sigma
 
+let rec explode_term t =
+	let rec is_constant f =
+		match f with
+		| Var(x) -> false
+		| Fun(f,l)-> List.fold_left (fun x t -> x && is_constant t) true l in
+	match t with
+	| Fun("plus",[l;r]) -> let (v1,t1,c1) = explode_term l in let (v2,t2,c2) = explode_term r in (v1@v2,t1@t2,c1@c2)
+	| Var(x) -> ([x],[],[])
+	| Fun(f,l)-> if is_constant (Fun(f,l)) then ([],[f],[Fun(f,l)]) else ([],[f],[])
+
+let rec recompose_term lst =
+	match lst with
+	| t1 :: t2 :: q -> Fun("plus",[t1;recompose_term (t2 ::q)])
+	| t1 :: [] -> t1
+	| [] -> raise Not_unifiable
+
+
 let rec unify_once s t sl tl sigma =
   match (s, t) with
     | (Var(x), Var(y)) when x = y -> unify_list sl tl sigma
@@ -46,6 +66,40 @@ let rec unify_once s t sl tl sigma =
 	   unify_list (update sl) (update tl) ((x, t) :: (subst_one_in_subst x t sigma)))
     | (_, Var(y)) ->
 	unify_once t s sl tl sigma
+    | (Fun("plus", sa), Fun("plus", ta)) -> begin
+	let (xs,ts,cs)= explode_term (Fun("plus", sa)) in 
+	let (ys,us,ds)= explode_term (Fun("plus", ta)) in 
+	if (List.length xs) + (List.length ys) > 1 
+	then raise No_easy_unifier
+	else let (ab_t1,co_t1,ab_t2,co_t2) = if xs = [] then (us,ds,ts,cs) else (ts,cs,us,ds) in
+		if List.length ts = List.length cs && List.length us = List.length ds 
+		then begin
+			let c_t2=list_diff co_t2 co_t1 in
+			let c_t1=list_diff co_t1 co_t2 in
+			if c_t1 <> [] 
+			then raise Not_unifiable
+			else if  xs = [] && ys = [] 
+				then begin
+					if c_t2 <> [] 
+					then raise Not_unifiable 
+					else unify_list sl tl sigma end
+				else
+				let t=recompose_term c_t2 in
+				let x = if xs = [] then List.hd ys else List.hd xs in
+				let update = function list -> subst_one_in_list x t list in
+				unify_list (update sl) (update tl) ((x, t) :: (subst_one_in_subst x t sigma))
+		end
+		else 
+			if sa = ta then unify_list sl tl sigma else (* au cas ou on a de la chance *)
+			if List.exists (function x -> not (List.mem x ab_t2)) ab_t1 
+			then raise Not_unifiable 
+			else 
+			if xs = [] &&  ys <> [] 
+			then raise No_easy_unifier 
+			else if List.exists (function x -> not (List.mem x ab_t1)) ab_t2 
+			then raise Not_unifiable 
+			else raise No_easy_unifier 
+	end
     | (Fun(f, sa), Fun(g, ta)) when ((f = g) && (List.length sa = List.length ta)) ->
 	unify_list (List.append sa sl) (List.append ta tl) sigma
     | _ -> raise Not_unifiable
@@ -55,7 +109,7 @@ and unify_list sl tl sigma =
     | (s :: sr, t :: tr) -> unify_once s t sr tr sigma
     | _ -> raise Not_unifiable
 
-let rec mgu s t = unify_once s t [] [] []
+let rec mgu s t = unify_once s t [] [] [] 
 
 let rec new_or_same x t sigma =
   try
@@ -77,16 +131,89 @@ and match_list pl ml sigma =
     | (p :: pr, m :: mr) -> match_once p m pr mr sigma
     | _ -> raise Not_matchable
 
+(** Equality modulo pure AC **)
+let rec sum_to_list t =
+	match t with
+	| Fun("plus",[l;r]) -> (sum_to_list l)@(sum_to_list r)
+	| x -> [x]
+
+
+let rec equals_ac s t =
+	match (s,t) with
+	| (Var(x),Var(y)) when x=y -> true
+	| (Var(x),Var(y)) -> false
+	| (Fun("plus",a1),Fun("plus",a2)) -> list_equals_ac (sum_to_list (Fun("plus",a1))) (sum_to_list (Fun("plus",a2)))
+	| (Fun(f,a),Fun(g,b)) when f = g && (List.length a) = (List.length b) -> 
+		List.fold_left2 (fun x t1 t2 -> x && (equals_ac t1 t2)) true a b
+	| _ -> false
+and list_equals_ac l1 l2 =
+	match l1 with
+	| t :: q -> begin
+		match List.partition (fun t1 -> equals_ac t t1) l2 with
+		| (a::r,l) -> list_equals_ac q (r@l)
+		| ([],l) -> false end
+	| [] -> l2 = []
+
 (** Most general matcher *)
 let rec mgm p m = match_once p m [] [] []
+
+
+let rec match_once_ac pattern model pl ml sigma =
+  match (pattern, model) with
+    | (Var(x), t) -> match_list_ac pl ml (new_or_same x t sigma)
+(*    | (Fun("plus",[Var(x);Fun("zero",[])]), Fun("plus",a)) ->
+	if List.exists (fun x -> x = Fun("zero",[])) (sum_to_list (Fun("plus",a)))
+	then raise No_easy_match else  raise Not_matchable
+    | (Fun("plus",[Var(x);Var(y)), Fun("plus",a)) when x = y ->
+	raise No_easy_match *)
+    | (Fun("plus",pa), Fun("plus",ma)) -> begin
+	let (xs,ts,cs)= explode_term (Fun("plus", pa)) in 
+	if xs = [] && List.length ts = List.length cs then
+		begin if equals_ac (Fun("plus",pa)) (Fun("plus",ma)) then
+			begin debugOutput "-exit- %s ** %s \n" (show_term pattern) (show_term model); raise No_easy_match end
+		else raise  Not_matchable end
+	else begin debugOutput "-exit- %s ** %s \n" (show_term pattern) (show_term model); raise No_easy_match end
+	end
+    | (Fun(f, pa), Fun(g, ma)) when ((f = g) && (List.length pa = List.length ma)) ->
+	match_list_ac (List.append pa pl) (List.append ma ml) sigma
+    | (_, _) -> raise Not_matchable
+and match_list_ac pl ml sigma =
+  match (pl, ml) with
+    | ([], []) -> sigma
+    | (p :: pr, m :: mr) -> match_once_ac p m pr mr sigma
+    | _ -> raise Not_matchable
+
+(** Most general matcher *)
+let rec mgmac p m = match_once_ac p m [] [] []
+
+
+
+
 
 (** Normalization *)
 
 let rec top_rewrite t (l, r) =
   try
-    let sigma = mgm l t in
+    let sigma = mgmac l t in
     [apply_subst r sigma]
   with Not_matchable -> []
+
+let rec compare_term t1 t2 =
+	match (t1,t2) with
+	| (Fun(f,a),Var(x)) -> 1
+	| Var(x),(Fun(f,a)) -> -1
+	| (Var(x),Var(y)) -> compare x y
+	| (Fun(f,a),Fun(g,b)) -> let c = compare f g in
+		if c <> 0 then c
+		else compare_term_list a b 
+and compare_term_list l1 l2 =
+	match (l1,l2) with
+	| (t1::q1,t2::q2) -> let c = compare_term t1 t2 in
+		if c <> 0 then c
+		else compare_term_list q1 q2
+	| ([],[]) -> 0
+	| (_,[])  -> 1
+	| ([],_) -> -1
 
 (* top normalize assumes that all strict subterms are in normal form *)
 let rec top_normalize t rules =
@@ -96,9 +223,18 @@ let rec top_normalize t rules =
 (* call this function to find the normal form of any term *)
 and normalize t rules =
   match t with
+    | Fun("plus",ta) -> recompose_term
+	(List.sort 
+		(fun t1 t2 -> 
+			if equals_ac t1 t2 || t1 = Fun("zero",[]) || t2 = Fun("zero",[]) 
+			then begin debugOutput "-exit-- %s ** %s \n" (show_term t1) (show_term t2);raise No_easy_match end
+			else compare_term t1 t2)
+ (List.map (fun x -> normalize x rules) (List.concat (List.map sum_to_list ta)))) 
     | Fun(f, ta) ->
 	top_normalize (Fun(f, List.map (fun x -> normalize x rules) ta)) rules
     | Var(x) -> t
+
+
 
 (** Variants and unification modulo R *)
 
