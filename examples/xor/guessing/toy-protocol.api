@@ -35,4 +35,4 @@ Pw = (out(C,pk(sk1)).(PA || PB) >> out(C,pw));
 
 Pfresh = (out(C,pk(sk1)).(PA || PB) >> out(C,pfresh));
 
-includedct? Pw in Pfresh;
+not includedct? Pw in Pfresh;
