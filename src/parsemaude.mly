@@ -72,31 +72,38 @@ let translate_name x =
 %token In
 %token Ms, Cpu, Real, Second
 %token Unifier, Variant, Result, Solution
-%token Line1
+%token Maude, Line1
 %token <string> Identifier
 %token <string> Number
 %token <int> Int
-%token Equals  Dot Slash Comma Colon Arrow
+%token Equals, Dot, Slash, Comma, Colon, Arrow
 %token EqualUnify, EqualMatch
 %token LeftP RightP
 %token Zero
 %token Plus
 %token NoUnifiers
-%token NoMoreUnifiers,NoMoreVariants
+%token NoMoreUnifiers NoMoreVariants
 %token Rewritesline
-%token Bool, True, False
+%token Bool True False
+%token Greater
 %token Term
 %token Bye
-%token Dot
+
+
 
 %start main
 
 %type < [ `Variants of ( (Term.term * Term.subst) list) | `Unify of (Term.subst list) | `Match of (Term.subst list) | `Norm of Term.term | `Equal of bool ] > main
 
 %%
-
 main:
- | Line1 result { $2 }
+ | firstLine result { $2 }
+
+     firstLine:
+ | Line1 { }
+ | Identifier Greater Line1 { }
+ | Greater Line1 { }
+     
      
      result:
  | unifierPreamble unifierList { `Unify $2 }

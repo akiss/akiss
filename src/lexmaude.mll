@@ -36,7 +36,7 @@ let letter = lower | upper
 let letters = letter (('.'| letter | digit) * )
 
   rule token = parse
-  | "Maude> ==========================================" { Line1 }
+  | "==========================================" { Line1 }
   | "No unifiers." { NoUnifiers }
   | "No more unifiers." { NoMoreUnifiers }
   | "No more variants." { NoMoreVariants }
@@ -66,6 +66,7 @@ let letters = letter (('.'| letter | digit) * )
   | "+" { Plus }
   | "," { Comma }
   | ":" { Colon }
+  | ">" { Greater }
   | "=" { Equals }
   | "=?" { EqualUnify }
   | "<?" { EqualMatch }

@@ -131,22 +131,46 @@ let print_module rules extrasig chan () =
     Format.fprintf chan "endm\n\n"
 
 (** Interacting with a maude process *)
+
+let get_chans =
+  let dummy = stdin,stdout in
+  let chans = ref dummy in
+  let countdown = ref 0 in
+  let close () =
+    if !chans <> dummy then begin
+      (* Maude doesn't seem to return 0 on clean termination. *)
+      ignore (Unix.close_process !chans) ;
+      (* Reset chans to dummy to avoid closing twice. *)
+      chans := dummy
+    end
+  in
+  at_exit close ;
+  fun () ->
+    if !countdown > 0 then begin
+      decr countdown ;
+      !chans
+    end else begin
+      close () ;
+      let pair = Unix.open_process (Lazy.force Config.maude_command) in
+      chans := pair ;
+      countdown := 10000 ;
+      pair
+    end
+
       
 let run_maude print_query parse_result =
   if debug then
     Format.printf "<< maude command: %s\n"  (Lazy.force Config.maude_command);
-  let chan_out,chan_in =
-    Unix.open_process (Lazy.force Config.maude_command)
-  in
+  let chan_out,chan_in = get_chans () in
+      (* let chan_out,chan_in = *)
+      (* 	Unix.open_process (Lazy.force Config.maude_command) in *)
   let fin = Format.formatter_of_out_channel chan_in in
   if sdebug then print_query Format.std_formatter ;
   Format.print_flush () ;
   print_query fin ;
   Format.pp_print_flush fin () ;
   let result = parse_result chan_out in
-  let _ = Unix.close_process (chan_out,chan_in) in
-  (* let ret = Unix.close_process (chan_out,chan_in) in *)
-  (*  assert (ret = Unix.WEXITED 0) ; *)
+      (* Unix.close_process (chan_out,chan_in); *)
   result
 
 
@@ -159,10 +183,10 @@ let unifiers s t rules =
   let query chan =
     Format.fprintf chan "%a\n" (print_module rules esig) () ;
     Format.fprintf chan "variant unify %a =? %a .\n" print s print t ; 
-    Format.fprintf chan "quit \n"
+    (* Format.fprintf chan "quit \n" *)
   in 
-  let parse_unifiers ch =
-    match Parsemaude.main Lexmaude.token (Lexing.from_channel ch) with
+  let parse_unifiers ch lexbuf =
+    match Parsemaude.main Lexmaude.token lexbuf with
     | `Unify substs ->
       if debug then
         List.iter
@@ -172,7 +196,8 @@ let unifiers s t rules =
     | _ -> assert false
   in
   let parse_unifiers ch =
-    try parse_unifiers ch with
+    let lexbuf = (Lexing.from_channel ch) in
+    try parse_unifiers ch lexbuf with
     | Parsing.Parse_error as e ->
       Format.printf
         "Error while parsing maude output.\n" ;
@@ -202,8 +227,8 @@ let variants t rules =
   let esig = sig_of_term_list [t] in
   let query chan =
     Format.fprintf chan "%a\n" (print_module rules esig) () ;
-    Format.fprintf chan "get variants %a .\n" print t ; 
-    Format.fprintf chan "quit \n"
+    Format.fprintf chan "get variants %a .\n" print t ;
+    (* Format.fprintf chan "quit \n" *)
   in 
   let parse_variants ch =
     match Parsemaude.main Lexmaude.token (Lexing.from_channel ch) with
