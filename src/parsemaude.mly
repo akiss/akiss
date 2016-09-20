@@ -151,8 +151,10 @@ main:
  | Percent Number Colon Term { Var ("%"^$2) } 
  | Identifier LeftP termlist RightP { let t = Fun(translate_symbol
 						    $1,$3) in t }
- | term Plus term { Fun ("plus", [$1; $3]) }
- | LeftP term Plus term RightP { Fun("plus", [$2; $4]) }
+ | Plus LeftP termlist RightP { let l = $3 in
+				List.fold_left
+				  (fun a b -> Fun ("plus",[a;b]))
+				  (List.hd l) (List.tl l)}
 
 termlist:
  | { [] }

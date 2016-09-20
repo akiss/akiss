@@ -63,7 +63,7 @@ let letters = letter (('.'| letter | digit) * )
   | "0" { Zero }
   | "-->" {Arrow}
   | "/" { Slash }
-  | "+" { Plus }
+  | "plus" { Plus }
   | "," { Comma }
   | ":" { Colon }
   | ">" { Greater }
