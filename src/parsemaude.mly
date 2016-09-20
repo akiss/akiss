@@ -142,7 +142,8 @@ main:
      {
        let id = translate_symbol $1 in
        if (List.mem id !private_names) || (List.mem id !channels) ||
-	 (List.mem (id,0) !fsymbols) || (List.mem id ["empty";"!test!"]) then
+	 (List.mem (id,0) !fsymbols) || (List.mem id ["empty";"!test!"] ||
+	 Str.string_match (Str.regexp "w[0-9]+") id 0) then
 	 Fun(id,[])
        else
 	 Var id
