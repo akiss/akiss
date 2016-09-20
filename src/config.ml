@@ -45,7 +45,7 @@ let full_maude = lazy (
 
 let maude_command = lazy (
   let lazy maude_binary = maude_binary in
-  maude_binary ^ " -batch -no-banner -no-ansi-color "
+  maude_binary ^ " -batch -no-banner -no-ansi-color -no-advise"
 )
 
   
