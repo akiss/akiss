@@ -27,6 +27,12 @@ exception Not_matchable
 exception No_easy_unifier
 exception No_easy_match
 
+let maudeCallUni s t = ()
+(*Printf.printf "Maude for unifying \n %s and %s \n" (show_term s) (show_term t)*)
+
+let maudeCallMatch s t = ()
+(*Printf.printf "Maude for matching \n %s and %s \n" (show_term s) (show_term t)*)
+
 let rec subst_one x small = function
   | Var(y) -> if x = y then small else Var(y)
   | Fun(f, list) ->
@@ -52,7 +58,7 @@ let rec recompose_term lst =
 	match lst with
 	| t1 :: t2 :: q -> Fun("plus",[t1;recompose_term (t2 ::q)])
 	| t1 :: [] -> t1
-	| [] -> raise Not_unifiable
+	| [] -> Fun("zero",[])
 
 
 let rec unify_once s t sl tl sigma =
@@ -66,40 +72,7 @@ let rec unify_once s t sl tl sigma =
 	   unify_list (update sl) (update tl) ((x, t) :: (subst_one_in_subst x t sigma)))
     | (_, Var(y)) ->
 	unify_once t s sl tl sigma
-    | (Fun("plus", sa), Fun("plus", ta)) -> begin
-	let (xs,ts,cs)= explode_term (Fun("plus", sa)) in 
-	let (ys,us,ds)= explode_term (Fun("plus", ta)) in 
-	if (List.length xs) + (List.length ys) > 1 
-	then raise No_easy_unifier
-	else let (ab_t1,co_t1,ab_t2,co_t2) = if xs = [] then (us,ds,ts,cs) else (ts,cs,us,ds) in
-		if List.length ts = List.length cs && List.length us = List.length ds 
-		then begin
-			let c_t2=list_diff co_t2 co_t1 in
-			let c_t1=list_diff co_t1 co_t2 in
-			if c_t1 <> [] 
-			then raise Not_unifiable
-			else if  xs = [] && ys = [] 
-				then begin
-					if c_t2 <> [] 
-					then raise Not_unifiable 
-					else unify_list sl tl sigma end
-				else
-				let t=recompose_term c_t2 in
-				let x = if xs = [] then List.hd ys else List.hd xs in
-				let update = function list -> subst_one_in_list x t list in
-				unify_list (update sl) (update tl) ((x, t) :: (subst_one_in_subst x t sigma))
-		end
-		else 
-			if sa = ta then unify_list sl tl sigma else (* au cas ou on a de la chance *)
-			if List.exists (function x -> not (List.mem x ab_t2)) ab_t1 
-			then raise Not_unifiable 
-			else 
-			if xs = [] &&  ys <> [] 
-			then raise No_easy_unifier 
-			else if List.exists (function x -> not (List.mem x ab_t1)) ab_t2 
-			then raise Not_unifiable 
-			else raise No_easy_unifier 
-	end
+    | (Fun("plus", sa), Fun("plus", ta)) -> may_unify_plus sa ta sl tl sigma
     | (Fun(f, sa), Fun(g, ta)) when ((f = g) && (List.length sa = List.length ta)) ->
 	unify_list (List.append sa sl) (List.append ta tl) sigma
     | _ -> raise Not_unifiable
@@ -108,6 +81,44 @@ and unify_list sl tl sigma =
     | ([], []) -> sigma
     | (s :: sr, t :: tr) -> unify_once s t sr tr sigma
     | _ -> raise Not_unifiable
+(* some heuristics to do unification *)
+and may_unify_plus sa ta sl tl sigma =
+	begin
+	let (xs,ts,cs)= explode_term (Fun("plus", sa)) in 
+	let (ys,us,ds)= explode_term (Fun("plus", ta)) in 
+	if (List.length xs) + (List.length ys) > 1 
+	then begin maudeCallUni (Fun("plus", sa)) (Fun("plus", ta)); raise No_easy_unifier end
+	else let (ab_t1,co_t1,ab_t2,co_t2) = if xs = [] then (us,ds,ts,cs) else (ts,cs,us,ds) in
+		if List.length ts = List.length cs && List.length us = List.length ds 
+		then begin
+			let c_t2=list_diff co_t2 co_t1 in
+			let c_t1=list_diff co_t1 co_t2 in
+			if c_t1 <> [] 
+			then raise Not_unifiable
+			else 
+			if  xs = [] && ys = [] 
+			then begin
+				if c_t2 <> [] 
+				then raise Not_unifiable 
+				else unify_list sl tl sigma end
+			else
+			if c_t2 = [] then raise Not_unifiable  else
+			let t=recompose_term c_t2 in
+			let x = if xs = [] then List.hd ys else List.hd xs in
+			let update = function list -> subst_one_in_list x t list in
+			unify_list (update sl) (update tl) ((x, t) :: (subst_one_in_subst x t sigma))
+		end
+		else 
+			if sa = ta then unify_list sl tl sigma else (* au cas ou on a de la chance *)
+			if List.exists (function x -> not (List.mem x ab_t2)) ab_t1 
+			then raise Not_unifiable 
+			else 
+			if xs = [] &&  ys <> [] 
+			then begin maudeCallUni (Fun("plus", sa)) (Fun("plus", ta));raise No_easy_unifier end
+			else if List.exists (function x -> not (List.mem x ab_t1)) ab_t2 
+			then raise Not_unifiable 
+			else raise begin maudeCallUni (Fun("plus", sa)) (Fun("plus", ta)); No_easy_unifier end
+	end
 
 let rec mgu s t = unify_once s t [] [] [] 
 
@@ -137,7 +148,7 @@ let rec sum_to_list t =
 	| Fun("plus",[l;r]) -> (sum_to_list l)@(sum_to_list r)
 	| x -> [x]
 
-
+(* Does not consider 0+X = X *)
 let rec equals_ac s t =
 	match (s,t) with
 	| (Var(x),Var(y)) when x=y -> true
@@ -161,19 +172,7 @@ let rec mgm p m = match_once p m [] [] []
 let rec match_once_ac pattern model pl ml sigma =
   match (pattern, model) with
     | (Var(x), t) -> match_list_ac pl ml (new_or_same x t sigma)
-(*    | (Fun("plus",[Var(x);Fun("zero",[])]), Fun("plus",a)) ->
-	if List.exists (fun x -> x = Fun("zero",[])) (sum_to_list (Fun("plus",a)))
-	then raise No_easy_match else  raise Not_matchable
-    | (Fun("plus",[Var(x);Var(y)), Fun("plus",a)) when x = y ->
-	raise No_easy_match *)
-    | (Fun("plus",pa), Fun("plus",ma)) -> begin
-	let (xs,ts,cs)= explode_term (Fun("plus", pa)) in 
-	if xs = [] && List.length ts = List.length cs then
-		begin if equals_ac (Fun("plus",pa)) (Fun("plus",ma)) then
-			begin debugOutput "-exit- %s ** %s \n" (show_term pattern) (show_term model); raise No_easy_match end
-		else raise  Not_matchable end
-	else begin debugOutput "-exit- %s ** %s \n" (show_term pattern) (show_term model); raise No_easy_match end
-	end
+    | (Fun("plus",pa), Fun("plus",ma)) -> may_match_plus pattern model pl ml sigma
     | (Fun(f, pa), Fun(g, ma)) when ((f = g) && (List.length pa = List.length ma)) ->
 	match_list_ac (List.append pa pl) (List.append ma ml) sigma
     | (_, _) -> raise Not_matchable
@@ -182,6 +181,15 @@ and match_list_ac pl ml sigma =
     | ([], []) -> sigma
     | (p :: pr, m :: mr) -> match_once_ac p m pr mr sigma
     | _ -> raise Not_matchable
+and may_match_plus pattern model pl ml sigma =
+	begin
+	let (xs,ts,cs)= explode_term pattern in 
+	if xs = [] && List.length ts = List.length cs then
+		begin if equals_ac pattern model then
+			begin maudeCallMatch pattern model; raise No_easy_match end
+		else raise  Not_matchable end
+	else begin maudeCallMatch pattern model; raise No_easy_match end
+	end
 
 (** Most general matcher *)
 let rec mgmac p m = match_once_ac p m [] [] []
@@ -215,6 +223,15 @@ and compare_term_list l1 l2 =
 	| (_,[])  -> 1
 	| ([],_) -> -1
 
+let rec remove_duplicate lst =
+	match lst with
+	| Fun("zero",[])::q -> remove_duplicate q 
+	| a::b::q -> 
+	
+	if equals_ac a b then remove_duplicate q else a :: (remove_duplicate (b ::q))
+	| [x] -> [x]
+	| [] -> []
+
 (* top normalize assumes that all strict subterms are in normal form *)
 let rec top_normalize t rules =
   match List.concat (List.map (fun x -> top_rewrite t x) rules) with
@@ -224,12 +241,7 @@ let rec top_normalize t rules =
 and normalize t rules =
   match t with
     | Fun("plus",ta) -> recompose_term
-	(List.sort 
-		(fun t1 t2 -> 
-			if equals_ac t1 t2 || t1 = Fun("zero",[]) || t2 = Fun("zero",[]) 
-			then begin debugOutput "-exit-- %s ** %s \n" (show_term t1) (show_term t2);raise No_easy_match end
-			else compare_term t1 t2)
- (List.map (fun x -> normalize x rules) (List.concat (List.map sum_to_list ta)))) 
+	(remove_duplicate(List.sort compare_term (List.map (fun x -> normalize x rules) (List.concat (List.map sum_to_list ta))))) 
     | Fun(f, ta) ->
 	top_normalize (Fun(f, List.map (fun x -> normalize x rules) ta)) rules
     | Var(x) -> t
