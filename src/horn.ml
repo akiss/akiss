@@ -1260,24 +1260,27 @@ let rec ridentical fa fb =
           debugOutput
             "ridentical trying to combine %s with %s\n%!"
             (show_statement fa) (show_statement fb);
-          let sigmas = R.csu u up in
-            List.map
-              (fun sigma ->
-                 let newhead = Predicate("ridentical", [u; r; rp]) in
-                 let newbody = List.append (get_body fa) (get_body fb) in
-                 let result =
-                   apply_subst_atom newhead sigma,
-                   List.map (fun x -> apply_subst_atom x sigma) newbody
-                 in
-                 let result = new_clause ~label:"ri" ~parents:[fa;fb] result in
-                   debugOutput "\n\nRID FROM: %s\nRID AND : %s\nRID GOT: %s\n\n%!" 
-                     (show_statement fa)
-                     (show_statement fb)
-                     (show_statement result);
-                   result)
-              sigmas
-      | Predicate("reach",_),Predicate("identical",_) -> ridentical fb fa
-      | _ -> []
+	  if(world_length u <> world_length up || r = rp) then [] else
+	    begin
+              let sigmas = R.csu u up in
+              List.map
+		(fun sigma ->
+                  let newhead = Predicate("ridentical", [u; r; rp]) in
+                  let newbody = List.append (get_body fa) (get_body fb) in
+                  let result =
+                    apply_subst_atom newhead sigma,
+                    List.map (fun x -> apply_subst_atom x sigma) newbody
+                  in
+                  let result = new_clause ~label:"ri" ~parents:[fa;fb] result in
+                  debugOutput "\n\nRID FROM: %s\nRID AND : %s\nRID GOT: %s\n\n%!" 
+                    (show_statement fa)
+                    (show_statement fb)
+                    (show_statement result);
+                  result)
+		sigmas
+	    end
+    | Predicate("reach",_),Predicate("identical",_) -> ridentical fb fa
+    | _ -> []
 
 (** {2 Saturation procedure} *)
 
