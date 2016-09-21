@@ -165,11 +165,14 @@ let rec simplify = function
      | p, SymbNul -> p
      | p1, p2 -> SymbPar (p1, p2))
 
-let rec optimize_tests p = p
-(* this optimization is currently disabled as it creates a bug in the
-   pre-treatment of private channels: tests before a private
-   communication are removed, even though they should not be  *)
-(* unlinearize SymbNul (compress_tests [] [] (linearize p)) *)
+let rec optimize_tests p =
+  if Theory.privchannels = []
+  then unlinearize SymbNul (compress_tests [] [] (linearize p))
+  else p
+(* this optimization is currently disabled in the presence of private
+   channels as it creates a bug in the pre-treatment: tests before a
+   private communication are removed, even though they should not
+   be *)
 
 and linearize = function
   | SymbNul -> []
