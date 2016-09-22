@@ -58,3 +58,5 @@ val bound : varName -> subst -> bool
 
 val compose : subst -> subst -> subst
 val restrict : subst -> varName list -> subst
+
+val contains_plus : term -> bool
