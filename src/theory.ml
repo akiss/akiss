@@ -292,9 +292,11 @@ module AC : REWRITING = struct
     if r = [] then begin 
 	try [Rewriting.mgu s t] with
 		| Rewriting.Not_unifiable -> [] 
-		| Rewriting.No_easy_unifier -> begin
-			debugOutput "Maude is called: %s =?= %s \n" (show_term s)(show_term t);
-		        Maude.unifiers s t [] end
+		| Rewriting.No_easy_unifier ->
+		  begin
+		    debugOutput "Maude is called: %s =?= %s \n" (show_term s)(show_term t);
+		    Maude.unifiers s t []
+		  end
 	end
 	else
       (* let u1 = Tamarin.unifiers Fullmaude.normalize s t r in *)
@@ -317,7 +319,9 @@ module AC : REWRITING = struct
 	m
       end 
   (* let variants = Tamarin.variants Fullmaude.normalize *)
-  let variants = Maude.variants
+  let variants t rules = 
+	if not (contains_plus t) then Rewriting.variants t rules 
+	else Maude.variants t rules
 end
 
 module NonAC : REWRITING = struct

@@ -206,3 +206,10 @@ let rec parse_term (Ast.TempTermCons(x,l)) =
             raise
               (Parse_error_semantic
                  (Printf.sprintf "undeclared function symbol %s" x))
+
+let rec contains_plus t =
+	match t with 
+	| Var(x) -> false
+	| Fun("plus",_) -> true
+	| Fun(_,l) -> List.fold_left (fun r a -> r || contains_plus a) false l
+
