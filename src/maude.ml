@@ -219,6 +219,51 @@ let unifiers s t rules =
     v
 
 
+
+let acunifiers s t =
+  if debug then
+    Format.printf "<< maude unifiers: %s =? %s\n" (show_term s) (show_term t) ;
+  let esig = sig_of_term_list [s;t] in
+  let query chan =
+    Format.fprintf chan "%a\n" (print_module [] esig) () ;
+    Format.fprintf chan "unify %a =? %a .\n" print s print t ; 
+    (* Format.fprintf chan "quit \n" *)
+  in 
+  let parse_unifiers ch lexbuf =
+    match Parsemaude.main Lexmaude.token lexbuf with
+    | `Unify substs ->
+      if debug then
+        List.iter
+          (fun s -> Printf.printf "Result> %s\n" (show_subst s))
+          substs ;
+      substs
+    | _ -> assert false
+  in
+  let parse_unifiers ch =
+    let lexbuf = (Lexing.from_channel ch) in
+    try parse_unifiers ch lexbuf with
+    | Parsing.Parse_error as e ->
+      Format.printf
+        "Error while parsing maude output.\n" ;
+      query Format.std_formatter ;
+      raise e
+  in
+  run_maude
+    (fun chan -> query chan)
+    (fun chan -> parse_unifiers chan)
+      
+let acunifiers s t  =
+  let v = acunifiers s t  in
+  (* let v = rename_in_subst v in *)
+  if debug then begin
+    Format.printf "unifiers %s %s (%d solutions):\n%!"
+        (show_term s) (show_term t) (List.length v) ;
+    List.iter (fun s -> Format.printf " %s\n" (show_subst s)) v
+  end ;
+  v
+
+
+      
 (** variants of a term *)
 
 let variants t rules =
@@ -267,82 +312,79 @@ let variants t rules =
 
 (** Matching *)
 
-(* let matchers s t rules = *)
-(*   assert (rules = []) ; *)
-(*   let esig = sig_of_term_list [s;t] in *)
+let acmatchers s t =
+  let esig = sig_of_term_list [s;t] in
 
-(*   let query chan = *)
-(*     Format.fprintf chan "%a\n" (print_module rules esig) () ; *)
-(*     Format.fprintf chan "match %a <=? %a .\n" print s print t; *)
-(*     Format.fprintf chan "quit \n" *)
-(*   in *)
+  let query chan =
+    Format.fprintf chan "%a\n" (print_module [] esig) () ;
+    Format.fprintf chan "match %a <=? %a .\n" print s print t;
+  in
 
-(*   let parse_matchers ch = *)
-(*     match Parsemaude.main Lexmaude.token (Lexing.from_channel ch) with *)
-(*     | `Match substs -> *)
-(*       if debug then *)
-(*         List.iter *)
-(*           (fun s -> Printf.printf "Result> %s\n" (show_subst s)) *)
-(*           substs ; *)
-(*       substs *)
-(*     | _ -> assert false *)
-(*   in *)
-(*   let parse_matchers ch = *)
-(*     try parse_matchers ch with *)
-(*     | Parsing.Parse_error as e -> *)
-(*       Format.printf *)
-(*         "Error while parsing maude output.\n" ; *)
-(*       query Format.std_formatter ; *)
-(*       raise e *)
-(*   in *)
-(*   run_maude *)
-(*     (fun chan -> query chan) *)
-(*     (fun chan -> parse_matchers chan) *)
+  let parse_matchers ch =
+    match Parsemaude.main Lexmaude.token (Lexing.from_channel ch) with
+    | `Match substs ->
+      if debug then
+        List.iter
+          (fun s -> Printf.printf "Result> %s\n" (show_subst s))
+          substs ;
+      substs
+    | _ -> assert false
+  in
+  let parse_matchers ch =
+    try parse_matchers ch with
+    | Parsing.Parse_error as e ->
+      Format.printf
+        "Error while parsing maude output.\n" ;
+      query Format.std_formatter ;
+      raise e
+  in
+  run_maude
+    (fun chan -> query chan)
+    (fun chan -> parse_matchers chan)
 
-(* let matchers s t rules = *)
-(*   let v = matchers s t rules in *)
-(*   (\* let v = rename_in_subst v in *\) *)
-(*     if debug then begin *)
-(*       Format.printf "matchers %s %s (%d solutions):\n%!" *)
-(*         (show_term s) (show_term t) (List.length v) ; *)
-(*       List.iter (fun s -> Format.printf " %s\n" (show_subst s)) v *)
-(*     end ; *)
-(*     v *)
+let acmatchers s t =
+  let v = acmatchers s t in
+  (* let v = rename_in_subst v in *)
+    if debug then begin
+      Format.printf "matchers %s %s (%d solutions):\n%!"
+        (show_term s) (show_term t) (List.length v) ;
+      List.iter (fun s -> Format.printf " %s\n" (show_subst s)) v
+    end ;
+    v
 
 (** Check equality modulo AC+R *)
 
-(* let equals s t rules = *)
-(*   if s = t then true *)
-(*   else( *)
-(*     if debug then *)
-(*       Format.printf "<< maude equals: %s = %s\n" (show_term s) (show_term t) ; *)
-(*     let esig = sig_of_term_list (s :: t :: terms_of_rules rules) in *)
+let equals s t rules =
+  if s = t then true
+  else(
+    if debug then
+      Format.printf "<< maude equals: %s = %s\n" (show_term s) (show_term t) ;
+    let esig = sig_of_term_list (s :: t :: terms_of_rules rules) in
     
-(*     let query chan = *)
-(*       Format.fprintf chan "%a\n" (print_module rules esig) () ; *)
-(*       Format.fprintf chan "reduce %a == %a .\n" print s print t ;  *)
-(*       Format.fprintf chan "quit \n" *)
-(*     in  *)
-(*     let parse_equals ch = *)
-(*       match Parsemaude.main Lexmaude.token (Lexing.from_channel ch) with *)
-(*       | `Equal b -> *)
-(* 	if debug then *)
-(*           Printf.printf "Result> %B\n" b; *)
-(* 	b *)
-(*       | _ -> assert false *)
-(*     in *)
-(*     let parse_equals ch = *)
-(*       try parse_equals ch with *)
-(*       | Parsing.Parse_error as e -> *)
-(* 	Format.printf *)
-(*           "Error while parsing Equals maude output.\n" ; *)
-(* 	query Format.std_formatter ; *)
-(* 	raise e *)
-(*     in *)
-(*     run_maude *)
-(*       (fun chan -> query chan) *)
-(*       (fun chan -> parse_equals chan) *)
-(*   ) *)
+    let query chan =
+      Format.fprintf chan "%a\n" (print_module rules esig) () ;
+      Format.fprintf chan "reduce %a == %a .\n" print s print t ;
+    in
+    let parse_equals ch =
+      match Parsemaude.main Lexmaude.token (Lexing.from_channel ch) with
+      | `Equal b ->
+	if debug then
+          Printf.printf "Result> %B\n" b;
+	b
+      | _ -> assert false
+    in
+    let parse_equals ch =
+      try parse_equals ch with
+      | Parsing.Parse_error as e ->
+	Format.printf
+          "Error while parsing Equals maude output.\n" ;
+	query Format.std_formatter ;
+	raise e
+    in
+    run_maude
+      (fun chan -> query chan)
+      (fun chan -> parse_equals chan)
+  )
     
 (* let equals s t rules = *)
 (*   let b = equals s t rules in *)
@@ -353,40 +395,40 @@ let variants t rules =
 (*     b *)
 
 (** Normalize a term *)
-(* let normalize t rules = *)
-(*   if debug then *)
-(*     Format.printf "<< maude reduce: %s\n" (show_term t) ; *)
-(*   let esig = sig_of_term_list (t :: terms_of_rules rules) in *)
-(*   let query chan = *)
-(*     Format.fprintf chan "%a\n" (print_module rules esig) () ; *)
-(*     Format.fprintf chan "reduce %a .\n" print t ;  *)
-(*     Format.fprintf chan "quit \n" *)
-(*   in  *)
-(*   let parse_normalize ch = *)
-(*     match Parsemaude.main Lexmaude.token (Lexing.from_channel ch) with *)
-(*     | `Norm term -> *)
-(*       if debug then *)
-(*         Printf.printf "Result> %s\n" (show_term term); *)
-(*       term *)
-(*     | _ -> assert false *)
-(*   in *)
-(*   let parse_normalize ch = *)
-(*     try parse_normalize ch with *)
-(*     | Parsing.Parse_error as e -> *)
-(*       Format.printf *)
-(*         "Error while parsing maude output.\n" ; *)
-(*       query Format.std_formatter ; *)
-(*       raise e *)
-(*   in *)
-(*   run_maude *)
-(*     (fun chan -> query chan) *)
-(*     (fun chan -> parse_normalize chan) *)
+let normalize t rules =
+  if debug then
+    Format.printf "<< maude reduce: %s\n" (show_term t) ;
+  let esig = sig_of_term_list (t :: terms_of_rules rules) in
+  let query chan =
+    Format.fprintf chan "%a\n" (print_module rules esig) () ;
+    Format.fprintf chan "reduce %a .\n" print t ;
+    (* Format.fprintf chan "quit \n" *)
+  in
+  let parse_normalize ch =
+    match Parsemaude.main Lexmaude.token (Lexing.from_channel ch) with
+    | `Norm term ->
+      if debug then
+        Printf.printf "Result> %s\n" (show_term term);
+      term
+    | _ -> assert false
+  in
+  let parse_normalize ch =
+    try parse_normalize ch with
+    | Parsing.Parse_error as e ->
+      Format.printf
+        "Error while parsing maude output.\n" ;
+      query Format.std_formatter ;
+      raise e
+  in
+  run_maude
+    (fun chan -> query chan)
+    (fun chan -> parse_normalize chan)
       
-(* let normalize t rules = *)
-(*   let nt = normalize t rules in *)
-(*     if debug then begin *)
-(*       Format.printf "normalize %s:\n%!" *)
-(*         (show_term t) ; *)
-(*     end ; *)
-(*     nt *)
+let normalize t rules =
+  let nt = normalize t rules in
+    if debug then begin
+      Format.printf "normalize %s:\n%!"
+        (show_term t) ;
+    end ;
+    nt
 

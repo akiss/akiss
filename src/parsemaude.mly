@@ -68,7 +68,7 @@ let translate_name x =
 
 %token Sharp, Percent
 %token EOF
-%token VariantUnify, GetVariants, Reduce
+%token VariantUnify, Unify, GetVariants, Reduce, Match
 %token In
 %token Ms, Cpu, Real, Second
 %token Unifier, Variant, Result, Solution
@@ -81,12 +81,13 @@ let translate_name x =
 %token LeftP RightP
 %token Zero
 %token Plus
-%token NoUnifiers
+%token NoUnifiers NoUnifier NoMatch
 %token NoMoreUnifiers NoMoreVariants
-%token Rewritesline
+%token Rewritesline Decisiontimeline
 %token Bool True False
 %token Greater
 %token Term
+%token Maude
 %token Bye
 
 
@@ -97,16 +98,16 @@ let translate_name x =
 
 %%
 main:
- | firstLine result { $2 }
+ | firstLine result Maude { $2 }
 
      firstLine:
  | Line1 { }
- | Identifier Greater Line1 { }
- | Greater Line1 { }
-     
-     
+ | Maude Line1 { }
+          
      result:
  | unifierPreamble unifierList { `Unify $2 }
+ | acunifierPreamble acunifierList { `Unify $2 }
+ | matchPreamble matcherList { `Match $2 }
  | variantPreamble variantList { `Variants $2 }
  | reducePreamble Rewritesline Result resultTerm {`Norm $4 }
  | equalsPreamble Rewritesline Result Bool Colon bool { `Equal $6 }
@@ -120,6 +121,33 @@ main:
  | Unifier Sharp Number Rewritesline substitution unifierList
      {(freshensubst $5)::$6}
 
+     acunifierPreamble:
+ | Unify In Identifier Colon term EqualUnify term Dot
+ Decisiontimeline{ }
+     
+     acunifierList:
+ | NoUnifier { [] }
+ | acunifier {[$1]}
+ | acunifier acunifierList { $1::$2 }
+
+     acunifier:
+ | Solution Number substitution
+     {freshensubst $3}
+
+     matchPreamble:
+ | Match In Identifier Colon term EqualMatch term Dot
+ Decisiontimeline{ }
+     
+     matcherList:
+ | NoMatch { [] }
+ | matcher {[$1]}
+ | matcher matcherList { $1::$2 }
+
+     matcher:
+ | Solution Number substitution
+     {freshensubst $3}
+
+     
      variantPreamble:
  | GetVariants In Identifier Colon term Dot { }
 
@@ -142,8 +170,10 @@ main:
      {
        let id = translate_symbol $1 in
        if (List.mem id !private_names) || (List.mem id !channels) ||
-	 (List.mem (id,0) !fsymbols) || (List.mem id ["empty";"!test!"] ||
-	 Str.string_match (Str.regexp "w[0-9]+") id 0) then
+	 (List.mem (id,0) !fsymbols) || List.mem id ["empty";"!test!"] ||
+	 (Str.string_match (Str.regexp "w[0-9]+") id 0) ||
+	 (Str.string_match (Str.regexp "!n![0-9]+") id 0)
+       then
 	 Fun(id,[])
        else
 	 Var id

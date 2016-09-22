@@ -37,10 +37,15 @@ let letters = letter (('.'| letter | digit) * )
 
   rule token = parse
   | "==========================================" { Line1 }
+  | "Maude>" {Maude}
   | "No unifiers." { NoUnifiers }
+  | "No unifier." { NoUnifier }
+  | "No match."   { NoMatch }
   | "No more unifiers." { NoMoreUnifiers }
   | "No more variants." { NoMoreVariants }
   | "Unifier" { Unifier }
+  | "unify" { Unify }
+  | "match" { Match }
   | "Variant" { Variant }
   | "reduce" { Reduce }
   | "result" { Result }
@@ -52,7 +57,8 @@ let letters = letter (('.'| letter | digit) * )
   | "variant unify" { VariantUnify }
   | "get variants" { GetVariants }
   | "rewrites: " digits " in " digits "ms cpu (" digits "ms real) ("
-    (digits | "~") " rewrites/second)" { Rewritesline }
+      (digits | "~") " rewrites/second)" { Rewritesline }
+  | "Decision time: " digits "ms cpu (" digits "ms real)" { Decisiontimeline }
   | "in" {  In }
   | digits "ms" { Ms }
   | "cpu" { Cpu }
@@ -69,7 +75,7 @@ let letters = letter (('.'| letter | digit) * )
   | ">" { Greater }
   | "=" { Equals }
   | "=?" { EqualUnify }
-  | "<?" { EqualMatch }
+  | "<=?" { EqualMatch }
   | "(" { LeftP }
   | ")" { RightP }
   | "." { Dot }
