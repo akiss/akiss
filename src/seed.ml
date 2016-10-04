@@ -79,7 +79,23 @@ let apply_subst_msg_st (head, body) sigma =
 (** {2 Compute knows statements from a trace} *)
 
 (** Core statements without variant computations *)
-let rec knows_statements_h oc tr antecedents world clauses =
+let trace_equationalize (head, body) rules sigmas=
+  let newatom sigma = function
+    | (Predicate(x, [y; z; t])) ->
+       Predicate(x, [apply_subst y sigma; z; apply_subst t sigma])
+    | _ -> invalid_arg("newatom") in
+  let newhead sigma = match head with
+    | Predicate("knows", [w; r; t]) ->
+       Predicate("knows", [apply_subst w sigma; r; apply_subst t sigma])
+    | Predicate("reach", [w]) -> Predicate("reach", [apply_subst w sigma])
+    | _ -> invalid_arg("wrong head") in
+  let newclause sigma =
+    (newhead sigma, trmap (fun x -> newatom sigma x) body) in
+  trmap newclause sigmas
+;;
+
+
+let rec trace_statements_h oc tr rules substitutions body world clauses =
   match tr with
     | NullTrace -> List.rev clauses
     | Trace(Output(ch, t), remaining_trace) ->
@@ -88,26 +104,41 @@ let rec knows_statements_h oc tr antecedents world clauses =
 	       [worldreplempty next_world (Var(fresh_variable ()));
 		Fun(current_parameter oc, []);
 		t]) in
-	let new_clause = (next_head, antecedents) in
-	knows_statements_h (oc + 1) remaining_trace antecedents
-	  next_world (new_clause :: clauses)
+	let new_clause = (next_head, body) in
+	let new_reach = (Predicate("reach", [next_world]), body) in
+	trace_statements_h (oc + 1) remaining_trace rules substitutions body
+	 next_world (List.concat [
+		(trace_equationalize new_clause rules substitutions);
+		(trace_equationalize new_reach rules substitutions);
+		clauses])
     | Trace(Input(ch, v), remaining_trace) ->
 	let next_world = worldadd world (Fun("!in!", [Fun(ch, []); Var(v)])) in
-	let ancedent = Predicate("knows", [world;
+	let premisse = Predicate("knows", [world;
 				     Var(fresh_variable ());
 				     Var(v)]) in
-	let next_antecedents = (List.append antecedents [ancedent]) in
-	knows_statements_h oc remaining_trace next_antecedents
-	  next_world clauses
+	let next_body = (List.append body [premisse]) in
+	let new_reach = (Predicate(
+			    "reach",
+			    [next_world]),
+			  next_body)  in
+	trace_statements_h oc remaining_trace rules substitutions next_body
+	  next_world (List.concat [ trace_equationalize new_reach rules substitutions; clauses])
     | Trace(Test(s, t), remaining_trace) ->
     	let next_world = worldadd world (Fun("!test!", [])) in
-    	let antecedent = Predicate("!equals!", [s; t]) in
-    	let next_antecedents = List.append antecedents [antecedent] in
-	knows_statements_h oc remaining_trace next_antecedents
-	  next_world clauses
+    	let next_substitutions = List.concat (List.map 
+		(fun sub ->
+			List.map (fun sb -> compose sub sb) 
+			(R.unifiers (apply_subst s sub) (apply_subst t sub) rules)) substitutions) in
+	let new_reach = (Predicate(
+			    "reach",
+			    [next_world]),
+			  body)  in
+	trace_statements_h oc remaining_trace rules next_substitutions body
+	  next_world ((trace_equationalize new_reach rules next_substitutions) @ clauses)
 ;;
 
-let knows_variantize (head, body) rules =
+
+let trace_variantize (head, body) rules =
   match head with
     | Predicate("knows", [world; recipe; t]) ->
 	let v = R.variants t rules in
@@ -116,105 +147,6 @@ let knows_variantize (head, body) rules =
             (normalize_msg_st (apply_subst_msg_st (head, body) sigma) rules)
 	in
 	trmap new_clause v
-    | _ -> invalid_arg("variantize")
-;;
-
-let knows_equationalize (head, body) rules =
-  let eqns = List.filter (function (Predicate(x, _)) -> x = "!equals!") body in
-  let lefts = trmap (function
-                      | (Predicate(_, [x;_])) -> x
-                      | _ -> invalid_arg("lefts")) eqns in
-  let rights = trmap (function
-                       | (Predicate(_, [_;y])) -> y
-                       | _ -> invalid_arg("rights")) eqns in
-  let t1 = Fun("!tuple!", lefts) in
-  let t2 = Fun("!tuple!", rights) in
-  let sigmas = R.unifiers t1 t2 rules in
-  let newbody = List.filter (function (Predicate(x, _)) -> x <> "!equals!") body in
-  let newatom sigma = function
-    | (Predicate(x, [y; z; t])) ->
-       Predicate(x, [apply_subst y sigma; z; apply_subst t sigma])
-    | _ -> invalid_arg("newatom") in
-  let newhead sigma = match head with
-    | Predicate("knows", [w; r; t]) ->
-       Predicate("knows", [apply_subst w sigma; r; apply_subst t sigma])
-    | _ -> invalid_arg("wrong head") in
-  let newclause sigma =
-    (newhead sigma, trmap (fun x -> newatom sigma x) newbody) in
-  trmap newclause sigmas
-;;
-
-let knows_statements tr rules =
-  let kstatements = knows_statements_h 0 tr [] (Fun("empty", [])) [] in
-    List.concat
-      (List.map
-         (fun x -> knows_variantize x rules)
-         (List.concat (trmap (fun x -> knows_equationalize x rules) kstatements)))
-;;
-
-(** {3 Computing reach statements from a trace} *)
-
-let rec reach_statements_h tr antecedents world result =
-  match tr with
-    | NullTrace -> List.rev result
-    | Trace(Output(ch, t), remaining_trace) ->
-	let next_world = worldadd world (Fun("!out!", [Fun(ch, [])])) in
-	let new_clause = (Predicate(
-			    "reach",
-			    [next_world]),
-			  antecedents)  in
-	reach_statements_h remaining_trace antecedents next_world
-	  (new_clause :: result)
-    | Trace(Input(ch, v), remaining_trace) ->
-	let next_world = worldadd world (Fun("!in!", [Fun(ch, []); Var(v)])) in
-	let antecedent = Predicate("knows", [world;
-					     Var(fresh_variable ());
-					     Var(v)]) in
-	let next_antecedents = List.append antecedents [antecedent] in
-	let new_clause = (Predicate(
-			    "reach",
-			    [next_world]),
-			  next_antecedents)  in
-	reach_statements_h remaining_trace next_antecedents next_world
-	  (new_clause :: result)
-    | Trace(Test(s, t), remaining_trace) ->
-	let next_world = worldadd world (Fun("!test!", [])) in
-	let antecedent = Predicate("!equals!", [s; t]) in
-	let next_antecedents = List.append antecedents [antecedent] in
-	let new_clause = (Predicate(
-			    "reach",
-			    [next_world]),
-			  next_antecedents)  in
-	reach_statements_h remaining_trace next_antecedents next_world
-	  (new_clause :: result)
-;;
-
-let reach_equationalize (head, body) rules =
-  let eqns = List.filter (function (Predicate(x, _)) -> x = "!equals!") body in
-  let lefts = trmap (function
-			  | (Predicate(_, [x;_])) -> x
-			  | _ -> invalid_arg("lefts")) eqns in
-  let rights = trmap (function
-			   | (Predicate(_, [_;y])) -> y
-			   | _ -> invalid_arg("rights")) eqns in
-  let t1 = Fun("!tuple!", lefts) in
-  let t2 = Fun("!tuple!", rights) in
-  let sigmas = R.unifiers t1 t2 rules in
-  let newbody = List.filter (function (Predicate(x, _)) -> x <> "!equals!") body in
-  let newatom sigma = function
-    | (Predicate(x, [y; z; t])) ->
-	Predicate(x, [apply_subst y sigma; z; apply_subst t sigma])
-    | _ -> invalid_arg("newatom") in
-  let newhead sigma = match head with
-    | Predicate("reach", [w]) -> Predicate("reach", [apply_subst w sigma])
-    | _ -> invalid_arg("wrong head") in
-  let newclause sigma =
-    (newhead sigma, trmap (fun x -> newatom sigma x) newbody) in
-  trmap newclause sigmas
-;;
-
-let reach_variantize (head, body) rules =
-  match head with
     | Predicate("reach", [w]) ->
 	let v = R.variants w rules in
 	let newhead sigma = Predicate("reach",
@@ -227,17 +159,20 @@ let reach_variantize (head, body) rules =
 				     R.normalize (apply_subst z sigma) rules])
 	     | _ -> invalid_arg("reach_variantize")) body in
 	trmap (fun (_, sigma) -> Horn.new_clause (newhead sigma, newbody sigma)) v
-    | _ -> invalid_arg("reach_variantize")
+    | _ -> invalid_arg("variantize")
 ;;
 
-let reach_statements tr rules =
-  let statements = reach_statements_h tr [] (Fun("empty", [])) [] in
+
+
+let trace_statements tr rules =
+  let kstatements = trace_statements_h 0 tr rules [[]] [] (Fun("empty", [])) [] in
     List.concat
       (List.map
-         (fun x -> reach_variantize x rules)
-         (List.concat
-            (List.map (fun x -> reach_equationalize x rules) statements)))
+         (fun x -> trace_variantize x rules)
+         (kstatements))
 ;;
+
+
 
 (** Compute the part of seed statements that comes from the theory. *)
 let context_statements symbol arity rules =
@@ -299,9 +234,6 @@ let seed_statements trace rew =
          (List.sort (fun (_,a) (_,a') -> compare a a') Theory.fsymbols))
   in
   let trace_clauses =
-    knows_statements trace rew
+    trace_statements trace rew
   in
-  let reach_clauses =
-    reach_statements trace rew
-  in
-    List.concat [context_clauses; trace_clauses; reach_clauses]
+    List.concat [context_clauses; trace_clauses]
