@@ -31,6 +31,9 @@ let ppool, plwt = Nproc.create jobs
 
 let trace_counter = ref 0
 let count_traces = ref 0
+let test_counter = ref 0
+let count_tests = ref 0
+
 
 let reset_count new_count =
   trace_counter := 0 ;
@@ -42,6 +45,11 @@ let do_count () =
   verboseOutput
     "Finished %d-th saturation out of %d\n%!"
     !trace_counter !count_traces
+
+let do_count_tests test =
+	test_counter := !test_counter +1;
+	verboseOutput "Test %d/%d : %s \n%!" 
+	!test_counter !count_tests (show_term test)
 
 let tests_of_trace_job t rew =
   verboseOutput "Constructing seed statements\n%!";
@@ -64,6 +72,7 @@ let check_test_multi_job test trace_list =
   List.exists (fun x -> check_test x test Theory.rewrite_rules) trace_list
 
 let check_test_multi test trace_list =
+  do_count_tests test;
   Nproc.submit ppool (check_test_multi_job test) trace_list >>= fun x ->
   match x with
   | Some y -> return y
@@ -123,6 +132,22 @@ let check_free_variables t =
     Printf.eprintf "Variable %s is bound multiple times.\n%!" x;
     exit 2
 
+let rec remove_duplicate lst =
+	match lst with
+	| [] -> []
+	| t :: q -> let qs = remove_duplicate q in 
+		if List.exists (fun x -> (x = t)) qs then qs else t :: qs
+
+
+let slim lst =
+	debugOutput "\nThere were %d tests in total\n" (List.length lst);
+	let qs = remove_duplicate lst in 
+	let qs = List.filter (fun t -> not (List.exists (fun x -> (is_smaller_reach_test t x)) qs)) qs in
+	count_tests :=  (List.length qs);
+	test_counter := 0;
+	verboseOutput "There are %d tests to check\n" (List.length qs);
+	qs
+
 let query ?(expected=true) s t =
   Printf.printf
     "Checking coarse trace %sequivalence of %s and %s\n%!"
@@ -137,11 +162,11 @@ let query ?(expected=true) s t =
   let stests =
     Lwt_list.map_p
       (fun x -> tests_of_trace true x Theory.rewrite_rules)
-      straces >>= wrap1 List.concat
+      straces >>= wrap1 List.concat >>= wrap1 slim
   and ttests =
     Lwt_list.map_p
       (fun x -> tests_of_trace true x Theory.rewrite_rules)
-      ttraces >>= wrap1 List.concat
+      ttraces >>= wrap1 List.concat >>= wrap1 slim
   in
   let fail_stests =
     stests >>=
@@ -179,7 +204,7 @@ let inclusion_ct ?(expected=true) s t =
   let stests =
     Lwt_list.map_p
       (fun x -> tests_of_trace true x Theory.rewrite_rules)
-      straces >>= wrap1 List.concat
+      straces >>= wrap1 List.concat >>= wrap1 slim
   in
     let fail_stests =
     stests >>=

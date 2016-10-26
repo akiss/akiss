@@ -109,15 +109,15 @@ and may_unify_plus sa ta sl tl sigma =
 			unify_list (update sl) (update tl) ((x, t) :: (subst_one_in_subst x t sigma))
 		end
 		else 
-			if sa = ta then unify_list sl tl sigma else (* au cas ou on a de la chance *)
+			if sa = ta then unify_list sl tl sigma else (* in the lucky case where all terms coincide *)
 			if List.exists (function x -> not (List.mem x ab_t2)) ab_t1 
 			then raise Not_unifiable 
 			else 
-			if xs = [] &&  ys <> [] 
+			if (xs <> [] ||  ys <> [])  
 			then begin maudeCallUni (Fun("plus", sa)) (Fun("plus", ta));raise No_easy_unifier end
 			else if List.exists (function x -> not (List.mem x ab_t1)) ab_t2 
 			then raise Not_unifiable 
-			else raise begin maudeCallUni (Fun("plus", sa)) (Fun("plus", ta)); No_easy_unifier end
+			else begin maudeCallUni (Fun("plus", sa)) (Fun("plus", ta)); raise No_easy_unifier end 
 	end
 
 let rec mgu s t = unify_once s t [] [] [] 
@@ -227,7 +227,6 @@ let rec remove_duplicate lst =
 	match lst with
 	| Fun("zero",[])::q -> remove_duplicate q 
 	| a::b::q -> 
-	
 	if equals_ac a b then remove_duplicate q else a :: (remove_duplicate (b ::q))
 	| [x] -> [x]
 	| [] -> []
@@ -241,7 +240,8 @@ let rec top_normalize t rules =
 and normalize t rules =
   match t with
     | Fun("plus",ta) -> recompose_term
-	(remove_duplicate(List.sort compare_term (List.map (fun x -> normalize x rules) (List.concat (List.map sum_to_list ta))))) 
+	(remove_duplicate (List.sort compare_term 
+	(List.concat(List.map (fun x -> sum_to_list (normalize x rules)) (List.concat (List.map sum_to_list ta)))))) 
     | Fun(f, ta) ->
 	top_normalize (Fun(f, List.map (fun x -> normalize x rules) ta)) rules
     | Var(x) -> t

@@ -284,8 +284,16 @@ module AC : REWRITING = struct
 	try Rewriting.normalize t rules with
 	| Rewriting.No_easy_match -> Maude.normalize t rules 
 
-  let equals s t rules = if rules <> [] 
-    then Maude.equals s t rules
+  let equals s t rules = 
+if rules <> [] 
+    then 
+let r = Maude.equals s t rules in
+try 
+	let s' =  Rewriting.normalize s rules in
+	let t' =  Rewriting.normalize t rules in
+	let r' =  Rewriting.equals_ac s' t' in
+      if r <> r' then Printf.printf "Failure !!!!! : %s !!!! %s \n %s ==== %s \n\n" (show_term s) (show_term t)(show_term s') (show_term t'); r with
+	| Rewriting.No_easy_match -> r
     else Rewriting.equals_ac s t 
  
   let unifiers s t r =
@@ -304,9 +312,10 @@ module AC : REWRITING = struct
       assert (ac ||
                 let u2 = Rewriting.unifiers s t r in
                   List.length u1 = List.length u2) ;
-        u1
-  let matchers s t rules =
-    assert (rules = []) ;
+        u1 
+
+  let matchers s t rules = 
+  assert (rules = []) ;
     try [Rewriting.mgmac s t] with
     | Rewriting.Not_matchable -> []
     (* | Rewriting.No_easy_match -> Fullmaude.matchers s t rules *)
@@ -318,6 +327,8 @@ module AC : REWRITING = struct
         debugOutput "Matchers: %s\n" (show_subst_list  m ) ;
 	m
       end 
+
+
   (* let variants = Tamarin.variants Fullmaude.normalize *)
   let variants t rules = 
 	if not (contains_plus t) then Rewriting.variants t rules 

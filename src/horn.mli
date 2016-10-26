@@ -30,6 +30,7 @@ type atom = Predicate of predicateName * term list
 
 type statement (** a Horn clause *)
 
+
 val is_deduction_st : statement -> bool
 val get_body : statement -> atom list
 
@@ -68,3 +69,6 @@ val saturate : Base.t -> rules -> unit
 val revworld : term -> term
 val checks : Base.t -> term list
 val show_tests : term list -> string
+
+(** Opti stuff *)
+val is_smaller_reach_test : term -> term -> bool

@@ -1391,24 +1391,64 @@ let recipize tl kb =
     result
   )
 
+
+(** Opti **)
+let rec list_find x lst =
+	match lst with
+	| h::q -> if x = h then List.length q else list_find x q
+	| [] -> -1
+
+let rec is_smaller_world small_world big_world =
+  match (small_world, big_world) with
+  | (Fun("empty", []),Fun("empty", []) ) -> false
+  | (Fun("empty", []), _) -> true
+  | (Fun("world", [h; t]), Fun("world", [hp; tp])) ->
+      if (R.equals h hp []) then
+      is_smaller_world t tp else false
+  | (Fun("world", [_; _]), Fun("empty", [])) -> false
+  | (Var(x), Var(y)) -> x = y
+  | _ -> assert false
+
+let is_smaller_reach_test t1 t2 =
+	match (t1,t2) with
+	| (Fun("check_run",[w1]),Fun("check_run",[w2]))->  is_smaller_world w1 w2 
+	| _ -> false
+
+let rec alpha_rename_namified_term term subst =
+	match term with
+	| Fun(n,[]) when startswith n "!n!" ->
+		let i = list_find n subst in 
+		if i = -1 
+			then (Fun("!n!"^string_of_int (List.length subst),[]), n::subst) 
+			else (Fun("!n!"^string_of_int (i),[]),subst)
+	| Fun(f,x) -> let (y,s) = List.fold_left (fun  (l,sub) t -> 
+		let (rterm,subst) = alpha_rename_namified_term t sub in  (rterm::l,subst)) ([],subst) x in
+		(Fun(f,List.rev y),s)
+	| _ -> assert(false)
+
+let alpha_rename_namified_term term =
+	let (t,_)=alpha_rename_namified_term term [] in t
+
 (** Extract all successful reachability tests from a knowledge base. *)
 let checks_reach kb =
-  Base.fold_solved
-    (fun x checks ->
+	let solved = Base.only_solved kb in
+	List.fold_left
+    (fun checks x ->
        match (get_head x) with
          | Predicate("reach", [w]) ->
-             debugOutput "TESTER: %s\n" (show_statement x) ;
-             Fun ("check_run", [revworld (recipize (namify w) kb)]) :: checks
+		let new_check = alpha_rename_namified_term(Fun ("check_run", [revworld (recipize (namify w) kb)])) in 
+		begin             
+			debugOutput "TESTER: %s \n" (show_term new_check); 
+			new_check  :: checks end 
          | _ -> checks)
-    kb []
+    [] solved
 
 (** Extract all successful identity tests from a knowledge base. *)
 let checks_ridentical kb =
   Base.fold_solved
-    (fun x checks ->
+    (fun x checks -> 
        match (get_head x) with
          | Predicate("ridentical", [w; r; rp]) ->
-             debugOutput "TESTER: %s\n" (show_statement x) ;
              let sigma = namify_subst w in
              let new_w = revworld (recipize (apply_subst w sigma) kb) in
              let omega =
@@ -1419,17 +1459,16 @@ let checks_ridentical kb =
                     | _ -> invalid_arg("checks_ridentical"))
                  (get_body x)
              in
-             let resulting_test = Fun("check_identity", [new_w;
+             let resulting_test = alpha_rename_namified_term(Fun("check_identity", [new_w;
                                                          apply_subst r omega;
-                                                         apply_subst rp omega]) in
-               (* debugOutput "FROM: %s\nGOT:%s\n\n%!"
-                *   (show_statement x) (show_term resulting_test); *)
-               resulting_test :: checks
+                                                         apply_subst rp omega])) in
+             begin   debugOutput "TESTER: %s\n" (show_term resulting_test) ; 
+             resulting_test :: checks end 
          | _ -> checks)
     kb []
     
 (** Extract all successful tests from a (saturated) knowledge base. *)
-let checks kb  =
+let checks  kb =
   List.append (checks_reach kb) (checks_ridentical kb)
 
 let show_tests tests =
@@ -1443,3 +1482,5 @@ let show_rew_rules rules =
 	| (l, r) -> (show_term l)^" -> "^(show_term r);
     )
     rules)
+
+	

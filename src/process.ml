@@ -458,6 +458,32 @@ let rec apply_subst_tr pr sigma = match pr with
     Trace(Output(ch, apply_subst x sigma), apply_subst_tr rest sigma)
 ;;
 
+let rec execute_h_dumb process instructions =
+  (
+    (* debugOutput *)
+    (*   "Executing: %s\nFrame: %s\nInstructions: %s\n\n%!" *)
+    (*   (show_trace process) *)
+    (*   (show_term_list frame) *)
+    (*   (show_term_list instructions); *)
+    match (process, instructions) with
+      | (NullTrace, Fun("empty", [])) -> true
+      | (NullTrace, _) -> false
+      | (_, Fun("empty", [])) -> true
+      | (Trace(Input(ch, x), pr), Fun("world", [Fun("!in!", [chp; r]); ir])) ->
+	  if chp = Fun(ch, []) then
+	    execute_h_dumb pr ir
+	  else
+	   false
+      | (Trace(Test(x, y), pr), Fun("world", _)) -> execute_h_dumb pr instructions
+      | (Trace(Output(ch, x), pr), Fun("world", [Fun("!out!", [chp]); ir])) ->
+	  if chp = Fun(ch, []) then
+	    execute_h_dumb pr ir 
+	  else
+	   false 
+      | _ ->  false
+  )
+;;
+
 let rec execute_h process frame instructions rules =
   (
     (* debugOutput *)
@@ -488,6 +514,8 @@ let rec execute_h process frame instructions rules =
   )
 ;;
 
+
+
 let rec worldfilter_h f w a =
   match w with
     | Fun("empty", []) -> a
@@ -505,7 +533,15 @@ let worldfilter f w =
 ;;
 
 let execute process frame instructions rules =
-  execute_h
+  let slimmed_instructions = (worldfilter 
+       (fun x -> match x with
+	 | Fun("!test!", []) -> false
+	 | _ -> true)
+       instructions) in
+  if execute_h_dumb process slimmed_instructions then
+   begin
+ 	(* Printf.printf "Smart test \n" ;*)
+    execute_h
     process
     frame
     (worldfilter 
@@ -513,7 +549,8 @@ let execute process frame instructions rules =
 	 | Fun("!test!", []) -> false
 	 | _ -> true)
        instructions)
-    rules
+    rules end
+  else begin (*Printf.printf "Stupid test avoided !\n";*) raise Process_blocked end
 ;;
 
 let is_reach_test test = match test with
@@ -528,10 +565,10 @@ let check_reach process test_reach rules = match test_reach with
 	(*   "CHECK FOR: %s\nREACH: %s\n\n%!" *)
 	(*   (show_trace process) *)
 	(*   (show_term w); *)
+	(*Printf.printf "r ";*)
 	try
 	  (
-	    ignore (execute process [] w rules);
-	    true
+	    ignore (execute process [] w rules); true
 	  )
 	with 
 	  | Process_blocked -> false
@@ -560,6 +597,7 @@ let rec trace_from_frame frame =
 let check_ridentical process test_ridentical rules = match test_ridentical with
   | Fun("check_identity", [w; r; rp]) ->
     (
+	(*Printf.printf "ri %s" (show_term test_ridentical);*)
       try
 	let frame = execute process [] w rules in
 	let t1 = apply_frame r frame in
