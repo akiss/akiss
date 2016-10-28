@@ -1,0 +1,43 @@
+// RFID protocol MW'04
+// Privacy and security in library RFID: issues, practices, and architectures
+// David Molnar and David Wagner 	
+// Proceedings of the 11th ACM conference on Computer and communications security (CCS'04)
+
+//  Alice-Bob notation
+// Reader and tag share secret s
+// R --> T: <hello, r0>
+// T --> R: <r1, id+f(s,c0,r0,r1)>
+// R --> T: id+f(s,1,r0,r1)
+
+
+#set xor;
+
+symbols f/4, pair/2, fst/1, snd/1, idA/0, idB/0, c0/0, c1/0, hello/0;
+private sA, sB, r0, r1, r2, r3;
+channels C, CR, CT;
+var X,Y,Z;
+
+rewrite fst(pair(X,Y)) -> X;
+rewrite snd(pair(X,Y)) -> Y;
+
+Tinit =
+out(C,pair(hello,r0)).out(C,pair(r1,idA+f(sA,0,r0,r1))).out(C,idA+f(sA,c1,r0,r1)).0;
+// first honest session with tag idA
+
+Treader = out(CR,pair(hello,r2)).in(CR,Z).
+	(
+	   [idA = snd(Z)+f(sA,c0,r2,fst(Z))].out(CR,idA+f(sA,c1,r2,fst(r3)))
+	++ [idB = snd(Z)+f(sB,c0,r2,fst(Z))].out(CR,idB+f(sB,c1,r2,fst(r3)))
+	);
+
+TtagA = in(CT,X).out(CT,pair(r3,idA+f(sA,c0,snd(X),r3))).out(CT,c0);
+TtagB = in(CT,X).out(CT,pair(r3,idB+f(sB,c0,snd(X),r3))).out(CT,c0);
+// outputting c0 at the end if authentication succeeds, i.e., we
+// suppose success is visible
+
+
+Psame = Tinit :: (TtagA || Treader);
+Pdiff = Tinit :: (TtagB || Treader);
+
+
+includedft? Psame in Pdiff;
