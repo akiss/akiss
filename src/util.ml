@@ -46,6 +46,16 @@ let normalOutput a =
 
 let trmap f l = List.rev (List.rev_map f l)
 
+(** When using lists as sets List.concat is uselessly costly (not
+  * tail-recursive) and the following union function is preferable.
+  * It does not preserve the order. *)
+
+let rec union acc = function
+  | [] -> acc
+  | traces :: l -> union (List.rev_append traces acc) l
+
+let union l = union [] l
+
 (** Return a list without duplicates, for structural equality. *)
 let unique =
   let f res e = 

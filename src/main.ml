@@ -196,8 +196,8 @@ let inclusion_ct ?(expected=true) s t =
     "Checking coarse trace %sinclusion of %s in %s\n%!"
     (if expected then "" else "non")
     (show_string_list s) (show_string_list t);
-  let straces = List.concat (List.map (fun x -> traces @@ List.assoc x !processes) s) in
-  let ttraces = List.concat (List.map (fun x -> traces @@ List.assoc x !processes) t) in
+  let straces = Util.union (List.map (fun x -> traces @@ List.assoc x !processes) s) in
+  let ttraces = Util.union (List.map (fun x -> traces @@ List.assoc x !processes) t) in
   let () = List.iter check_free_variables straces in
   let () = List.iter check_free_variables ttraces in
   let () = reset_count (List.length straces) in
