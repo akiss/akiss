@@ -160,11 +160,11 @@ let query ?(expected=true) s t =
   let () = reset_count ((List.length straces) + (List.length ttraces)) in
   verboseOutput "Checking %d traces...\n%!" !count_traces;
   let stests =
-    Lwt_list.map_p
+    Lwt_list.rev_map_p
       (fun x -> tests_of_trace true x Theory.rewrite_rules)
       straces >>= wrap1 List.concat >>= wrap1 slim
   and ttests =
-    Lwt_list.map_p
+    Lwt_list.rev_map_p
       (fun x -> tests_of_trace true x Theory.rewrite_rules)
       ttraces >>= wrap1 List.concat >>= wrap1 slim
   in
@@ -202,7 +202,7 @@ let inclusion_ct ?(expected=true) s t =
   let () = List.iter check_free_variables ttraces in
   let () = reset_count (List.length straces) in
   let stests =
-    Lwt_list.map_p
+    Lwt_list.rev_map_p
       (fun x -> tests_of_trace true x Theory.rewrite_rules)
       straces >>= wrap1 List.concat >>= wrap1 slim
   in
@@ -256,12 +256,12 @@ let square ~expected s t =
   let () = List.iter check_free_variables lt in
   let () = reset_count ((List.length ls) + (List.length lt)) in
   let stests =
-    Lwt_list.map_p
+    Lwt_list.rev_map_p
       (fun x ->
        tests_of_trace true x Theory.rewrite_rules >>= fun y -> return (y, x))
       ls
   and ttests =
-    Lwt_list.map_p
+    Lwt_list.rev_map_p
       (fun x ->
        tests_of_trace true x Theory.rewrite_rules >>= fun y -> return (y, x))
       lt
@@ -302,12 +302,12 @@ let inclusion_ft ~expected s t =
   let () = List.iter check_free_variables lt in
   let () = reset_count (List.length ls) in
   let stests =
-    Lwt_list.map_p
+    Lwt_list.rev_map_p
       (fun x ->
        tests_of_trace true x Theory.rewrite_rules >>= fun y -> return (y, x))
       ls
   and ttests =
-    Lwt_list.map_p
+    Lwt_list.rev_map_p
       (fun x ->
 	return [] >>= fun y -> return (y, x))
       lt
@@ -420,13 +420,13 @@ let evequiv ~expected s t =
   let () = List.iter check_free_variables lt in
   let () = reset_count ((List.length ls) + (List.length lt)) in
   let stests =
-    Lwt_list.map_p
+    Lwt_list.rev_map_p
       (fun x ->
        tests_of_trace true x Theory.rewrite_rules >>= fun y ->
        return (List.filter is_reach_test y, x))
       ls
   and ttests =
-    Lwt_list.map_p
+    Lwt_list.rev_map_p
       (fun x ->
        tests_of_trace true x Theory.rewrite_rules >>= fun y ->
        return (List.filter is_reach_test y, x))

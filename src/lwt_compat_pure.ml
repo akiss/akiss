@@ -27,6 +27,6 @@ module Lwt_unix = struct
 end
 
 module Lwt_list = struct
-  let map_p = List.map
+  let rev_map_p = List.rev_map
   let filter_p = List.filter
 end
