@@ -1,0 +1,32 @@
+// RFID protocol KCL07 (modified)
+// Running example, fixed to obtain unlinkability
+
+#set xor;
+
+symbols h/2, pair/2, fst/1, snd/1;
+private idA, idB, r1, r2, r3, r4, r5, r6, kA, kB;
+channels C, CT, CR;
+var W, X, Y, Z, X2, Z2;
+
+rewrite fst(pair(X,Y)) -> X;
+rewrite snd(pair(X,Y)) -> Y;
+
+//  Alice-Bob notation
+//   R --> T: r1
+//   T --> R: <idA+r2, h(r1,kA+r2)>
+
+Tinit = out(C,r1).out(C,pair(idA+r2,h(r1,kA+r2))).0;
+
+Treader = out(CR,r3).in(CR,Z).([snd(Z)=h(r3,kA+idA+fst(Z))].out(CR,0).0 ++ [snd(Z)=h(r3,kB+idB+fst(Z))].out(CR,0).0);
+Treader2 = out(CR,r5).in(CR,Z2).([snd(Z2)=h(r5,kA+idA+fst(Z2))].out(CR,0).0 ++ [snd(Z2)=h(r5,kB+idB+fst(Z2))].out(CR,0).0);
+
+TtagA = in(CT,X).out(CT,pair(idA+r4,h(X,kA+r4))).0;
+TtagA2 = in(CT,X2).out(CT,pair(idA+r6,h(X2,kA+r6))).0;
+TtagB = in(CT,X).out(CT,pair(idB+r4,h(X,kB+r4))).0;
+TtagB2 = in(CT,X2).out(CT,pair(idB+r6,h(X2,kB+r6))).0;
+
+Psame = Tinit :: ((TtagA || Treader) >> (TtagA2 || Treader2));
+Pdiff = Tinit :: ((TtagB || Treader) >> (TtagA2 || Treader2));
+
+
+includedft? Psame in Pdiff;

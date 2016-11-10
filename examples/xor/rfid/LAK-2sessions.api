@@ -29,8 +29,8 @@ Treader2 = out(CR,r22).in(CR,Z2).([snd(Z2)=h(r22+fst(Z2)+h(kA))].out(CR,h(snd(Z2
 TtagA2 = in(C,X2).out(C,pair(r32,h(X2+r22+h(kA)))).0;
 TtagB2 = in(C,X2).out(C,pair(r32,h(X2+r22+kB))).0;
 
-Psame = Tinit :: (TtagA || Treader || TtagA2 || Treader2);
-Pdiff = Tinit :: (TtagB || Treader || TtagB2 || Treader2);
+Psame = Tinit :: ((TtagA || Treader) >> (TtagA2 || Treader2));
+Pdiff = Tinit :: ((TtagB || Treader) >> (TtagB2 || Treader2));
 
 
-includedct? Psame in Pdiff;
+includedft? Psame in Pdiff;
