@@ -191,6 +191,7 @@ let query ?(expected=true) s t =
     if expected then exit 1
   end
 
+
 let inclusion_ct ?(expected=true) s t =
   Printf.printf
     "Checking coarse trace %sinclusion of %s in %s\n%!"
@@ -205,6 +206,7 @@ let inclusion_ct ?(expected=true) s t =
     Lwt_list.rev_map_p
       (fun x -> tests_of_trace true x Theory.rewrite_rules)
       straces >>= wrap1 List.concat >>= wrap1 slim
+
   in
     let fail_stests =
     stests >>=

@@ -42,7 +42,6 @@ type negatable_cmd =
   | NegIncFt of (string list) * (string list)
   | NegIncCt of (string list) * (string list)
 
-
 type cmd =
   | SetXOR | SetAC
   | SetPOR
