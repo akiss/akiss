@@ -591,6 +591,8 @@ let is_ridentical_test test = match test with
   | _ -> false
 ;;
 
+(* Forward equivalence use static equivalence on frame but this induces collision
+with alpha renaming *)
 let rec rename_free_names term =
 	match term with
 	| Fun(n,[]) when startswith n "!n!" -> Fun("!!"^n^"!!",[])

@@ -1,12 +1,11 @@
 HAS_NPROC := $(shell if ocamlfind query nproc >/dev/null 2>&1; then echo yes; fi)
 
 ML = ast.ml parser.ml lexer.ml util.ml term.ml \
-	 config.ml fullmaude.ml \
+	 config.ml  \
 	 lexmaude.ml parsemaude.ml maude.ml \
-	 lextam.ml parsetam.ml tamarin.ml \
 	 rewriting.ml theory.ml \
 	 base.ml horn.ml process.ml seed.ml lwt_compat.ml main.ml
-MLI = $(wildcard $(ML:.ml=.mli)) parser.mli parsemaude.mli parsetam.mli 
+MLI = $(wildcard $(ML:.ml=.mli)) parser.mli parsemaude.mli 
 OCAMLC = ocamlfind ocamlopt -g -annot -package str,unix $(if $(HAS_NPROC),-package nproc)
 OCAMLDEP = ocamldep -native
 CMA = cmxa
@@ -44,7 +43,6 @@ endif
 
 clean::
 	rm -f parser.ml lexer.ml parser.mli lexer.mli
-	rm -f lextam.ml lextam.mli parsetam.ml parsetam.mli
 	rm -f lexmaude.ml lexmaude.mli parsemaude.ml parsemaude.mli
 	rm -f lwt_compat.ml
 	rm -f *.o *.cmi *.cmx *.cmo *.annot
@@ -68,26 +66,26 @@ TESTS = \
 # Basic tests + RFID tests without Toy-v1 + NSLxor tests,
 # without duplicates
 VALIDATION = $(TESTS) \
-			 ../examples/xor/rfid/KCL.api \
-			 ../examples/xor/rfid/KCL-running.api \
-			 ../examples/xor/rfid/KCL-fixed.api \
-			 ../examples/xor/rfid/LAK.api \
-			 ../examples/xor/rfid/LD.api \
-			 ../examples/xor/rfid/OTYT.api \
-			 ../examples/xor/rfid/YPL.api \
-			 ../examples/xor/NSLxor/nslhelp.api \
-			 ../examples/xor/NSLxor/nsl.api \
-			 ../examples/xor/NSLxor/NSL-xor-1a.api \
-			 ../examples/xor/guessing/toy-protocol.api \
-			 ../examples/xor/guessing/toy-protocol-passive.api \
-			 ../examples/xor/guessing/secret-public-key-protocol.api \
-			 ../examples/xor/guessing/secret-public-key-protocol-passive.api \
-			 ../examples/xor/guessing/nonce-protocol.api \
-			 ../examples/xor/guessing/nonce-protocol-passive.api \
-			 ../examples/xor/guessing/gong-pwA-passive.api \
-			 ../examples/xor/guessing/gong-pwB-passive.api \
-			 ../examples/xor/guessing/direct-auth-protocol.api \
-			 ../examples/xor/guessing/direct-auth-protocol-passive.api 
+		 ../examples/xor/rfid/KCL.api \
+		 ../examples/xor/rfid/KCL-running.api \
+		 ../examples/xor/rfid/KCL-fixed.api \
+		 ../examples/xor/rfid/LAK.api \
+		 ../examples/xor/rfid/LD.api \
+		 ../examples/xor/rfid/OTYT.api \
+		 ../examples/xor/rfid/YPL.api \
+		 ../examples/xor/NSLxor/nslhelp.api \
+		 ../examples/xor/NSLxor/nsl.api \
+		 ../examples/xor/NSLxor/NSL-xor-1a.api \
+		 ../examples/xor/guessing/toy-protocol.api \
+		 ../examples/xor/guessing/toy-protocol-passive.api \
+		 ../examples/xor/guessing/secret-public-key-protocol.api \
+		 ../examples/xor/guessing/secret-public-key-protocol-passive.api \
+		 ../examples/xor/guessing/nonce-protocol.api \
+		 ../examples/xor/guessing/nonce-protocol-passive.api \
+		 ../examples/xor/guessing/gong-pwA-passive.api \
+		 ../examples/xor/guessing/gong-pwB-passive.api \
+		 ../examples/xor/guessing/direct-auth-protocol.api \
+		 ../examples/xor/guessing/direct-auth-protocol-passive.api 
 
 RUN = OCAMLRUNPARAM=b ./akiss -verbose
 
@@ -98,7 +96,3 @@ test:
 
 validate:
 	./runtests.sh val$(NAME)  $(VALIDATION)
-
-test_tamarin: $(wildcard *.ml)
-	ocamlopt unix.cmxa str.cmxa util.ml term.ml config.ml \
-	  maude.ml lextam.ml parsetam.ml tamarin.ml test_tamarin.ml -o test_tamarin

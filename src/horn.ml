@@ -81,8 +81,6 @@ let apply_shift_rule = Theory.xor
 (* Use of Conseq *)
 let use_conseq = (not Theory.xor) || true
 
-let use_hardcoded_f0plus = Theory.xor && true
-
 let print_flags () =
   (*assert (not Theory.ac || Theory.xor) ;*)
   if !debug_output then
@@ -94,10 +92,9 @@ let print_flags () =
       \  opti_sort: %b\n\
       \  drop non-normal skel: %b\n\
       \  renormalize_recipes: %b\n\
-      \  conseq: %b\n\
-      \  hard coded unification f0+: %b\n"
+      \  conseq: %b\n"
       Theory.ac Theory.xor
-      eqrefl_opt opti_sort drop_non_normal_skel renormalize_recipes use_conseq use_hardcoded_f0plus
+      eqrefl_opt opti_sort drop_non_normal_skel renormalize_recipes use_conseq 
 
 (** {2 Predicates and clauses, conversions and printing} *)
 
@@ -247,9 +244,8 @@ let show_statement st =
 let csu_atom a1 a2 =
   R.csu (term_from_atom a1) (term_from_atom a2)
 
-	
-
-let csu_atom_debug dbg a1 a2 =
+(* Perform internally the computation of unifiers for resolution with f_0^+ *)
+let csu_atom opti a1 a2 =
 	let rec explode_term t =
 		match t with
 		| Fun("plus",[l;r]) -> let (v1,t1) = explode_term l in let (v2,t2) = explode_term r in (v1@v2,t1@t2)
@@ -278,7 +274,7 @@ let csu_atom_debug dbg a1 a2 =
 			:: [(w,world);(rx, Fun("plus",[Var(x1);Var(x2)])); (x11 , sum_from (Var(xa)::t11)); (x12 , sum_from (Var(xb)::t12));(x,Fun("plus",[Var(xa);Var(xb)]))]
 			:: (addvar w world x1 x2 rx x11 x12 x q)
 		| [] -> [] in
-	if dbg
+	if opti
 	then begin (*debugOutput "Unification : %s = %s \n" (show_term (term_from_atom a1)) (show_term (term_from_atom a2));*)
 			match (a1,a2) with 
 			| (Predicate("knows",[world;Var(rx);t]),Predicate("knows",[Var(w);Fun("plus",[Var(x1);Var(x2)]);Fun("plus",[Var(x11);Var(x12)])])) -> 
@@ -1046,6 +1042,7 @@ let generate_dynamic_marking sigmas ~t ~rx ~x ~ry ~y =
 
 (** Propagate marking on a collection of unifiers. *)
 let propagate_marking =
+  if Theory.xor then begin
   let propagate sigma =
     let theta =
       List.map
@@ -1060,6 +1057,9 @@ let propagate_marking =
       List.map (fun (x,t) -> x, apply_subst t theta) sigma
   in
   fun l -> List.map propagate l
+  end
+  else
+     fun x -> x
 
 (** [resolution d_kb (master,slave)] attempts to perform a resolution step
   * between clauses [master] and [slave] by matching the head of [slave]
@@ -1074,10 +1074,10 @@ let resolution master slave =
     if not (is_deduction_st slave) then [] else
 
     (* Forbid resolution against f0+ clause if selected atom is marked. *)
-    if is_marked (unbox_var (get_recipe atom)) &&
+    if Theory.xor && is_marked (unbox_var (get_recipe atom)) &&
        is_plus_clause slave
     then [] else
-    let sigmas = csu_atom_debug (is_plus_clause slave && use_hardcoded_f0plus) atom slave.head in
+    let sigmas = csu_atom (Theory.xor && is_plus_clause slave) atom slave.head in
     let sigmas = propagate_marking sigmas in
     let length = List.length sigmas in
     if !debug_output && length > 0 then begin
@@ -1090,7 +1090,7 @@ let resolution master slave =
         sigmas
     end ;
     let sigmas =
-      if sigmas = [] then sigmas else
+      if sigmas = [] || not Theory.xor then sigmas else
         match deconstruct_plus_clause (slave.head,slave.body) with
           | None -> sigmas
           | Some (rx,ry,x,y) ->
@@ -1392,11 +1392,8 @@ let recipize tl kb =
   )
 
 
-(** Opti **)
-let rec list_find x lst =
-	match lst with
-	| h::q -> if x = h then List.length q else list_find x q
-	| [] -> -1
+(** Optimizations **)
+(* Avoid tests on traces with different input output scenarios and alpha rename  tests to avoid identical ones *)
 
 let rec is_smaller_world small_world big_world =
   match (small_world, big_world) with
@@ -1413,6 +1410,11 @@ let is_smaller_reach_test t1 t2 =
 	match (t1,t2) with
 	| (Fun("check_run",[w1]),Fun("check_run",[w2]))->  is_smaller_world w1 w2 
 	| _ -> false
+
+let rec list_find x lst =
+	match lst with
+	| h::q -> if x = h then List.length q else list_find x q
+	| [] -> -1
 
 let rec alpha_rename_namified_term term subst =
 	match term with

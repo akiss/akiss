@@ -21,10 +21,8 @@ following papers:
     March 2012.
 
   * Rohit Chadha, Vincent Cheval, Ștefan Ciobâcă, and Steve Kremer.
-	[Automated verification of equivalence properties of cryptographic
-	protocol.](https://hal.inria.fr/hal-01306561/document)
-	ACM Transactions on Computational Logic, 2016. To appear.
-
+    [Automated Verification of Equivalence Properties of Cryptographic Protocols (long version)](https://hal.inria.fr/inria-00632564/file/equivalence.pdf).
+    INRIA HAL Technical Report.
 
 The notion of everlasting indistinguishability is introduced in
 
@@ -40,13 +38,12 @@ Build
 
 You will need OCaml; version 4.01 is known to work.
 
-An experimental version of Akiss supporting the xor operator
-also requires both Maude and Full Maude:
+The support for the xor operator also requires Maude:
 
  * [maude](http://maude.cs.illinois.edu/w/index.php?title=The_Maude_System) (version 2.7)
 
 You shouldn't need it if you don't use the feature. See XOR.md for more
-information on that branch.
+information on that feature.
 
 For parallelising the saturation process, Akiss needs the following library:
 
@@ -84,10 +81,6 @@ Usage:
  * `-j <n>`: use `<n>` parallel jobs (if supported)
  * `--ac-compatible`: use the AC-compatible toolbox even on non-AC
    theories (experimental, needs maude and tamarin)
- * `--tamarin-variants`: use tamarin to compute variants in seed
-   statements
- * `--check-generalizations`: check that generalizations of kept
-   statements are never dropped
  * `--help`, `-help`: display this list of options
 
 For example:
@@ -100,11 +93,17 @@ A quick overview of specification files
 
 Specification files consist of:
 
+ * declaration of some flags;
  * a preamble declaring used symbols and their arity, private names
    (public names are symbols of arity 0), channels and variables;
  * the definition of an equational theory;
  * process definitions;
  * queries.
+
+### Flags
+
+ * `set xor;` : declare the infix `+` operator and make use of the xor machinery 
+ * `set por;` : use the partial order reduction technics
 
 ### Preamble
 
@@ -156,9 +155,11 @@ declarations. They respect the following grammar:
                 | let variable = term in process
                 | process :: process
                 | process || process
+                | process ++ process
                 | ( process )
+                | process >> process
 
-The operator precedence is: `"in"` < `::` < `||` < `.`.
+The operator precedence is: `"in"` <  `>>` < `::` < `||` < `++` < `.`.
 
 ### Queries
 
@@ -166,8 +167,12 @@ Akiss can answer to a variety of queries, the main ones being:
 
  * `[not] equivalentct? P and Q;`: checks coarse-grain
    [in]equivalence of `P` and `Q`.
+ * `[not] includect? P and Q;`: checks coarse-grain
+   [in]inclusion of `P` and `Q`.
  * `[not] equavalentft? P and Q;`: checks fine-grain
    [in]equivalence of `P` and `Q`.
+ * `[not] includeft? P and Q;`: checks fine-grain
+   [in]inclusion of `P` and `Q`.
  * `[not] fwdequivalentft? P and Q;`: checks forward [in]equivalence
    of `P` and `Q`.
  * `print_traces P;`: The core of Akiss works on traces. After a
@@ -191,7 +196,6 @@ Here is a quick guide to the organization of the source code:
  * `config.ml`: detects external tools
  * `term.ml`: term structure and basic operations on them
  * `lexmaude.mll`, `parsemaude.mly`, `maude.ml`: interface with maude
- * `lextam.mll`, `parsetam.mly`, `tamarin.ml`: interface with tamarin
  * `rewriting.ml`: unification and variants for non-AC theories
  * `theory.ml`: process first half of API file, setting up the theory and
    appropriate rewriting toolbox

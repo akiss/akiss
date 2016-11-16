@@ -35,7 +35,6 @@ val evchannels : string list
 val privchannels : string list
 val rewrite_rules : rules
 val evrewrite_rules : rules
-val check_generalizations : bool
 
 module type REWRITING = sig
   val unifiers : term -> term -> rules -> subst list

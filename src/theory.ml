@@ -41,8 +41,6 @@ let tamarin_variants = ref false
 (** Experimental POR optimization *)
 let por = ref false
 
-(** See in [Horn] for documentation. *)
-let check_generalizations = ref false
 
 let usage = Printf.sprintf
   "Usage: %s [options] < specification-file.api"
@@ -62,11 +60,7 @@ let command_line_options_list = [
   ("-j", Arg.Int (fun i -> jobs := i),
    "<n>  Use <n> parallel jobs (if supported)");
   ("--ac-compatible", Arg.Set ac_toolbox,
-   "Use the AC-compatible toolbox even on non-AC theories (experimental, needs maude and tamarin)");
-  ("--tamarin-variants", Arg.Set tamarin_variants,
-   "Use tamarin-prover to compute variants in seed statements");
-  ("--check-generalizations", Arg.Set check_generalizations,
-   "Check that generalizations of kept statements are never dropped.")
+   "Use the AC-compatible toolbox even on non-AC theories (experimental, needs maude and tamarin)")
 ]
 
 let cmdlist =
@@ -267,7 +261,6 @@ let evchannels = !evchannels
 let privchannels = !privchannels
 let rewrite_rules = !rewrite_rules
 let evrewrite_rules = !evrewrite_rules
-let check_generalizations = !check_generalizations
 
 (** Rewriting toolbox *)
 
@@ -285,15 +278,14 @@ module AC : REWRITING = struct
 	| Rewriting.No_easy_match -> Maude.normalize t rules 
 
   let equals s t rules = 
-if rules <> [] 
+    if rules <> [] 
     then 
-let r = Maude.equals s t rules in
-try 
-	let s' =  Rewriting.normalize s rules in
-	let t' =  Rewriting.normalize t rules in
-	let r' =  Rewriting.equals_ac s' t' in
-      if r <> r' then Printf.printf "Failure !!!!! : %s !!!! %s \n %s ==== %s \n\n" (show_term s) (show_term t)(show_term s') (show_term t'); r with
-	| Rewriting.No_easy_match -> r
+       try 
+	   let s' =  Rewriting.normalize s rules in
+	   let t' =  Rewriting.normalize t rules in
+	   Rewriting.equals_ac s' t' 
+       with
+	  | Rewriting.No_easy_match -> Maude.equals s t rules
     else Rewriting.equals_ac s t 
  
   let unifiers s t r =
@@ -302,12 +294,11 @@ try
 		| Rewriting.Not_unifiable -> [] 
 		| Rewriting.No_easy_unifier ->
 		  begin
-		    debugOutput "Maude is called: %s =?= %s \n" (show_term s)(show_term t);
+		    (*debugOutput "Maude is called: %s =?= %s \n" (show_term s)(show_term t);*)
 		    Maude.unifiers s t []
 		  end
 	end
 	else
-      (* let u1 = Tamarin.unifiers Fullmaude.normalize s t r in *)
       let u1 = Maude.unifiers s t r in
       assert (ac ||
                 let u2 = Rewriting.unifiers s t r in
@@ -318,18 +309,14 @@ try
   assert (rules = []) ;
     try [Rewriting.mgmac s t] with
     | Rewriting.Not_matchable -> []
-    (* | Rewriting.No_easy_match -> Fullmaude.matchers s t rules *)
     | Rewriting.No_easy_match ->
       begin
-	debugOutput "Maude is called: %s <=? %s \n" (show_term s)(show_term t);
+	  (*debugOutput "Maude is called: %s <=? %s \n" (show_term s)(show_term t);*)
 	let m= Maude.acmatchers s t in
-	(* let m= Fullmaude.matchers s t rules in *)
-        debugOutput "Matchers: %s\n" (show_subst_list  m ) ;
+        (*debugOutput "Matchers: %s\n" (show_subst_list  m ) ;*)
 	m
       end 
 
-
-  (* let variants = Tamarin.variants Fullmaude.normalize *)
   let variants t rules = 
 	if not (contains_plus t) then Rewriting.variants t rules 
 	else Maude.variants t rules
@@ -359,21 +346,6 @@ module NonAC : REWRITING = struct
 
 end
 
-module NonACTamarin : REWRITING = struct
-  let normalize = NonAC.normalize
-  let equals = NonAC.equals
-
-  let unifiers s t r =
-    if r = [] then
-      try [Rewriting.mgu s t] with
-      | Rewriting.Not_unifiable -> []
-    else
-      Tamarin.unifiers Rewriting.normalize s t r
-
-  let matchers = NonAC.matchers
-  let variants = Tamarin.variants Rewriting.normalize
-end
-
 module R = (val if ac || !ac_toolbox then begin
               if not ac && List.mem ("plus",2) fsymbols then begin
                 Printf.printf
@@ -383,9 +355,6 @@ module R = (val if ac || !ac_toolbox then begin
               end ;
               Printf.printf "Using AC-compatible toolbox...\n" ;
               (module AC : REWRITING)
-            end else if !tamarin_variants then begin
-              Printf.printf "Using tamarin-prover to compute variants in seed statements\n";
-              (module NonACTamarin : REWRITING)
             end else begin
               Printf.printf "Using non-AC toolbox...\n" ;
               (module NonAC : REWRITING)
