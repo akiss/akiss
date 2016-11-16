@@ -80,7 +80,7 @@ Usage:
  * `--output-dot <file>`: output statement graph to <file>
  * `-j <n>`: use `<n>` parallel jobs (if supported)
  * `--ac-compatible`: use the AC-compatible toolbox even on non-AC
-   theories (experimental, needs maude and tamarin)
+   theories (experimental, needs maude)
  * `--help`, `-help`: display this list of options
 
 For example:
@@ -103,8 +103,8 @@ Specification files consist of:
 ### Flags
 
  * `set xor;` : declare the infix `+` operator and make use of the xor machinery 
- * `set por;` : use the partial order reduction technics
-
+ * `set por;` : use partial order reduction technics to reduce the number of traces; this reduction is only correct on action-determinate processes
+ 
 ### Preamble
 
 The preamble is straightforward. Each item is a comma-separated list
