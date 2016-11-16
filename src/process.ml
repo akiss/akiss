@@ -591,12 +591,17 @@ let is_ridentical_test test = match test with
   | _ -> false
 ;;
 
+let rec rename_free_names term =
+	match term with
+	| Fun(n,[]) when startswith n "!n!" -> Fun("!!"^n^"!!",[])
+	| Fun(f,x) -> Fun(f, List.map rename_free_names x)
+	| Var(x)->Var(x)
 
 let rec trace_from_frame frame =
 (* create trace out(c,t1). ... .out(c,tn).0 from frame [t1, ..., tn] *)
   match frame with
   | [] ->  NullTrace
-  | h::t -> Trace(Output("c", h), trace_from_frame t)
+  | h::t -> Trace(Output("c",rename_free_names h), trace_from_frame t)
 ;;
 
 

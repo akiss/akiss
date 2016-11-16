@@ -1424,7 +1424,12 @@ let rec alpha_rename_namified_term term subst =
 	| Fun(f,x) -> let (y,s) = List.fold_left (fun  (l,sub) t -> 
 		let (rterm,subst) = alpha_rename_namified_term t sub in  (rterm::l,subst)) ([],subst) x in
 		(Fun(f,List.rev y),s)
-	| _ -> assert(false)
+	| Var(x) ->
+		let i = list_find x subst in 
+		if i = -1 
+			then (Var("X"^string_of_int (List.length subst)), x::subst) 
+			else (Var("X"^string_of_int (i)),subst)
+
 
 let alpha_rename_namified_term term =
 	let (t,_)=alpha_rename_namified_term term [] in t
@@ -1462,7 +1467,7 @@ let checks_ridentical kb =
              let resulting_test = alpha_rename_namified_term(Fun("check_identity", [new_w;
                                                          apply_subst r omega;
                                                          apply_subst rp omega])) in
-             begin   debugOutput "TESTER: %s\n" (show_term resulting_test) ; 
+             begin debugOutput "TESTER: %s\n" (show_term resulting_test) ; 
              resulting_test :: checks end 
          | _ -> checks)
     kb []
