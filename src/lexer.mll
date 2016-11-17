@@ -73,6 +73,7 @@ rule token = parse
     | "rewrite" { Rewrite }
     | "evrewrite" { EvRewrite }
     | "->" { Arrow }
+    | "!=" { Inequals }
     | "=" { Equals }
     | "out" { Out }
     | "in" { In }

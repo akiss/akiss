@@ -55,8 +55,8 @@ let normalize_msg_atom rules = function
   | _ -> invalid_arg("normalize_msg_atom")
 ;;
 
-let normalize_msg_st (head, body) rules =
-  (normalize_msg_atom rules head, trmap (fun x -> normalize_msg_atom rules x) body)
+let normalize_msg_st (head, body, ineq) rules =
+  (normalize_msg_atom rules head, trmap (fun x -> normalize_msg_atom rules x) body, ineq)
 ;;
 
 let apply_subst_msg_atom sigma = function
@@ -71,31 +71,41 @@ let apply_subst_msg_atom sigma = function
   | _ -> invalid_arg("apply_subst_msg_atom")
 ;;
 
-let apply_subst_msg_st (head, body) sigma =
+let apply_subst_msg_ineq sigma = function
+  | Predicate("ineq", [x;y]) ->
+      Predicate("ineq", [apply_subst x sigma;  apply_subst y sigma])
+ | _ -> invalid_arg("apply_subst_msg_ineq")
+
+
+let apply_subst_msg_st (head, body, ineq) sigma =
   (apply_subst_msg_atom sigma head,
-   trmap (fun x -> apply_subst_msg_atom sigma x) body)
+   trmap (fun x -> apply_subst_msg_atom sigma x) body,  trmap (fun x -> apply_subst_msg_ineq sigma x) ineq)
 ;;
 
 (** {2 Compute knows statements from a trace} *)
 
 (** Core statements without variant computations *)
-let trace_equationalize (head, body) rules sigmas=
+let trace_equationalize (head, body, ineq) rules sigmas=
   let newatom sigma = function
     | (Predicate(x, [y; z; t])) ->
        Predicate(x, [apply_subst y sigma; z; apply_subst t sigma])
     | _ -> invalid_arg("newatom") in
+  let newineq sigma = function
+    | (Predicate("ineq", [y; z])) ->
+       Predicate("ineq", [apply_subst y sigma; apply_subst z sigma])
+    | _ -> invalid_arg("newineq") in
   let newhead sigma = match head with
     | Predicate("knows", [w; r; t]) ->
        Predicate("knows", [apply_subst w sigma; r; apply_subst t sigma])
     | Predicate("reach", [w]) -> Predicate("reach", [apply_subst w sigma])
     | _ -> invalid_arg("wrong head") in
-  let newclause sigma =
-    (newhead sigma, trmap (fun x -> newatom sigma x) body) in
+  let newclause sigma = 
+    (newhead sigma, trmap (fun x -> newatom sigma x) body, trmap (fun x -> newineq sigma x) ineq) in
   trmap newclause sigmas
 ;;
 
 
-let rec trace_statements_h oc tr rules substitutions body world clauses =
+let rec trace_statements_h oc tr rules substitutions body ineq world clauses =
   match tr with
     | NullTrace -> List.rev clauses
     | Trace(Output(ch, t), remaining_trace) ->
@@ -104,9 +114,9 @@ let rec trace_statements_h oc tr rules substitutions body world clauses =
 	       [worldreplempty next_world (Var(fresh_variable ()));
 		Fun(current_parameter oc, []);
 		t]) in
-	let new_clause = (next_head, body) in
-	let new_reach = (Predicate("reach", [next_world]), body) in
-	trace_statements_h (oc + 1) remaining_trace rules substitutions body
+	let new_clause = (next_head, body, ineq) in
+	let new_reach = (Predicate("reach", [next_world]), body, ineq) in
+	trace_statements_h (oc + 1) remaining_trace rules substitutions body ineq
 	 next_world (List.concat [
 		(trace_equationalize new_clause rules substitutions);
 		(trace_equationalize new_reach rules substitutions);
@@ -120,8 +130,8 @@ let rec trace_statements_h oc tr rules substitutions body world clauses =
 	let new_reach = (Predicate(
 			    "reach",
 			    [next_world]),
-			  next_body)  in
-	trace_statements_h oc remaining_trace rules substitutions next_body
+			  next_body, ineq)  in
+	trace_statements_h oc remaining_trace rules substitutions next_body ineq
 	  next_world (List.concat [ trace_equationalize new_reach rules substitutions; clauses])
     | Trace(Test(s, t), remaining_trace) ->
     	let next_world = worldadd world (Fun("!test!", [])) in
@@ -132,19 +142,29 @@ let rec trace_statements_h oc tr rules substitutions body world clauses =
 	let new_reach = (Predicate(
 			    "reach",
 			    [next_world]),
-			  body)  in
-	trace_statements_h oc remaining_trace rules next_substitutions body
+			  body,ineq)  in
+	trace_statements_h oc remaining_trace rules next_substitutions body ineq
+	  next_world ((trace_equationalize new_reach rules next_substitutions) @ clauses)
+    | Trace(TestInequal(s, t), remaining_trace) -> (*TODO*)
+    	let next_world = worldadd world (Fun("!test!", [])) in
+    	let next_substitutions = substitutions in
+	let next_ineq = Predicate("ineq",[s;t]) :: ineq in
+	let new_reach = (Predicate(
+			    "reach",
+			    [next_world]),
+			  body, next_ineq)  in
+	trace_statements_h oc remaining_trace rules next_substitutions body next_ineq
 	  next_world ((trace_equationalize new_reach rules next_substitutions) @ clauses)
 ;;
 
 
-let trace_variantize (head, body) rules =
+let trace_variantize (head, body, ineq) rules =
   match head with
     | Predicate("knows", [world; recipe; t]) ->
 	let v = R.variants t rules in
 	let new_clause (_, sigma) =
           Horn.new_clause
-            (normalize_msg_st (apply_subst_msg_st (head, body) sigma) rules)
+            (normalize_msg_st (apply_subst_msg_st (head, body, ineq) sigma) rules)
 	in
 	trmap new_clause v
     | Predicate("reach", [w]) ->
@@ -158,14 +178,19 @@ let trace_variantize (head, body) rules =
 				     y;
 				     R.normalize (apply_subst z sigma) rules])
 	     | _ -> invalid_arg("reach_variantize")) body in
-	trmap (fun (_, sigma) -> Horn.new_clause (newhead sigma, newbody sigma)) v
+	let newineq sigma = trmap
+	  (function
+	     | Predicate("ineq", [x; y]) -> 
+		 Predicate("ineq", [x; y])
+	     | _ -> invalid_arg("ineq_variantize")) ineq in
+	trmap (fun (_, sigma) -> Horn.new_clause (newhead sigma, newbody sigma, newineq sigma)) v
     | _ -> invalid_arg("variantize")
 ;;
 
 
 
 let trace_statements tr rules =
-  let kstatements = trace_statements_h 0 tr rules [[]] [] (Fun("empty", [])) [] in
+  let kstatements = trace_statements_h 0 tr rules [[]] [] [] (Fun("empty", [])) [] in
     List.concat
       (List.map
          (fun x -> trace_variantize x rules)
@@ -201,8 +226,8 @@ let context_statements symbol arity rules =
     (* Syntactic sugar *)
     let (+) a b = Fun("plus",[a;b]) in
     let knows r x = Predicate("knows",[w;r;x]) in
-    let (<=) h t = Horn.new_clause (h,t) in
-    let (<==) h t = Horn.new_clause ~vip:true (h,t) in
+    let (<=) h t = Horn.new_clause (h,t,[]) in
+    let (<==) h t = Horn.new_clause ~vip:true (h,t,[]) in
       (* Kinit statements for xor *)
       [ knows (r1+r2) (x1+x2)
           <= [ knows r1 x1 ; knows r2 x2 ] ;
@@ -221,7 +246,7 @@ let context_statements symbol arity rules =
                       Fun(symbol, box_vars vYs);
                       t'
                      ]),
-           body sigma))
+           body sigma, []))
     v
 
 (** Compute everything *)

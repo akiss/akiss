@@ -30,6 +30,7 @@ type action =
   | Input of id * id
   | Output of id * term
   | Test of term * term
+  | TestInequal of term * term
 ;;
 
 type trace =
@@ -60,6 +61,7 @@ let show_action = function
   | Input(ch, x) -> Printf.sprintf "in(%s,%s)" ch x
   | Output(ch, t) -> Printf.sprintf "out(%s,%s)" ch (show_term t)
   | Test(s,t) -> Printf.sprintf "[%s=%s]" (show_term s) (show_term t)
+  | TestInequal(s,t) -> Printf.sprintf "[%s!=%s]" (show_term s) (show_term t)
 ;;
 
 let rec show_trace = function
@@ -92,6 +94,7 @@ let rec parse_action = function
     else
       Printf.ksprintf failwith "Undeclared channel: %s" ch
   | TempActionTest(s, t) -> Test(parse_term s, parse_term t)
+  | TempActionTestInequal(s, t) -> TestInequal(parse_term s, parse_term t)
 ;;
 
 let replace_var_in_term x t term =
@@ -122,6 +125,10 @@ let replace_var_in_act x t a =
      let term1 = replace_var_in_term x t term1 in
      let term2 = replace_var_in_term x t term2 in
      Test (term1, term2)
+  | TestInequal (term1, term2) ->
+     let term1 = replace_var_in_term x t term1 in
+     let term2 = replace_var_in_term x t term2 in
+     TestInequal (term1, term2)
 
 let rec replace_var_in_symb x t p =
   match p with
@@ -255,6 +262,7 @@ type action_classification =
 let classify_action = function
   | [] -> assert false
   | Test (_, _) :: _ -> PublicAction
+  | TestInequal (_, _) :: _ -> PublicAction
   | Input (c, x) :: _ ->
      if List.mem c Theory.privchannels
      then PrivateInput (c, x) else PublicAction
@@ -460,6 +468,8 @@ let rec apply_subst_tr pr sigma = match pr with
       Trace(Input(ch, x), apply_subst_tr rest sigma)
   | Trace(Test(x, y), rest) ->
     Trace(Test(apply_subst x sigma, apply_subst y sigma), apply_subst_tr rest sigma)
+  | Trace(TestInequal(x, y), rest) ->
+    Trace(TestInequal(apply_subst x sigma, apply_subst y sigma), apply_subst_tr rest sigma)
   | Trace(Output(ch, x), rest) ->
     Trace(Output(ch, apply_subst x sigma), apply_subst_tr rest sigma)
 ;;

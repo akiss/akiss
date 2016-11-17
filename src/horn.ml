@@ -119,6 +119,7 @@ type statement = {
   age : int ;
   head : atom ;
   body : atom list ;
+  ineq : atom list ;
   vip : bool
 }
 
@@ -185,6 +186,8 @@ let get_head st = st.head
 
 let get_body st = st.body
 
+let get_ineq st = st.ineq
+
 (** {3 Conversions to and from terms} *)
 
 let atom_from_term term = match term with
@@ -231,13 +234,19 @@ let rec show_atom_body = function
         | Not_found ->
             name ^ "(" ^ (show_term_list (w::term_list)) ^ ")"
 
+let rec show_atom_ineq = function
+  | Predicate("ineq", [s;t]) ->
+      (show_term s) ^ " != " ^ (show_term t)
+  | _ -> assert(false)
+
 let show_statement st =
   Format.sprintf
-    "#%d@@%d(len=%d): %s <== %s"
+    "#%d@@%d(len=%d): %s <== %s || %s"
     st.id st.age
     (List.length st.body)
     (show_atom st.head)
     (String.concat ", " (trmap show_atom_body st.body))
+    (String.concat ", " (trmap show_atom_ineq st.ineq))
 
 (** {3 Unification and substitutions} *)
 
@@ -424,7 +433,7 @@ let new_clause =
       | _ -> assert false
   in
   let c = ref 0 in
-    fun ?(label="") ?(vip=false) ?(parents=([]:statement list)) (head,body) ->
+    fun ?(label="") ?(vip=false) ?(parents=([]:statement list)) (head,body,ineq) ->
       let body = List.sort compare body in
       let age =
         List.fold_left
@@ -433,7 +442,7 @@ let new_clause =
           parents
       in
       incr c ;
-      let st = { id = !c ; age ; head ; body ; vip } in
+      let st = { id = !c ; age ; head ; body ; ineq; vip } in
       begin match dotfile with
       | Some dotfile ->
         Printf.fprintf dotfile
@@ -467,8 +476,8 @@ let new_clause =
 
 (** Create anonymous/temporary statement.
   * This is currently only used in conseq. *)
-let anon_statement head body =
-  { id = -1 ; age = -1 ; head = head ; body = body ; vip = false }
+let anon_statement head body ineq =
+  { id = -1 ; age = -1 ; head = head ; body = body ; ineq = ineq ; vip = false }
 
 (** Check that a term is a normal form. *)
 let is_normal tm rules =
@@ -741,7 +750,7 @@ let rec print_trace chan = function
   * See Definition 14 and Lemma 2 in the paper. *)
 let consequence st kb rules =
   assert (is_solved st) ;
-  let rec aux { head = head ; body = body } kb =
+  let rec aux { head = head ; body = body ; ineq = ineq } kb =
     match head with
       | Predicate("knows", [_; _; Fun(name, [])]) when (startswith name "!n!") ->
           `Public_name, Fun(name, [])
@@ -774,7 +783,7 @@ let consequence st kb rules =
                          (fun y ->
                             let trace,r =
                               aux
-                                (anon_statement (apply_subst_atom y sigma) body)
+                                (anon_statement (apply_subst_atom y sigma) body ineq)
                                 kb
                             in
                               trace, (unbox_var (get_recipe y), r))
@@ -1117,11 +1126,17 @@ let resolution master slave =
                     slave.body
                     (List.filter (fun x -> (x <> atom)) master.body))
              in
+		 let ineq = 
+               List.map (fun x -> apply_subst_atom x sigma)
+                 (List.append
+                    slave.ineq
+                    (List.filter (fun x -> (x <> atom)) master.ineq))
+             in
                new_clause
                  ~label:"res"
                  ~vip:master.vip
                  ~parents:[master;slave]
-                 (head,body)
+                 (head,body,ineq)
            in
              debugOutput "RESO: %s\n\n"
                (show_statement result);
@@ -1200,12 +1215,14 @@ let equation fa fb =
             in
             let newhead = Predicate("identical", [ul; r; rp]) in
             let newbody = List.append (get_body fb) (get_body fa) in
+            let newineq = List.append (get_ineq fb) (get_ineq fa) in
             let clauses =
               List.map
                 (fun sigma ->
                    let st =
                      apply_subst_atom newhead sigma,
-                     List.map (fun x -> apply_subst_atom x sigma) newbody
+                     List.map (fun x -> apply_subst_atom x sigma) newbody,
+                     List.map (fun x -> apply_subst_atom x sigma) newineq
                    in
                      new_clause ~label:"eq" ~parents:[fa;fb] st)
                 sigmas
@@ -1238,9 +1255,11 @@ let rec ridentical fa fb =
               (fun sigma ->
                  let newhead = Predicate("ridentical", [u; r; rp]) in
                  let newbody = List.append (get_body fa) (get_body fb) in
+                 let newineq = List.append (get_ineq fa) (get_ineq fb) in
                  let result =
                    apply_subst_atom newhead sigma,
-                   List.map (fun x -> apply_subst_atom x sigma) newbody
+                   List.map (fun x -> apply_subst_atom x sigma) newbody,
+                   List.map (fun x -> apply_subst_atom x sigma) newineq
                  in
                  let result = new_clause ~label:"ri" ~parents:[fa;fb] result in
                    debugOutput "\n\nRID FROM: %s\nRID AND : %s\nRID GOT: %s\n\n%!"

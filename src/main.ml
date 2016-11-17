@@ -56,8 +56,10 @@ let tests_of_trace_job t rew =
   let seed = Seed.seed_statements t rew in
     verboseOutput "Constructing initial kb\n%!";
     let kb = initial_kb seed rew in
+	extraOutput about_seed "Initial seed: %s \n"   (show_kb kb);
       verboseOutput "Saturating knowledge base\n%!";
       saturate kb rew ;
+	extraOutput about_saturated "Saturated base:  %s\n" (show_kb kb);
       checks kb
 
 let tests_of_trace show_progress t rew =
@@ -116,6 +118,10 @@ let rec variables_of_trace t =
        StringSet.remove x fvs, StringSet.add x bvs
      | Output (_, t) -> StringSet.union fvs (variables_of_term t), bvs
      | Test (t1, t2) ->
+        let xs1 = variables_of_term t1 in
+        let xs2 = variables_of_term t2 in
+        StringSet.(union fvs (union xs1 xs2)), bvs
+     | TestInequal (t1, t2) ->
         let xs1 = variables_of_term t1 in
         let xs2 = variables_of_term t2 in
         StringSet.(union fvs (union xs1 xs2)), bvs

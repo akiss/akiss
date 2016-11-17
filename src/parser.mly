@@ -30,7 +30,7 @@ open Ast
 %token Symbols Private Var Rewrite EvRewrite Channels EvChannels Let
 %token PrivChannels
 %token LeftP RightP LeftB RightB
-%token Arrow Equals Dot Slash Comma Semicolon
+%token Arrow Equals Inequals Dot Slash Comma Semicolon
 %token Out In And Zero Plus
 %token Not Equivalent Square EvSquare Variants Unifiers Normalize Incft Incct
 %token Print PrintTraces
@@ -109,6 +109,7 @@ main:
  | In LeftP Identifier Comma Identifier RightP { TempActionIn($3, $5) }
  | Out LeftP Identifier Comma term RightP { TempActionOut($3, $5) }
  | LeftB term Equals term RightB { TempActionTest ($2, $4) }
+ | LeftB term Inequals term RightB { TempActionTestInequal ($2, $4) }
 
      term:
  | Identifier { TempTermCons ($1, []) }

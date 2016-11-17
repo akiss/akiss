@@ -21,6 +21,15 @@ let debug_output = ref false
 
 let verbose_output = ref false
 
+let extra_output = ref 0
+
+let about_verbose = 1
+let about_debug = 2
+let about_seed = 4
+let about_saturated = 8
+let about_tests = 16
+let about_else = 32
+
 let verboseOutput a =
   if !verbose_output then
     Format.printf a
@@ -32,6 +41,13 @@ let debugOutput a =
     Format.printf a
   else
     Format.ifprintf Format.std_formatter a
+
+let extraOutput i a =
+  if !extra_output land i > 0 then 
+    Format.printf a
+  else
+    Format.ifprintf Format.std_formatter a
+
 
 let normalOutput a =
   if !verbose_output || !debug_output then

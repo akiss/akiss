@@ -55,12 +55,14 @@ let command_line_options_list = [
    "Enable debug output");
   ("--debug", Arg.Unit (fun () -> debug_output := true),
    "Enable debug output");
+  ("--extra", Arg.Int (fun i -> extra_output := i),
+   "<n>  Display information <n>");
   ("--output-dot", Arg.String (fun s -> dotfile := Some s),
    "<file>  Output statement graph to <file>");
   ("-j", Arg.Int (fun i -> jobs := i),
    "<n>  Use <n> parallel jobs (if supported)");
   ("--ac-compatible", Arg.Set ac_toolbox,
-   "Use the AC-compatible toolbox even on non-AC theories (experimental, needs maude and tamarin)")
+   "Use the AC-compatible toolbox even on non-AC theories (experimental)")
 ]
 
 let cmdlist =

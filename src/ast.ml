@@ -24,6 +24,7 @@ type tempAction =
   | TempActionIn of string * string
   | TempActionOut of string * tempTerm
   | TempActionTest of tempTerm * tempTerm
+  | TempActionTestInequal of tempTerm * tempTerm
 
 type tempProcess =
   | TempSequence of tempProcess * tempProcess

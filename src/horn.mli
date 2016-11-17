@@ -37,12 +37,14 @@ val get_body : statement -> atom list
 (** {3 Printing} *)
 
 val show_statement : statement -> string
+val show_atom_body : atom -> string
+val show_atom_ineq : atom -> string
 val apply_subst_st : statement -> subst -> statement
 
 (** {3 Unification and substitutions} *)
 
 val new_clause :
-  ?label:string -> ?vip:bool -> ?parents:statement list -> atom * atom list -> statement
+  ?label:string -> ?vip:bool -> ?parents:statement list -> atom * atom list  * atom list -> statement
 
 (** {3 Knowledge bases} *)
 

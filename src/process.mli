@@ -25,6 +25,7 @@ type action =
   | Input of id * id
   | Output of id * term
   | Test of term * term
+  | TestInequal of term * term
 
 type trace =
   | NullTrace
