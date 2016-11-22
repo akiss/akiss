@@ -10,8 +10,6 @@
 // pw is a poorly choosen secret between A and B
 
 #set xor;
-#set por;
-
 
 symbols  senc/2, sdec/2, pair/2, fst/1, snd/1, f1/1, f2/1, aenc/2, adec/2, pk/1, A/0, B/0;
 private pw, nb1,nb2, ra, rb, pfresh, ska, cb, k;

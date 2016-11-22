@@ -29,7 +29,9 @@ val jobs : int
 val cmdlist : Ast.cmd list
 val xor : bool
 val ac : bool
-val por : bool
+val por : bool ref
+val disable_por : bool
+val set_por : bool -> unit
 val fsymbols : (string * int) list
 val evchannels : string list
 val privchannels : string list

@@ -43,6 +43,7 @@ val show_trace : trace -> string
 (** {3 Parsing} *)
 
 val parse_process : Ast.tempProcess -> (string * symbProcess) list -> symbProcess
+val action_determinate : symbProcess -> bool
 val traces : symbProcess -> process
 
 (** {2 Executing and testing processes} *)

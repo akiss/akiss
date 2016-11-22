@@ -38,7 +38,6 @@ rule token = parse
     | "0" { Zero }
     | "let" { Let }
     | "#set xor" { XOR }
-    | "#set por" { POR }
     | "#set ac;"  { AC }
     | "#set ac+;" { AC }
     | "symbols" { Symbols }

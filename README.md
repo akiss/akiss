@@ -81,6 +81,7 @@ Usage:
  * `-j <n>`: use `<n>` parallel jobs (if supported)
  * `--ac-compatible`: use the AC-compatible toolbox even on non-AC
    theories (experimental, needs maude)
+ * `--disable-por`: disables partial-order reduction (por) optimisation; without this option the por optimisation is automatically enabled when processes are action determinate
  * `--help`, `-help`: display this list of options
 
 For example:
@@ -103,7 +104,6 @@ Specification files consist of:
 ### Flags
 
  * `set xor;` : declare the infix `+` operator and make use of the xor machinery 
- * `set por;` : use partial order reduction technics to reduce the number of traces; this reduction is only correct on action-determinate processes
  
 ### Preamble
 

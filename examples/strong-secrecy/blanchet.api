@@ -11,7 +11,7 @@
 
 symbols enc/2, dec/2, aenc/2, adec/2, pk/1, sign/2, ok/0, msg/1, check/2, pair/2, fst/1, snd/1, n1/0, n2/0, n3/0; 
 
-channels c;
+channels c, cab, cba;
 
 private ekB, skA, k;
 
@@ -30,21 +30,21 @@ rewrite msg(sign(X,Y)) -> X;
 Setup = out(c, pk(skA)).out(c, pk(ekB)).in(c, Z1).in(c, Z2).0;
 
 // Role A
-A = out(c, aenc(sign(pair(pk(skA),pair(pk(ekB),k)),skA),pk(ekB))).0;
+A = out(cab, aenc(sign(pair(pk(skA),pair(pk(ekB),k)),skA),pk(ekB))).0;
 
 
 // Role B using either Z1 or Z2
-B1 = in(c, X).
+B1 = in(cab, X).
      [check(adec(X,ekB),pk(skA)) = ok].
      [fst(msg(adec(X,ekB))) = pk(skA)].
      [fst(snd(msg(adec(X,ekB)))) = pk(ekB)].
-     out(c, enc(Z1,snd(snd(msg(adec(X,ekB)))))).0;
+     out(cba, enc(Z1,snd(snd(msg(adec(X,ekB)))))).0;
 
-B2 = in(c, X).
+B2 = in(cab, X).
      [check(adec(X,ekB),pk(skA)) = ok].
      [fst(msg(adec(X,ekB))) = pk(skA)].
      [fst(snd(msg(adec(X,ekB)))) = pk(ekB)].
-     out(c, enc(Z2,snd(snd(msg(adec(X,ekB)))))).0;
+     out(cba, enc(Z2,snd(snd(msg(adec(X,ekB)))))).0;
 
 // Computing the interleavings of the 2 roles
 I1 = A || B1;

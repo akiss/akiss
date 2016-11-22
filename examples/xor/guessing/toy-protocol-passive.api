@@ -9,7 +9,6 @@
 
 
 #set xor;
-#set por;
 
 symbols  senc/2, sdec/2, pair/2, fst/1, snd/1, f/1, g/1,aenc/2, adec/2, pk/1, A/0;
 private pw, c1, c2, n, sk1, pfresh;

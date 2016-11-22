@@ -1,7 +1,6 @@
 // API IBM
 
 #set xor;
-#set por;
 
 symbols enc/2, dec/2, data/0, imp/0, exp/0, kp/0, pin/0, kp3/0, pan/0;
 private km, pdk, kp1, kp2;

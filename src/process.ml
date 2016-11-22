@@ -32,6 +32,24 @@ type action =
   | Test of term * term
 ;;
 
+let is_io_action a =
+  match a with
+  | Input(_,_)
+  | Output(_,_) -> true
+  | Test (_,_) -> false
+      
+let remove_term_in_io_action a =
+  match a with
+  | Input(c,_) -> Input(c,"")
+  | Output(c,_) -> Output(c,Var(""))
+  | Test(t1,t2) -> Test(t1,t2)
+    
+module ActionSet = Set.Make( 
+  struct
+    let compare = Pervasives.compare
+    type t = action
+  end );;
+
 type trace =
   | NullTrace
   | Trace of action * trace
@@ -114,6 +132,35 @@ let rec show_symb = function
   | SymbAlt (p1, p2) -> "(alt " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
   | SymbPhase (p1, p2) -> "(phase " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
 
+
+let rec actions_of p =
+  match p with
+  | SymbNul -> ActionSet.empty
+  | SymbAct a -> ActionSet.of_list (List.rev_map remove_term_in_io_action (List.filter is_io_action a))
+  | SymbSeq (p1, p2) 
+  | SymbAlt (p1, p2) 
+  | SymbPhase (p1, p2) 
+  | SymbPar (p1, p2) -> ActionSet.union (actions_of p1) (actions_of p2)
+
+
+let action_determinate p =
+
+  let rec ad p =
+    match p with
+    | SymbNul -> true
+    | SymbAct a -> true
+    | SymbSeq (SymbAct a, p) -> ad p
+    | SymbSeq (p, SymbNul) -> ad p
+    | SymbSeq (SymbSeq (p1, p2), p) -> ad p1 &&  ad (SymbSeq (p2, p))
+    | SymbPar (p1, p2) -> ActionSet.is_empty (ActionSet.inter (actions_of p1) (actions_of p2)) && ( ad p1 && ad p2 )
+    | SymbSeq (_, _) 
+    | SymbPhase (_, _)
+    | SymbAlt (_, _) -> false
+  in
+  match p with 
+  | SymbPhase (p1, p2) -> ad p1 && ad p2
+  | _ as p -> ad p
+    
 let replace_var_in_act x t a =
   match a with
   | Input (_, _) -> a
@@ -171,6 +218,7 @@ let rec symb_of_temp process processes =
   | TempProcessRef (name) ->
      List.assoc name processes
 
+       
 let rec simplify = function
   | SymbNul -> SymbNul
   | SymbAct a -> SymbAct a
@@ -407,8 +455,8 @@ let traces_por p =
     | _ -> traces_por p
 
 let traces p =
-  let traces = if Theory.por then traces_por else traces in
-    TraceSet.elements @@ traces @@ simplify @@ optimize_tests p
+  let traces = if !Theory.por then traces_por else traces in
+  TraceSet.elements @@ traces @@ simplify @@ optimize_tests p
 
 let parse_process p ps =
   simplify @@ symb_of_temp p ps

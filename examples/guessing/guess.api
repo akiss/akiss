@@ -1,6 +1,6 @@
 symbols enc/2, dec/2, h/1;
 
-channels c;
+channels c, cab, cba;
 
 private n, w, v;
 
@@ -9,17 +9,17 @@ var X, Y, Z, x;
 rewrite dec(enc(X, Y), Y) -> X;
 rewrite enc(dec(X, Y), Y) -> X;
 
-tA = out(c, enc(n, w)).0;
+tA = out(cab, enc(n, w)).0;
 
-tB = in(c, x).out(c, enc(h(dec(x, w)), w)).0;
+tB = in(cab, x).out(cba, enc(h(dec(x, w)), w)).0;
 
 P = tA || tB;
 
 revealW = out(c, w).0;
 revealV = out(c, v).0;
 
-P1 = P :: revealW;
-P2 = P :: revealV;
+P1 = P >> revealW;
+P2 = P >> revealV;
 
 // not equivalentft? P1 and P2;
 

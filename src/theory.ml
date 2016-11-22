@@ -40,6 +40,7 @@ let tamarin_variants = ref false
 
 (** Experimental POR optimization *)
 let por = ref false
+let disable_por = ref false
 
 
 let usage = Printf.sprintf
@@ -60,7 +61,10 @@ let command_line_options_list = [
   ("-j", Arg.Int (fun i -> jobs := i),
    "<n>  Use <n> parallel jobs (if supported)");
   ("--ac-compatible", Arg.Set ac_toolbox,
-   "Use the AC-compatible toolbox even on non-AC theories (experimental, needs maude and tamarin)")
+   "Use the AC-compatible toolbox even on non-AC theories (experimental, needs maude and tamarin)");
+  ("--disable-por", Arg.Unit (fun () -> disable_por := true),
+   "Disable partial order reduction (por) optimisations");
+
 ]
 
 let cmdlist =
@@ -183,8 +187,6 @@ let process_decl = function
       declare_symbols ["plus",2;"zero",0];
       declare_vars ["#X";"#Y"];
       check_atoms ()
-  | SetPOR ->
-      por := true
   | DeclSymbols symbolList ->
     verboseOutput "Declaring symbols\n%!";
     declare_symbols symbolList;
@@ -253,7 +255,8 @@ let dotfile = !dotfile
 let jobs = !jobs
 let xor = !xor
 let ac = !ac
-let por = !por
+let set_por b = por:= b
+let disable_por = !disable_por
 let fsymbols = !fsymbols
 let channels = !channels
 let private_names = !private_names

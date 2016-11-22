@@ -26,7 +26,6 @@ open Ast
 %token <string> Identifier
 %token <int> Int
 %token XOR AC
-%token POR
 %token Symbols Private Var Rewrite EvRewrite Channels EvChannels Let
 %token PrivChannels
 %token LeftP RightP LeftB RightB
@@ -60,7 +59,6 @@ main:
      command:
  | XOR { SetXOR }
  | AC { SetAC }
- | POR { SetPOR }
  | Symbols symbollist { DeclSymbols $2 }
  | Private namelist { DeclPrivate $2 }
  | Channels namelist { DeclChannels $2 }
