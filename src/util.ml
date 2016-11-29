@@ -31,13 +31,13 @@ let about_tests = 16
 let about_else = 32
 
 let verboseOutput a =
-  if !verbose_output then
+  if !verbose_output || (!extra_output land about_verbose)>0 then
     Format.printf a
   else
     Format.ifprintf Format.std_formatter a
 
 let debugOutput a =
-  if !debug_output then
+  if !debug_output || (!extra_output land about_debug)>0 then
     Format.printf a
   else
     Format.ifprintf Format.std_formatter a

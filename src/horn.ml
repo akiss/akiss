@@ -235,7 +235,7 @@ let rec show_atom_body = function
             name ^ "(" ^ (show_term_list (w::term_list)) ^ ")"
 
 let rec show_atom_ineq = function
-  | Predicate("ineq", [s;t]) ->
+  | Predicate("ineq", [w;s;t]) ->
       (show_term s) ^ " != " ^ (show_term t)
   | _ -> assert(false)
 
@@ -312,7 +312,8 @@ let apply_subst_atom atom sigma = match atom with
 let apply_subst_st st sigma =
   { st with
         head = apply_subst_atom st.head sigma ;
-        body = trmap (fun x -> apply_subst_atom x sigma) st.body }
+        body = trmap (fun x -> apply_subst_atom x sigma) st.body;
+        ineq = trmap (fun x -> apply_subst_atom x sigma) st.ineq }
 
 let fresh_statement ~keep_marks f =
   let allv = vars_of_horn_clause f in
@@ -1089,7 +1090,7 @@ let resolution master slave =
     let sigmas = csu_atom (Theory.xor && is_plus_clause slave) atom slave.head in
     let sigmas = propagate_marking sigmas in
     let length = List.length sigmas in
-    if !debug_output && length > 0 then begin
+    if (!debug_output || !extra_output land about_debug >0) && length > 0 then begin
       debugOutput "Resolution?\n FROM: %s\n AND : %s\n\n"
         (show_statement master)
         (show_statement slave) ;
@@ -1246,9 +1247,9 @@ let rec ridentical fa fb =
     | Predicate("identical", [u; r; rp]),
       Predicate("reach", [up]) ->
           assert (is_solved fa && is_solved fb) ;
-          debugOutput
+          (*debugOutput
             "ridentical trying to combine %s with %s\n%!"
-            (show_statement fa) (show_statement fb);
+            (show_statement fa) (show_statement fb);*)
           if(world_length u <> world_length up || r = rp) then [] else begin
           let sigmas = R.csu u up in
             List.map
@@ -1300,13 +1301,13 @@ let saturate kb rules =
 
 (** {2 Recipe stuff} *)
 
-let namify_subst t =
+let namify_subst t = 
   let vars = vars_of_term t in
   let names = List.map (fun _ -> Fun(fresh_string "!n!", [])) vars in
   let sigma = List.combine vars names in
   sigma
 
-let namify t =
+let namify t = 
   let sigma = namify_subst t in
   apply_subst t sigma
 
@@ -1369,7 +1370,8 @@ let find_recipe atom kb =
         (show_atom atom)
         (show_kb_list kbsolved) ;
       assert false
-    with Recipe_found r -> r
+    with Recipe_found r -> (*extraOutput about_else "Recipe found: %s for %s \n%!" (show_term r)(show_atom atom);*)
+	r
 
 let rec revworld_h (w : term) (a : term) : term =
   match w with
@@ -1455,16 +1457,27 @@ let rec alpha_rename_namified_term term subst =
 let alpha_rename_namified_term term =
 	let (t,_)=alpha_rename_namified_term term [] in t
 
+let rec ineq_to_term ineq =
+	match ineq with 
+	| Predicate("ineq",[w;s;t]) :: q -> Fun("liste", [Fun("ineq",[w;s;t]); ineq_to_term q])
+	| [] -> Fun("empty",[])
+	| _ -> assert false
+
+
 (** Extract all successful reachability tests from a knowledge base. *)
 let checks_reach kb =
 	let solved = Base.only_solved kb in
 	List.fold_left
-    (fun checks x ->
+    (fun checks x -> 
        match (get_head x) with
-         | Predicate("reach", [w]) ->
-		let new_check = alpha_rename_namified_term(Fun ("check_run", [revworld (recipize (namify w) kb)])) in 
+         | Predicate("reach", [w]) -> 
+		let sigma = namify_subst w in
+		let ineq_body = (apply_subst (ineq_to_term (get_ineq x)) sigma) in
+		extraOutput about_else "init %s\nsubst sigma> %s\nineq:: %s\n%!" (show_statement x)(show_subst sigma)(show_term ineq_body);
+		let new_check = alpha_rename_namified_term(
+			Fun ("check_run", [revworld (recipize (apply_subst w sigma) kb);ineq_body])) in 
 		begin             
-			debugOutput "TESTER: %s \n" (show_term new_check); 
+			extraOutput (about_debug+about_else) "TESTER: %s \n" (show_term new_check); 
 			new_check  :: checks end 
          | _ -> checks)
     [] solved
@@ -1477,6 +1490,7 @@ let checks_ridentical kb =
          | Predicate("ridentical", [w; r; rp]) ->
              let sigma = namify_subst w in
              let new_w = revworld (recipize (apply_subst w sigma) kb) in
+		 let ineq_body = (apply_subst (ineq_to_term (get_ineq x)) sigma) in
              let omega =
                List.map
                  (function
@@ -1486,15 +1500,16 @@ let checks_ridentical kb =
                  (get_body x)
              in
              let resulting_test = alpha_rename_namified_term(Fun("check_identity", [new_w;
-                                                         apply_subst r omega;
-                                                         apply_subst rp omega])) in
+                                                      apply_subst r omega;
+                                                      apply_subst rp omega; 
+									ineq_body])) in
              begin debugOutput "TESTER: %s\n" (show_term resulting_test) ; 
              resulting_test :: checks end 
          | _ -> checks)
     kb []
     
 (** Extract all successful tests from a (saturated) knowledge base. *)
-let checks  kb =
+let checks kb =
   List.append (checks_reach kb) (checks_ridentical kb)
 
 let show_tests tests =

@@ -56,10 +56,10 @@ let tests_of_trace_job t rew =
   let seed = Seed.seed_statements t rew in
     verboseOutput "Constructing initial kb\n%!";
     let kb = initial_kb seed rew in
-	extraOutput about_seed "Initial seed: %s \n"   (show_kb kb);
+	extraOutput about_seed "Initial seed: %s \n\n"   (show_kb kb);
       verboseOutput "Saturating knowledge base\n%!";
       saturate kb rew ;
-	extraOutput about_saturated "Saturated base:  %s\n" (show_kb kb);
+	extraOutput about_saturated "Saturated base:  %s\n%!" (show_kb kb);
       checks kb
 
 let tests_of_trace show_progress t rew =
@@ -71,6 +71,7 @@ let tests_of_trace show_progress t rew =
   | None -> failwith "fatal error in tests_of_trace"
 
 let check_test_multi_job test trace_list =
+	extraOutput about_tests "Starting checks about %s \n%!" (show_term test);
   List.exists (fun x -> check_test x test Theory.rewrite_rules) trace_list
 
 let check_test_multi test trace_list =
@@ -372,9 +373,9 @@ let check_ev_ind_test trace1 trace2 test =
   (* check that reach test from trace1 is reachable in trace2 and check static equiv of two resulting frames *)
   match test with
   | Fun("check_run", [w]) ->
-      let f1 = execute trace1 [] w Theory.rewrite_rules in
+      let (f1,_) = execute trace1 [] w Theory.rewrite_rules in
       begin try
-        let f2 = execute trace2 [] w Theory.rewrite_rules in
+        let (f2,_) = execute trace2 [] w Theory.rewrite_rules in
         let rf1 = restrict_frame_to_channels f1 trace1 Theory.evchannels in
         let rf2 = restrict_frame_to_channels f2 trace2 Theory.evchannels in
         stat_equiv rf1 rf2 Theory.evrewrite_rules >>= fun r ->

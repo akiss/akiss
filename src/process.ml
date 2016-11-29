@@ -64,6 +64,10 @@ let show_action = function
   | TestInequal(s,t) -> Printf.sprintf "[%s!=%s]" (show_term s) (show_term t)
 ;;
 
+let rec show_action_lst = function 
+	| t::q -> (show_action t)^","^(show_action_lst q)
+	| [] -> "."
+
 let rec show_trace = function
   | NullTrace -> "0"
   | Trace(a, rest) -> (show_action a) ^ "." ^ (show_trace rest)
@@ -476,11 +480,10 @@ let rec apply_subst_tr pr sigma = match pr with
 
 let rec execute_h_dumb process instructions =
   (
-    (* debugOutput *)
-    (*   "Executing: %s\nFrame: %s\nInstructions: %s\n\n%!" *)
-    (*   (show_trace process) *)
-    (*   (show_term_list frame) *)
-    (*   (show_term_list instructions); *)
+    (* extraOutput about_else
+       "Executing: %s\nInstructions: %s\n\n%!" 
+       (show_trace process) 
+       (show_term instructions); *)
     match (process, instructions) with
       | (NullTrace, Fun("empty", [])) -> true
       | (NullTrace, _) -> false
@@ -491,6 +494,7 @@ let rec execute_h_dumb process instructions =
 	  else
 	   false
       | (Trace(Test(x, y), pr), Fun("world", _)) -> execute_h_dumb pr instructions
+      | (Trace(TestInequal(x, y), pr), Fun("world", _)) -> execute_h_dumb pr instructions
       | (Trace(Output(ch, x), pr), Fun("world", [Fun("!out!", [chp]); ir])) ->
 	  if chp = Fun(ch, []) then
 	    execute_h_dumb pr ir 
@@ -500,30 +504,32 @@ let rec execute_h_dumb process instructions =
   )
 ;;
 
-let rec execute_h process frame instructions rules =
+let rec execute_h process frame inequalities instructions rules =
   (
-    (* debugOutput *)
-    (*   "Executing: %s\nFrame: %s\nInstructions: %s\n\n%!" *)
-    (*   (show_trace process) *)
-    (*   (show_term_list frame) *)
-    (*   (show_term_list instructions); *)
+     extraOutput about_else 
+      "Executing: %s\nFrame: %s\nInstructions: %s\n\n%!" 
+      (show_trace process) 
+      (show_term_list frame) 
+      (show_term instructions); 
     match (process, instructions) with
-      | (NullTrace, Fun("empty", [])) -> frame
+      | (NullTrace, Fun("empty", [])) -> (frame,inequalities)
       | (NullTrace, _) -> raise Too_many_instructions
-      | (_, Fun("empty", [])) -> frame
+      | (_, Fun("empty", [])) -> (frame,inequalities)
       | (Trace(Input(ch, x), pr), Fun("world", [Fun("!in!", [chp; r]); ir])) ->
 	  if chp = Fun(ch, []) then
-	    execute_h (apply_subst_tr pr [(x, (apply_frame r frame))]) frame ir rules
+	    execute_h (apply_subst_tr pr [(x, (apply_frame r frame))]) frame inequalities ir rules
 	  else
 	    raise Invalid_instruction
-      | (Trace(Test(x, y), pr), Fun("world", _)) ->
-	  if R.equals x y rules then
-	    execute_h pr frame instructions rules
-	  else
-	    raise Process_blocked
+      | (Trace(Test(x, y), pr), Fun("world", _)) -> extraOutput about_tests "> Testing (%s = %s) \n%!" (show_term x)(show_term y); 
+	  if R.equals x y rules then begin extraOutput about_tests "> test (%s = %s) is satisfied \n%!" (show_term x)(show_term y); 
+	    execute_h pr frame inequalities instructions rules end
+	  else 
+	    begin extraOutput about_tests "> test (%s = %s) not satisfied " (show_term x)(show_term y); raise Process_blocked end
+      | (Trace(TestInequal(x, y), pr), Fun("world", _)) -> 
+	    execute_h pr frame (TestInequal(R.normalize x rules,R.normalize y rules) :: inequalities) instructions rules
       | (Trace(Output(ch, x), pr), Fun("world", [Fun("!out!", [chp]); ir])) ->
 	  if chp = Fun(ch, []) then
-	    execute_h pr (List.append frame [x]) ir rules
+	    execute_h pr (List.append frame [x]) inequalities ir rules
 	  else
 	    raise Invalid_instruction
       | _ -> raise Invalid_instruction
@@ -554,19 +560,19 @@ let execute process frame instructions rules =
 	 | Fun("!test!", []) -> false
 	 | _ -> true)
        instructions) in
-  if execute_h_dumb process slimmed_instructions then
+  if execute_h_dumb process slimmed_instructions then (* Avoid testing non compatible trace*)
    begin
  	(* Printf.printf "Smart test \n" ;*)
     execute_h
     process
-    frame
+    frame []
     (worldfilter 
        (fun x -> match x with
 	 | Fun("!test!", []) -> false
 	 | _ -> true)
        instructions)
     rules end
-  else begin (*Printf.printf "Stupid test avoided !\n";*) raise Process_blocked end
+  else begin extraOutput about_tests "> non compatible " ; raise Process_blocked end
 ;;
 
 let is_reach_test test = match test with
@@ -574,8 +580,32 @@ let is_reach_test test = match test with
   | _ -> false
 ;;
 
+let rec term_to_ineq term = match term with
+	| Fun("liste",[Fun("ineq",[w;x;y]);v]) -> TestInequal(x,y)::(term_to_ineq v)
+	| Fun("empty",[])-> []
+	| _ -> assert(false)
+
+
+let rec ineq_in ineq lstineq =
+	match ineq with 
+	| TestInequal(u,v)  -> begin
+	match lstineq with
+	| TestInequal(s,t) :: q -> if (u = s && v = t) || (u = t && v = s) then true else ineq_in ineq q
+	| [] -> false
+	| _ -> assert false
+	end
+	| _ -> assert false
+
+let rec ineq_incl l1 l2 =
+	match l1 with 
+	| t :: q -> if ineq_in t l2 then ineq_incl q l2 else false
+	| [] -> true
+
+let ineq_equal l1 l2 =
+	ineq_incl l1 l2 && ineq_incl l2 l1
+
 let check_reach process test_reach rules = match test_reach with
-  | Fun("check_run", [w]) ->
+  | Fun("check_run", [w;ineq]) ->
       (
 	(* debugOutput *)
 	(*   "CHECK FOR: %s\nREACH: %s\n\n%!" *)
@@ -584,7 +614,9 @@ let check_reach process test_reach rules = match test_reach with
 	(*Printf.printf "r ";*)
 	try
 	  (
-	    ignore (execute process [] w rules); true
+	    let (frame, inequalities) = execute process [] w rules in
+		extraOutput about_else "> %s\nx:%d %s\n%!" (show_term test_reach) (List.length inequalities) (show_action_lst inequalities);
+		if ineq_incl inequalities (term_to_ineq ineq) then true else false
 	  )
 	with 
 	  | Process_blocked -> false
@@ -597,7 +629,7 @@ let check_reach process test_reach rules = match test_reach with
 ;;
 
 let is_ridentical_test test = match test with
-  | Fun("check_identity", [_; _; _]) -> true
+  | Fun("check_identity", [_; _; _;_]) -> true
   | _ -> false
 ;;
 
@@ -618,11 +650,11 @@ let rec trace_from_frame frame =
 
 
 let check_ridentical process test_ridentical rules = match test_ridentical with
-  | Fun("check_identity", [w; r; rp]) ->
+  | Fun("check_identity", [w; r; rp; ineq]) ->
     (
 	(*Printf.printf "ri %s" (show_term test_ridentical);*)
       try
-	let frame = execute process [] w rules in
+	let (frame, inequalities) = execute process [] w rules in
 	let t1 = apply_frame r frame in
 	let t2 = apply_frame rp frame in
 	  R.equals t1 t2 rules
@@ -657,12 +689,15 @@ let rec restrict_frame_to_channels frame trace ch =
 exception Unknown_test;;
 
 let check_test process test rules =
+	extraOutput about_tests "test of %s\n on %s\n%!" (show_term test) (show_trace process);
+	let result = 
   if is_ridentical_test test then
     check_ridentical process test rules
   else if is_reach_test test then
     check_reach process test rules
   else
     raise Unknown_test
+	in extraOutput about_tests "> %b \n%!" result; result
 ;;
 
 let rec check_reach_tests trace reach_tests rules =

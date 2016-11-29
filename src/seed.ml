@@ -72,8 +72,8 @@ let apply_subst_msg_atom sigma = function
 ;;
 
 let apply_subst_msg_ineq sigma = function
-  | Predicate("ineq", [x;y]) ->
-      Predicate("ineq", [apply_subst x sigma;  apply_subst y sigma])
+  | Predicate("ineq", [w;x;y]) ->
+      Predicate("ineq", [apply_subst w sigma;apply_subst x sigma;  apply_subst y sigma])
  | _ -> invalid_arg("apply_subst_msg_ineq")
 
 
@@ -91,8 +91,8 @@ let trace_equationalize (head, body, ineq) rules sigmas=
        Predicate(x, [apply_subst y sigma; z; apply_subst t sigma])
     | _ -> invalid_arg("newatom") in
   let newineq sigma = function
-    | (Predicate("ineq", [y; z])) ->
-       Predicate("ineq", [apply_subst y sigma; apply_subst z sigma])
+    | (Predicate("ineq", [w; y; z])) ->
+       Predicate("ineq", [apply_subst w sigma; apply_subst y sigma; apply_subst z sigma])
     | _ -> invalid_arg("newineq") in
   let newhead sigma = match head with
     | Predicate("knows", [w; r; t]) ->
@@ -148,7 +148,7 @@ let rec trace_statements_h oc tr rules substitutions body ineq world clauses =
     | Trace(TestInequal(s, t), remaining_trace) -> (*TODO*)
     	let next_world = worldadd world (Fun("!test!", [])) in
     	let next_substitutions = substitutions in
-	let next_ineq = Predicate("ineq",[s;t]) :: ineq in
+	let next_ineq = Predicate("ineq",[world;s;t]) :: ineq in
 	let new_reach = (Predicate(
 			    "reach",
 			    [next_world]),
@@ -158,11 +158,11 @@ let rec trace_statements_h oc tr rules substitutions body ineq world clauses =
 ;;
 
 
-let trace_variantize (head, body, ineq) rules =
+let trace_variantize (head, body, ineq) rules = 
   match head with
     | Predicate("knows", [world; recipe; t]) ->
 	let v = R.variants t rules in
-	let new_clause (_, sigma) =
+	let new_clause (_, sigma) = 
           Horn.new_clause
             (normalize_msg_st (apply_subst_msg_st (head, body, ineq) sigma) rules)
 	in
@@ -180,10 +180,11 @@ let trace_variantize (head, body, ineq) rules =
 	     | _ -> invalid_arg("reach_variantize")) body in
 	let newineq sigma = trmap
 	  (function
-	     | Predicate("ineq", [x; y]) -> 
-		 Predicate("ineq", [x; y])
+	     | Predicate("ineq", [w; x; y]) -> 
+		 Predicate("ineq", [R.normalize (apply_subst w sigma) rules; R.normalize (apply_subst x sigma) rules; R.normalize (apply_subst y sigma) rules])
 	     | _ -> invalid_arg("ineq_variantize")) ineq in
-	trmap (fun (_, sigma) -> Horn.new_clause (newhead sigma, newbody sigma, newineq sigma)) v
+	trmap (fun (_, sigma) -> 
+	let st = Horn.new_clause (newhead sigma, newbody sigma, newineq sigma) in st) v 
     | _ -> invalid_arg("variantize")
 ;;
 
