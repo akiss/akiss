@@ -104,6 +104,15 @@ let trace_equationalize (head, body, ineq) rules sigmas=
   trmap newclause sigmas
 ;;
 
+module StringSet = Set.Make (String)
+
+let rec variables_of_term t =
+  match t with
+  | Var x -> StringSet.singleton x
+  | Fun (_, ts) ->
+     List.fold_left (fun accu t ->
+       StringSet.union accu (variables_of_term t)
+     ) StringSet.empty ts
 
 let rec trace_statements_h oc tr rules substitutions body ineq world clauses =
   match tr with
@@ -127,6 +136,24 @@ let rec trace_statements_h oc tr rules substitutions body ineq world clauses =
 				     Var(fresh_variable ());
 				     Var(v)]) in
 	let next_body = (List.append body [premisse]) in
+	let new_reach = (Predicate(
+			    "reach",
+			    [next_world]),
+			  next_body, ineq)  in
+	trace_statements_h oc remaining_trace rules substitutions next_body ineq
+	  next_world (List.concat [ trace_equationalize new_reach rules substitutions; clauses])
+    | Trace(InputMatch(ch, t), remaining_trace) ->
+	let next_world = worldadd world (Fun("!in!", [Fun(ch, []); t])) in (*TOdo!!*)
+	let vart = variables_of_term t in
+	let rec var_of_body body = 
+		match body with 
+		| [] -> StringSet.empty
+		| Predicate("knows", [_; _;Var(v)])::q -> StringSet.add v (var_of_body q)
+		| _ -> assert false in
+	let next_body = StringSet.fold 
+		(fun x l -> Predicate("knows",[world; Var(fresh_variable ());Var(x)])::l)
+		(StringSet.diff vart (var_of_body body))
+		body in
 	let new_reach = (Predicate(
 			    "reach",
 			    [next_world]),

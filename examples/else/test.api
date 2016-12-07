@@ -1,0 +1,19 @@
+
+
+symbols ok/0, ko/0, h/1, pair/2, fst/1, snd/1, dec/2, enc/2;
+
+private a, b, c, u;
+
+
+channels C;
+var X, Y, Z;
+
+rewrite dec(enc(X,Y),Y) -> X;
+rewrite fst(pair(X,Y)) -> X;
+rewrite snd(pair(X,Y)) -> Y;
+
+T1 = out(C,enc(ok,a)).in(C,X).[dec(X,a)!=ok].out(C,dec(X,a)).0;
+
+T2 = out(C,enc(ko,b)).in(C,X).[dec(X,b)!=ko].out(C,dec(X,b)).0;
+
+includedct? T1 in T2; 

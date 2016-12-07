@@ -1405,10 +1405,10 @@ let rec recipize_h (tl : term) kb =
     | _ -> invalid_arg("recipize_h")
 
 let recipize tl kb =
-  debugOutput "Recipizing %s\n" (show_term tl);
+  extraOutput about_debug "Recipizing %s\n%!" (show_term tl);
   let result = recipize_h (revworld tl) kb in
   (
-  debugOutput "Result %s\n" (show_term (revworld result));
+  extraOutput about_debug "Result %s\n%!" (show_term (revworld result));
     result
   )
 
@@ -1463,31 +1463,41 @@ let rec ineq_to_term ineq =
 	| [] -> Fun("empty",[])
 	| _ -> assert false
 
+let rec satisfiable lst rules =
+	match lst with
+	| [] -> true
+	| Predicate("ineq",[w;s;t]) :: q -> 
+		if R.equals s t rules then 
+			begin extraOutput about_else "The predicate %s is not satisfiable.\n%!" (show_atom (Predicate("ineq",[w;s;t]))); false end
+		else satisfiable q rules
+	| _ -> assert false
 
 (** Extract all successful reachability tests from a knowledge base. *)
-let checks_reach kb =
+let checks_reach kb rules =
 	let solved = Base.only_solved kb in
 	List.fold_left
     (fun checks x -> 
        match (get_head x) with
          | Predicate("reach", [w]) -> 
+		if not (satisfiable (get_ineq x) rules) then checks else
 		let sigma = namify_subst w in
 		let ineq_body = (apply_subst (ineq_to_term (get_ineq x)) sigma) in
-		extraOutput about_else "init %s\nsubst sigma> %s\nineq:: %s\n%!" (show_statement x)(show_subst sigma)(show_term ineq_body);
+		(*extraOutput about_else "init %s\nsubst sigma> %s\nineq:: %s\n%!" (show_statement x)(show_subst sigma)(show_term ineq_body);*)
 		let new_check = alpha_rename_namified_term(
 			Fun ("check_run", [revworld (recipize (apply_subst w sigma) kb);ineq_body])) in 
 		begin             
-			extraOutput (about_debug+about_else) "TESTER: %s \n" (show_term new_check); 
+			extraOutput (about_debug+about_else) "TESTER: %s \n%!" (show_term new_check); 
 			new_check  :: checks end 
          | _ -> checks)
     [] solved
 
 (** Extract all successful identity tests from a knowledge base. *)
-let checks_ridentical kb =
+let checks_ridentical kb rules =
   Base.fold_solved
     (fun x checks -> 
        match (get_head x) with
          | Predicate("ridentical", [w; r; rp]) ->
+             if not (satisfiable (get_ineq x) rules) then checks else
              let sigma = namify_subst w in
              let new_w = revworld (recipize (apply_subst w sigma) kb) in
 		 let ineq_body = (apply_subst (ineq_to_term (get_ineq x)) sigma) in
@@ -1509,8 +1519,8 @@ let checks_ridentical kb =
     kb []
     
 (** Extract all successful tests from a (saturated) knowledge base. *)
-let checks kb =
-  List.append (checks_reach kb) (checks_ridentical kb)
+let checks kb rules =
+  List.append (checks_reach kb rules) (checks_ridentical kb rules)
 
 let show_tests tests =
   String.concat "\n" (trmap show_term tests)

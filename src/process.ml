@@ -28,6 +28,7 @@ module R = Theory.R
 
 type action = 
   | Input of id * id
+  | InputMatch of id * term
   | Output of id * term
   | Test of term * term
   | TestInequal of term * term
@@ -59,6 +60,7 @@ let show_frame fr =
 
 let show_action = function
   | Input(ch, x) -> Printf.sprintf "in(%s,%s)" ch x
+  | InputMatch(ch, t) -> Printf.sprintf "in(%s,<%s>)" ch (show_term t)
   | Output(ch, t) -> Printf.sprintf "out(%s,%s)" ch (show_term t)
   | Test(s,t) -> Printf.sprintf "[%s=%s]" (show_term s) (show_term t)
   | TestInequal(s,t) -> Printf.sprintf "[%s!=%s]" (show_term s) (show_term t)
@@ -124,6 +126,7 @@ let rec show_symb = function
 let replace_var_in_act x t a =
   match a with
   | Input (_, _) -> a
+  | InputMatch (c, term) -> InputMatch (c, replace_var_in_term x t term)
   | Output (c, term) -> Output (c, replace_var_in_term x t term)
   | Test (term1, term2) ->
      let term1 = replace_var_in_term x t term1 in
@@ -270,6 +273,7 @@ let classify_action = function
   | Input (c, x) :: _ ->
      if List.mem c Theory.privchannels
      then PrivateInput (c, x) else PublicAction
+  | InputMatch (c, t) :: _ -> assert (false) (* Todo *)
   | Output (c, t) :: _ ->
      if List.mem c Theory.privchannels
      then PrivateOutput (c, t) else PublicAction
@@ -425,301 +429,3 @@ let traces p =
 let parse_process p ps =
   simplify @@ symb_of_temp p ps
 
-(** {2 Executing and testing processes} *)
-
-exception Process_blocked;;
-exception Not_a_recipe;;    
-exception Bound_variable;;
-exception Invalid_instruction;;
-exception Too_many_instructions;;
-
-let is_parameter name = 
-  (String.sub name 0 1 = "w") &&
-    (try
-       let pcounter = (String.sub name 1 ((String.length name) - 1)) in
-       let ipcounter = (int_of_string pcounter) in
-       (ipcounter >= 0) && (pcounter = string_of_int ipcounter)
-     with _ -> false)
-;;
-
-let param_count name =
-  int_of_string (String.sub name 1 ((String.length name) - 1))
-;;
-
-
-let rec apply_frame term frame =
-  match term with
-    | Fun(name, []) when is_parameter name ->
-      (
-	try
-	  List.nth frame (param_count name)
-	with _ -> raise Not_a_recipe
-      )
-    | Fun(f, tl) ->
-      Fun(f, trmap (fun x -> apply_frame x frame) tl)
-    | Var(x) ->
-      Var(x)
-;;
-
-let rec apply_subst_tr pr sigma = match pr with
-  | NullTrace -> NullTrace
-  | Trace(Input(ch, x), rest) -> 
-    if bound x sigma then 
-      raise Bound_variable
-    else if bound ch sigma then
-      raise Bound_variable
-    else
-      Trace(Input(ch, x), apply_subst_tr rest sigma)
-  | Trace(Test(x, y), rest) ->
-    Trace(Test(apply_subst x sigma, apply_subst y sigma), apply_subst_tr rest sigma)
-  | Trace(TestInequal(x, y), rest) ->
-    Trace(TestInequal(apply_subst x sigma, apply_subst y sigma), apply_subst_tr rest sigma)
-  | Trace(Output(ch, x), rest) ->
-    Trace(Output(ch, apply_subst x sigma), apply_subst_tr rest sigma)
-;;
-
-let rec execute_h_dumb process instructions =
-  (
-    (* extraOutput about_else
-       "Executing: %s\nInstructions: %s\n\n%!" 
-       (show_trace process) 
-       (show_term instructions); *)
-    match (process, instructions) with
-      | (NullTrace, Fun("empty", [])) -> true
-      | (NullTrace, _) -> false
-      | (_, Fun("empty", [])) -> true
-      | (Trace(Input(ch, x), pr), Fun("world", [Fun("!in!", [chp; r]); ir])) ->
-	  if chp = Fun(ch, []) then
-	    execute_h_dumb pr ir
-	  else
-	   false
-      | (Trace(Test(x, y), pr), Fun("world", _)) -> execute_h_dumb pr instructions
-      | (Trace(TestInequal(x, y), pr), Fun("world", _)) -> execute_h_dumb pr instructions
-      | (Trace(Output(ch, x), pr), Fun("world", [Fun("!out!", [chp]); ir])) ->
-	  if chp = Fun(ch, []) then
-	    execute_h_dumb pr ir 
-	  else
-	   false 
-      | _ ->  false
-  )
-;;
-
-let rec execute_h process frame inequalities instructions rules =
-  (
-     extraOutput about_else 
-      "Executing: %s\nFrame: %s\nInstructions: %s\n\n%!" 
-      (show_trace process) 
-      (show_term_list frame) 
-      (show_term instructions); 
-    match (process, instructions) with
-      | (NullTrace, Fun("empty", [])) -> (frame,inequalities)
-      | (NullTrace, _) -> raise Too_many_instructions
-      | (_, Fun("empty", [])) -> (frame,inequalities)
-      | (Trace(Input(ch, x), pr), Fun("world", [Fun("!in!", [chp; r]); ir])) ->
-	  if chp = Fun(ch, []) then
-	    execute_h (apply_subst_tr pr [(x, (apply_frame r frame))]) frame inequalities ir rules
-	  else
-	    raise Invalid_instruction
-      | (Trace(Test(x, y), pr), Fun("world", _)) -> extraOutput about_tests "> Testing (%s = %s) \n%!" (show_term x)(show_term y); 
-	  if R.equals x y rules then begin extraOutput about_tests "> test (%s = %s) is satisfied \n%!" (show_term x)(show_term y); 
-	    execute_h pr frame inequalities instructions rules end
-	  else 
-	    begin extraOutput about_tests "> test (%s = %s) not satisfied " (show_term x)(show_term y); raise Process_blocked end
-      | (Trace(TestInequal(x, y), pr), Fun("world", _)) -> 
-	    execute_h pr frame (TestInequal(R.normalize x rules,R.normalize y rules) :: inequalities) instructions rules
-      | (Trace(Output(ch, x), pr), Fun("world", [Fun("!out!", [chp]); ir])) ->
-	  if chp = Fun(ch, []) then
-	    execute_h pr (List.append frame [x]) inequalities ir rules
-	  else
-	    raise Invalid_instruction
-      | _ -> raise Invalid_instruction
-  )
-;;
-
-
-
-let rec worldfilter_h f w a =
-  match w with
-    | Fun("empty", []) -> a
-    | Fun("world", [h; t]) -> 
-	if f h then
-	  worldfilter_h f t (Fun("world", [h; a]))
-	else
-	  worldfilter_h f t a
-    | Var(_) -> invalid_arg("worldfilter_h variable")
-    | _ -> invalid_arg("worldfilter_h")
-;;
-
-let worldfilter f w =
-  revworld (worldfilter_h f w (Fun("empty", [])))
-;;
-
-let execute process frame instructions rules =
-  let slimmed_instructions = (worldfilter 
-       (fun x -> match x with
-	 | Fun("!test!", []) -> false
-	 | _ -> true)
-       instructions) in
-  if execute_h_dumb process slimmed_instructions then (* Avoid testing non compatible trace*)
-   begin
- 	(* Printf.printf "Smart test \n" ;*)
-    execute_h
-    process
-    frame []
-    (worldfilter 
-       (fun x -> match x with
-	 | Fun("!test!", []) -> false
-	 | _ -> true)
-       instructions)
-    rules end
-  else begin extraOutput about_tests "> non compatible " ; raise Process_blocked end
-;;
-
-let is_reach_test test = match test with
-  | Fun("check_run", _) -> true
-  | _ -> false
-;;
-
-let rec term_to_ineq term = match term with
-	| Fun("liste",[Fun("ineq",[w;x;y]);v]) -> TestInequal(x,y)::(term_to_ineq v)
-	| Fun("empty",[])-> []
-	| _ -> assert(false)
-
-
-let rec ineq_in ineq lstineq =
-	match ineq with 
-	| TestInequal(u,v)  -> begin
-	match lstineq with
-	| TestInequal(s,t) :: q -> if (u = s && v = t) || (u = t && v = s) then true else ineq_in ineq q
-	| [] -> false
-	| _ -> assert false
-	end
-	| _ -> assert false
-
-let rec ineq_incl l1 l2 =
-	match l1 with 
-	| t :: q -> if ineq_in t l2 then ineq_incl q l2 else false
-	| [] -> true
-
-let ineq_equal l1 l2 =
-	ineq_incl l1 l2 && ineq_incl l2 l1
-
-let check_reach process test_reach rules = match test_reach with
-  | Fun("check_run", [w;ineq]) ->
-      (
-	(* debugOutput *)
-	(*   "CHECK FOR: %s\nREACH: %s\n\n%!" *)
-	(*   (show_trace process) *)
-	(*   (show_term w); *)
-	(*Printf.printf "r ";*)
-	try
-	  (
-	    let (frame, inequalities) = execute process [] w rules in
-		extraOutput about_else "> %s\nx:%d %s\n%!" (show_term test_reach) (List.length inequalities) (show_action_lst inequalities);
-		if ineq_incl inequalities (term_to_ineq ineq) then true else false
-	  )
-	with 
-	  | Process_blocked -> false
-	  | Too_many_instructions -> false
-	  | Not_a_recipe -> false
-	  | Invalid_instruction -> false
-	  | Bound_variable -> invalid_arg("the process binds twice the same variable")
-      )
-  | _ -> invalid_arg("check_reach")
-;;
-
-let is_ridentical_test test = match test with
-  | Fun("check_identity", [_; _; _;_]) -> true
-  | _ -> false
-;;
-
-(* Forward equivalence use static equivalence on frame but this induces collision
-with alpha renaming *)
-let rec rename_free_names term =
-	match term with
-	| Fun(n,[]) when startswith n "!n!" -> Fun("!!"^n^"!!",[])
-	| Fun(f,x) -> Fun(f, List.map rename_free_names x)
-	| Var(x)->Var(x)
-
-let rec trace_from_frame frame =
-(* create trace out(c,t1). ... .out(c,tn).0 from frame [t1, ..., tn] *)
-  match frame with
-  | [] ->  NullTrace
-  | h::t -> Trace(Output("c",rename_free_names h), trace_from_frame t)
-;;
-
-
-let check_ridentical process test_ridentical rules = match test_ridentical with
-  | Fun("check_identity", [w; r; rp; ineq]) ->
-    (
-	(*Printf.printf "ri %s" (show_term test_ridentical);*)
-      try
-	let (frame, inequalities) = execute process [] w rules in
-	let t1 = apply_frame r frame in
-	let t2 = apply_frame rp frame in
-	  R.equals t1 t2 rules
-      with 
-	| Process_blocked -> false
-	| Too_many_instructions -> false
-	| Not_a_recipe -> false
-	| Invalid_instruction -> false
-	| Bound_variable -> invalid_arg("the process binds twice the same variable")
-    )
-  | _ -> invalid_arg("check_ridentical")
-;;
-
-let rec restrict_frame_to_channels frame trace ch =
-(* given a trace and a frame resulting from an execution of trace, restrict elements in frame to outputs on channels in ch *)
-  match frame with 
-  | [] -> []
-  | h :: tframe ->
-    (
-      match trace with 
-      | NullTrace -> []
-      | Trace(a, rest) ->
-	(
-	  match a with
-	  | Output(chan, term) -> if List.exists (fun x -> x = chan) ch then h::restrict_frame_to_channels tframe rest ch  else restrict_frame_to_channels tframe rest ch
-	  | _ -> restrict_frame_to_channels frame rest ch
-	)
-    )
-;;
-
-
-exception Unknown_test;;
-
-let check_test process test rules =
-	extraOutput about_tests "test of %s\n on %s\n%!" (show_term test) (show_trace process);
-	let result = 
-  if is_ridentical_test test then
-    check_ridentical process test rules
-  else if is_reach_test test then
-    check_reach process test rules
-  else
-    raise Unknown_test
-	in extraOutput about_tests "> %b \n%!" result; result
-;;
-
-let rec check_reach_tests trace reach_tests rules =
-  match reach_tests with
-    | h :: t ->
-	(
-	  if not (check_reach trace h rules) then
-	    Some h
-	  else
-	    check_reach_tests trace t rules
-	)
-    | [] -> None
-;;
-
-let rec check_ridentical_tests trace ridentical_tests rules =
-  match ridentical_tests with
-    | h :: t ->
-	(
-	  if not (check_ridentical trace h rules) then
-	    Some h
-	  else
-	    check_ridentical_tests trace t rules
-	)
-    | [] -> None
-;;

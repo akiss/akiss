@@ -22,6 +22,7 @@ open Parser
 open Util
 open Term
 open Process
+open Process_execution
 open Horn
 open Theory
 open Lwt_compat
@@ -60,7 +61,7 @@ let tests_of_trace_job t rew =
       verboseOutput "Saturating knowledge base\n%!";
       saturate kb rew ;
 	extraOutput about_saturated "Saturated base:  %s\n%!" (show_kb kb);
-      checks kb
+      checks kb rew
 
 let tests_of_trace show_progress t rew =
   Nproc.submit ppool (tests_of_trace_job t) rew >>= fun x ->
@@ -70,13 +71,15 @@ let tests_of_trace show_progress t rew =
      return y
   | None -> failwith "fatal error in tests_of_trace"
 
-let check_test_multi_job test trace_list =
-	extraOutput about_tests "Starting checks about %s \n%!" (show_term test);
-  List.exists (fun x -> check_test x test Theory.rewrite_rules) trace_list
+let check_test_multi_job source test trace_list =
+	extraOutput about_tests "\n\nStarting checks about %s \n%!" (show_term test);
+ let result = List.exists (fun x -> check_test source x test Theory.rewrite_rules) trace_list in
+	extraOutput about_tests "Result of checks about %s : %b \n%!" (show_term test) result;
+	result
 
-let check_test_multi test trace_list =
+let check_test_multi source test trace_list =
   do_count_tests test;
-  Nproc.submit ppool (check_test_multi_job test) trace_list >>= fun x ->
+  Nproc.submit ppool (check_test_multi_job source test) trace_list >>= fun x ->
   match x with
   | Some y -> return y
   | None -> assert false
@@ -117,6 +120,8 @@ let rec variables_of_trace t =
           (* the Barendregt convention is not honoured *)
           raise (MultiplyBoundVariable x);
        StringSet.remove x fvs, StringSet.add x bvs
+     | InputMatch(_, t) -> let xs =  variables_of_term t in
+       StringSet.diff fvs xs, StringSet.union xs bvs
      | Output (_, t) -> StringSet.union fvs (variables_of_term t), bvs
      | Test (t1, t2) ->
         let xs1 = variables_of_term t1 in
@@ -146,14 +151,17 @@ let rec remove_duplicate lst =
 		if List.exists (fun x -> (x = t)) qs then qs else t :: qs
 
 
-let slim lst =
+let slim lst = lst (*
 	debugOutput "\nThere were %d tests in total\n" (List.length lst);
 	let qs = remove_duplicate lst in 
 	let qs = List.filter (fun t -> not (List.exists (fun x -> (is_smaller_reach_test t x)) qs)) qs in
 	count_tests :=  (List.length qs);
 	test_counter := 0;
 	verboseOutput "There are %d tests to check\n" (List.length qs);
-	qs
+	qs*)
+
+let blop (x,lst) =
+	List.map (fun y -> (x,y)) lst
 
 let query ?(expected=true) s t =
   Printf.printf
@@ -168,19 +176,19 @@ let query ?(expected=true) s t =
   verboseOutput "Checking %d traces...\n%!" !count_traces;
   let stests =
     Lwt_list.rev_map_p
-      (fun x -> tests_of_trace true x Theory.rewrite_rules)
+      (fun x -> (tests_of_trace true x Theory.rewrite_rules) >>= fun y -> return (x, y) >>= wrap1 blop)
       straces >>= wrap1 List.concat >>= wrap1 slim
   and ttests =
     Lwt_list.rev_map_p
-      (fun x -> tests_of_trace true x Theory.rewrite_rules)
+      (fun x -> (tests_of_trace true x Theory.rewrite_rules) >>= fun y -> return (x, y) >>= wrap1 blop)
       ttraces >>= wrap1 List.concat >>= wrap1 slim
   in
   let fail_stests =
     stests >>=
-      Lwt_list.filter_p (fun x -> check_test_multi x ttraces >>= wrap1 not)
+      Lwt_list.filter_p (fun (s,x) -> check_test_multi s x ttraces >>= wrap1 not)
   and fail_ttests =
     ttests >>=
-      Lwt_list.filter_p (fun x -> check_test_multi x straces >>= wrap1 not)
+      Lwt_list.filter_p (fun (s,x) -> check_test_multi s x straces >>= wrap1 not)
   in
   let fail_stests, fail_ttests = wait_pending2 fail_stests fail_ttests in
   if fail_stests = [] && fail_ttests = [] then begin
@@ -191,10 +199,10 @@ let query ?(expected=true) s t =
   end else begin
     if fail_stests <> [] then
       Printf.printf "The following tests work on %s but not on %s:\n%s\n%!"
-        (show_string_list s) (show_string_list t) (show_tests fail_stests);
+        (show_string_list s) (show_string_list t) (show_tests (List.map (fun (x,y) -> y)fail_stests));
     if fail_ttests <> [] then
       Printf.printf "The following tests work on %s but not on %s:\n%s\n%!"
-        (show_string_list t) (show_string_list s) (show_tests fail_ttests);
+        (show_string_list t) (show_string_list s) (show_tests (List.map (fun (x,y) -> y)fail_ttests));
     if expected then exit 1
   end
 
@@ -211,13 +219,13 @@ let inclusion_ct ?(expected=true) s t =
   let () = reset_count (List.length straces) in
   let stests =
     Lwt_list.rev_map_p
-      (fun x -> tests_of_trace true x Theory.rewrite_rules)
+      (fun x -> tests_of_trace true x Theory.rewrite_rules >>= fun y -> return (x, y) >>= wrap1 blop)
       straces >>= wrap1 List.concat >>= wrap1 slim
 
   in
     let fail_stests =
     stests >>=
-      Lwt_list.filter_p (fun x -> check_test_multi x ttraces >>= wrap1 not)
+      Lwt_list.filter_p (fun (s,x) -> check_test_multi s x ttraces >>= wrap1 not)
   and fail_ttests = return []
   in
   let fail_stests, fail_ttests = wait_pending2 fail_stests fail_ttests in
@@ -229,7 +237,7 @@ let inclusion_ct ?(expected=true) s t =
   end else begin
     if fail_stests <> [] then
       Printf.printf "The following tests work on %s but not on %s:\n%s\n%!"
-        (show_string_list s) (show_string_list t) (show_tests fail_stests);
+        (show_string_list s) (show_string_list t) (show_tests (List.map (fun (x,y) -> y)fail_stests));
     if expected then exit 1
   end
 
@@ -238,12 +246,12 @@ exception OneToMoreFail of trace * term list
 let check_one_to_one (tests1, trace1) (tests2, trace2) rew =
   let fail1 =
     List.filter
-      (fun x -> not (check_test trace2 x rew))
+      (fun x -> not (check_test trace1 trace2 x rew))
       tests1
   in
   let fail2 =
     List.filter
-      (fun x -> not (check_test trace1 x rew))
+      (fun x -> not (check_test trace2 trace1 x rew))
       tests2
   in
     fail1 = [] && fail2 = []
@@ -356,9 +364,9 @@ let stat_equiv frame1 frame2 rew =
   (*  check_one_to_one  (tests1, t1) (tests2, t2) rew *)
 
   let fail1 =
-    tests1 >>= Lwt_list.filter_p (fun x -> return (not (check_test t2 x rew)))
+    tests1 >>= Lwt_list.filter_p (fun x -> return (not (check_test NullTrace t2 x rew)))
   and fail2 =
-    tests2 >>= Lwt_list.filter_p (fun x -> return (not (check_test t1 x rew)))
+    tests2 >>= Lwt_list.filter_p (fun x -> return (not (check_test NullTrace t1 x rew)))
   in
 
   fail1 >>= fun fail1 -> fail2 >>= fun fail2 ->
@@ -504,19 +512,19 @@ let query_print traceName =
       print_kbs ~filter:is_deduction_st (Base.solved kb) ;
       Printf.printf "\n\nKnows unsolved statements in saturation:\n\n" ;
       print_kbs ~filter:is_deduction_st (Base.not_solved kb) ;
-      let tests = checks kb in
+      let tests = checks kb Theory.rewrite_rules in
         Printf.printf "\n\nTests:\n\n%s\n\n%!" (show_tests tests);
         let trace = trace_of_process (traces @@ List.assoc traceName !processes) in
           Printf.printf
             "Running reach self tests: %s\n\
              Running ridentical self tests: %s\n\n%!"
             (str_of_tr
-               (check_reach_tests
+               (check_reach_tests t
                   trace
                   (List.filter is_reach_test tests)
                   Theory.rewrite_rules))
             (str_of_tr
-               (check_ridentical_tests
+               (check_ridentical_tests t
                   trace
                   (List.filter is_ridentical_test tests)
                   Theory.rewrite_rules))

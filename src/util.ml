@@ -29,6 +29,7 @@ let about_seed = 4
 let about_saturated = 8
 let about_tests = 16
 let about_else = 32
+let about_execution = 64
 
 let verboseOutput a =
   if !verbose_output || (!extra_output land about_verbose)>0 then

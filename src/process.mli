@@ -23,6 +23,7 @@ open Term
 
 type action =
   | Input of id * id
+  | InputMatch of id * term
   | Output of id * term
   | Test of term * term
   | TestInequal of term * term
@@ -40,26 +41,11 @@ type symbProcess
 val str_of_tr : term option -> varName
 val show_frame : term list -> string
 val show_trace : trace -> string
+val show_action_lst : action list -> string
 
 (** {3 Parsing} *)
 
 val parse_process : Ast.tempProcess -> (string * symbProcess) list -> symbProcess
 val traces : symbProcess -> process
 
-(** {2 Executing and testing processes} *)
 
-exception Process_blocked
-exception Not_a_recipe
-exception Bound_variable
-exception Invalid_instruction
-exception Too_many_instructions
-
-val execute : trace -> term list -> term -> rules -> term list
-
-val is_reach_test : term -> bool
-val is_ridentical_test : term -> bool
-val trace_from_frame : term list -> trace
-val restrict_frame_to_channels : term list -> trace -> id list -> term list
-val check_test : trace -> term -> rules -> bool
-val check_reach_tests : trace -> term list -> rules -> term option
-val check_ridentical_tests : trace -> term list -> rules -> term option

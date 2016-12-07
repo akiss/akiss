@@ -69,7 +69,7 @@ val saturate : Base.t -> rules -> unit
 (** {2 Recipe stuff} *)
 
 val revworld : term -> term
-val checks : Base.t -> term list
+val checks : Base.t -> rules -> term list
 val show_tests : term list -> string
 
 (** Opti stuff *)

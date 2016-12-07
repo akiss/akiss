@@ -4,7 +4,7 @@ ML = ast.ml parser.ml lexer.ml util.ml term.ml \
 	 config.ml  \
 	 lexmaude.ml parsemaude.ml maude.ml \
 	 rewriting.ml theory.ml \
-	 base.ml horn.ml process.ml seed.ml lwt_compat.ml main.ml
+	 base.ml horn.ml process.ml seed.ml process_execution.ml lwt_compat.ml main.ml
 MLI = $(wildcard $(ML:.ml=.mli)) parser.mli parsemaude.mli 
 OCAMLC = ocamlfind ocamlopt -g -annot -package str,unix $(if $(HAS_NPROC),-package nproc)
 OCAMLDEP = ocamldep -native
