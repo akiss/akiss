@@ -171,11 +171,12 @@ let rec negate_instruction process frame  instructions rules =
 ;;
 
 let tests_of_trace rew t=
+extraOutput debug_seed "Computing seed of the negate process: %s \n" (show_trace t); 
   let seed = Seed.seed_statements t rew in
     let kb = initial_kb seed rew in
 	extraOutput about_seed "|Initial seed: %s \n\n"   (show_kb kb);
       saturate kb rew ;
-	extraOutput about_saturated "|Saturated base:  %s\n%!" (show_kb kb);
+	extraOutput about_saturation "|Saturated base:  %s\n%!" (show_kb kb);
       checks kb rew
 
 

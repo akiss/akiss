@@ -23,13 +23,18 @@ let verbose_output = ref false
 
 let extra_output = ref 0
 
-let about_verbose = 1
-let about_debug = 2
-let about_seed = 4
-let about_saturated = 8
-let about_tests = 16
-let about_else = 32
-let about_execution = 64
+let about_verbose = 1 lsl 0
+let about_debug = 1 lsl 1 
+let about_seed = 1 lsl 2
+let debug_seed = about_seed lsl 16
+let about_saturation = 1 lsl 3
+let debug_saturation = about_saturation lsl 16
+let about_tests = 1 lsl 4
+let debug_tests = about_tests lsl 16
+let about_else = 1 lsl 5
+let about_execution = 1 lsl 6
+let about_theory = 1 lsl 7
+let debug_theory = about_theory lsl 16
 
 let verboseOutput a =
   if !verbose_output || (!extra_output land about_verbose)>0 then

@@ -37,8 +37,10 @@ val get_body : statement -> atom list
 (** {3 Printing} *)
 
 val show_statement : statement -> string
+val show_atom : atom -> string
 val show_atom_body : atom -> string
 val show_atom_ineq : atom -> string
+val show_atom_list : atom list -> string
 val apply_subst_st : statement -> subst -> statement
 
 (** {3 Unification and substitutions} *)

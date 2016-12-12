@@ -115,6 +115,7 @@ let rec variables_of_term t =
      ) StringSet.empty ts
 
 let rec trace_statements_h oc tr rules substitutions body ineq world clauses =
+  extraOutput debug_seed "Computing trace statement for %s \n%!" (show_trace tr);
   match tr with
     | NullTrace -> List.rev clauses
     | Trace(Output(ch, t), remaining_trace) ->
@@ -186,6 +187,7 @@ let rec trace_statements_h oc tr rules substitutions body ineq world clauses =
 
 
 let trace_variantize (head, body, ineq) rules = 
+extraOutput debug_seed "Computing variants of statement %s <= %s || %s \n%!" (Horn.show_atom head)(Horn.show_atom_list body)(Horn.show_atom_list ineq);
   match head with
     | Predicate("knows", [world; recipe; t]) ->
 	let v = R.variants t rules in
@@ -196,6 +198,7 @@ let trace_variantize (head, body, ineq) rules =
 	trmap new_clause v
     | Predicate("reach", [w]) ->
 	let v = R.variants w rules in
+	extraOutput about_theory "body is computed \n%!";
 	let newhead sigma = Predicate("reach",
 				[R.normalize (apply_subst w sigma) rules]) in
 	let newbody sigma = trmap
@@ -211,7 +214,8 @@ let trace_variantize (head, body, ineq) rules =
 		 Predicate("ineq", [R.normalize (apply_subst w sigma) rules; R.normalize (apply_subst x sigma) rules; R.normalize (apply_subst y sigma) rules])
 	     | _ -> invalid_arg("ineq_variantize")) ineq in
 	trmap (fun (_, sigma) -> 
-	let st = Horn.new_clause (newhead sigma, newbody sigma, newineq sigma) in st) v 
+	let st = Horn.new_clause (newhead sigma, newbody sigma, newineq sigma) in 
+		extraOutput debug_seed " - %s \n%!" (Horn.show_statement st); st) v 
     | _ -> invalid_arg("variantize")
 ;;
 
@@ -229,6 +233,7 @@ let trace_statements tr rules =
 
 (** Compute the part of seed statements that comes from the theory. *)
 let context_statements symbol arity rules =
+	extraOutput debug_seed "Computing context statement for %s \n%!" symbol;
   let w = Var(fresh_variable ()) in
   let vYs = trmap fresh_variable (create_list () arity) in
   let vZs = trmap fresh_variable (create_list () arity) in
@@ -289,4 +294,5 @@ let seed_statements trace rew =
   let trace_clauses =
     trace_statements trace rew
   in
+extraOutput debug_seed "Seed computation completed \n\n%!" ;
     List.concat [context_clauses; trace_clauses]

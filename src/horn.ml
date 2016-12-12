@@ -239,6 +239,8 @@ let rec show_atom_ineq = function
       (show_term s) ^ " != " ^ (show_term t)
   | _ -> assert(false)
 
+let rec show_atom_list lst = Format.sprintf "%s" (String.concat ", " (trmap show_atom_body lst))
+
 let show_statement st =
   Format.sprintf
     "#%d@@%d(len=%d): %s <== %s || %s"

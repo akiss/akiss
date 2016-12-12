@@ -60,7 +60,7 @@ let tests_of_trace_job t rew =
 	extraOutput about_seed "Initial seed: %s \n\n"   (show_kb kb);
       verboseOutput "Saturating knowledge base\n%!";
       saturate kb rew ;
-	extraOutput about_saturated "Saturated base:  %s\n%!" (show_kb kb);
+	extraOutput about_saturation "Saturated base:  %s\n%!" (show_kb kb);
       checks kb rew
 
 let tests_of_trace show_progress t rew =
