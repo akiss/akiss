@@ -1339,7 +1339,7 @@ let for_each l (succ:'a list succ) (fail:cont) (f:'b -> 'a succ -> cont -> unit)
         f hd (fun x k -> aux (x::prefix) k tl) fail
   in aux [] fail l
 
-let rec find_recipe_h atom kbs (succ:term succ) (fail:cont) =
+let rec find_recipe_h atom kbs ineqs (succ:term succ) (fail:cont) =
   match atom with
     | Predicate("knows", [_; _; Fun(name, [])]) when startswith name "!n!" ->
         succ (Fun(name, [])) fail
@@ -1349,6 +1349,12 @@ let rec find_recipe_h atom kbs (succ:term succ) (fail:cont) =
              let sigmas = inst_w_t_ac atom (get_head clause) in
                for_some sigmas succ fail
                  (fun sigma succ fail ->
+			  (*List.iter (fun x ->  extraOutput about_else " Recipe get_ineq: %s \n" (show_atom_ineq (apply_subst_atom x sigma)))(get_ineq clause);
+			  List.iter (fun x ->  extraOutput about_else " Recipe global ineqs: %s \n" (show_atom_ineq (apply_subst_atom x sigma)))(ineqs);*)
+                    if not( List.for_all (fun x -> List.mem x (List.map (fun i -> apply_subst_atom i sigma) ineqs))(List.map (fun i -> apply_subst_atom i sigma)(get_ineq clause)))
+                    then fail ()
+                    else
+                    
                     let succ' theta k =
                       succ
                         (apply_subst (get_recipe (get_head clause)) theta)
@@ -1358,18 +1364,19 @@ let rec find_recipe_h atom kbs (succ:term succ) (fail:cont) =
                         (fun atom succ fail ->
                            let rvar = unbox_var (get_recipe atom) in
                            let succ recipe k = succ (rvar,recipe) k in
-                             find_recipe_h (apply_subst_atom atom sigma) kbs succ fail)))
+                             find_recipe_h (apply_subst_atom atom sigma) kbs ineqs succ fail)))
 
 exception Recipe_found of term
 
-let find_recipe atom kb =
+let find_recipe atom kb ineqs =
   let kbsolved = (only_knows (only_solved kb)) in
     try
-      find_recipe_h atom kbsolved
+      find_recipe_h atom kbsolved ineqs
         (fun r _ -> raise (Recipe_found r))
         (fun () -> ()) ;
-      Format.eprintf "Trying to get %s out of:\n%s\n\n%!"
+      Format.eprintf "Trying to get %s\n with constraints %s out of:\n%s\n\n%!"
         (show_atom atom)
+        (show_atom_list ineqs)
         (show_kb_list kbsolved) ;
       assert false
     with Recipe_found r -> (*extraOutput about_else "Recipe found: %s for %s \n%!" (show_term r)(show_atom atom);*)
@@ -1385,7 +1392,7 @@ let rec revworld_h (w : term) (a : term) : term =
 let revworld w =
   revworld_h w (Fun("empty", []))
 
-let rec recipize_h (tl : term) kb =
+let rec recipize_h (tl : term) kb ineqs =
   match tl with
     | Fun("empty", []) -> Fun("empty", [])
     | Fun("world", [t; w]) ->
@@ -1395,20 +1402,20 @@ let rec recipize_h (tl : term) kb =
 		let atom = Predicate("knows",
 				      [revworld w;
 				       Var(fresh_variable ()); tp]) in
-		let r = find_recipe atom kb in
-		Fun("world", [Fun("!in!", [ch; r]); recipize_h w kb])
+		let r = find_recipe atom kb ineqs in
+		Fun("world", [Fun("!in!", [ch; r]); recipize_h w kb ineqs])
 	    | Fun("!out!", [ch]) ->
-		Fun("world", [t; recipize_h w kb])
+		Fun("world", [t; recipize_h w kb ineqs])
 	    | Fun("!test!", []) ->
-		Fun("world", [t; recipize_h w kb])
+		Fun("world", [t; recipize_h w kb ineqs])
 	    | _ -> invalid_arg("recipize_h")
 	)
     | Var(_) -> invalid_arg("recipize_h with var")
     | _ -> invalid_arg("recipize_h")
 
-let recipize tl kb =
+let recipize tl kb ineqs =
   extraOutput about_debug "Recipizing %s\n%!" (show_term tl);
-  let result = recipize_h (revworld tl) kb in
+  let result = recipize_h (revworld tl) kb ineqs in
   (
   extraOutput about_debug "Result %s\n%!" (show_term (revworld result));
     result
@@ -1459,11 +1466,11 @@ let rec alpha_rename_namified_term term subst =
 let alpha_rename_namified_term term =
 	let (t,_)=alpha_rename_namified_term term [] in t
 
-let rec ineq_to_term ineq =
+(*let rec ineq_to_term ineq =
 	match ineq with 
 	| Predicate("ineq",[w;s;t]) :: q -> Fun("liste", [Fun("ineq",[w;s;t]); ineq_to_term q])
 	| [] -> Fun("empty",[])
-	| _ -> assert false
+	| _ -> assert false*)
 
 let rec satisfiable lst rules =
 	match lst with
@@ -1483,10 +1490,10 @@ let checks_reach kb rules =
          | Predicate("reach", [w]) -> 
 		if not (satisfiable (get_ineq x) rules) then checks else
 		let sigma = namify_subst w in
-		let ineq_body = (apply_subst (ineq_to_term (get_ineq x)) sigma) in
+		let ineq_body = List.map (fun x -> apply_subst_atom x sigma)(get_ineq x) in
 		(*extraOutput about_else "init %s\nsubst sigma> %s\nineq:: %s\n%!" (show_statement x)(show_subst sigma)(show_term ineq_body);*)
 		let new_check = alpha_rename_namified_term(
-			Fun ("check_run", [revworld (recipize (apply_subst w sigma) kb);ineq_body])) in 
+			Fun ("check_run", [revworld (recipize (apply_subst w sigma) kb ineq_body)])) in 
 		begin             
 			extraOutput (about_debug+about_else) "TESTER: %s \n%!" (show_term new_check); 
 			new_check  :: checks end 
@@ -1501,9 +1508,9 @@ let checks_ridentical kb rules =
          | Predicate("ridentical", [w; r; rp]) ->
              if not (satisfiable (get_ineq x) rules) then checks else
              let sigma = namify_subst w in
-             let new_w = revworld (recipize (apply_subst w sigma) kb) in
-		 let ineq_body = (apply_subst (ineq_to_term (get_ineq x)) sigma) in
-             let omega =
+ 		 let ineq_body = List.map (fun x -> apply_subst_atom x sigma)(get_ineq x) in
+             let new_w = revworld (recipize (apply_subst w sigma) kb ineq_body) in
+            let omega =
                List.map
                  (function
                     | Predicate("knows", [_; Var(vX); Var(vx)]) ->
@@ -1513,8 +1520,7 @@ let checks_ridentical kb rules =
              in
              let resulting_test = alpha_rename_namified_term(Fun("check_identity", [new_w;
                                                       apply_subst r omega;
-                                                      apply_subst rp omega; 
-									ineq_body])) in
+                                                      apply_subst rp omega])) in
              begin debugOutput "TESTER: %s\n" (show_term resulting_test) ; 
              resulting_test :: checks end 
          | _ -> checks)

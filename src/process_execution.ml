@@ -124,7 +124,7 @@ let rec execute_h process frame inequalities instructions rules =
 	  if R.equals x y rules then begin extraOutput about_execution "> test (%s = %s) is satisfied \n%!" (show_term x)(show_term y); 
 	    execute_h pr frame inequalities instructions rules end
 	  else 
-	    begin extraOutput about_execution "> test (%s = %s) not satisfied " (show_term x)(show_term y); raise Process_blocked end
+	    begin extraOutput about_execution "> test (%s = %s) not satisfied \n" (show_term x)(show_term y); raise Process_blocked end
       | (Trace(TestInequal(x, y), pr), Fun("world", _)) -> 
 	    execute_h pr frame (TestInequal(R.normalize x rules,R.normalize y rules) :: inequalities) instructions rules
       | (Trace(Output(ch, x), pr), Fun("world", [Fun("!out!", [chp]); ir])) ->
@@ -135,10 +135,53 @@ let rec execute_h process frame inequalities instructions rules =
       | _ -> raise Invalid_instruction
   )
 ;;
+	
 
+(* Shrink a process to some instructions *)
+let rec shrink process frame instructions =
+    (*extraOutput about_else "    %s\n>%s\n%!" (show_trace process)(show_term instructions);*)
+      match (process, instructions) with
+      | (NullTrace, Fun("empty", [])) -> NullTrace
+      | (NullTrace, _) -> raise Too_many_instructions
+      | (_, Fun("empty", [])) -> NullTrace (* Maybe exception *)
+      | (Trace(Input(ch, x), pr), Fun("world", [Fun("!in!", [chp; r]); ir])) ->
+		let rv = variabilize "Z" r in
+	  if chp = Fun(ch, []) then
+	    let new_process = shrink (apply_subst_tr pr [(x, (apply_frame rv frame))]) frame ir  in
+		Trace(InputMatch(ch,apply_frame rv frame),new_process)
+	  else
+	    raise Invalid_instruction
+      | (Trace(Test(x, y), pr), Fun("world", _)) -> 
+            Trace(Test(x,y),shrink pr frame  instructions)
+      | (Trace(TestInequal(x, y), pr), Fun("world", _)) -> 
+	      Trace(TestInequal(x,y),shrink pr frame instructions)
+      | (Trace(Output(ch, x), pr), Fun("world", [Fun("!out!", [chp]); ir])) ->
+	  if chp = Fun(ch, []) then
+		Trace(Output(ch, x), shrink pr (List.append frame [x])  ir)
+	  else
+	    raise Invalid_instruction
+      | _ -> raise Invalid_instruction
 
+let rec free process = 
+    match process with
+       | NullTrace -> NullTrace
+       | Trace(TestInequal(x, y), pr) -> free pr
+       | Trace(instr,pr) -> Trace(instr, free pr)
 
-let rec negate_instruction process frame  instructions rules =
+let rec negate process =
+    (*extraOutput about_else "    %s\n%!" (show_trace process);*)
+    match process with
+      | NullTrace -> []
+      | Trace(TestInequal(x, y), pr) -> Trace(Test(x, y), free pr) :: (negate pr)
+      | Trace(instr,pr) -> List.map (fun t -> Trace(instr, t)) (negate pr)
+
+let rec size_of instr =
+	match instr with 
+	| Fun("empty", []) -> 0
+	| Fun("world", [i;n]) -> 1 + (size_of n)
+      | _ -> raise Invalid_instruction
+
+(*let rec negate_instruction process frame  instructions rules =
   (
     match (process, instructions) with
       | (NullTrace, Fun("empty", [])) -> (NullTrace,[])
@@ -168,7 +211,7 @@ let rec negate_instruction process frame  instructions rules =
 	    raise Invalid_instruction
       | _ -> raise Invalid_instruction
   )
-;;
+;;*)
 
 let tests_of_trace rew t=
 extraOutput debug_seed "Computing seed of the negate process: %s \n" (show_trace t); 
@@ -198,13 +241,15 @@ let worldfilter f w =
   revworld (worldfilter_h f w (Fun("empty", [])))
 ;;
 
-let execute process frame instructions rules =
-  let slimmed_instructions = (worldfilter 
+let slim instructions = 
+	worldfilter 
        (fun x -> match x with
 	 | Fun("!test!", []) -> false
 	 | _ -> true)
-       instructions) in
-  if execute_h_dumb process slimmed_instructions then (* Avoid testing non compatible trace*)
+       instructions
+
+let execute process frame instructions rules =
+  if execute_h_dumb process (slim instructions) then (* Avoid testing non compatible trace*)
    begin
  	(* Printf.printf "Smart test \n" ;*)
      extraOutput about_execution
@@ -214,29 +259,25 @@ let execute process frame instructions rules =
     execute_h
     process
     frame []
-    (worldfilter 
-       (fun x -> match x with
-	 | Fun("!test!", []) -> false
-	 | _ -> true)
-       instructions)
+    (slim instructions)
     rules end
   else begin extraOutput about_tests "> non compatible " ; raise Process_blocked end
 ;;
 
-let rec add_test_at_end i pr = 
+(*let rec add_test_at_end i pr = 
 	match pr with
 	| Trace(a,b) -> List.map (fun tr -> Trace(a,tr)) (add_test_at_end i b)
-	| NullTrace -> List.map (fun ineq -> Trace(ineq,Trace(Output("then",Fun("xx",[])),NullTrace))) i
+	| NullTrace -> List.map (fun ineq -> Trace(ineq,Trace(Output("then",Fun("xx",[])),NullTrace))) i*)
 
-let rec has_test_at_end pr =
+(*let rec has_test_at_end pr =
 	match pr with
 	| Fun("empty",[]) -> false
 	| Fun("world", [Fun("!out!", [Fun("then",[])]);Fun("empty",[])]) -> true
 	| Fun("world",[a;b]) -> has_test_at_end b
 	| _ -> assert(false)
+*)
 
-
-let negate process frame instructions rules =
+(*let negate process frame instructions rules =
   let slimmed_instructions = (worldfilter 
        (fun x -> match x with
 	 | Fun("!test!", []) -> false
@@ -260,6 +301,7 @@ let negate process frame instructions rules =
 end
   else begin extraOutput about_tests "> non compatible " ; raise Process_blocked end
 ;;
+*)
 
 let is_reach_test test = match test with
   | Fun("check_run", _) -> true
@@ -267,34 +309,10 @@ let is_reach_test test = match test with
 ;;
 
 let is_ridentical_test test = match test with
-  | Fun("check_identity", [_; _; _;_]) -> true
+  | Fun("check_identity", [_; _; _]) -> true
   | _ -> false
 ;;
 
-
-(*let rec term_to_ineq term = match term with
-	| Fun("liste",[Fun("ineq",[w;x;y]);v]) -> TestInequal(x,y)::(term_to_ineq v)
-	| Fun("empty",[])-> []
-	| _ -> assert(false)*)
-
-
-(*let rec ineq_in ineq lstineq =
-	match ineq with 
-	| TestInequal(u,v)  -> begin
-	match lstineq with
-	| TestInequal(s,t) :: q -> if (u = s && v = t) || (u = t && v = s) then true else ineq_in ineq q
-	| [] -> false
-	| _ -> assert false
-	end
-	| _ -> assert false
-
-let rec ineq_incl l1 l2 =
-	match l1 with 
-	| t :: q -> if ineq_in t l2 then ineq_incl q l2 else false
-	| [] -> true
-
-let ineq_equal l1 l2 =
-	ineq_incl l1 l2 && ineq_incl l2 l1*)
 
 (* Forward equivalence use static equivalence on frame but this induces collision
 with alpha renaming *)
@@ -311,49 +329,62 @@ let rec trace_from_frame frame =
   | h::t -> Trace(Output("c",rename_free_names h), trace_from_frame t)
 ;;
 
-let get_the_test tests =
-	List.find (function Fun("check_run",[w;_]) -> has_test_at_end w | _ -> false) tests
+let get_the_tests n tests =
+	List.filter (function Fun("check_run",[w]) -> n = size_of w | _ -> false) tests
+
+let interpret (r,t) = r && t = []
 
 let rec auxi_reach source process w rules r rp =
-	    let (frame, inequalities) = execute process [] w rules in
-		extraOutput about_execution "Result of execution: there are %d inequalities:\n - %s\n%!" (List.length inequalities) (show_action_lst inequalities);
+		let size = size_of w in
+	      let (frame, inequalities) = execute process [] w rules in
+		extraOutput about_execution "Result of execution of %s\n%!" (show_term w);
 		let t1 = apply_frame r frame in
 		let t2 = apply_frame rp frame in
-		if(not (R.equals t1 t2 rules)) then (false,[]) else
-		if(inequalities = []) then (true,[]) else
-		let neg_process = negate process [] w rules in
-		let neg_source = negate source [] w rules in
-            let tests = List.filter (
-			fun x -> try let tst = get_the_test (tests_of_trace rules x) in 
-				extraOutput about_else "The test to check is %s\n%!" (show_term tst); 
-				not (List.exists (fun y -> check_reach NullTrace y tst rules) neg_source)
-				with 
-				| Not_found -> false) 
-			neg_process in
-		List.iter (fun x -> extraOutput about_else "Failure of: %s\n%!" (show_trace x)) tests;
-		(true,tests)
+		if(not (R.equals t1 t2 rules)) then begin extraOutput about_execution "   Failure of recipe\n";(false,[]) end else
+		if(inequalities = []) then 
+			begin extraOutput about_execution "   Success\n";(true,[]) end 
+		else begin
+		extraOutput about_else "  Checking else branches...\n%!";
+		let neg_process = negate (shrink process [] (slim w)) in
+		let all_tests = List.concat (List.map (
+				fun pr -> extraOutput about_else "  -negation process: %s\n%!" (show_trace pr); 
+					get_the_tests size (tests_of_trace rules pr))
+			neg_process) in
+		let neg_source = negate source in
+            let base_tests = List.filter (
+				fun tst ->
+				extraOutput about_else "      -one test to check is %s\n%!" (show_term tst); 
+				not (List.exists (fun trc -> interpret (check_reach NullTrace trc tst rules)) neg_source)
+			)
+			all_tests in
+		let words = List.map (function  Fun("check_run",[w]) -> w | _ -> invalid_arg("check_reach_2")) base_tests in
+		let tests = List.map (function  Fun("check_run",[w]) -> 
+			if (r = rp) 
+			then Fun("check_run",[w]) 
+			else Fun("check_identity",[w;r;rp]) | _ -> invalid_arg("check_reach_2")) base_tests in
+		extraOutput about_else "    o The test %s returns\n" (show_term w);
+		List.iter (fun x -> extraOutput about_else "    - Failure of: %s\n%!" (show_term x)) tests;
+		if (List.mem w words) then 
+			begin extraOutput about_else "Loop ! \n%!";(false,tests) end 
+		else (true,tests)
+		end
 
 and check_reach source process test_reach rules = 
   match test_reach with
-  | Fun("check_run", [w;ineq]) ->
+  | Fun("check_run", [w]) ->
       (
-	(* debugOutput *)
-	(*   "CHECK FOR: %s\nREACH: %s\n\n%!" *)
-	(*   (show_trace process) *)
-	(*   (show_term w); *)
-	(*Printf.printf "r ";*)
 	try
 	  (
 		extraOutput about_else "\n  Check reach of %s\non: %s\n%!" (show_term test_reach) (show_trace process);
 		let (result,tests) = auxi_reach source process w rules (Fun("!x!",[])) (Fun("!x!",[])) in
 		extraOutput about_else "RESULT of the test %s\n on %s\n is %b with list of size %d\n\n%!" (show_term test_reach) (show_trace process) result (List.length tests);
-		result && tests = []
+		(result,tests)
 	  )
 	with 
-	  | Process_blocked -> false
-	  | Too_many_instructions -> false
-	  | Not_a_recipe -> false
-	  | Invalid_instruction -> false
+	  | Process_blocked -> (false,[])
+	  | Too_many_instructions -> (false,[])
+	  | Not_a_recipe -> (false,[])
+	  | Invalid_instruction -> (false,[])
 	  | Bound_variable -> invalid_arg("the process binds twice the same variable")
       )
   | _ -> invalid_arg("check_reach")
@@ -361,23 +392,18 @@ and check_reach source process test_reach rules =
 
 let check_ridentical source process test_ridentical rules = 
   match test_ridentical with
-  | Fun("check_identity", [w; r; rp; ineq]) ->
+  | Fun("check_identity", [w; r; rp]) ->
     (
-	(*Printf.printf "ri %s" (show_term test_ridentical);*)
       try
-	(*let (frame, inequalities) = execute process [] w rules in
-	let t1 = apply_frame r frame in
-	let t2 = apply_frame rp frame in
-	  R.equals t1 t2 rules*)
 		extraOutput about_else "\n  Check identity of %s\non: %s\n%!" (show_term test_ridentical) (show_trace process);
 		let (result,tests) = auxi_reach source process w rules r rp in
 		extraOutput about_else "RESULT of the test %s\n on %s\n is %b with list of size %d\n\n%!" (show_term test_ridentical) (show_trace process) result (List.length tests);
-		result && tests = []
+		(result,tests)
       with 
-	| Process_blocked -> false
-	| Too_many_instructions -> false
-	| Not_a_recipe -> false
-	| Invalid_instruction -> false
+	| Process_blocked -> (false,[])
+	| Too_many_instructions -> (false,[])
+	| Not_a_recipe -> (false,[])
+	| Invalid_instruction -> (false,[])
 	| Bound_variable -> invalid_arg("the process binds twice the same variable")
     )
   | _ -> invalid_arg("check_ridentical")
@@ -406,6 +432,17 @@ exception Unknown_test;;
 let check_test source process test rules =
 	let result = 
   if is_ridentical_test test then
+    interpret (check_ridentical source process test rules) 
+  else if is_reach_test test then
+    interpret (check_reach source process test rules)
+  else
+    raise Unknown_test
+	in  result
+;;
+
+let update_tests source process test rules =
+	let result = 
+  if is_ridentical_test test then
     check_ridentical source process test rules
   else if is_reach_test test then
     check_reach source process test rules
@@ -414,11 +451,13 @@ let check_test source process test rules =
 	in  result
 ;;
 
+
+
 let rec check_reach_tests source trace reach_tests rules =
   match reach_tests with
     | h :: t ->
 	(
-	  if not (check_reach source trace h rules) then
+	  if not (interpret(check_reach source trace h rules)) then
 	    Some h
 	  else
 	    check_reach_tests source trace t rules
@@ -430,7 +469,7 @@ let rec check_ridentical_tests source trace ridentical_tests rules =
   match ridentical_tests with
     | h :: t ->
 	(
-	  if not (check_ridentical source trace h rules) then
+	  if not (interpret(check_ridentical source trace h rules)) then
 	    Some h
 	  else
 	    check_ridentical_tests source trace t rules

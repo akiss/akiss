@@ -16,5 +16,6 @@ val is_ridentical_test : term -> bool
 val trace_from_frame : term list -> trace
 val restrict_frame_to_channels : term list -> trace -> id list -> term list
 val check_test : trace -> trace -> term -> rules -> bool
+val update_tests : trace -> trace -> term -> rules -> bool * term list
 val check_reach_tests : trace -> trace -> term list -> rules -> term option
 val check_ridentical_tests : trace -> trace -> term list -> rules -> term option 

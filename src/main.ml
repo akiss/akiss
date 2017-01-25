@@ -71,11 +71,22 @@ let tests_of_trace show_progress t rew =
      return y
   | None -> failwith "fatal error in tests_of_trace"
 
-let check_test_multi_job source test trace_list =
+(*let check_test_multi_job source test trace_list =
 	extraOutput about_tests "\n\nStarting checks about %s \n%!" (show_term test);
  let result = List.exists (fun x -> check_test source x test Theory.rewrite_rules) trace_list in
 	extraOutput about_tests "Result of checks about %s : %b \n%!" (show_term test) result;
-	result
+	result*)
+
+let rec check_one_test source tests current_traces trace_list =
+	match (tests,current_traces) with 
+	| ([],_) -> true
+	| (t::other_tests,tr::other_traces) -> let (r,new_tests) = update_tests source tr t Theory.rewrite_rules in
+		extraOutput about_tests "Test of %s \n on %s \n result : %s , %i\n%!" (show_term t) (show_trace tr) (if r then "ok" else "fail")(List.length new_tests);
+		if r then 
+			check_one_test source (new_tests @ other_tests) current_traces trace_list
+		else check_one_test source tests other_traces trace_list
+	| (_,[]) -> false
+let rec check_test_multi_job source test traces = check_one_test source [test] traces traces
 
 let check_test_multi source test trace_list =
   do_count_tests test;

@@ -1,0 +1,21 @@
+#set xor;
+
+symbols ok/0, ko/0, h/1, pair/2, fst/1, snd/1, dec/2, enc/2, yop/1;
+
+private a, b, c, u;
+
+
+channels C;
+var X, Y, Z;
+
+rewrite dec(enc(X,Y),Y) -> X;
+rewrite fst(pair(X,Y)) -> X;
+rewrite snd(pair(X,Y)) -> Y;
+rewrite yop(ok) -> ok;
+rewrite yop(ko) -> ok;
+
+T1 = in(C,X).[X!=ok].out(C,ok).0;
+
+T2 = in(C,X).[yop(X)!=ok].out(C,ok).0 ++ in(C,X).[X=ko].out(C,ko).0;
+
+includedct? T1 in T2; 
