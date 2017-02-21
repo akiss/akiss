@@ -27,6 +27,7 @@ open Ast
 %token <int> Int
 %token XOR AC
 %token Symbols Private Var Rewrite EvRewrite Channels EvChannels Let
+%token Bang Nu
 %token PrivChannels
 %token LeftP RightP LeftB RightB
 %token Arrow Equals Dot Slash Comma Semicolon
@@ -100,6 +101,8 @@ main:
  | process InnerInterleave process { TempInterleave($1, $3) }
  | process InnerChoice process { TempChoice($1, $3) }
  | process InnerPhase process { TempPhase($1, $3) }
+ | Bang Int process { TempBang ($2,$3) }
+ | Nu Identifier Semicolon process { TempNu ($2,$4) }
  | LeftP process RightP { $2 }
  | Identifier { TempProcessRef($1) }
 

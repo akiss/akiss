@@ -89,32 +89,9 @@ let rec show_process process =
   String.concat "\n\n" (trmap show_trace process)
 ;;
 
-(** {3 Parsing} *)
+(** {3 Processes} *)
 
 open Ast
-
-let rec parse_action = function
-  | TempActionOut(ch, t) ->
-     if List.mem ch !channels then
-       Output(ch, parse_term t)
-     else if List.mem ch Theory.privchannels then
-       Output(ch, parse_term t)
-     else
-       Printf.ksprintf failwith "Undeclared channel: %s" ch
-  | TempActionIn(ch, x) ->
-    if List.mem ch !channels || List.mem ch Theory.privchannels  then
-      if List.mem x !vars then
-	Input(ch, x)
-      else
-	Printf.ksprintf failwith "Undeclared variable: %s" x
-    else
-      Printf.ksprintf failwith "Undeclared channel: %s" ch
-  | TempActionTest(s, t) -> Test(parse_term s, parse_term t)
-;;
-
-let replace_var_in_term x t term =
-  apply_subst term [(x, t)]
-;;
 
 type symbProcess =
   | SymbNul
@@ -132,7 +109,6 @@ let rec show_symb = function
   | SymbAlt (p1, p2) -> "(alt " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
   | SymbPhase (p1, p2) -> "(phase " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
 
-
 let rec actions_of p =
   match p with
   | SymbNul -> ActionSet.empty
@@ -142,9 +118,7 @@ let rec actions_of p =
   | SymbPhase (p1, p2) 
   | SymbPar (p1, p2) -> ActionSet.union (actions_of p1) (actions_of p2)
 
-
 let action_determinate p =
-
   let rec ad p =
     match p with
     | SymbNul -> true
@@ -161,6 +135,11 @@ let action_determinate p =
   | SymbPhase (p1, p2) -> ad p1 && ad p2
   | _ as p -> ad p
     
+(** {4 Substitution functions} *)
+
+let replace_var_in_term x t term =
+  apply_subst term [(x, t)]
+
 let replace_var_in_act x t a =
   match a with
   | Input (_, _) -> a
@@ -191,6 +170,45 @@ let rec replace_var_in_symb x t p =
      let p2 = replace_var_in_symb x t p2 in
      SymbPhase (p1, p2)
 
+let rec replace_var_in_trace x t = function
+  | NullTrace -> NullTrace
+  | Trace (Input (c,y), tt) ->
+      if x = y then
+        Trace (Input (c,y), tt)
+      else
+        Trace (Input (c,y), replace_var_in_trace x t tt)
+  | Trace (Output (c,u), tt) ->
+      Trace
+        (Output (c, replace_var_in_term x t u),
+         replace_var_in_trace x t tt)
+  | Trace (Test (u,v), tt) ->
+      Trace
+        (Test (replace_var_in_term x t u, replace_var_in_term x t v),
+         replace_var_in_trace x t tt)
+
+(** {4 Parsing} *)
+
+let parse_action = function
+  | TempActionOut (ch,t) ->
+      if List.mem ch !channels ||
+	 List.mem ch Theory.privchannels
+      then
+	Output (ch,parse_term t)
+      else
+	Printf.ksprintf failwith "Undeclared channel: %s" ch
+  | TempActionIn (ch,x) ->
+      if List.mem ch !channels || List.mem ch Theory.privchannels  then
+	if List.mem x !vars then
+	  Input (ch, x)
+	else
+	  Printf.ksprintf failwith "Undeclared variable: %s" x
+      else
+	Printf.ksprintf failwith "Undeclared channel: %s" ch
+  | TempActionTest(s, t) ->
+      Test (parse_term s, parse_term t)
+
+(** Convert from temp to symb processes,
+  * given an association list of (symb) process definitions. *)
 let rec symb_of_temp process processes =
   match process with
   | TempEmpty -> SymbNul
@@ -217,8 +235,57 @@ let rec symb_of_temp process processes =
      replace_var_in_symb x t p
   | TempProcessRef (name) ->
      List.assoc name processes
+  | TempNu (x,p) ->
+     let p = symb_of_temp p processes in
+     let rec fresh_name x =
+       if List.mem x !private_names || List.mem x !vars
+       then x else fresh_name (x^"_")
+     in
+     let xx = fresh_name x in
+       private_names := xx :: !private_names ;
+       replace_var_in_symb x (Fun (xx,[])) p
+  | TempBang (i,p) ->
+     let p = symb_of_temp p processes in
+     let rec rep = function
+       | 0 -> SymbNul
+       | 1 -> p
+       | i -> SymbPar (p, rep (i-1))
+     in rep i
 
-       
+(** {4 Process transformations} *)
+
+(** Enforce Barendregt convention on a trace *)
+let refresh p =
+  let bound = ref [] in
+  let seq p q = if q = SymbNul then p else SymbSeq (p,q) in
+
+  (* The actual refreshing function works on a list
+   * that represents a sequence, since inputs bind
+   * in the rest of the sequence they're in. *)
+  let rec aux = function
+    | [] -> SymbNul
+    | SymbNul :: l -> aux l
+    | SymbSeq (p,q) :: l -> aux (p::q::l) (* TODO p might only bind in q *)
+    | SymbPar (p,q) :: l ->
+        seq (SymbPar (aux [p], aux [q])) (aux l)
+    | SymbPhase (p,q) :: l ->
+        seq (SymbPhase (aux [p], aux [q])) (aux l)
+    | SymbAlt (p,q) :: l ->
+        seq (SymbAlt (aux [p], aux [q])) (aux l)
+    | SymbAct [Input (c,x)] :: l ->
+        let rec fresh x =
+          if List.mem x !bound then fresh (x^"_") else x
+        in
+        let xx = fresh x in
+          bound := xx :: !bound ;
+          if not (List.mem xx !vars) then vars := xx :: !vars ;
+          seq (SymbAct [Input (c,xx)]) (aux (List.map (replace_var_in_symb x (Var xx)) l))
+    | SymbAct [a] :: l ->
+        seq (SymbAct [a]) (aux l)
+    | SymbAct _ :: _ -> assert false
+
+  in aux [p]
+
 let rec simplify = function
   | SymbNul -> SymbNul
   | SymbAct a -> SymbAct a
@@ -459,7 +526,7 @@ let traces p =
   TraceSet.elements @@ traces @@ simplify @@ optimize_tests p
 
 let parse_process p ps =
-  simplify @@ symb_of_temp p ps
+  simplify @@ refresh @@ symb_of_temp p ps
 
 (** {2 Executing and testing processes} *)
 

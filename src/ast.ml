@@ -32,6 +32,8 @@ type tempProcess =
   | TempChoice of tempProcess * tempProcess
   | TempPhase of tempProcess * tempProcess
   | TempLet of string * tempTerm * tempProcess
+  | TempBang of int * tempProcess
+  | TempNu of string * tempProcess
   | TempEmpty
   | TempProcessRef of string
 		      

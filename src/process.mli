@@ -30,6 +30,8 @@ type trace =
   | NullTrace
   | Trace of action * trace
 
+val replace_var_in_trace : string -> term -> trace -> trace
+
 type process = trace list
 
 type symbProcess
