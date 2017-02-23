@@ -83,7 +83,11 @@ let rec show_trace = function
 let rec show_process process =
   String.concat "\n\n" (trmap show_trace process)
 
-(** {3 Processes} *)
+(** {3 Symbolic processes}
+  *
+  * Symbolic processes are intermediates between the input language
+  * processes (Ast.tempProcess) and processes as sets of traces.
+  * They feature less syntactic sugar than tempProcesses. *)
 
 open Ast
 
@@ -180,73 +184,7 @@ let rec replace_var_in_trace x t = function
         (Test (replace_var_in_term x t u, replace_var_in_term x t v),
          replace_var_in_trace x t tt)
 
-(** {4 Parsing} *)
-
-let parse_action = function
-  | TempActionOut (ch,t) ->
-      if List.mem ch !channels ||
-	 List.mem ch Theory.privchannels
-      then
-	Output (ch,parse_term t)
-      else
-	Printf.ksprintf failwith "Undeclared channel: %s" ch
-  | TempActionIn (ch,x) ->
-      if List.mem ch !channels || List.mem ch Theory.privchannels  then
-	if List.mem x !vars then
-	  Input (ch, x)
-	else
-	  Printf.ksprintf failwith "Undeclared variable: %s" x
-      else
-	Printf.ksprintf failwith "Undeclared channel: %s" ch
-  | TempActionTest(s, t) ->
-      Test (parse_term s, parse_term t)
-
-(** Convert from temp to symb processes,
-  * given an association list of (symb) process definitions. *)
-let rec symb_of_temp process processes =
-  match process with
-  | TempEmpty -> SymbNul
-  | TempAction a -> SymbAct [parse_action a]
-  | TempSequence (p1, p2) ->
-     let p1 = symb_of_temp p1 processes in
-     let p2 = symb_of_temp p2 processes in
-     SymbSeq (p1, p2)
-  | TempInterleave (p1, p2) ->
-     let p1 = symb_of_temp p1 processes in
-     let p2 = symb_of_temp p2 processes in
-     SymbPar (p1, p2)
-  | TempChoice (p1, p2) ->
-     let p1 = symb_of_temp p1 processes in
-     let p2 = symb_of_temp p2 processes in
-     SymbAlt (p1, p2)
-  | TempPhase (p1, p2) ->
-     let p1 = symb_of_temp p1 processes in
-     let p2 = symb_of_temp p2 processes in
-     SymbPhase (p1, p2)
-  | TempLet (x, tt, process) ->
-     let t = parse_term tt in
-     let p = symb_of_temp process processes in
-     replace_var_in_symb x t p
-  | TempProcessRef (name) ->
-     List.assoc name processes
-  | TempNu (x,p) ->
-     let p = symb_of_temp p processes in
-     let rec fresh_name x =
-       if List.mem x !private_names || List.mem x !vars
-       then x else fresh_name (x^"_")
-     in
-     let xx = fresh_name x in
-       private_names := xx :: !private_names ;
-       replace_var_in_symb x (Fun (xx,[])) p
-  | TempBang (i,p) ->
-     let p = symb_of_temp p processes in
-     let rec rep = function
-       | 0 -> SymbNul
-       | 1 -> p
-       | i -> SymbPar (p, rep (i-1))
-     in rep i
-
-(** {4 Process transformations} *)
+(** {4 Transformations on symbolic processes} *)
 
 (** Enforce Barendregt convention on a trace *)
 let refresh p =
@@ -330,6 +268,75 @@ and compress_tests res accu = function
   | p :: xs ->
      let res = if accu = [] then res else SymbAct accu :: res in
      compress_tests (p :: res) [] xs
+
+(** {4 Parsing} *)
+
+let parse_action = function
+  | TempActionOut (ch,t) ->
+      if List.mem ch !channels ||
+	 List.mem ch Theory.privchannels
+      then
+	Output (ch,parse_term t)
+      else
+	Printf.ksprintf failwith "Undeclared channel: %s" ch
+  | TempActionIn (ch,x) ->
+      if List.mem ch !channels || List.mem ch Theory.privchannels  then
+	if List.mem x !vars then
+	  Input (ch, x)
+	else
+	  Printf.ksprintf failwith "Undeclared variable: %s" x
+      else
+	Printf.ksprintf failwith "Undeclared channel: %s" ch
+  | TempActionTest(s, t) ->
+      Test (parse_term s, parse_term t)
+
+(** Convert from temp to symb processes,
+  * given an association list of (symb) process definitions. *)
+let rec symb_of_temp process processes =
+  match process with
+  | TempEmpty -> SymbNul
+  | TempAction a -> SymbAct [parse_action a]
+  | TempSequence (p1, p2) ->
+     let p1 = symb_of_temp p1 processes in
+     let p2 = symb_of_temp p2 processes in
+     SymbSeq (p1, p2)
+  | TempInterleave (p1, p2) ->
+     let p1 = symb_of_temp p1 processes in
+     let p2 = symb_of_temp p2 processes in
+     SymbPar (p1, p2)
+  | TempChoice (p1, p2) ->
+     let p1 = symb_of_temp p1 processes in
+     let p2 = symb_of_temp p2 processes in
+     SymbAlt (p1, p2)
+  | TempPhase (p1, p2) ->
+     let p1 = symb_of_temp p1 processes in
+     let p2 = symb_of_temp p2 processes in
+     SymbPhase (p1, p2)
+  | TempLet (x, tt, process) ->
+     let t = parse_term tt in
+     let p = symb_of_temp process processes in
+     replace_var_in_symb x t p
+  | TempProcessRef (name) ->
+     List.assoc name processes
+  | TempNu (x,p) ->
+     let p = symb_of_temp p processes in
+     let rec fresh_name x =
+       if List.mem x !private_names || List.mem x !vars
+       then x else fresh_name (x^"_")
+     in
+     let xx = fresh_name x in
+       private_names := xx :: !private_names ;
+       replace_var_in_symb x (Fun (xx,[])) p
+  | TempBang (i,p) ->
+     let p = symb_of_temp p processes in
+     let rec rep = function
+       | 0 -> SymbNul
+       | 1 -> p
+       | i -> SymbPar (p, rep (i-1))
+     in rep i
+
+let parse_process p ps =
+  simplify @@ refresh @@ symb_of_temp p ps
 
 (** {4 Operational semantics} *)
 
@@ -520,9 +527,6 @@ let traces_por p =
 let traces p =
   let traces = if !Theory.por then traces_por else traces in
   TraceSet.elements @@ traces @@ simplify @@ optimize_tests p
-
-let parse_process p ps =
-  simplify @@ refresh @@ symb_of_temp p ps
 
 (** {2 Executing and testing processes} *)
 
