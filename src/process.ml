@@ -26,18 +26,17 @@ module R = Theory.R
 
 (** {2 Processes} *)
 
-type action = 
+type action =
   | Input of id * id
   | Output of id * term
   | Test of term * term
-;;
 
 let is_io_action a =
   match a with
   | Input(_,_)
   | Output(_,_) -> true
   | Test (_,_) -> false
-      
+
 let remove_term_in_io_action a =
   match a with
   | Input(c,_) -> Input(c,"")
@@ -56,41 +55,33 @@ end
 type trace =
   | NullTrace
   | Trace of action * trace
-;;
 
 let rec trace_size = function
   | NullTrace -> 0
   | Trace(_, t) -> 1 + (trace_size t)
-;;
 
-
-type process = trace list;;
+type process = trace list
 
 (** {3 Printing} *)
 
 let str_of_tr tr = match tr with
   | Some(t) -> show_term t
   | None -> "ok"
-;;
 
-let show_frame fr = 
+let show_frame fr =
   show_string_list (trmap show_term fr)
-;;
 
 let show_action = function
   | Input(ch, x) -> Printf.sprintf "in(%s,%s)" ch x
   | Output(ch, t) -> Printf.sprintf "out(%s,%s)" ch (show_term t)
   | Test(s,t) -> Printf.sprintf "[%s=%s]" (show_term s) (show_term t)
-;;
 
 let rec show_trace = function
   | NullTrace -> "0"
   | Trace(a, rest) -> (show_action a) ^ "." ^ (show_trace rest)
-;;
 
 let rec show_process process =
   String.concat "\n\n" (trmap show_trace process)
-;;
 
 (** {3 Processes} *)
 
@@ -116,9 +107,9 @@ let rec actions_of p =
   match p with
   | SymbNul -> ActionSet.empty
   | SymbAct a -> ActionSet.of_list (List.rev_map remove_term_in_io_action (List.filter is_io_action a))
-  | SymbSeq (p1, p2) 
-  | SymbAlt (p1, p2) 
-  | SymbPhase (p1, p2) 
+  | SymbSeq (p1, p2)
+  | SymbAlt (p1, p2)
+  | SymbPhase (p1, p2)
   | SymbPar (p1, p2) -> ActionSet.union (actions_of p1) (actions_of p2)
 
 let action_determinate p =
@@ -130,14 +121,14 @@ let action_determinate p =
     | SymbSeq (p, SymbNul) -> ad p
     | SymbSeq (SymbSeq (p1, p2), p) -> ad p1 &&  ad (SymbSeq (p2, p))
     | SymbPar (p1, p2) -> ActionSet.is_empty (ActionSet.inter (actions_of p1) (actions_of p2)) && ( ad p1 && ad p2 )
-    | SymbSeq (_, _) 
+    | SymbSeq (_, _)
     | SymbPhase (_, _)
     | SymbAlt (_, _) -> false
   in
-  match p with 
+  match p with
   | SymbPhase (p1, p2) -> ad p1 && ad p2
   | _ as p -> ad p
-    
+ 
 (** {4 Substitution functions} *)
 
 let replace_var_in_term x t term =
@@ -340,6 +331,8 @@ and compress_tests res accu = function
      let res = if accu = [] then res else SymbAct accu :: res in
      compress_tests (p :: res) [] xs
 
+(** {4 Operational semantics} *)
+
 let rec delta = function
   | SymbNul -> []
   | SymbAct a -> [ a, SymbNul ]
@@ -533,25 +526,22 @@ let parse_process p ps =
 
 (** {2 Executing and testing processes} *)
 
-exception Process_blocked;;
-exception Not_a_recipe;;    
-exception Bound_variable;;
-exception Invalid_instruction;;
-exception Too_many_instructions;;
+exception Process_blocked
+exception Not_a_recipe
+exception Bound_variable
+exception Invalid_instruction
+exception Too_many_instructions
 
-let is_parameter name = 
+let is_parameter name =
   (String.sub name 0 1 = "w") &&
     (try
        let pcounter = (String.sub name 1 ((String.length name) - 1)) in
        let ipcounter = (int_of_string pcounter) in
        (ipcounter >= 0) && (pcounter = string_of_int ipcounter)
      with _ -> false)
-;;
 
 let param_count name =
   int_of_string (String.sub name 1 ((String.length name) - 1))
-;;
-
 
 let rec apply_frame term frame =
   match term with
@@ -565,12 +555,11 @@ let rec apply_frame term frame =
       Fun(f, trmap (fun x -> apply_frame x frame) tl)
     | Var(x) ->
       Var(x)
-;;
 
 let rec apply_subst_tr pr sigma = match pr with
   | NullTrace -> NullTrace
-  | Trace(Input(ch, x), rest) -> 
-    if bound x sigma then 
+  | Trace(Input(ch, x), rest) ->
+    if bound x sigma then
       raise Bound_variable
     else if bound ch sigma then
       raise Bound_variable
@@ -580,189 +569,174 @@ let rec apply_subst_tr pr sigma = match pr with
     Trace(Test(apply_subst x sigma, apply_subst y sigma), apply_subst_tr rest sigma)
   | Trace(Output(ch, x), rest) ->
     Trace(Output(ch, apply_subst x sigma), apply_subst_tr rest sigma)
-;;
 
 let rec execute_h_dumb process instructions =
-  (
-    (* debugOutput *)
-    (*   "Executing: %s\nFrame: %s\nInstructions: %s\n\n%!" *)
-    (*   (show_trace process) *)
-    (*   (show_term_list frame) *)
-    (*   (show_term_list instructions); *)
-    match (process, instructions) with
-      | (NullTrace, Fun("empty", [])) -> true
-      | (NullTrace, _) -> false
-      | (_, Fun("empty", [])) -> true
-      | (Trace(Input(ch, x), pr), Fun("world", [Fun("!in!", [chp; r]); ir])) ->
-	  if chp = Fun(ch, []) then
-	    execute_h_dumb pr ir
-	  else
-	   false
-      | (Trace(Test(x, y), pr), Fun("world", _)) -> execute_h_dumb pr instructions
-      | (Trace(Output(ch, x), pr), Fun("world", [Fun("!out!", [chp]); ir])) ->
-	  if chp = Fun(ch, []) then
-	    execute_h_dumb pr ir 
-	  else
-	   false 
-      | _ ->  false
-  )
-;;
+  (* debugOutput *)
+  (*   "Executing: %s\nFrame: %s\nInstructions: %s\n\n%!" *)
+  (*   (show_trace process) *)
+  (*   (show_term_list frame) *)
+  (*   (show_term_list instructions); *)
+  match (process, instructions) with
+    | (NullTrace, Fun("empty", [])) -> true
+    | (NullTrace, _) -> false
+    | (_, Fun("empty", [])) -> true
+    | (Trace(Input(ch, x), pr), Fun("world", [Fun("!in!", [chp; r]); ir])) ->
+        if chp = Fun(ch, []) then
+          execute_h_dumb pr ir
+        else
+         false
+    | (Trace(Test(x, y), pr), Fun("world", _)) -> execute_h_dumb pr instructions
+    | (Trace(Output(ch, x), pr), Fun("world", [Fun("!out!", [chp]); ir])) ->
+        if chp = Fun(ch, []) then
+          execute_h_dumb pr ir
+        else
+         false
+    | _ ->  false
 
 let rec execute_h process frame instructions rules =
-  (
-    (* debugOutput *)
-    (*   "Executing: %s\nFrame: %s\nInstructions: %s\n\n%!" *)
-    (*   (show_trace process) *)
-    (*   (show_term_list frame) *)
-    (*   (show_term_list instructions); *)
-    match (process, instructions) with
-      | (NullTrace, Fun("empty", [])) -> frame
-      | (NullTrace, _) -> raise Too_many_instructions
-      | (_, Fun("empty", [])) -> frame
-      | (Trace(Input(ch, x), pr), Fun("world", [Fun("!in!", [chp; r]); ir])) ->
-	  if chp = Fun(ch, []) then
-	    execute_h (apply_subst_tr pr [(x, (apply_frame r frame))]) frame ir rules
-	  else
-	    raise Invalid_instruction
-      | (Trace(Test(x, y), pr), Fun("world", _)) ->
-	  if R.equals x y rules then
-	    execute_h pr frame instructions rules
-	  else
-	    raise Process_blocked
-      | (Trace(Output(ch, x), pr), Fun("world", [Fun("!out!", [chp]); ir])) ->
-	  if chp = Fun(ch, []) then
-	    execute_h pr (List.append frame [x]) ir rules
-	  else
-	    raise Invalid_instruction
-      | _ -> raise Invalid_instruction
-  )
-;;
-
-
+  (* debugOutput *)
+  (*   "Executing: %s\nFrame: %s\nInstructions: %s\n\n%!" *)
+  (*   (show_trace process) *)
+  (*   (show_term_list frame) *)
+  (*   (show_term_list instructions); *)
+  match (process, instructions) with
+    | (NullTrace, Fun("empty", [])) -> frame
+    | (NullTrace, _) -> raise Too_many_instructions
+    | (_, Fun("empty", [])) -> frame
+    | (Trace(Input(ch, x), pr), Fun("world", [Fun("!in!", [chp; r]); ir])) ->
+        if chp = Fun(ch, []) then
+          execute_h (apply_subst_tr pr [(x, (apply_frame r frame))]) frame ir rules
+        else
+          raise Invalid_instruction
+    | (Trace(Test(x, y), pr), Fun("world", _)) ->
+        if R.equals x y rules then
+          execute_h pr frame instructions rules
+        else
+          raise Process_blocked
+    | (Trace(Output(ch, x), pr), Fun("world", [Fun("!out!", [chp]); ir])) ->
+        if chp = Fun(ch, []) then
+          execute_h pr (List.append frame [x]) ir rules
+        else
+          raise Invalid_instruction
+    | _ -> raise Invalid_instruction
 
 let rec worldfilter_h f w a =
   match w with
     | Fun("empty", []) -> a
-    | Fun("world", [h; t]) -> 
-	if f h then
-	  worldfilter_h f t (Fun("world", [h; a]))
-	else
-	  worldfilter_h f t a
+    | Fun("world", [h; t]) ->
+        if f h then
+          worldfilter_h f t (Fun("world", [h; a]))
+        else
+          worldfilter_h f t a
     | Var(_) -> invalid_arg("worldfilter_h variable")
     | _ -> invalid_arg("worldfilter_h")
-;;
 
 let worldfilter f w =
   revworld (worldfilter_h f w (Fun("empty", [])))
-;;
 
 let execute process frame instructions rules =
-  let slimmed_instructions = (worldfilter 
+  let slimmed_instructions = (worldfilter
        (fun x -> match x with
-	 | Fun("!test!", []) -> false
-	 | _ -> true)
+          | Fun("!test!", []) -> false
+          | _ -> true)
        instructions) in
   if execute_h_dumb process slimmed_instructions then
    begin
- 	(* Printf.printf "Smart test \n" ;*)
-    execute_h
-    process
-    frame
-    (worldfilter 
-       (fun x -> match x with
-	 | Fun("!test!", []) -> false
-	 | _ -> true)
-       instructions)
-    rules end
-  else begin (*Printf.printf "Stupid test avoided !\n";*) raise Process_blocked end
-;;
+     (* Printf.printf "Smart test \n" ;*)
+     execute_h
+       process
+       frame
+       (worldfilter
+          (fun x -> match x with
+             | Fun("!test!", []) -> false
+             | _ -> true)
+          instructions)
+       rules end
+  else begin
+  (*Printf.printf "Stupid test avoided !\n";*)
+    raise Process_blocked
+  end
 
 let is_reach_test test = match test with
   | Fun("check_run", _) -> true
   | _ -> false
-;;
 
 let check_reach process test_reach rules = match test_reach with
   | Fun("check_run", [w]) ->
-      (
-	(* debugOutput *)
-	(*   "CHECK FOR: %s\nREACH: %s\n\n%!" *)
-	(*   (show_trace process) *)
-	(*   (show_term w); *)
-	(*Printf.printf "r ";*)
-	try
-	  (
-	    ignore (execute process [] w rules); true
-	  )
-	with 
-	  | Process_blocked -> false
-	  | Too_many_instructions -> false
-	  | Not_a_recipe -> false
-	  | Invalid_instruction -> false
-	  | Bound_variable -> invalid_arg("the process binds twice the same variable")
-      )
+      (* debugOutput *)
+      (*   "CHECK FOR: %s\nREACH: %s\n\n%!" *)
+      (*   (show_trace process) *)
+      (*   (show_term w); *)
+      (*Printf.printf "r ";*)
+      begin try
+        (
+          ignore (execute process [] w rules); true
+        )
+      with
+        | Process_blocked -> false
+        | Too_many_instructions -> false
+        | Not_a_recipe -> false
+        | Invalid_instruction -> false
+        | Bound_variable ->
+            invalid_arg "the process binds twice the same variable"
+      end
   | _ -> invalid_arg("check_reach")
-;;
 
 let is_ridentical_test test = match test with
   | Fun("check_identity", [_; _; _]) -> true
   | _ -> false
-;;
 
 (* Forward equivalence use static equivalence on frame but this induces collision
 with alpha renaming *)
 let rec rename_free_names term =
-	match term with
-	| Fun(n,[]) when startswith n "!n!" -> Fun("!!"^n^"!!",[])
-	| Fun(f,x) -> Fun(f, List.map rename_free_names x)
-	| Var(x)->Var(x)
+  match term with
+    | Fun(n,[]) when startswith n "!n!" -> Fun("!!"^n^"!!",[])
+    | Fun(f,x) -> Fun(f, List.map rename_free_names x)
+    | Var(x)->Var(x)
 
 let rec trace_from_frame frame =
 (* create trace out(c,t1). ... .out(c,tn).0 from frame [t1, ..., tn] *)
   match frame with
   | [] ->  NullTrace
   | h::t -> Trace(Output("c",rename_free_names h), trace_from_frame t)
-;;
-
 
 let check_ridentical process test_ridentical rules = match test_ridentical with
   | Fun("check_identity", [w; r; rp]) ->
-    (
-	(*Printf.printf "ri %s" (show_term test_ridentical);*)
-      try
-	let frame = execute process [] w rules in
-	let t1 = apply_frame r frame in
-	let t2 = apply_frame rp frame in
-	  R.equals t1 t2 rules
-      with 
-	| Process_blocked -> false
-	| Too_many_instructions -> false
-	| Not_a_recipe -> false
-	| Invalid_instruction -> false
-	| Bound_variable -> invalid_arg("the process binds twice the same variable")
-    )
+      (*Printf.printf "ri %s" (show_term test_ridentical);*)
+      begin try
+        let frame = execute process [] w rules in
+        let t1 = apply_frame r frame in
+        let t2 = apply_frame rp frame in
+          R.equals t1 t2 rules
+      with
+        | Process_blocked -> false
+        | Too_many_instructions -> false
+        | Not_a_recipe -> false
+        | Invalid_instruction -> false
+        | Bound_variable ->
+            invalid_arg "the process binds twice the same variable"
+      end
   | _ -> invalid_arg("check_ridentical")
-;;
 
 let rec restrict_frame_to_channels frame trace ch =
 (* given a trace and a frame resulting from an execution of trace, restrict elements in frame to outputs on channels in ch *)
-  match frame with 
+  match frame with
   | [] -> []
   | h :: tframe ->
-    (
-      match trace with 
-      | NullTrace -> []
-      | Trace(a, rest) ->
-	(
-	  match a with
-	  | Output(chan, term) -> if List.exists (fun x -> x = chan) ch then h::restrict_frame_to_channels tframe rest ch  else restrict_frame_to_channels tframe rest ch
-	  | _ -> restrict_frame_to_channels frame rest ch
-	)
-    )
-;;
+      begin match trace with
+        | NullTrace -> []
+        | Trace(a, rest) ->
+            begin match a with
+              | Output(chan, term) ->
+                  if List.exists (fun x -> x = chan) ch then
+                    h::restrict_frame_to_channels tframe rest ch
+                  else
+                    restrict_frame_to_channels tframe rest ch
+              | _ -> restrict_frame_to_channels frame rest ch
+            end
+      end
 
-
-exception Unknown_test;;
+exception Unknown_test
 
 let check_test process test rules =
   if is_ridentical_test test then
@@ -771,28 +745,21 @@ let check_test process test rules =
     check_reach process test rules
   else
     raise Unknown_test
-;;
 
 let rec check_reach_tests trace reach_tests rules =
   match reach_tests with
     | h :: t ->
-	(
-	  if not (check_reach trace h rules) then
-	    Some h
-	  else
-	    check_reach_tests trace t rules
-	)
+        if not (check_reach trace h rules) then
+          Some h
+        else
+          check_reach_tests trace t rules
     | [] -> None
-;;
 
 let rec check_ridentical_tests trace ridentical_tests rules =
   match ridentical_tests with
     | h :: t ->
-	(
-	  if not (check_ridentical trace h rules) then
-	    Some h
-	  else
-	    check_ridentical_tests trace t rules
-	)
+        if not (check_ridentical trace h rules) then
+          Some h
+        else
+          check_ridentical_tests trace t rules
     | [] -> None
-;;
