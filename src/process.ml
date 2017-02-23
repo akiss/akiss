@@ -43,12 +43,15 @@ let remove_term_in_io_action a =
   | Input(c,_) -> Input(c,"")
   | Output(c,_) -> Output(c,Var(""))
   | Test(t1,t2) -> Test(t1,t2)
-    
-module ActionSet = Set.Make( 
-  struct
-    let compare = Pervasives.compare
-    type t = action
-  end );;
+
+module ActionSet = struct
+  include
+    Set.Make (struct
+                let compare = Pervasives.compare
+                type t = action
+              end)
+  let of_list l = List.fold_left (fun x s -> add s x) empty l
+end
 
 type trace =
   | NullTrace
