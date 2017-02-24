@@ -49,9 +49,9 @@ clean::
 	rm -f akiss
 	rm -f .depend
 
-doc: $(ML)
+doc: $(ML) $(MLI) Makefile
 	mkdir -p doc
-	ocamldoc -stars $(ML) -html -d doc
+	ocamldoc -stars $(ML) $(wildcard *mli) -html -d doc
 
 # TESTS
 

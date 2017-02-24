@@ -17,9 +17,11 @@
 (* 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.              *)
 (****************************************************************************)
 
-open Term
+(** This module defines the internal representations of processes,
+  * together with their operational semantics, process transformations,
+  * and transformation from the source language used in parsing. *)
 
-(** {2 Processes} *)
+open Term
 
 type action =
   | Input of id * id
@@ -30,25 +32,25 @@ type trace =
   | NullTrace
   | Trace of action * trace
 
-val replace_var_in_trace : string -> term -> trace -> trace
-
-type process = trace list
-
+(** Symbolic processes are intermediates between the input language
+  * processes (Ast.tempProcess) and processes as sets of traces.
+  * They feature less syntactic sugar than tempProcesses. *)
 type symbProcess
 
-(** {3 Printing} *)
-
-val str_of_tr : term option -> varName
-val show_frame : term list -> string
-val show_trace : trace -> string
-
-(** {3 Parsing} *)
-
 val parse_process : Ast.tempProcess -> (string * symbProcess) list -> symbProcess
-val action_determinate : symbProcess -> bool
-val traces : symbProcess -> process
 
-(** {2 Executing and testing processes} *)
+val action_determinate : symbProcess -> bool
+
+val traces : symbProcess -> trace list
+
+(** {2 Frames} *)
+
+type frame = term list
+
+val trace_from_frame : frame -> trace
+val restrict_frame_to_channels : frame -> trace -> id list -> term list
+
+(** {2 Execution of a trace} *)
 
 exception Process_blocked
 exception Not_a_recipe
@@ -56,12 +58,22 @@ exception Bound_variable
 exception Invalid_instruction
 exception Too_many_instructions
 
-val execute : trace -> term list -> term -> rules -> term list
+val execute : trace -> frame -> term -> rules -> term list
+
+(** {2 Tests} *)
 
 val is_reach_test : term -> bool
-val is_ridentical_test : term -> bool
-val trace_from_frame : term list -> trace
-val restrict_frame_to_channels : term list -> trace -> id list -> term list
-val check_test : trace -> term -> rules -> bool
 val check_reach_tests : trace -> term list -> rules -> term option
+
+val is_ridentical_test : term -> bool
 val check_ridentical_tests : trace -> term list -> rules -> term option
+
+val check_test : trace -> term -> rules -> bool
+
+(** {2 Printing} *)
+
+val show_frame : frame -> string
+val show_trace : trace -> string
+
+(** Printing of test result. *)
+val str_of_tr : term option -> string

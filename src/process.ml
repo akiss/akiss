@@ -17,6 +17,10 @@
 (* 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.              *)
 (****************************************************************************)
 
+(** This module defines the internal representations of processes,
+  * together with their operational semantics, process transformations,
+  * and transformation from the source language used in parsing. *)
+
 open Parser
 open Util
 open Term
@@ -83,11 +87,42 @@ let rec show_trace = function
 let rec show_process process =
   String.concat "\n\n" (trmap show_trace process)
 
-(** {3 Symbolic processes}
-  *
-  * Symbolic processes are intermediates between the input language
-  * processes (Ast.tempProcess) and processes as sets of traces.
-  * They feature less syntactic sugar than tempProcesses. *)
+(** {2 Frames} *)
+
+(* Forward equivalence use static equivalence on frame but this induces collision
+with alpha renaming *)
+let rec rename_free_names term =
+  match term with
+    | Fun(n,[]) when startswith n "!n!" -> Fun("!!"^n^"!!",[])
+    | Fun(f,x) -> Fun(f, List.map rename_free_names x)
+    | Var(x)->Var(x)
+
+(** Create trace [out(c,t1). ... .out(c,tn).0] from frame [[t1; ...; tn]]. *)
+let rec trace_from_frame frame =
+  match frame with
+  | [] ->  NullTrace
+  | h::t -> Trace(Output("c",rename_free_names h), trace_from_frame t)
+
+(** Given a trace and a frame resulting from an execution of that trace,
+  * restrict elements in frame to outputs on the given channels list. *)
+let rec restrict_frame_to_channels frame trace ch =
+  match frame with
+  | [] -> []
+  | h :: tframe ->
+      begin match trace with
+        | NullTrace -> []
+        | Trace(a, rest) ->
+            begin match a with
+              | Output(chan, term) ->
+                  if List.exists (fun x -> x = chan) ch then
+                    h::restrict_frame_to_channels tframe rest ch
+                  else
+                    restrict_frame_to_channels tframe rest ch
+              | _ -> restrict_frame_to_channels frame rest ch
+            end
+      end
+
+(** {2 Symbolic processes} *)
 
 open Ast
 
@@ -116,6 +151,9 @@ let rec actions_of p =
   | SymbPhase (p1, p2)
   | SymbPar (p1, p2) -> ActionSet.union (actions_of p1) (actions_of p2)
 
+(** Check whether a symbolic process is action determinate.
+  * This is a heuristic; it may return false on some action determinate
+  * processes, but action determinacy is guaranteed when true is returned. *)
 let action_determinate p =
   let rec ad p =
     match p with
@@ -218,6 +256,8 @@ let refresh p =
 
   in aux [p]
 
+(** Simplify symbolic processes, exploiting the fact that the null process
+  * is a unit for all composition operators. *)
 let rec simplify = function
   | SymbNul -> SymbNul
   | SymbAct a -> SymbAct a
@@ -239,6 +279,9 @@ let rec simplify = function
   | SymbPhase (p1, p2) ->
       SymbPhase (simplify p1, simplify p2)
 
+(** Avoid useless interleavings by grouping actions:
+  * tests can be grouped together, and they can also be grouped
+  * with the next observable action. *)
 let rec optimize_tests p =
   if Theory.privchannels = []
   then unlinearize SymbNul (compress_tests [] [] (linearize p))
@@ -336,6 +379,9 @@ let rec symb_of_temp process processes =
        | i -> SymbPar (p, rep (i-1))
      in rep i
 
+(** Transform a temporary process (source language) to a symbolic
+  * process. Simplifications are automatically performed, as well
+  * as renamings to enforce Barendregt's convention. *)
 let parse_process p ps =
   simplify @@ refresh @@ symb_of_temp p ps
 
@@ -525,6 +571,9 @@ let traces_por p =
             s1 TraceSet.empty
     | _ -> traces_por p
 
+(** Compute the set of traces of a process.
+  * When [Theory.por] is set, the compressed semantics will be used.
+  * Before computing traces, tests are grouped together for optimization. *)
 let traces p =
   let traces = if !Theory.por then traces_por else traces in
   TraceSet.elements @@ traces @@ simplify @@ optimize_tests p
@@ -639,6 +688,18 @@ let rec worldfilter_h f w a =
 let worldfilter f w =
   revworld (worldfilter_h f w (Fun("empty", [])))
 
+type frame = term list
+
+(** [execute trace frame instructions rules]
+  * attempts to execute instructions along the given trace,
+  * given a starting frame and set of rewrite rules.
+  * @return the resulting frame.
+  * @raise Bound_variable if variable naming conventions are not respected.
+  * @raise Process_blocked if the process is stuck because of a failed test.
+  * @raise Invalid_instruction if two variable bindings rely on the same
+  *   variable name.
+  * @raise Not_a_recipe if an invalid recipe is met, relying on variable
+  *   outside of the frame's domain. *)
 let execute process frame instructions rules =
   let slimmed_instructions = (worldfilter
        (fun x -> match x with
@@ -661,6 +722,8 @@ let execute process frame instructions rules =
   (*Printf.printf "Stupid test avoided !\n";*)
     raise Process_blocked
   end
+
+(** {2 Tests} *)
 
 let is_reach_test test = match test with
   | Fun("check_run", _) -> true
@@ -691,20 +754,6 @@ let is_ridentical_test test = match test with
   | Fun("check_identity", [_; _; _]) -> true
   | _ -> false
 
-(* Forward equivalence use static equivalence on frame but this induces collision
-with alpha renaming *)
-let rec rename_free_names term =
-  match term with
-    | Fun(n,[]) when startswith n "!n!" -> Fun("!!"^n^"!!",[])
-    | Fun(f,x) -> Fun(f, List.map rename_free_names x)
-    | Var(x)->Var(x)
-
-let rec trace_from_frame frame =
-(* create trace out(c,t1). ... .out(c,tn).0 from frame [t1, ..., tn] *)
-  match frame with
-  | [] ->  NullTrace
-  | h::t -> Trace(Output("c",rename_free_names h), trace_from_frame t)
-
 let check_ridentical process test_ridentical rules = match test_ridentical with
   | Fun("check_identity", [w; r; rp]) ->
       (*Printf.printf "ri %s" (show_term test_ridentical);*)
@@ -723,34 +772,23 @@ let check_ridentical process test_ridentical rules = match test_ridentical with
       end
   | _ -> invalid_arg("check_ridentical")
 
-let rec restrict_frame_to_channels frame trace ch =
-(* given a trace and a frame resulting from an execution of trace, restrict elements in frame to outputs on channels in ch *)
-  match frame with
-  | [] -> []
-  | h :: tframe ->
-      begin match trace with
-        | NullTrace -> []
-        | Trace(a, rest) ->
-            begin match a with
-              | Output(chan, term) ->
-                  if List.exists (fun x -> x = chan) ch then
-                    h::restrict_frame_to_channels tframe rest ch
-                  else
-                    restrict_frame_to_channels tframe rest ch
-              | _ -> restrict_frame_to_channels frame rest ch
-            end
-      end
-
 exception Unknown_test
 
-let check_test process test rules =
+(** Check if an ridentical or reachability test passes
+  * against a given trace and rewrite rules.
+  * @raise Unknown_test if the input term is not a ridentical
+  * or reachability test. *)
+let check_test trace test rules =
   if is_ridentical_test test then
-    check_ridentical process test rules
+    check_ridentical trace test rules
   else if is_reach_test test then
-    check_reach process test rules
+    check_reach trace test rules
   else
     raise Unknown_test
 
+(** Given a list of reachability tests, a trace and rewrite rules,
+  * checks if all tests pass.
+  * @return [None] if all tests pass, [Some t] if test [t] fails. *)
 let rec check_reach_tests trace reach_tests rules =
   match reach_tests with
     | h :: t ->
@@ -760,6 +798,9 @@ let rec check_reach_tests trace reach_tests rules =
           check_reach_tests trace t rules
     | [] -> None
 
+(** Given a list of ridentical tests, a trace and rewrite rules,
+  * checks if all tests pass.
+  * @return [None] if all tests pass, [Some t] if test [t] fails. *)
 let rec check_ridentical_tests trace ridentical_tests rules =
   match ridentical_tests with
     | h :: t ->

@@ -471,7 +471,7 @@ let evequiv ~expected s t =
             (show_tests tests);
           if expected then exit 1
 
-let trace_of_process (p : process) : trace =
+let trace_of_process p : trace =
   match p with
     | [t] -> t
     | _ -> invalid_arg "trace_of_process: not a trace"

@@ -1,4 +1,4 @@
-.PHONY: src/akiss
+.PHONY: src/akiss doc
 
 all: src/akiss
 
@@ -7,6 +7,9 @@ src/akiss:
 
 clean::
 	$(MAKE) -C src clean
+
+doc:
+	$(MAKE) -C src doc
 
 # STATS
 
