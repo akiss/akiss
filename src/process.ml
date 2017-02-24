@@ -236,7 +236,8 @@ let rec simplify = function
      | SymbNul, p -> p
      | p, SymbNul -> p
      | p1, p2 -> SymbAlt (p1, p2))
-  | SymbPhase _ as p -> p
+  | SymbPhase (p1, p2) ->
+      SymbPhase (simplify p1, simplify p2)
 
 let rec optimize_tests p =
   if Theory.privchannels = []
