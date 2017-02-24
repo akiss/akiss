@@ -330,12 +330,38 @@ let rec trace_from_frame frame =
 ;;
 
 let get_the_tests n tests =
-	List.filter (function Fun("check_run",[w]) -> n = size_of w | _ -> false) tests
+	List.filter (function Fun("check_run",[w]) -> n = size_of (slim w) | _ -> false) tests
 
 let interpret (r,t) = r && t = []
 
+let rec find_delta process instructions =
+	match (process,instructions) with
+      | (NullTrace, Fun("empty", [])) -> []
+      | (NullTrace, _) -> assert false
+      | (_, Fun("empty", [])) -> []
+      | (Trace(Input(ch, x), pr), Fun("world", [Fun("!in!", [chp; r]); ir])) ->
+		(x,r):: find_delta pr ir 
+      | (Trace(InputMatch(ch, t), pr), Fun("world", [Fun("!in!", [chp; r]); ir])) ->
+		let recipe = (variabilize "W" r ) in
+		let substs = R.matchers t recipe [] in
+		begin match substs with 
+		| [] -> assert false
+		| [subst] -> extraOutput about_execution "Matchers=  %s\n%!" (show_subst subst);
+			subst @ find_delta pr ir
+		| _ -> assert false
+		end
+      | (Trace(Test(x, y), pr), Fun("world", _)) -> 
+	    find_delta pr  instructions 
+      | (Trace(TestInequal(x, y), pr), Fun("world", _)) -> 
+	   find_delta pr instructions 
+      | (Trace(Output(ch, x), pr), Fun("world", [Fun("!out!", [chp]); ir])) ->
+	  find_delta pr ir
+	| (_ , Fun("world", [_; ir])) -> find_delta process ir
+      | _ -> begin extraOutput about_else "err: %s , %s" (show_trace process)(show_term instructions) ; assert false end
+  
+
 let rec auxi_reach source process w rules r rp =
-		let size = size_of w in
+		let size = size_of (slim w) in
 	      let (frame, inequalities) = execute process [] w rules in
 		extraOutput about_execution "Result of execution of %s\n%!" (show_term w);
 		let t1 = apply_frame r frame in
@@ -345,7 +371,8 @@ let rec auxi_reach source process w rules r rp =
 			begin extraOutput about_execution "   Success\n";(true,[]) end 
 		else begin
 		extraOutput about_else "  Checking else branches...\n%!";
-		let neg_process = negate (shrink process [] (slim w)) in
+		let shrinked = shrink process [] (slim w) in 
+		let neg_process = negate shrinked in
 		let all_tests = List.concat (List.map (
 				fun pr -> extraOutput about_else "  -negation process: %s\n%!" (show_trace pr); 
 					get_the_tests size (tests_of_trace rules pr))
@@ -358,10 +385,14 @@ let rec auxi_reach source process w rules r rp =
 			)
 			all_tests in
 		let words = List.map (function  Fun("check_run",[w]) -> w | _ -> invalid_arg("check_reach_2")) base_tests in
-		let tests = List.map (function  Fun("check_run",[w]) -> 
-			if (r = rp) 
-			then Fun("check_run",[w]) 
-			else Fun("check_identity",[w;r;rp]) | _ -> invalid_arg("check_reach_2")) base_tests in
+		let tests = List.map 
+			(function  Fun("check_run",[w]) -> 
+				if (r = rp) 
+				then Fun("check_run",[w]) 
+				else let delta = find_delta shrinked w in 
+					extraOutput about_else "        Delta : %s \n" (show_subst delta);
+					Fun("check_identity",[w;apply_subst (variabilize "Z" r) (delta);apply_subst (variabilize "Z" rp) (delta)]) 
+			| _ -> invalid_arg("check_reach_2")) base_tests in
 		extraOutput about_else "    o The test %s returns\n" (show_term w);
 		List.iter (fun x -> extraOutput about_else "    - Failure of: %s\n%!" (show_term x)) tests;
 		if (List.mem w words) then 
