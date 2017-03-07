@@ -28,7 +28,7 @@ module R = Theory.R
 
 type action = 
   | Input of id * id
-  | InputMatch of id * term
+(*  | InputMatch of id * term *)
   | Output of id * term
   | Test of term * term
   | TestInequal of term * term
@@ -60,7 +60,7 @@ let show_frame fr =
 
 let show_action = function
   | Input(ch, x) -> Printf.sprintf "in(%s,%s)" ch x
-  | InputMatch(ch, t) -> Printf.sprintf "in(%s,<%s>)" ch (show_term t)
+(*  | InputMatch(ch, t) -> Printf.sprintf "in(%s,<%s>)" ch (show_term t)*)
   | Output(ch, t) -> Printf.sprintf "out(%s,%s)" ch (show_term t)
   | Test(s,t) -> Printf.sprintf "[%s=%s]" (show_term s) (show_term t)
   | TestInequal(s,t) -> Printf.sprintf "[%s!=%s]" (show_term s) (show_term t)
@@ -126,7 +126,7 @@ let rec show_symb = function
 let replace_var_in_act x t a =
   match a with
   | Input (_, _) -> a
-  | InputMatch (c, term) -> InputMatch (c, replace_var_in_term x t term)
+ (* | InputMatch (c, term) -> InputMatch (c, replace_var_in_term x t term)*)
   | Output (c, term) -> Output (c, replace_var_in_term x t term)
   | Test (term1, term2) ->
      let term1 = replace_var_in_term x t term1 in
@@ -273,7 +273,7 @@ let classify_action = function
   | Input (c, x) :: _ ->
      if List.mem c Theory.privchannels
      then PrivateInput (c, x) else PublicAction
-  | InputMatch (c, t) :: _ -> assert (false) (* Todo *)
+(*  | InputMatch (c, t) :: _ -> assert (false) (* Todo *)*)
   | Output (c, t) :: _ ->
      if List.mem c Theory.privchannels
      then PrivateOutput (c, t) else PublicAction

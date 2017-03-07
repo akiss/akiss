@@ -104,7 +104,7 @@ let trace_equationalize (head, body, ineq) rules sigmas=
   trmap newclause sigmas
 ;;
 
-module StringSet = Set.Make (String)
+(*module StringSet = Set.Make (String)
 
 let rec variables_of_term t =
   match t with
@@ -112,7 +112,7 @@ let rec variables_of_term t =
   | Fun (_, ts) ->
      List.fold_left (fun accu t ->
        StringSet.union accu (variables_of_term t)
-     ) StringSet.empty ts
+     ) StringSet.empty ts*)
 
 let rec trace_statements_h oc tr rules substitutions body ineq world clauses =
   extraOutput debug_seed "Computing trace statement for %s \n%!" (show_trace tr);
@@ -143,24 +143,28 @@ let rec trace_statements_h oc tr rules substitutions body ineq world clauses =
 			  next_body, ineq)  in
 	trace_statements_h oc remaining_trace rules substitutions next_body ineq
 	  next_world (List.concat [ trace_equationalize new_reach rules substitutions; clauses])
-    | Trace(InputMatch(ch, t), remaining_trace) ->
-	let next_world = worldadd world (Fun("!in!", [Fun(ch, []); t])) in (*TOdo!!*)
-	let vart = variables_of_term t in
+(*   | Trace(InputMatch(ch, t), remaining_trace) ->
 	let rec var_of_body body = 
 		match body with 
 		| [] -> StringSet.empty
 		| Predicate("knows", [_; _;Var(v)])::q -> StringSet.add v (var_of_body q)
 		| _ -> assert false in
+	let vart = variables_of_term t in
+	let new_vars = (StringSet.diff vart (var_of_body body)) in
+	(*let recipe_vars = List.map (fun v -> (Var(fresh_variable ()),Var(x))) new_vars*)
+	let next_world = worldadd world (Fun("!pattern!", [Fun(ch, []); t]))  in
+	let next_world = StringSet.fold 
+		(fun v w -> worldadd w (Fun("!in!", [Fun("!hidden!", []); Var(v)]))) new_vars next_world in (*TOdo!!*)
 	let next_body = StringSet.fold 
 		(fun x l -> Predicate("knows",[world; Var(fresh_variable ());Var(x)])::l)
-		(StringSet.diff vart (var_of_body body))
+		new_vars
 		body in
 	let new_reach = (Predicate(
 			    "reach",
 			    [next_world]),
 			  next_body, ineq)  in
 	trace_statements_h oc remaining_trace rules substitutions next_body ineq
-	  next_world (List.concat [ trace_equationalize new_reach rules substitutions; clauses])
+	  next_world (List.concat [ trace_equationalize new_reach rules substitutions; clauses])*)
     | Trace(Test(s, t), remaining_trace) ->
     	let next_world = worldadd world (Fun("!test!", [])) in
     	let next_substitutions = List.concat (List.map 

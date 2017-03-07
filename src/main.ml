@@ -61,7 +61,15 @@ let tests_of_trace_job t rew =
       verboseOutput "Saturating knowledge base\n%!";
       saturate kb rew ;
 	extraOutput about_saturation "Saturated base:  %s\n%!" (show_kb kb);
-      checks kb rew
+(* pour les inegalites *)
+	let free_checks = checks kb rew in
+	if (has_inequalities t)
+	then 
+		List.filter (function Fun("check_run",[trace]) -> is_executable t trace Theory.rewrite_rules
+					  | Fun("check_identity",[trace;_;_]) -> is_executable t trace Theory.rewrite_rules
+					| _ -> assert false) free_checks
+      else
+		free_checks
 
 let tests_of_trace show_progress t rew =
   Nproc.submit ppool (tests_of_trace_job t) rew >>= fun x ->
@@ -80,13 +88,13 @@ let tests_of_trace show_progress t rew =
 let rec check_one_test source tests current_traces trace_list =
 	match (tests,current_traces) with 
 	| ([],_) -> true
-	| (t::other_tests,tr::other_traces) -> let (r,new_tests) = update_tests source tr t Theory.rewrite_rules in
-		extraOutput about_tests "Test of %s \n on %s \n result : %s , %i\n%!" (show_term t) (show_trace tr) (if r then "ok" else "fail")(List.length new_tests);
+	| (t::other_tests,tr::other_traces) -> 	do_count (); let (r,new_tests) = update_tests source tr t Theory.rewrite_rules in
 		if r then 
 			check_one_test source (new_tests @ other_tests) current_traces trace_list
 		else check_one_test source tests other_traces trace_list
-	| (_,[]) -> false
-let rec check_test_multi_job source test traces = check_one_test source [test] traces traces
+	| (t,[]) ->  normalOutput "\nFAILURE OF \n"; List.iter (fun test -> normalOutput " -*- %s \n" (show_term test)) t; false
+
+let check_test_multi_job source test traces = check_one_test source [test] traces traces
 
 let check_test_multi source test trace_list =
   do_count_tests test;
@@ -131,8 +139,8 @@ let rec variables_of_trace t =
           (* the Barendregt convention is not honoured *)
           raise (MultiplyBoundVariable x);
        StringSet.remove x fvs, StringSet.add x bvs
-     | InputMatch(_, t) -> let xs =  variables_of_term t in
-       StringSet.diff fvs xs, StringSet.union xs bvs
+(*     | InputMatch(_, t) -> let xs =  variables_of_term t in
+       StringSet.diff fvs xs, StringSet.union xs bvs *)
      | Output (_, t) -> StringSet.union fvs (variables_of_term t), bvs
      | Test (t1, t2) ->
         let xs1 = variables_of_term t1 in
@@ -392,9 +400,9 @@ let check_ev_ind_test trace1 trace2 test =
   (* check that reach test from trace1 is reachable in trace2 and check static equiv of two resulting frames *)
   match test with
   | Fun("check_run", [w]) ->
-      let (f1,_) = execute trace1 [] w Theory.rewrite_rules in
+      let f1 = execute trace1 [] w Theory.rewrite_rules in
       begin try
-        let (f2,_) = execute trace2 [] w Theory.rewrite_rules in
+        let f2 = execute trace2 [] w Theory.rewrite_rules in
         let rf1 = restrict_frame_to_channels f1 trace1 Theory.evchannels in
         let rf2 = restrict_frame_to_channels f2 trace2 Theory.evchannels in
         stat_equiv rf1 rf2 Theory.evrewrite_rules >>= fun r ->

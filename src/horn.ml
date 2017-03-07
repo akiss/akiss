@@ -781,6 +781,9 @@ let consequence st kb rules =
                      (* debugOutput "Against %s\n%!" *)
                      (*   (show_statement x); *)
                      let sigma = inst_w_t head (get_head x) Not_a_consequence in
+			(*	assert( not( List.for_all (fun z -> List.mem z (List.map (fun i -> apply_subst_atom i sigma) (get_ineq x)))(List.map (fun i -> apply_subst_atom i sigma)(ineq))));*)
+                   (* then raise Not_a_consequence
+                    else*)
                      let subresults =
                        List.map
                          (fun y ->
@@ -1408,6 +1411,7 @@ let rec recipize_h (tl : term) kb ineqs =
 		Fun("world", [t; recipize_h w kb ineqs])
 	    | Fun("!test!", []) ->
 		Fun("world", [t; recipize_h w kb ineqs])
+	    | Fun("!pattern!",[ch;r]) ->  recipize_h w kb ineqs (*todo*)
 	    | _ -> invalid_arg("recipize_h")
 	)
     | Var(_) -> invalid_arg("recipize_h with var")
@@ -1472,14 +1476,14 @@ let alpha_rename_namified_term term =
 	| [] -> Fun("empty",[])
 	| _ -> assert false*)
 
-let rec satisfiable lst rules =
+(*let rec satisfiable lst rules =
 	match lst with
 	| [] -> true
 	| Predicate("ineq",[w;s;t]) :: q -> 
 		if R.equals s t rules then 
 			begin extraOutput about_else "The predicate %s is not satisfiable.\n%!" (show_atom (Predicate("ineq",[w;s;t]))); false end
 		else satisfiable q rules
-	| _ -> assert false
+	| _ -> assert false*)
 
 (** Extract all successful reachability tests from a knowledge base. *)
 let checks_reach kb rules =
@@ -1488,14 +1492,13 @@ let checks_reach kb rules =
     (fun checks x -> 
        match (get_head x) with
          | Predicate("reach", [w]) -> 
-		if not (satisfiable (get_ineq x) rules) then checks else
 		let sigma = namify_subst w in
 		let ineq_body = List.map (fun x -> apply_subst_atom x sigma)(get_ineq x) in
 		(*extraOutput about_else "init %s\nsubst sigma> %s\nineq:: %s\n%!" (show_statement x)(show_subst sigma)(show_term ineq_body);*)
 		let new_check = alpha_rename_namified_term(
 			Fun ("check_run", [revworld (recipize (apply_subst w sigma) kb ineq_body)])) in 
 		begin             
-			extraOutput (about_debug+about_else) "TESTER: %s \n%!" (show_term new_check); 
+			extraOutput (about_debug+about_saturation) "TESTER: %s \n%!" (show_term new_check); 
 			new_check  :: checks end 
          | _ -> checks)
     [] solved
@@ -1506,7 +1509,6 @@ let checks_ridentical kb rules =
     (fun x checks -> 
        match (get_head x) with
          | Predicate("ridentical", [w; r; rp]) ->
-             if not (satisfiable (get_ineq x) rules) then checks else
              let sigma = namify_subst w in
  		 let ineq_body = List.map (fun x -> apply_subst_atom x sigma)(get_ineq x) in
              let new_w = revworld (recipize (apply_subst w sigma) kb ineq_body) in
@@ -1521,7 +1523,7 @@ let checks_ridentical kb rules =
              let resulting_test = alpha_rename_namified_term(Fun("check_identity", [new_w;
                                                       apply_subst r omega;
                                                       apply_subst rp omega])) in
-             begin debugOutput "TESTER: %s\n" (show_term resulting_test) ; 
+             begin extraOutput (about_debug+about_saturation) "TESTER: %s\n" (show_term resulting_test) ; 
              resulting_test :: checks end 
          | _ -> checks)
     kb []
