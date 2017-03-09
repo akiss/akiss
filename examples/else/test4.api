@@ -18,4 +18,4 @@ T1 = in(C,X).[X!=ok].out(C,ok).0;
 
 T2 = in(C,X).[yop(X)!=ok].out(C,ok).0;
 
-includedct? T1 in T2; 
+not includedct? T1 in T2; 

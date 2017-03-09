@@ -23,7 +23,7 @@ open Term
 
 type action =
   | Input of id * id
-  | InputMatch of id * term
+(*  | InputMatch of id * term *)
   | Output of id * term
   | Test of term * term
   | TestInequal of term * term

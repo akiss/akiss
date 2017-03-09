@@ -9,10 +9,12 @@ exception Bound_variable
 exception Invalid_instruction
 exception Too_many_instructions
 
-val execute : trace -> term list -> term -> rules -> term list * action list
+val execute : trace -> term list -> term -> rules -> term list 
 
 val is_reach_test : term -> bool
 val is_ridentical_test : term -> bool
+val is_executable : trace -> term -> rules -> bool
+val has_inequalities : trace -> bool
 val trace_from_frame : term list -> trace
 val restrict_frame_to_channels : term list -> trace -> id list -> term list
 val check_test : trace -> trace -> term -> rules -> bool

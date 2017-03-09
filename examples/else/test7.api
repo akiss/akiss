@@ -6,7 +6,7 @@ private a, b, c, u;
 
 
 channels C;
-var X, Y, Z;
+var W, X, Y, Z;
 
 rewrite dec(enc(X,Y),Y) -> X;
 rewrite fst(pair(X,Y)) -> X;
@@ -14,8 +14,8 @@ rewrite snd(pair(X,Y)) -> Y;
 rewrite yop(ok) -> ok;
 rewrite yop(ko) -> ok;
 
-T1 = in(C,Y).in(C,X).[Y!=ok].[X!=ko].out(C,h(X,a)).out(C,h(Y,a)).in(C,Z).[Z=h(ok,a)].out(C,ok).0;
+T1 = in(C,Y).in(C,X).[Y!=ko].out(C,h(X,a)).out(C,h(Y,a)).in(C,Z).in(C,W).[Z=h(W,a)].out(C,ok).0;
 
-T2 = in(C,Y).in(C,X).[Y!=ok].[X!=ko].out(C,h(X,a)).out(C,h(Y,b)).in(C,Z).[Z=h(ok,a)].out(C,ok).0;
+T2 = in(C,Y).in(C,X).[Y!=ko].out(C,h(X,a)).out(C,h(Y,b)).in(C,Z).in(C,W).[Z=h(W,b)].out(C,ok).0;
 
 not includedct? T1 in T2; 

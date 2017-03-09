@@ -437,7 +437,7 @@ let rec auxi_reach source process w rules r rp =
 	extraOutput about_execution " Result of execution of %s\n%!" (show_term w);
 	let t1 = apply_frame r frame in
 	let t2 = apply_frame rp frame in
-	if(not (R.equals t1 t2 rules)) then begin extraOutput about_tests "   Execution does leads to an equality\n";(false,[]) end else
+	if(not (R.equals t1 t2 rules)) then begin extraOutput about_tests "   The identity of %s and %s is not satisfied\n" (show_term t1)(show_term t2);(false,[]) end else
 	if not(has_inequalities process) then 
 		begin extraOutput about_tests "   Success\n";(true,[]) end 
 	else begin

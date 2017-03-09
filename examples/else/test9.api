@@ -1,0 +1,16 @@
+#set xor;
+
+symbols ok/0;
+private a, b, c, u;
+
+
+channels C;
+var W, X, Y, Z;
+
+
+
+T1 = in(C,X).out(C,X).0;
+
+T2 = in(C,X).[X!=ok].out(C,X).0 ++ in(C,X).[X=ok].out(C,a).0;
+
+not includedct? T1 in T2; 
