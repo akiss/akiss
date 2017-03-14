@@ -11,6 +11,6 @@ var W, X, Y, Z;
 
 T1 = in(C,X).out(C,X).0;
 
-T2 = in(C,X).[X!=ok].out(C,X).0 ++ in(C,X).[X=ok].out(C,a).0;
+T2 = in(C,X).if X=ok then out(C,a).out(C,ok) else out(C,X).out(C,ok);
 
 not includedct? T1 in T2; 

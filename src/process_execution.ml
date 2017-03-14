@@ -49,8 +49,6 @@ let rec apply_subst_tr pr sigma = match pr with
       raise Bound_variable
     else
       Trace(Input(ch, x), apply_subst_tr rest sigma)
-(*  | Trace(InputMatch(ch, t), rest) ->
-      Trace(InputMatch(ch, apply_subst t sigma), apply_subst_tr rest sigma)*)
   | Trace(Test(x, y), rest) ->
     Trace(Test(apply_subst x sigma, apply_subst y sigma), apply_subst_tr rest sigma)
   | Trace(TestInequal(x, y), rest) ->
@@ -64,6 +62,15 @@ let rec variabilize str term =
 	| Fun(f,[]) when (startswith f "!n!") -> Var(str^(String.sub f 3 ((String.length f) - 3)))
 	| Fun(f,a) -> Fun(f,List.map (variabilize str) a)
 	| Var(x) -> Var(x)
+
+
+let rec has_inequalities process = 
+	match process with 
+	| NullTrace -> false
+	| Trace(Input(_, _), pr) -> has_inequalities pr
+	| Trace(Test(_, _), pr) -> has_inequalities pr
+	| Trace(TestInequal(_, _), _) -> true
+	| Trace(Output(_,_),pr)-> has_inequalities pr
 
 let rec execute_h_dumb process instructions =
   (
@@ -80,11 +87,6 @@ let rec execute_h_dumb process instructions =
 	    execute_h_dumb pr ir
 	  else
 	   false
- (*    | (Trace(InputMatch(ch, t), pr), Fun("world", [Fun("!in!", [chp; r]); ir])) ->
-	  if chp = Fun(ch, []) then 
-	    execute_h_dumb pr ir
-	  else
-	   false *)
       | (Trace(Test(x, y), pr), Fun("world", _)) -> execute_h_dumb pr instructions
       | (Trace(TestInequal(x, y), pr), Fun("world", _)) -> execute_h_dumb pr instructions
       | (Trace(Output(ch, x), pr), Fun("world", [Fun("!out!", [chp]); ir])) ->
@@ -95,15 +97,6 @@ let rec execute_h_dumb process instructions =
       | _ ->  false
   )
 ;;
-
-let rec has_inequalities process = 
-	match process with 
-	| NullTrace -> false
-	| Trace(Input(_, _), pr) -> has_inequalities pr
-(*	| Trace(InputMatch(_, _), pr) -> has_inequalities pr*)
-	| Trace(Test(_, _), pr) -> has_inequalities pr
-	| Trace(TestInequal(_, _), _) -> true
-	| Trace(Output(_,_),pr)-> has_inequalities pr
 
 let rec execute_h process frame  instructions rules =
   (extraOutput about_execution "%s ; %s \n%!" (show_trace process)(show_term instructions);
@@ -116,19 +109,6 @@ let rec execute_h process frame  instructions rules =
 	    execute_h (apply_subst_tr pr [(x, (apply_frame r frame))]) frame  ir rules
 	  else
 	    raise Invalid_instruction
-(*      | (Trace(InputMatch(ch, t), pr), Fun("world", [Fun("!in!", [chp; r]); ir])) ->
-	  if chp = Fun(ch, []) then begin
-		let recipe = (variabilize "W" (apply_frame r frame)) in
-		extraOutput about_execution "Matching  %s and %s \n%!" (show_term recipe)(show_term t);
-		let substs = R.matchers t recipe [] in
-		match substs with 
-		| [] -> raise Process_blocked
-		| [subst] -> extraOutput about_execution "Matchers=  %s\n%!" (show_subst subst);
-	    execute_h (apply_subst_tr pr subst) frame  ir rules
-		| _ -> assert false
-		end
-	  else
-	    raise Invalid_instruction*)
       | (Trace(Test(x, y), pr), Fun("world", _)) -> extraOutput about_execution "> Testing (%s = %s) \n%!" (show_term x)(show_term y); 
 	  if R.equals x y rules then begin extraOutput about_execution "> test (%s = %s) is satisfied \n%!" (show_term x)(show_term y); 
 	    execute_h pr frame  instructions rules end
@@ -208,44 +188,22 @@ let rec size_of instr =
 	| Fun("world", [i;n]) -> 1 + (size_of n)
       | _ -> raise Invalid_instruction
 
-(*let rec negate_instruction process frame  instructions rules =
-  (
-    match (process, instructions) with
-      | (NullTrace, Fun("empty", [])) -> (NullTrace,[])
-      | (NullTrace, _) -> raise Too_many_instructions
-      | (_, Fun("empty", [])) -> (NullTrace,[])
-      | (Trace(Input(ch, x), pr), Fun("world", [Fun("!in!", [chp; r]); ir])) ->
-		let rv = variabilize "Z" r in
-	  if chp = Fun(ch, []) then
-	    let (new_process,inequalities) = negate_instruction (apply_subst_tr pr [(x, (apply_frame rv frame))]) frame  ir rules in
-		(Trace(InputMatch(ch,apply_frame rv frame),new_process),inequalities)
-	  else
-	    raise Invalid_instruction
-      | (Trace(Test(x, y), pr), Fun("world", _)) -> 
-	  if R.equals x y rules then
-            begin  let (new_process,inequalities) =negate_instruction pr frame  instructions rules in 
-            (Trace(Test(x,y),new_process),inequalities) end
-	  else 
-	    begin raise Process_blocked end
-      | (Trace(TestInequal(x, y), pr), Fun("world", _)) -> 
-	   let (new_process,inequalities) =  negate_instruction pr frame  instructions rules in
-		(new_process,(Test(R.normalize  x rules,R.normalize y rules) :: inequalities))
-      | (Trace(Output(ch, x), pr), Fun("world", [Fun("!out!", [chp]); ir])) ->
-	  if chp = Fun(ch, []) then
-	    let (new_process,inequalities) = negate_instruction pr (List.append frame [x])  ir rules in
-		(Trace(Output(ch, x), new_process),inequalities)
-	  else
-	    raise Invalid_instruction
-      | _ -> raise Invalid_instruction
-  )
-;;*)
+(*let get_the_reach n tests =
+	let rec size_of tr =
+	match tr with
+	| Fun("empty", []) -> 0
+	| Fun("world", [Fun("!in!",[Fun(ch,[]); _]);w]) -> if startswith ch "!hidden!" then (size_of w) else 1 + (size_of w)
+	| Fun("world", [Fun("!out!",_);w]) ->  1 + (size_of w)
+	| Fun("world", [i;w]) ->(size_of w)
+      | _ -> raise Invalid_instruction in
+	List.filter (function Predicate("reach",[w]) ->  size_of w = n | _ -> true) tests*)
 
-let tests_of_trace rew t=
+let tests_of_trace_reach size rew t=
 extraOutput debug_seed "      Computing seed of the negate process: %s \n" (show_trace t); 
-  let seed = Seed.seed_statements t rew in
+  let seed = Seed.seed_statements ~one_reach:true t rew in
     let kb = initial_kb seed rew in
 	extraOutput about_seed "      |Initial seed: %s \n\n"   (show_kb kb);
-      saturate kb rew ;
+      saturate ~only_reach:true  kb rew ;
 	extraOutput about_saturation "      |Saturated base:  %s\n%!" (show_kb kb);
       checks kb rew
 
@@ -289,7 +247,7 @@ let execute process frame instructions rules =
     frame 
     (slim instructions)
     rules end
-  else begin extraOutput about_tests "> non compatible " ; raise Process_blocked end
+  else begin extraOutput about_execution "[trace with a different shape] " ; raise Process_blocked end
 ;;
 
 let is_executable process instructions rules =
@@ -304,44 +262,6 @@ let is_executable process instructions rules =
 	  | Bound_variable -> invalid_arg("the process binds twice the same variable")
       )
 
-(*let rec add_test_at_end i pr = 
-	match pr with
-	| Trace(a,b) -> List.map (fun tr -> Trace(a,tr)) (add_test_at_end i b)
-	| NullTrace -> List.map (fun ineq -> Trace(ineq,Trace(Output("then",Fun("xx",[])),NullTrace))) i*)
-
-(*let rec has_test_at_end pr =
-	match pr with
-	| Fun("empty",[]) -> false
-	| Fun("world", [Fun("!out!", [Fun("then",[])]);Fun("empty",[])]) -> true
-	| Fun("world",[a;b]) -> has_test_at_end b
-	| _ -> assert(false)
-*)
-
-(*let negate process frame instructions rules =
-  let slimmed_instructions = (worldfilter 
-       (fun x -> match x with
-	 | Fun("!test!", []) -> false
-	 | _ -> true)
-       instructions) in
-  if execute_h_dumb process slimmed_instructions then (* Avoid testing non compatible trace*)
-   begin
-     extraOutput about_else 
-      "Computing negation: %s\n with instructions: %s\n%!" 
-      (show_trace process) 
-      (show_term instructions); 
-	let (pr,ineq) = negate_instruction process frame slimmed_instructions rules in
-	let lst = add_test_at_end ineq pr in
-	extraOutput about_else 
-      "Result of the negation:\n";
-	List.iter (fun tr ->
-	extraOutput about_else 
-      "- %s\n" (show_trace tr)) lst ;
-	extraOutput about_else 
-      "\n%!"; lst
-end
-  else begin extraOutput about_tests "> non compatible " ; raise Process_blocked end
-;;
-*)
 
 let is_reach_test test = match test with
   | Fun("check_run", _) -> true
@@ -369,48 +289,16 @@ let rec trace_from_frame frame =
   | h::t -> Trace(Output("c",rename_free_names h), trace_from_frame t)
 ;;
 
-let get_the_tests n tests =
-	let rec size_of tr =
-	match tr with
-	| Fun("empty", []) -> 0
-	| Fun("world", [Fun("!in!",[Fun(ch,[]); _]);w]) -> if startswith ch "!hidden!" then (size_of w) else 1 + (size_of w)
-	| Fun("world", [Fun("!out!",_);w]) ->  1 + (size_of w)
-	| Fun("world", [i;w]) ->(size_of w)
-      | _ -> raise Invalid_instruction in
-	List.filter (function Fun("check_run",[w]) ->  size_of w = n | _ -> false) tests
+
 
 let interpret (r,t) = r && t = []
 
-let rec find_sub_term t frame r =
+(*let rec find_sub_term t frame r =
 	if apply_frame r frame = t then Some r else
 	match r with
 	| Fun(f, args) -> List.fold_left (fun x recipe -> match x with | Some r -> Some r | None -> find_sub_term t frame recipe) None args
 	| _ -> None
-
-(*let rec find_delta instr1 instr2 frame subst =
-	match (instr1,instr2) with
-      | (Fun("empty", []), Fun("empty", [])) -> []
-      | (Fun("world", [Fun("!in!", [ch; r1]); ir1]), Fun("world", [Fun("!in!", [chp; r2]); ir2])) ->
-		if (ch <> chp) then begin extraOutput about_else "err: %s , %s" (show_term ch) (show_term chp) ;assert false end else
-		let term1 = apply_subst (variabilize "W" (apply_frame r1 frame)) subst in
-		let term2 = apply_subst (variabilize "W" (apply_frame r2 frame)) subst in
-		let substs = R.matchers term1 term2 [] in
-		begin
-		match substs with
-		| [] -> extraOutput about_else "no match for delta: %s , %s\n frame: %s\nsubst: %s \n" (show_term term1) (show_term term2) (show_term_list frame) (show_subst subst) ;assert false
-		| [new_substs] ->
-		let delta = List.map (function (x,t) -> 
-			match find_sub_term t frame r2 with 
-				| None -> assert false 
-				| Some r -> (x, r)) 
-			new_substs in
-			delta @ (find_delta ir1 ir2 frame (new_substs @ subst))
-		| _ -> assert false
-		end
-      | (Fun("world", [Fun("!out!", [ch]); ir1]), Fun("world", [Fun("!out!", [chp]); ir2])) ->
-	  find_delta ir1 ir2 frame subst
-      | _ -> begin extraOutput about_else "err: %s , %s" (show_term instr1)(show_term instr2) ; assert false end
-  *)
+*)
 
 
 let rec build_instructions instr1 instr2 subst =
@@ -446,7 +334,7 @@ let rec auxi_reach source process w rules r rp =
 	let neg_process = negate shrinked in
 	let all_tests = List.concat (List.map (
 			fun pr -> extraOutput about_else "  -negation process: %s\n%!" (show_trace pr); 
-				get_the_tests size (tests_of_trace rules pr))
+				tests_of_trace_reach size rules pr)
 		neg_process) in
 	let tests = List.fold_left (fun acc (Fun("check_run",[test])) -> 
 		let (tst,delta) = build_instructions (variabilize "Z" w) test [] in 
@@ -463,29 +351,6 @@ let rec auxi_reach source process w rules r rp =
 		end
 		else
 			acc ) [] all_tests in
-(*	let base_tests = List.filter (
-		function Fun("check_run",[tst]) ->  
-		extraOutput about_else "      -one test to check is %s\n%!" (show_term tst); 
-		is_executable source tst rules 
-		| _ -> assert false
-		)
-		all_tests in
-	(*let words = List.map (function  Fun("check_run",[w2]) -> w2 | _ -> invalid_arg("check_reach_2")) base_tests in*)
-	let tests = List.map 
-		(function  Fun("check_run",[w2]) -> 
-			if (r = rp) 
-			then Fun("check_run",[w2]) 
-			else begin extraOutput about_else "        Delta from : %s ;; %s [ %s\n" (show_term w)(show_term w2)(show_term_list frame);
-				let delta = find_delta slim_w (slim w2) frame [] in 
-				extraOutput about_else "        Delta : %s \n" (show_subst delta);
-				Fun("check_identity",[w2;apply_subst (variabilize "Z" r) (delta);apply_subst (variabilize "Z" rp) (delta)]) 
-			end
-		| _ -> invalid_arg("check_reach_2")) base_tests in *)
-	(*extraOutput about_else "    o The test %s returns\n" (show_term w);
-	List.iter (fun x -> extraOutput about_else "    - New test: %s\n%!" (show_term x)) tests;*)
-	(*if (List.mem w words) then 
-		begin extraOutput about_else "Loop ! \n%!";(false,tests) end 
-	else *)
 	(true,tests)
 	end
 

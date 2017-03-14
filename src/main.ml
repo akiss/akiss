@@ -42,6 +42,7 @@ let reset_count new_count =
 
 let do_count () =
   trace_counter := !trace_counter + 1;
+  if(!trace_counter mod 100 == 0) then
   normalOutput "\x0dComputed tests %d/%d%!" !trace_counter !count_traces;
   verboseOutput
     "Finished %d-th saturation out of %d\n%!"
@@ -88,9 +89,9 @@ let tests_of_trace show_progress t rew =
 let rec check_one_test source tests current_traces trace_list =
 	match (tests,current_traces) with 
 	| ([],_) -> true
-	| (t::other_tests,tr::other_traces) -> 	do_count (); let (r,new_tests) = update_tests source tr t Theory.rewrite_rules in
-		if r then 
-			check_one_test source (new_tests @ other_tests) current_traces trace_list
+	| (t::other_tests,tr::other_traces) -> let (r,new_tests) = update_tests source tr t Theory.rewrite_rules in
+		if r then begin do_count ();
+			check_one_test source (new_tests @ other_tests) trace_list trace_list end
 		else check_one_test source tests other_traces trace_list
 	| (t,[]) ->  normalOutput "\nFAILURE OF \n"; List.iter (fun test -> normalOutput " -*- %s \n" (show_term test)) t; false
 

@@ -50,6 +50,9 @@ rule token = parse
     | "||" { InnerInterleave }
     | "++" { InnerChoice }
     | ">>" { InnerPhase }
+    | "if" { If}
+    | "then" {Then}
+    | "else" {Else}
     | "print_traces" { PrintTraces }
     | "print" { Print }
     | "equivalentft?" { Square }

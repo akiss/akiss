@@ -1296,12 +1296,12 @@ let saturate_step_solved rules kb =
         List.iter (update kb rules) (ridentical f g) ;
         true
 
-let saturate kb rules =
+let saturate ?only_reach:(only_reach=false) kb rules =
   assert (if Theory.xor then List.mem ("zero",0) !fsymbols else true) ;
   print_flags () ;
   (* Try not_solved step, otherwise solved step, otherwise stop. *)
   while saturate_step_not_solved rules kb
-     || saturate_step_solved rules kb
+     || (not only_reach && saturate_step_solved rules kb)
   do () done
 
 (** {2 Recipe stuff} *)

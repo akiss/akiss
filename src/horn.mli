@@ -66,7 +66,7 @@ val initial_kb : statement list -> rules -> Base.t
 
 (** {2 Saturation procedure} *)
 
-val saturate : Base.t -> rules -> unit
+val saturate : ?only_reach:bool -> Base.t -> rules -> unit
 
 (** {2 Recipe stuff} *)
 

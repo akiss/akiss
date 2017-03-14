@@ -29,15 +29,15 @@ out(c,ntt).
   let m2 = senc( pair(pair(nr2,nt2),kr2),ke) in
   out(c,pair(m2,mac(m2,km))).
     in(c,y2).
-    (([snd(y2)=mac(fst(y2),km)].
+    if snd(y2)=mac(fst(y2),km) then 
 	  let nnk2 = sdec(fst(y2),ke) in
-        (([ snd(fst(nnk2)) = ntt2 ].
+        if snd(fst(nnk2)) = ntt2 then
       let m2 = senc(pair(pair(ntt2,fst(fst(nnk2))),kt2),ke) in 
-      out(c,pair(m2,mac(m2,km))))
-      ++ [snd(fst(nnk2)) != ntt2 ].
-      out(c,Error6300)))
-    ++[ snd(y2)!=mac(fst(y2),km) ].
-       out(c,errormac));
+      out(c,pair(m2,mac(m2,km)))
+      else 
+      out(c,Error6300)
+    else
+       out(c,errormac);
 
 
 

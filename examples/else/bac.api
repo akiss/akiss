@@ -24,29 +24,28 @@ rewrite sdec(senc(X, Y), Y) -> X;
 // Description of the passport role 
 
  passport =
-  in(c,x).(
+  in(c,x).
   [ x = getchallenge ].
 //  then
 //    new nt;
     out(c,ntt).
     in(c,y).
 //    let (me,mm) = y in
-  
-    ([snd(y)=mac(fst(y),ke)].
-//    ()if mm = mac(me,km)
+    if snd(y)=mac(fst(y),km) then 
+//    if mm = mac(me,km)
 //    then
 //      let (nr,nt2,kr) = sdec(me,ke) in
 	  let nnk = sdec(fst(y),ke) in
-        [ fst(snd(nnk)) = ntt ].
+        if snd(fst(nnk)) = ntt then
 //      then 
 //	new kt; 
 //	let m = senc((ntt,fst(fst(nnk)),kt),ke) in
       let m = senc(pair(pair(ntt,fst(fst(nnk))),kt),ke) in 
-      out(c,pair(m,mac(m,km))).0
-      ++ [snd(y)!=mac(fst(y),ke)].
-      out(c,Error6300))
-    ++[ x != getchallenge ].
-    out(c,errormac).0);
+      out(c,pair(m,mac(m,km)))
+      else 
+      out(c,Error6300)
+   else
+    out(c,errormac);
 
 // Description of the reader role
 
@@ -62,7 +61,7 @@ rewrite sdec(senc(X, Y), Y) -> X;
 // Description of the passport role 
 
  passport2 =
-  in(c,x2).(
+  in(c,x2).
   [ x2 = getchallenge ].
 //  then
 //    new nt;
@@ -70,21 +69,21 @@ rewrite sdec(senc(X, Y), Y) -> X;
     in(c,y2).
 //    let (me,mm) = y in
   
-    ([snd(y2)=mac(fst(y2),ke)].
+    if snd(y2)=mac(fst(y2),km) then 
 //    ()if mm = mac(me,km)
 //    then
 //      let (nr,nt2,kr) = sdec(me,ke) in
 	  let nnk2 = sdec(fst(y2),ke) in
-        [ fst(snd(nnk2)) = ntt2 ].
+        if snd(fst(nnk2)) = ntt2 then
 //      then 
 //	new kt; 
 //	let m = senc((ntt,fst(fst(nnk)),kt),ke) in
       let m2 = senc(pair(pair(ntt2,fst(fst(nnk2))),kt2),ke) in 
-      out(c,pair(m2,mac(m2,km))).0
-      ++ [snd(y2)!=mac(fst(y2),ke)].
-      out(c,Error6300))
-    ++[ x2 != getchallenge ].
-    out(c,errormac).0);
+      out(c,pair(m2,mac(m2,km)))
+     else
+      out(c,Error6300)
+	else
+    out(c,errormac);
 
 // Description of the reader role
 
@@ -100,7 +99,7 @@ rewrite sdec(senc(X, Y), Y) -> X;
 // Description of the passport role 
 
  passport3 =
-  in(c,x2).(
+  in(c,x2).
   [ x2 = getchallenge ].
 //  then
 //    new nt;
@@ -108,21 +107,21 @@ rewrite sdec(senc(X, Y), Y) -> X;
     in(c,y2).
 //    let (me,mm) = y in
   
-    ([snd(y2)=mac(fst(y2),ke2)].
-//    ()if mm = mac(me,km)
+    if snd(y2)=mac(fst(y2),ke2) then
+//    if mm = mac(me,km2)
 //    then
 //      let (nr,nt2,kr) = sdec(me,ke2) in
 	  let nnk2 = sdec(fst(y2),ke2) in
-        [ fst(snd(nnk2)) = ntt2 ].
-//      then 
+        if snd(fst(nnk2)) = ntt2 
+      then 
 //	new kt; 
 //	let m = senc((ntt,fst(fst(nnk)),kt),ke2) in
       let m2 = senc(pair(pair(ntt2,fst(fst(nnk2))),kt2),ke2) in 
-      out(c,pair(m2,mac(m2,km2))).0
-      ++ [snd(y2)!=mac(fst(y2),ke2)].
-      out(c,Error6300))
-    ++[ x2 != getchallenge ].
-    out(c,errormac).0);
+      out(c,pair(m2,mac(m2,km2)))
+     else
+      out(c,Error6300)
+   else
+    out(c,errormac);
 
 // Unlinkability
 

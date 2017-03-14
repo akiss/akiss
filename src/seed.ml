@@ -114,7 +114,7 @@ let rec variables_of_term t =
        StringSet.union accu (variables_of_term t)
      ) StringSet.empty ts*)
 
-let rec trace_statements_h oc tr rules substitutions body ineq world clauses =
+let rec trace_statements_h ~one_reach:one_reach oc tr rules substitutions body ineq world clauses =
   extraOutput debug_seed "Computing trace statement for %s \n%!" (show_trace tr);
   match tr with
     | NullTrace -> List.rev clauses
@@ -126,10 +126,10 @@ let rec trace_statements_h oc tr rules substitutions body ineq world clauses =
 		t]) in
 	let new_clause = (next_head, body, ineq) in
 	let new_reach = (Predicate("reach", [next_world]), body, ineq) in
-	trace_statements_h (oc + 1) remaining_trace rules substitutions body ineq
+	trace_statements_h ~one_reach:one_reach (oc + 1) remaining_trace rules substitutions body ineq
 	 next_world (List.concat [
 		(trace_equationalize new_clause rules substitutions);
-		(trace_equationalize new_reach rules substitutions);
+		if one_reach && remaining_trace <> NullTrace then [] else (trace_equationalize new_reach rules substitutions);
 		clauses])
     | Trace(Input(ch, v), remaining_trace) ->
 	let next_world = worldadd world (Fun("!in!", [Fun(ch, []); Var(v)])) in
@@ -141,30 +141,8 @@ let rec trace_statements_h oc tr rules substitutions body ineq world clauses =
 			    "reach",
 			    [next_world]),
 			  next_body, ineq)  in
-	trace_statements_h oc remaining_trace rules substitutions next_body ineq
-	  next_world (List.concat [ trace_equationalize new_reach rules substitutions; clauses])
-(*   | Trace(InputMatch(ch, t), remaining_trace) ->
-	let rec var_of_body body = 
-		match body with 
-		| [] -> StringSet.empty
-		| Predicate("knows", [_; _;Var(v)])::q -> StringSet.add v (var_of_body q)
-		| _ -> assert false in
-	let vart = variables_of_term t in
-	let new_vars = (StringSet.diff vart (var_of_body body)) in
-	(*let recipe_vars = List.map (fun v -> (Var(fresh_variable ()),Var(x))) new_vars*)
-	let next_world = worldadd world (Fun("!pattern!", [Fun(ch, []); t]))  in
-	let next_world = StringSet.fold 
-		(fun v w -> worldadd w (Fun("!in!", [Fun("!hidden!", []); Var(v)]))) new_vars next_world in (*TOdo!!*)
-	let next_body = StringSet.fold 
-		(fun x l -> Predicate("knows",[world; Var(fresh_variable ());Var(x)])::l)
-		new_vars
-		body in
-	let new_reach = (Predicate(
-			    "reach",
-			    [next_world]),
-			  next_body, ineq)  in
-	trace_statements_h oc remaining_trace rules substitutions next_body ineq
-	  next_world (List.concat [ trace_equationalize new_reach rules substitutions; clauses])*)
+	trace_statements_h ~one_reach:one_reach oc remaining_trace rules substitutions next_body ineq
+	  next_world (if one_reach && remaining_trace <> NullTrace then clauses else (List.concat [ trace_equationalize new_reach rules substitutions; clauses]))
     | Trace(Test(s, t), remaining_trace) ->
     	let next_world = worldadd world (Fun("!test!", [])) in
     	let next_substitutions = List.concat (List.map 
@@ -175,8 +153,8 @@ let rec trace_statements_h oc tr rules substitutions body ineq world clauses =
 			    "reach",
 			    [next_world]),
 			  body,ineq)  in
-	trace_statements_h oc remaining_trace rules next_substitutions body ineq
-	  next_world ((trace_equationalize new_reach rules next_substitutions) @ clauses)
+	trace_statements_h ~one_reach:one_reach oc remaining_trace rules next_substitutions body ineq
+	  next_world (if one_reach && remaining_trace <> NullTrace then clauses else ((trace_equationalize new_reach rules next_substitutions) @ clauses))
     | Trace(TestInequal(s, t), remaining_trace) -> (*TODO*)
     	let next_world = worldadd world (Fun("!test!", [])) in
     	let next_substitutions = substitutions in
@@ -185,8 +163,8 @@ let rec trace_statements_h oc tr rules substitutions body ineq world clauses =
 			    "reach",
 			    [next_world]),
 			  body, next_ineq)  in
-	trace_statements_h oc remaining_trace rules next_substitutions body next_ineq
-	  next_world ((trace_equationalize new_reach rules next_substitutions) @ clauses)
+	trace_statements_h ~one_reach:one_reach oc remaining_trace rules next_substitutions body next_ineq
+	  next_world (if one_reach && remaining_trace <> NullTrace then clauses else ((trace_equationalize new_reach rules next_substitutions) @ clauses))
 ;;
 
 
@@ -225,8 +203,8 @@ extraOutput debug_seed "Computing variants of statement %s <= %s || %s \n%!" (Ho
 
 
 
-let trace_statements tr rules =
-  let kstatements = trace_statements_h 0 tr rules [[]] [] [] (Fun("empty", [])) [] in
+let trace_statements ?one_reach:(one_reach=false) tr rules =
+  let kstatements = trace_statements_h ~one_reach:one_reach 0 tr rules [[]] [] [] (Fun("empty", [])) [] in
     List.concat
       (List.map
          (fun x -> trace_variantize x rules)
@@ -287,7 +265,7 @@ let context_statements symbol arity rules =
     v
 
 (** Compute everything *)
-let seed_statements trace rew =
+let seed_statements ?one_reach:(one_reach = false) trace rew =
   let context_clauses =
     List.concat
       (List.map
@@ -296,7 +274,7 @@ let seed_statements trace rew =
          (List.sort (fun (_,a) (_,a') -> compare a a') Theory.fsymbols))
   in
   let trace_clauses =
-    trace_statements trace rew
+    trace_statements ~one_reach:one_reach trace rew
   in
 extraOutput debug_seed "Seed computation completed \n\n%!" ;
     List.concat [context_clauses; trace_clauses]

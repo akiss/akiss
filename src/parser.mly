@@ -35,6 +35,7 @@ open Ast
 %token Not Equivalent Square EvSquare Variants Unifiers Normalize Incft Incct
 %token Print PrintTraces
 %token InnerSequence InnerInterleave InnerChoice InnerPhase
+%token If Then Else
 %token EOF
 
 %left In
@@ -104,6 +105,7 @@ main:
  | process InnerPhase process { TempPhase($1, $3) }
  | LeftP process RightP { $2 }
  | Identifier { TempProcessRef($1) }
+ | If term Equals term Then process Else process {TempChoice(TempSequence(TempAction(TempActionTest ($2, $4)), $6),TempSequence(TempAction(TempActionTestInequal ($2, $4)), $8))}
 
      action:
  | In LeftP Identifier Comma Identifier RightP { TempActionIn($3, $5) }
