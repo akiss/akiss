@@ -219,7 +219,7 @@ let rec worldfilter_h f w a =
 	else
 	  worldfilter_h f t a
     | Var(_) -> invalid_arg("worldfilter_h variable")
-    | x -> begin if !about_execution  then Format.printf "Error: %s\n" (show_term x); 
+    | x ->  begin Format.printf "Error: %s\n" (show_term x); 
 		invalid_arg("worldfilter_h") end
 ;;
 
@@ -245,7 +245,12 @@ let rec truncate n process =
 	| Trace(Output(c,t),pr)->  Trace(Output(c,t),truncate (n - 1) pr)
 
 let cut_from instr pr =
-	let n = size_of (slim instr) in
+	let w= 
+	match instr with
+	| Fun("check_run",[w]) -> w
+	| Fun("check_identity",[w;r;s]) -> w
+	| _ -> assert false in
+	let n = size_of (slim w) in
 	truncate n pr
 
 let execute process frame instructions rules =

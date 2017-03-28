@@ -169,7 +169,7 @@ let rec remove_duplicate lst =
 		if List.exists (fun x -> (x = t)) qs then qs else t :: qs
 
 
-let slim lst = 
+let slim_tests lst = 
 	if !debug_output then Format.printf "\nThere were %d tests in total\n" (List.length lst);
 	let qs = remove_duplicate lst in 
 	(*let qs = List.filter (fun (pr,t) -> not (List.exists (fun x -> (is_smaller_reach_test t x)) qs)) qs in*)
@@ -195,11 +195,11 @@ let query ?(expected=true) s t =
   let stests =
     Lwt_list.rev_map_p
       (fun x -> (tests_of_trace true x Theory.rewrite_rules) >>= fun y -> return (x, y) >>= wrap1 blop)
-      straces >>= wrap1 List.concat >>= wrap1 slim
+      straces >>= wrap1 List.concat >>= wrap1 slim_tests
   and ttests =
     Lwt_list.rev_map_p
       (fun x -> (tests_of_trace true x Theory.rewrite_rules) >>= fun y -> return (x, y) >>= wrap1 blop)
-      ttraces >>= wrap1 List.concat >>= wrap1 slim
+      ttraces >>= wrap1 List.concat >>= wrap1 slim_tests
   in
   let fail_stests =
     stests >>=
@@ -238,7 +238,7 @@ let inclusion_ct ?(expected=true) s t =
   let stests =
     Lwt_list.rev_map_p
       (fun x -> tests_of_trace true x Theory.rewrite_rules >>= fun y -> return (x, y) >>= wrap1 blop)
-      straces >>= wrap1 List.concat >>= wrap1 slim
+      straces >>= wrap1 List.concat >>= wrap1 slim_tests
 
   in
     let fail_stests =
