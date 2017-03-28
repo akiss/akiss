@@ -17,43 +17,37 @@
 (* 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.              *)
 (****************************************************************************)
 
+exception Bug
+
+let bench = ref 0.
+let bench_cur = ref 0.
+let bench_start () = bench_cur := Sys.time ()
+let bench_stop () = bench := !bench +. Sys.time () -. !bench_cur
+
 let debug_output = ref false
-
 let verbose_output = ref false
+let about_seed = ref false
+let debug_seed = ref false
+let about_saturation = ref false
+let debug_saturation = false
+let about_tests = ref false
+let debug_tests = ref false
+let about_else = ref false
+let about_execution = ref false
+let about_theory = ref false
+let debug_theory = false
 
-let extra_output = ref 0
-
-let about_verbose = 1 lsl 0
-let about_debug = 1 lsl 1 
-let about_seed = 1 lsl 2
-let debug_seed = about_seed lsl 16
-let about_saturation = 1 lsl 3
-let debug_saturation = about_saturation lsl 16
-let about_tests = 1 lsl 4
-let debug_tests = about_tests lsl 16
-let about_else = 1 lsl 5
-let about_execution = 1 lsl 6
-let about_theory = 1 lsl 7
-let debug_theory = about_theory lsl 16
-
-let verboseOutput a =
-  if !verbose_output || (!extra_output land about_verbose)>0 then
+(*let verboseOutput a =
+  if !verbose_output || about_verbose then
     Format.printf a
   else
     Format.ifprintf Format.std_formatter a
 
 let debugOutput a =
-  if !debug_output || (!extra_output land about_debug)>0 then
+  if !debug_output || !about_debug then
     Format.printf a
   else
-    Format.ifprintf Format.std_formatter a
-
-let extraOutput i a =
-  if !extra_output land i > 0 then 
-    Format.printf a
-  else
-    Format.ifprintf Format.std_formatter a
-
+    Format.ifprintf Format.std_formatter a*)
 
 let normalOutput a =
   if !verbose_output || !debug_output then

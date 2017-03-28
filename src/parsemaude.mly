@@ -48,6 +48,8 @@ let translate_symbol = function
   | "akisstest" -> "!test!"
   | "akissout" -> "!out!"
   | "akissin" -> "!in!"
+  | s when Util.startswith ~prefix:"akisschhidden" s ->
+      "!hidden!" ^ (String.sub s 13 (String.length s - 13))
   | s when Util.startswith ~prefix:"akissch" s ->
       String.sub s 7 (String.length s - 7)
   | s when Util.startswith ~prefix:"akiss" s ->
@@ -172,7 +174,8 @@ main:
        if (List.mem id !private_names) || (List.mem id !channels) ||
 	 (List.mem (id,0) !fsymbols) || List.mem id ["empty";"!test!"] ||
 	 (Str.string_match (Str.regexp "w[0-9]+") id 0) ||
-	 (Str.string_match (Str.regexp "!n![0-9]+") id 0)
+	 (Str.string_match (Str.regexp "!n![0-9]+") id 0) ||
+	 (Str.string_match (Str.regexp "!hidden!Z[0-9]+") id 0) 
        then
 	 Fun(id,[])
        else

@@ -36,9 +36,11 @@ module R = struct
 
   let csu u v =
     let sols = if may_be_unifiable u v then unifiers u v [] else [] in
-    let n = List.length sols in
-      if n>0 then debugOutput "Found %d solution(s)\n" n ;
-      sols
+    if !debug_output
+    then begin
+      let n = List.length sols in
+      if n>0 then Format.printf  "Found %d solution(s)\n" n end ;
+    sols
 
   (** If it returns true, terms must be alpha equivalent.
     * It is okay to not return true on all alpha equivalent pairs. *)
@@ -300,7 +302,8 @@ let csu_atom opti a1 a2 =
 				| ([],l) -> []
 				| ([x],a::l) -> 
 					if List.mem x ( vars_of_term_list (a::l)) 
-					then begin debugOutput "warning \n"; csu_atom  a1 a2 end
+					then begin if !debug_output  then Format.printf "warning \n"; 
+						csu_atom  a1 a2 end
 					else addvar w world x1 x2 rx x11 x12 x (exponential l [([a],[])])
 				| _ ->  csu_atom a1 a2 ) end 
 			| _ -> assert(false) end
@@ -533,7 +536,7 @@ module Base = struct
       S.iter
         (fun y ->
            if same_statement x y then begin
-             debugOutput "Statement #%d already in kb: #%d.\n"
+             if !debug_output then Format.printf "Statement #%d already in kb: #%d.\n"
                (get_id x) (get_id y) ;
              raise Found
            end)
@@ -544,7 +547,7 @@ module Base = struct
   let add ?(needs_check=true) x _ kb =
     assert (needs_check || not (mem_equiv x kb)) ;
     if not (needs_check && mem_equiv x kb) then begin
-      debugOutput "Adding clause #%d@@%d.\n" x.id x.age ;
+      if !debug_output then Format.printf "Adding clause #%d@@%d.\n" x.id x.age ;
       add x kb
     end
 
@@ -624,14 +627,14 @@ let rule_shift st =
   | Predicate("knows", [w; r ; Fun("plus", [ l ; t ])]) ->
 	begin match (variable_first (Fun("plus", [ l ; t ]))) with
 		| Fun("plus", [ Var(x); t ]) -> begin let stt = {st with head = Predicate("knows", [w; Fun("plus",[get_recipe (Var(x)) (st.body); r]); t])} in 
-			debugOutput "shift + on the statement: %s \n" (show_statement stt); stt;
+			if !debug_output then Format.printf "shift + on the statement: %s \n" (show_statement stt); stt;
 			 end
 		| _ -> st
 	end
   | Predicate("knows", [w; r ; Var(x)]) ->
 	begin let stt = {st with head = Predicate("knows", [w; Fun("plus",[get_recipe (Var(x)) (st.body); r]); Fun("zero",[])])} in 
-			debugOutput "shift 0 on the statement: %s \n" (show_statement stt); stt;
-			 end
+			if !debug_output then Format.printf "shift 0 on the statement: %s \n" (show_statement stt); stt;
+			end
   | _ -> st
 
 
@@ -665,7 +668,7 @@ let simplify_statement st =
       st.body
   in
     List.iter
-      (fun a -> debugOutput "Removed %s\n" (show_atom a))
+      (fun a -> if !debug_output then Format.printf "Removed %s\n" (show_atom a))
       useless ;
     if useless = [] then st else { st with body = body }
 
@@ -674,7 +677,7 @@ let canonical_form statement =
     let f = if Theory.xor then 
         iterate rule_shift (simplify_statement statement) 
       else iterate rule_remove (iterate rule_rename statement) in
-      debugOutput "Canonized: %s\n" (show_statement f) ;
+      if !debug_output then Format.printf "Canonized: %s\n" (show_statement f) ;
       f
   else
     simplify_statement statement
@@ -725,9 +728,9 @@ let inst_w_t_ac my_head head_kb =
     | (Predicate(_, [myw; _; myt]), Predicate(_, [wkb; _; tkb])) ->
 	let t1 = Fun("!tuple!", [myw; myt]) in
 	let t2 = Fun("!tuple!", [wkb; tkb]) in
-        (* debugOutput "Matching %s against %s\n%!" (show_term t1) (show_term t2); *)
-        R.matchers t2 t1 []
-        (* debugOutput "Result %s\n%!" (show_subst sigma); *)
+        (*extraOutput about_else "Matching %s against %s\n%!" (show_term t1) (show_term t2); *)
+        R.matchers t2 t1 [] 
+        (*List.iter (fun sigma -> extraOutput about_else "Result %s\n%!" (show_subst sigma)) s;*)
     | _ -> invalid_arg("inst_w_t_ac")
 
 let rec factors = function
@@ -827,7 +830,7 @@ let is_reflexive st =
     | Predicate("identical", [_; r; rp])
     | Predicate("ridentical", [_; r; rp]) ->
         if r = rp then begin
-          debugOutput "Clause #%d is reflexive, not useful.\n" st.id ;
+          if !debug_output then Format.printf "Clause #%d is reflexive, not useful.\n" st.id ;
           false
         end else true
     | _ -> invalid_arg "is_reflexive"
@@ -856,7 +859,7 @@ let normalize_new_statement rules f =
     if drop_non_normal_skel then
       let t' = R.normalize t rules in
         if not (R.equals t t' []) then begin
-          debugOutput "Non-normal term in clause #%d.\n" (get_id f) ;
+          if !debug_output then Format.printf "Non-normal term in clause #%d.\n" (get_id f) ;
           None
         end else
           (* Return t' rather than t because it is more canonical. *)
@@ -937,7 +940,7 @@ let update (kb : Base.t) rules (f : statement) : unit =
       let newclause = normalize_identical { fc with head = newhead } in
         (* No need to freshen [newclause], since it has the same variables as
          * [fc] which is fresh. *)
-        debugOutput
+        if !debug_output then Format.printf 
           "Useless: %s\n\
            Original form: %s\n\
            Replaced by: %s\n\n%!"
@@ -975,7 +978,7 @@ let initial_kb (seed : statement list) rules : Base.t =
       in
         List.iter
           (fun f ->
-             debugOutput "Initializing kb with clause %s.\n" (show_statement f) ;
+             if !debug_output then Format.printf "Initializing kb with clause %s.\n" (show_statement f) ;
              Base.add f rules kb)
           xor_variants ;
         seed
@@ -1014,12 +1017,12 @@ let generate_dynamic_marking sigmas ~t ~rx ~x ~ry ~y =
 
     match extract_rigid [] [t] with
       | `None variables ->
-          debugOutput
+          if !debug_output then Format.printf 
             "rigid subterm: none, size %d\n"
             (List.length variables) ;
           sigmas
       | `Some t ->
-          debugOutput "rigid subterm: %s\n" (show_term t) ;
+          if !debug_output then Format.printf "rigid subterm: %s\n" (show_term t) ;
           let rec occurs t = function
             | Var _ :: l -> occurs t l
             | Fun ("plus",args) :: l ->
@@ -1095,8 +1098,8 @@ let resolution master slave =
     let sigmas = csu_atom (Theory.xor && is_plus_clause slave) atom slave.head in
     let sigmas = propagate_marking sigmas in
     let length = List.length sigmas in
-    if (!debug_output || !extra_output land about_debug >0) && length > 0 then begin
-      debugOutput "Resolution?\n FROM: %s\n AND : %s\n\n"
+    if !debug_output && length > 0 then begin
+      Format.printf "Resolution?\n FROM: %s\n AND : %s\n\n"
         (show_statement master)
         (show_statement slave) ;
       Format.printf "csu of size %d:\n" length ;
@@ -1144,7 +1147,7 @@ let resolution master slave =
                  ~parents:[master;slave]
                  (head,body,ineq)
            in
-             debugOutput "RESO: %s\n\n"
+             if !debug_output then Format.printf "RESO: %s\n\n"
                (show_statement result);
              result)
         sigmas
@@ -1172,7 +1175,7 @@ let equation fa fb =
         | (Predicate("knows", [ul; r; t]),
            Predicate("knows", [upl; rp; tp])) ->
 
-            debugOutput "Equation:\n %s\n %s\n%!"
+            if !debug_output then Format.printf "Equation:\n %s\n %s\n%!"
               (show_statement fa) (show_statement fb) ;
             let t1 = Fun("!tuple!", [t; ul]) in
             let t2 = Fun("!tuple!", [tp; upl]) in
@@ -1214,7 +1217,7 @@ let equation fa fb =
                 let sigmas' = List.filter nontrivial sigmas in
                 let l' = List.length sigmas' in
                   if l' < List.length sigmas then
-                    debugOutput "Non-trivial solutions: %d\n" l' ;
+                    if !debug_output then Format.printf "Non-trivial solutions: %d\n" l' ;
                   sigmas'
               else
                 sigmas
@@ -1234,7 +1237,7 @@ let equation fa fb =
                 sigmas
             in
               if sigmas <> [] then
-                debugOutput "Generated clauses %s.\n"
+                if !debug_output then Format.printf "Generated clauses %s.\n"
                   (String.concat ","
                      (List.map (fun st -> "#"^string_of_int st.id) clauses)) ;
               clauses
@@ -1268,7 +1271,7 @@ let rec ridentical fa fb =
                    List.map (fun x -> apply_subst_atom x sigma) newineq
                  in
                  let result = new_clause ~label:"ri" ~parents:[fa;fb] result in
-                   debugOutput "\n\nRID FROM: %s\nRID AND : %s\nRID GOT: %s\n\n%!"
+                   if !debug_output then Format.printf "\n\nRID FROM: %s\nRID AND : %s\nRID GOT: %s\n\n%!"
                      (show_statement fa)
                      (show_statement fb)
                      (show_statement result);
@@ -1342,7 +1345,7 @@ let for_each l (succ:'a list succ) (fail:cont) (f:'b -> 'a succ -> cont -> unit)
         f hd (fun x k -> aux (x::prefix) k tl) fail
   in aux [] fail l
 
-let rec find_recipe_h atom kbs ineqs (succ:term succ) (fail:cont) =
+let rec find_recipe_h atom kbs (succ:term succ) (fail:cont) =
   match atom with
     | Predicate("knows", [_; _; Fun(name, [])]) when startswith name "!n!" ->
         succ (Fun(name, [])) fail
@@ -1351,13 +1354,7 @@ let rec find_recipe_h atom kbs ineqs (succ:term succ) (fail:cont) =
           (fun clause succ fail ->
              let sigmas = inst_w_t_ac atom (get_head clause) in
                for_some sigmas succ fail
-                 (fun sigma succ fail ->
-			  (*List.iter (fun x ->  extraOutput about_else " Recipe get_ineq: %s \n" (show_atom_ineq (apply_subst_atom x sigma)))(get_ineq clause);
-			  List.iter (fun x ->  extraOutput about_else " Recipe global ineqs: %s \n" (show_atom_ineq (apply_subst_atom x sigma)))(ineqs);*)
-                    if not( List.for_all (fun x -> List.mem x (List.map (fun i -> apply_subst_atom i sigma) ineqs))(List.map (fun i -> apply_subst_atom i sigma)(get_ineq clause)))
-                    then fail ()
-                    else
-                    
+                 (fun sigma succ fail ->                    
                     let succ' theta k =
                       succ
                         (apply_subst (get_recipe (get_head clause)) theta)
@@ -1367,23 +1364,21 @@ let rec find_recipe_h atom kbs ineqs (succ:term succ) (fail:cont) =
                         (fun atom succ fail ->
                            let rvar = unbox_var (get_recipe atom) in
                            let succ recipe k = succ (rvar,recipe) k in
-                             find_recipe_h (apply_subst_atom atom sigma) kbs ineqs succ fail)))
+                             find_recipe_h (apply_subst_atom atom sigma) kbs succ fail)))
 
 exception Recipe_found of term
 
-let find_recipe atom kb ineqs =
+let find_recipe atom kb =
   let kbsolved = (only_knows (only_solved kb)) in
     try
-      find_recipe_h atom kbsolved ineqs
+      find_recipe_h atom kbsolved
         (fun r _ -> raise (Recipe_found r))
         (fun () -> ()) ;
-      Format.eprintf "Trying to get %s\n with constraints %s out of:\n%s\n\n%!"
+      Format.eprintf "Trying to get %s\n out of:\n%s\n\n%!"
         (show_atom atom)
-        (show_atom_list ineqs)
         (show_kb_list kbsolved) ;
       assert false
-    with Recipe_found r -> (*extraOutput about_else "Recipe found: %s for %s \n%!" (show_term r)(show_atom atom);*)
-	r
+    with Recipe_found r -> r
 
 let rec revworld_h (w : term) (a : term) : term =
   match w with
@@ -1395,7 +1390,7 @@ let rec revworld_h (w : term) (a : term) : term =
 let revworld w =
   revworld_h w (Fun("empty", []))
 
-let rec recipize_h (tl : term) kb ineqs =
+let rec recipize_h (tl : term) kb =
   match tl with
     | Fun("empty", []) -> Fun("empty", [])
     | Fun("world", [t; w]) ->
@@ -1405,23 +1400,22 @@ let rec recipize_h (tl : term) kb ineqs =
 		let atom = Predicate("knows",
 				      [revworld w;
 				       Var(fresh_variable ()); tp]) in
-		let r = find_recipe atom kb ineqs in
-		Fun("world", [Fun("!in!", [ch; r]); recipize_h w kb ineqs])
+		let r = find_recipe atom kb in
+		Fun("world", [Fun("!in!", [ch; r]); recipize_h w kb])
 	    | Fun("!out!", [ch]) ->
-		Fun("world", [t; recipize_h w kb ineqs])
+		Fun("world", [t; recipize_h w kb])
 	    | Fun("!test!", []) ->
-		Fun("world", [t; recipize_h w kb ineqs])
-	    | Fun("!pattern!",[ch;r]) ->  recipize_h w kb ineqs (*todo*)
+		Fun("world", [t; recipize_h w kb])
 	    | _ -> invalid_arg("recipize_h")
 	)
     | Var(_) -> invalid_arg("recipize_h with var")
     | _ -> invalid_arg("recipize_h")
 
-let recipize tl kb ineqs =
-  extraOutput about_debug "Recipizing %s\n%!" (show_term tl);
-  let result = recipize_h (revworld tl) kb ineqs in
+let recipize tl kb =
+  if !debug_output then Format.printf  "Recipizing %s\n%!" (show_term tl);
+  let result = recipize_h (revworld tl) kb in
   (
-  extraOutput about_debug "Result %s\n%!" (show_term (revworld result));
+  if !debug_output then Format.printf  "Result %s\n%!" (show_term (revworld result));
     result
   )
 
@@ -1492,13 +1486,13 @@ let checks_reach kb rules =
     (fun checks x -> 
        match (get_head x) with
          | Predicate("reach", [w]) -> 
+		(*extraOutput about_else "========> %s\n" (show_statement x);*)
 		let sigma = namify_subst w in
-		let ineq_body = List.map (fun x -> apply_subst_atom x sigma)(get_ineq x) in
-		(*extraOutput about_else "init %s\nsubst sigma> %s\nineq:: %s\n%!" (show_statement x)(show_subst sigma)(show_term ineq_body);*)
+		(*extraOutput about_else "========< %s\n" (show_subst sigma);*)
 		let new_check = alpha_rename_namified_term(
-			Fun ("check_run", [revworld (recipize (apply_subst w sigma) kb ineq_body)])) in 
+			Fun ("check_run", [revworld (recipize (apply_subst w sigma) kb )])) in 
 		begin             
-			extraOutput (about_debug+about_saturation) "TESTER: %s \n%!" (show_term new_check); 
+			if !debug_output then Format.printf "TESTER: %s \n%!" (show_term new_check); 
 			new_check  :: checks end 
          | _ -> checks)
     [] solved
@@ -1510,8 +1504,7 @@ let checks_ridentical kb rules =
        match (get_head x) with
          | Predicate("ridentical", [w; r; rp]) ->
              let sigma = namify_subst w in
- 		 let ineq_body = List.map (fun x -> apply_subst_atom x sigma)(get_ineq x) in
-             let new_w = revworld (recipize (apply_subst w sigma) kb ineq_body) in
+             let new_w = revworld (recipize (apply_subst w sigma) kb ) in
             let omega =
                List.map
                  (function
@@ -1523,7 +1516,7 @@ let checks_ridentical kb rules =
              let resulting_test = alpha_rename_namified_term(Fun("check_identity", [new_w;
                                                       apply_subst r omega;
                                                       apply_subst rp omega])) in
-             begin extraOutput (about_debug+about_saturation) "TESTER: %s\n" (show_term resulting_test) ; 
+             begin if !debug_output then Format.printf  "TESTER: %s\n" (show_term resulting_test) ; 
              resulting_test :: checks end 
          | _ -> checks)
     kb []

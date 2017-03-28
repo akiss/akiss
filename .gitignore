@@ -8,11 +8,12 @@
 *.annot
 parser.ml
 parser.mli
-lextam.ml
-lextam.mli
-parsetam.ml
-parsetam.mli
+lexmaude.ml
+lexmaude.mli
+parsemaude.ml
+parsemaude.mli
 lexer.ml
+lexer.mli
 lwt_compat.ml
 .depend
 akiss

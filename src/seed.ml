@@ -104,18 +104,9 @@ let trace_equationalize (head, body, ineq) rules sigmas=
   trmap newclause sigmas
 ;;
 
-(*module StringSet = Set.Make (String)
-
-let rec variables_of_term t =
-  match t with
-  | Var x -> StringSet.singleton x
-  | Fun (_, ts) ->
-     List.fold_left (fun accu t ->
-       StringSet.union accu (variables_of_term t)
-     ) StringSet.empty ts*)
 
 let rec trace_statements_h ~one_reach:one_reach oc tr rules substitutions body ineq world clauses =
-  extraOutput debug_seed "Computing trace statement for %s \n%!" (show_trace tr);
+  if !debug_seed then Format.printf "Computing trace statement for %s \n%!" (show_trace tr);
   match tr with
     | NullTrace -> List.rev clauses
     | Trace(Output(ch, t), remaining_trace) ->
@@ -158,18 +149,17 @@ let rec trace_statements_h ~one_reach:one_reach oc tr rules substitutions body i
     | Trace(TestInequal(s, t), remaining_trace) -> (*TODO*)
     	let next_world = worldadd world (Fun("!test!", [])) in
     	let next_substitutions = substitutions in
-	let next_ineq = Predicate("ineq",[world;s;t]) :: ineq in
 	let new_reach = (Predicate(
 			    "reach",
 			    [next_world]),
-			  body, next_ineq)  in
-	trace_statements_h ~one_reach:one_reach oc remaining_trace rules next_substitutions body next_ineq
+			  body, ineq)  in
+	trace_statements_h ~one_reach:one_reach oc remaining_trace rules next_substitutions body ineq
 	  next_world (if one_reach && remaining_trace <> NullTrace then clauses else ((trace_equationalize new_reach rules next_substitutions) @ clauses))
 ;;
 
 
 let trace_variantize (head, body, ineq) rules = 
-extraOutput debug_seed "Computing variants of statement %s <= %s || %s \n%!" (Horn.show_atom head)(Horn.show_atom_list body)(Horn.show_atom_list ineq);
+  if !debug_seed then Format.printf "Computing variants of statement %s <= %s || %s \n%!" (Horn.show_atom head)(Horn.show_atom_list body)(Horn.show_atom_list ineq);
   match head with
     | Predicate("knows", [world; recipe; t]) ->
 	let v = R.variants t rules in
@@ -180,7 +170,7 @@ extraOutput debug_seed "Computing variants of statement %s <= %s || %s \n%!" (Ho
 	trmap new_clause v
     | Predicate("reach", [w]) ->
 	let v = R.variants w rules in
-	extraOutput about_theory "body is computed \n%!";
+	if !about_theory then Format.printf  "body is computed \n%!";
 	let newhead sigma = Predicate("reach",
 				[R.normalize (apply_subst w sigma) rules]) in
 	let newbody sigma = trmap
@@ -197,7 +187,7 @@ extraOutput debug_seed "Computing variants of statement %s <= %s || %s \n%!" (Ho
 	     | _ -> invalid_arg("ineq_variantize")) ineq in
 	trmap (fun (_, sigma) -> 
 	let st = Horn.new_clause (newhead sigma, newbody sigma, newineq sigma) in 
-		extraOutput debug_seed " - %s \n%!" (Horn.show_statement st); st) v 
+		if !debug_seed then Format.printf  " - %s \n%!" (Horn.show_statement st); st) v 
     | _ -> invalid_arg("variantize")
 ;;
 
@@ -215,7 +205,7 @@ let trace_statements ?one_reach:(one_reach=false) tr rules =
 
 (** Compute the part of seed statements that comes from the theory. *)
 let context_statements symbol arity rules =
-	extraOutput debug_seed "Computing context statement for %s \n%!" symbol;
+  if !debug_seed then Format.printf "Computing context statement for %s \n%!" symbol;
   let w = Var(fresh_variable ()) in
   let vYs = trmap fresh_variable (create_list () arity) in
   let vZs = trmap fresh_variable (create_list () arity) in
@@ -276,5 +266,5 @@ let seed_statements ?one_reach:(one_reach = false) trace rew =
   let trace_clauses =
     trace_statements ~one_reach:one_reach trace rew
   in
-extraOutput debug_seed "Seed computation completed \n\n%!" ;
+  if !debug_seed then Format.printf "Seed computation completed \n\n%!" ;
     List.concat [context_clauses; trace_clauses]

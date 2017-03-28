@@ -18,9 +18,10 @@
 (****************************************************************************)
 
 open Term
+open Util
 
-let debug= (! Util.extra_output land Util.about_theory != 0)
-let pdebug = (! Util.extra_output land Util.debug_theory != 0) (* show parsing info *)
+let debug= false (* debug *)
+let pdebug = false (* pdebug *) (* show parsing info *)
 let sdebug = false (* show maude script *)
 
 let terms_of_rules rules =
@@ -31,7 +32,7 @@ let terms_of_rules rules =
 
 let input_line chan =
   let line = input_line chan in
-    if(! Util.extra_output land Util.debug_theory != 0)then
+    if pdebug then
       Format.printf "input line > %S\n%!" line ;
     line
 
@@ -48,8 +49,10 @@ let rec print chan = function
   | Fun ("!out!",[Fun(c,[])]) ->
       print chan (Fun ("akissout",[Fun ("akissch"^c,[])]))
   | Fun ("!in!",[Fun(c,[]);t]) ->
-      print chan (Fun ("akissin",[Fun("akissch"^c,[]);t]))
-
+	if startswith c "!hidden!" then
+	print chan (Fun ("akissin",[Fun("akisschhidden"^(String.sub c 8 ((String.length c) - 8)),[]);t]))
+	else
+        print chan (Fun ("akissin",[Fun("akissch"^c,[]);t]))
   | Fun (s,[]) | Var s ->
       begin try
         Scanf.sscanf s "w%d"
@@ -114,6 +117,9 @@ let print_module rules extrasig chan () =
     List.iter
       (fun n -> op ("akissn" ^ string_of_int n) 0)
       extrasig.names ;
+    List.iter
+      (fun n -> op ("akisschhiddenZ" ^ string_of_int n) 0)
+      extrasig.hiddenchan ;
     if !vars <> [] || extrasig.vars <> [] then
       Format.fprintf chan "var %a : Term .\n"
         (Util.pp_list Util.output_string " ")
@@ -160,7 +166,7 @@ let get_chans =
 
       
 let run_maude print_query parse_result =
-  if(! Util.extra_output land Util.debug_theory != 0)then
+  if pdebug then
     Format.printf "<< maude command: %s\n"  (Lazy.force Config.maude_command);
   let chan_out,chan_in = get_chans () in
       (* let chan_out,chan_in = *)
@@ -178,7 +184,7 @@ let run_maude print_query parse_result =
 (** Unification mod AC + R*)
 
 let unifiers s t rules =
-  if(! Util.extra_output land Util.about_theory != 0)then
+  if debug then
     Format.printf "<< maude unifiers: %s =? %s\n" (show_term s) (show_term t) ;
   let esig = sig_of_term_list [s;t] in
   let query chan =
@@ -189,7 +195,7 @@ let unifiers s t rules =
   let parse_unifiers ch lexbuf =
     match Parsemaude.main Lexmaude.token lexbuf with
     | `Unify substs ->
-      if(! Util.extra_output land Util.about_theory != 0)then
+      if debug then
         List.iter
           (fun s -> Printf.printf "Result> %s\n" (show_subst s))
           substs ;
@@ -212,7 +218,7 @@ let unifiers s t rules =
 let unifiers s t rules =
   let v = unifiers s t rules in
   (* let v = rename_in_subst v in *)
-    if(! Util.extra_output land Util.about_theory != 0)then begin
+    if debug then begin
       Format.printf "unifiers %s %s (%d solutions):\n%!"
         (show_term s) (show_term t) (List.length v) ;
       List.iter (fun s -> Format.printf " %s\n" (show_subst s)) v
@@ -222,7 +228,7 @@ let unifiers s t rules =
 
 
 let acunifiers s t =
-  if(! Util.extra_output land Util.about_theory != 0)then
+  if debug then
     Format.printf "<< maude unifiers: %s =? %s\n" (show_term s) (show_term t) ;
   let esig = sig_of_term_list [s;t] in
   let query chan =
@@ -233,7 +239,7 @@ let acunifiers s t =
   let parse_unifiers ch lexbuf =
     match Parsemaude.main Lexmaude.token lexbuf with
     | `Unify substs ->
-      if(! Util.extra_output land Util.about_theory != 0)then
+      if debug then
         List.iter
           (fun s -> Printf.printf "Result> %s\n" (show_subst s))
           substs ;
@@ -256,7 +262,7 @@ let acunifiers s t =
 let acunifiers s t  =
   let v = acunifiers s t  in
   (* let v = rename_in_subst v in *)
-  if(! Util.extra_output land Util.about_theory != 0)then begin
+  if debug then begin
     Format.printf "unifiers %s %s (%d solutions):\n%!"
         (show_term s) (show_term t) (List.length v) ;
     List.iter (fun s -> Format.printf " %s\n" (show_subst s)) v
@@ -268,7 +274,7 @@ let acunifiers s t  =
 (** variants of a term *)
 
 let variants t rules =
-  if(! Util.extra_output land Util.about_theory != 0)then
+  if debug then
     Format.printf "<< maude variants: %s \n" (show_term t) ;
   let esig = sig_of_term_list [t] in
   let query chan =
@@ -279,7 +285,7 @@ let variants t rules =
   let parse_variants ch =
     match Parsemaude.main Lexmaude.token (Lexing.from_channel ch) with
     | `Variants v ->
-      if(! Util.extra_output land Util.about_theory != 0)then
+      if debug then
 	(
       	  let (_, sl) = List.split v in
           List.iter
@@ -304,7 +310,7 @@ let variants t rules =
 let variants t rules =
   let v = variants t rules in
   (* let v = rename_in_subst v in *)
-  if(! Util.extra_output land Util.about_theory != 0)then begin
+  if debug then begin
     Format.printf "variants %s (%d solutions):\n%!"
       (show_term t) (List.length v) ;
     (*      List.iter (fun s -> Format.printf " %s\n" (show_subst s)) v *)
@@ -324,7 +330,7 @@ let acmatchers s t =
   let parse_matchers ch =
     match Parsemaude.main Lexmaude.token (Lexing.from_channel ch) with
     | `Match substs ->
-      if(! Util.extra_output land Util.about_theory != 0)then
+      if debug then
         List.iter
           (fun s -> Printf.printf "Result> %s\n" (show_subst s))
           substs ;
@@ -346,7 +352,7 @@ let acmatchers s t =
 let acmatchers s t =
   let v = acmatchers s t in
   (* let v = rename_in_subst v in *)
-    if(! Util.extra_output land Util.about_theory != 0)then begin
+    if debug then begin
       Format.printf "matchers %s %s (%d solutions):\n%!"
         (show_term s) (show_term t) (List.length v) ;
       List.iter (fun s -> Format.printf " %s\n" (show_subst s)) v
@@ -358,7 +364,7 @@ let acmatchers s t =
 let equals s t rules =
   if s = t then true
   else(
-    if(! Util.extra_output land Util.about_theory != 0)then
+    if debug then
       Format.printf "<< maude equals: %s = %s\n" (show_term s) (show_term t) ;
     let esig = sig_of_term_list (s :: t :: terms_of_rules rules) in
     
@@ -369,7 +375,7 @@ let equals s t rules =
     let parse_equals ch =
       match Parsemaude.main Lexmaude.token (Lexing.from_channel ch) with
       | `Equal b ->
-	if(! Util.extra_output land Util.about_theory != 0)then
+	if debug then
           Printf.printf "Result> %B\n" b;
 	b
       | _ -> assert false
@@ -397,7 +403,7 @@ let equals s t rules =
 
 (** Normalize a term *)
 let normalize t rules =
-  if(! Util.extra_output land Util.about_theory != 0)then
+  if debug then
     Format.printf "<< maude reduce: %s\n" (show_term t) ;
   let esig = sig_of_term_list (t :: terms_of_rules rules) in
   let query chan =
@@ -408,7 +414,7 @@ let normalize t rules =
   let parse_normalize ch =
     match Parsemaude.main Lexmaude.token (Lexing.from_channel ch) with
     | `Norm term ->
-      if(! Util.extra_output land Util.about_theory != 0)then
+      if debug then
         Printf.printf "Result> %s\n" (show_term term);
       term
     | _ -> assert false
@@ -427,7 +433,7 @@ let normalize t rules =
       
 let normalize t rules =
   let nt = normalize t rules in
-    if(! Util.extra_output land Util.about_theory != 0)then begin
+    if debug then begin
       Format.printf "normalize %s:\n%!"
         (show_term t) ;
     end ;

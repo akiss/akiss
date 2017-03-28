@@ -106,6 +106,7 @@ main:
  | LeftP process RightP { $2 }
  | Identifier { TempProcessRef($1) }
  | If term Equals term Then process Else process {TempChoice(TempSequence(TempAction(TempActionTest ($2, $4)), $6),TempSequence(TempAction(TempActionTestInequal ($2, $4)), $8))}
+ | If term Inequals term Then process Else process {TempChoice(TempSequence(TempAction(TempActionTestInequal ($2, $4)), $6),TempSequence(TempAction(TempActionTest ($2, $4)), $8))}
 
      action:
  | In LeftP Identifier Comma Identifier RightP { TempActionIn($3, $5) }

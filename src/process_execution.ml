@@ -99,7 +99,7 @@ let rec execute_h_dumb process instructions =
 ;;
 
 let rec execute_h process frame  instructions rules =
-  (extraOutput about_execution "%s ; %s \n%!" (show_trace process)(show_term instructions);
+  (if !about_execution then Format.printf "%s ; %s \n%!" (show_trace process)(show_term instructions);
     match (process, instructions) with
       | (NullTrace, Fun("empty", [])) -> frame
       | (NullTrace, _) -> raise Too_many_instructions
@@ -109,16 +109,16 @@ let rec execute_h process frame  instructions rules =
 	    execute_h (apply_subst_tr pr [(x, (apply_frame r frame))]) frame  ir rules
 	  else
 	    raise Invalid_instruction
-      | (Trace(Test(x, y), pr), Fun("world", _)) -> extraOutput about_execution "> Testing (%s = %s) \n%!" (show_term x)(show_term y); 
-	  if R.equals x y rules then begin extraOutput about_execution "> test (%s = %s) is satisfied \n%!" (show_term x)(show_term y); 
+      | (Trace(Test(x, y), pr), Fun("world", _)) -> if !about_execution then Format.printf "> Testing (%s = %s) \n%!" (show_term x)(show_term y); 
+	  if R.equals x y rules then begin if !about_execution then Format.printf "> test (%s = %s) is satisfied \n%!" (show_term x)(show_term y); 
 	    execute_h pr frame  instructions rules end
 	  else 
-	    begin extraOutput about_execution "> test (%s = %s) not satisfied \n" (show_term x)(show_term y); raise Process_blocked end
+	    begin if !about_execution then Format.printf "> test (%s = %s) not satisfied \n" (show_term x)(show_term y); raise Process_blocked end
       | (Trace(TestInequal(x, y), pr), Fun("world", _)) -> 
-	  if not (R.equals x y rules) then begin extraOutput about_execution "> test (%s != %s) is satisfied \n%!" (show_term x)(show_term y); 
+	  if not (R.equals x y rules) then begin if !about_execution then Format.printf "> test (%s != %s) is satisfied \n%!" (show_term x)(show_term y); 
 	    execute_h pr frame  instructions rules end
 	  else 
-	    begin extraOutput about_execution "> test (%s != %s) not satisfied \n" (show_term x)(show_term y); raise Process_blocked end
+	    begin if !about_execution then Format.printf "> test (%s != %s) not satisfied \n" (show_term x)(show_term y); raise Process_blocked end
       | (Trace(Output(ch, x), pr), Fun("world", [Fun("!out!", [chp]); ir])) ->
 	  if chp = Fun(ch, []) then
 	    execute_h pr (List.append frame [x])  ir rules
@@ -157,7 +157,7 @@ let rec shrink process frame instructions vars =
 			new_vars 
 			(Trace(Input(ch,x),Trace(Test(apply_frame rv frame,Var(x)), shrink pr frame  ir next_vars))) 
 	  else
-	    begin extraOutput about_else "    invalid channel: %s\n>%s\n%!" (show_trace process)(show_term instructions); raise Invalid_instruction end
+	    begin if !about_else then Format.printf "    invalid channel: %s\n>%s\n%!" (show_trace process)(show_term instructions); raise Invalid_instruction end
       | (Trace(Test(x, y), pr), Fun("world", _)) -> 
             Trace(Test(x,y),shrink pr frame  instructions vars)
       | (Trace(TestInequal(x, y), pr), Fun("world", _)) -> 
@@ -166,8 +166,8 @@ let rec shrink process frame instructions vars =
 	  if chp = Fun(ch, []) then
 		Trace(Output(ch, x), shrink pr (List.append frame [x])  ir vars)
 	  else
-	    begin extraOutput about_else "    invalid channel: %s\n>%s\n%!" (show_trace process)(show_term instructions); raise Invalid_instruction end
-      | _ -> begin extraOutput about_else "    invalid misc: %s\n>%s\n%!" (show_trace process)(show_term instructions); raise Invalid_instruction end
+	    begin if ! about_else then Format.printf "    invalid channel: %s\n>%s\n%!" (show_trace process)(show_term instructions); raise Invalid_instruction end
+      | _ -> begin if ! about_else then Format.printf "    invalid misc: %s\n>%s\n%!" (show_trace process)(show_term instructions); raise Invalid_instruction end
 
 let rec free process = 
     match process with
@@ -199,12 +199,12 @@ let rec size_of instr =
 	List.filter (function Predicate("reach",[w]) ->  size_of w = n | _ -> true) tests*)
 
 let tests_of_trace_reach size rew t=
-extraOutput debug_seed "      Computing seed of the negate process: %s \n" (show_trace t); 
+  if !debug_seed then Format.printf "      Computing seed of the negate process: %s \n" (show_trace t); 
   let seed = Seed.seed_statements ~one_reach:true t rew in
     let kb = initial_kb seed rew in
-	extraOutput about_seed "      |Initial seed: %s \n\n"   (show_kb kb);
+	if !about_seed  then Format.printf "      |Initial seed: %s \n\n"   (show_kb kb);
       saturate ~only_reach:true  kb rew ;
-	extraOutput about_saturation "      |Saturated base:  %s\n%!" (show_kb kb);
+	if !about_saturation then Format.printf  "      |Saturated base:  %s\n%!" (show_kb kb);
       checks kb rew
 
 
@@ -219,8 +219,8 @@ let rec worldfilter_h f w a =
 	else
 	  worldfilter_h f t a
     | Var(_) -> invalid_arg("worldfilter_h variable")
-    | x -> begin extraOutput about_execution
-      "Error: %s\n" (show_term x); invalid_arg("worldfilter_h") end
+    | x -> begin if !about_execution  then Format.printf "Error: %s\n" (show_term x); 
+		invalid_arg("worldfilter_h") end
 ;;
 
 let worldfilter f w =
@@ -234,12 +234,25 @@ let slim instructions =
 	 | _ -> true)
        instructions
 
+let rec truncate n process = 
+	if n = 0 then NullTrace
+	else
+	match process with 
+	| NullTrace -> NullTrace
+	| Trace(Input(c, x), pr) -> Trace(Input(c, x),truncate (n - 1) pr)
+	| Trace(Test(s, t), pr) -> Trace(Test(s, t),truncate n pr)
+	| Trace(TestInequal(s, t), pr) ->Trace(TestInequal(s, t), truncate n pr)
+	| Trace(Output(c,t),pr)->  Trace(Output(c,t),truncate (n - 1) pr)
+
+let cut_from instr pr =
+	let n = size_of (slim instr) in
+	truncate n pr
+
 let execute process frame instructions rules =
   if execute_h_dumb process (slim instructions) then (* Avoid testing non compatible trace*)
    begin
- 	(* Printf.printf "Smart test \n" ;*)
-     extraOutput about_execution
-      "Executing: %s\n with instructions: %s\n%!" 
+       if !about_execution
+       then Format.printf "Executing: %s\n with instructions: %s\n%!" 
       (show_trace process) 
       (show_term instructions); 
     execute_h
@@ -247,7 +260,8 @@ let execute process frame instructions rules =
     frame 
     (slim instructions)
     rules end
-  else begin extraOutput about_execution "[trace with a different shape] " ; raise Process_blocked end
+  else begin if !about_execution then Format.printf "[trace with a different shape] " ; 
+	raise Process_blocked end
 ;;
 
 let is_executable process instructions rules =
@@ -318,27 +332,32 @@ let rec build_instructions instr1 instr2 subst =
 
 	
 
-let rec auxi_reach source process w rules r rp =
+let auxi_reach source process w rules r rp =
 	let slim_w = (slim w) in
 	let size = size_of (slim_w) in
 	let frame = execute process [] slim_w rules in
-	extraOutput about_execution " Result of execution of %s\n%!" (show_term w);
+	if !about_execution then Format.printf  " Result of execution of %s\n%!" (show_term w);
 	let t1 = apply_frame r frame in
 	let t2 = apply_frame rp frame in
-	if(not (R.equals t1 t2 rules)) then begin extraOutput about_tests "   The identity of %s and %s is not satisfied\n" (show_term t1)(show_term t2);(false,[]) end else
+	if(not (R.equals t1 t2 rules)) then 
+		begin if !about_tests then Format.printf "   The identity of %s and %s is not satisfied\n" (show_term t1)(show_term t2);
+		 (false,[]) end 
+	else begin 
 	if not(has_inequalities process) then 
-		begin extraOutput about_tests "   Success\n";(true,[]) end 
+		begin if !about_tests then Format.printf "   Success\n";
+		(true,[]) end 
 	else begin
 	let shrinked = shrink process (List.map (fun t-> variabilize "Z" t) frame) (slim_w) StringSet.empty in 
-	extraOutput about_else "  Checking else branches with shrink %s\n%!" (show_trace shrinked);
+	if !about_else then Format.printf "  Checking else branches with shrink %s\n%!" (show_trace shrinked);
 	let neg_process = negate shrinked in
 	let all_tests = List.concat (List.map (
-			fun pr -> extraOutput about_else "  -negation process: %s\n%!" (show_trace pr); 
+			fun pr -> 
+				if !about_else then Format.printf "  -negation process: %s\n%!" (show_trace pr); 
 				tests_of_trace_reach size rules pr)
 		neg_process) in
 	let tests = List.fold_left (fun acc (Fun("check_run",[test])) -> 
 		let (tst,delta) = build_instructions (variabilize "Z" w) test [] in 
-		extraOutput about_else "      -one test to check is %s\n%!" (show_term tst);
+		if !about_else then Format.printf "      -one test to check is %s\n%!" (show_term tst);
 		if is_executable source tst rules
 		then begin let t =
 			if (r = rp )
@@ -346,12 +365,13 @@ let rec auxi_reach source process w rules r rp =
 			else
 				Fun("check_identity",[tst;apply_subst (variabilize "Z" r) delta;apply_subst (variabilize "Z" rp) (delta)])
 			in 
-			extraOutput about_else "    - New test: %s\n%!" (show_term t);
+			if !about_else then Format.printf  "    - New test: %s\n%!" (show_term t);
 			t::acc
 		end
 		else
 			acc ) [] all_tests in
 	(true,tests)
+	end
 	end
 
 let check_reach source process test_reach rules = 
@@ -360,16 +380,16 @@ let check_reach source process test_reach rules =
       (
 	try
 	  (
-		extraOutput about_else "\n*** Check reach of %s ***\n    on: %s\n%!" (show_term test_reach) (show_trace process);
+		if !about_else then Format.printf  "\n*** Check reach of %s ***\n    on: %s\n%!" (show_term test_reach) (show_trace process);
 		let (result,tests) = auxi_reach source process w rules (Fun("!x!",[])) (Fun("!x!",[])) in
 		(*extraOutput about_else "RESULT of the test %s\n on %s\n is %b with list of size %d\n\n%!" (show_term test_reach) (show_trace process) result (List.length tests);*)
 		(result,tests)
 	  )
 	with 
-	  | Process_blocked -> extraOutput about_else "Process blocked! \n%!"; (false,[])
-	  | Too_many_instructions -> extraOutput about_else "Too many instruction! \n%!"; (false,[])
-	  | Not_a_recipe -> extraOutput about_else "Not a recipe! \n%!"; (false,[])
-	  | Invalid_instruction -> extraOutput about_else "Invalid instruction! \n%!"; (false,[])
+	  | Process_blocked -> if !about_else then Format.printf  "Process blocked! \n%!"; (false,[])
+	  | Too_many_instructions -> if !about_else then Format.printf  "Too many instruction! \n%!"; (false,[])
+	  | Not_a_recipe -> if !about_else then Format.printf  "Not a recipe! \n%!"; (false,[])
+	  | Invalid_instruction -> if !about_else then Format.printf  "Invalid instruction! \n%!"; (false,[])
 	  | Bound_variable -> invalid_arg("the process binds twice the same variable")
       )
   | _ -> invalid_arg("check_reach")
@@ -380,12 +400,12 @@ let check_ridentical source process test_ridentical rules =
   | Fun("check_identity", [w; r; rp]) ->
     (
       try
-		extraOutput about_else "\n*** Check identity of %s ***\n     on: %s\n%!" (show_term test_ridentical) (show_trace process);
+		if !about_else then Format.printf  "\n*** Check identity of %s ***\n     on: %s\n%!" (show_term test_ridentical) (show_trace process);
 		let (result,tests) = auxi_reach source process w rules r rp in
 		(*extraOutput about_else "RESULT of the test %s\n on %s\n is %b with list of size %d\n\n%!" (show_term test_ridentical) (show_trace process) result (List.length tests);*)
 		(result,tests)
       with 
-	| Process_blocked ->  extraOutput about_else "Process blocked ! \n%!"; (false,[])
+	| Process_blocked ->  if !about_else then Format.printf  "Process blocked ! \n%!"; (false,[])
 	| Too_many_instructions -> (false,[])
 	| Not_a_recipe -> (false,[])
 	| Invalid_instruction -> (false,[])
@@ -422,7 +442,8 @@ let check_test source process test rules =
     interpret (check_reach source process test rules)
   else
     raise Unknown_test
-	in  result
+	in
+ result
 ;;
 
 let update_tests source process test rules =
@@ -434,7 +455,7 @@ let update_tests source process test rules =
   else
     raise Unknown_test
 	in 
-	extraOutput about_tests "--- End of update: %s , %i ---\n%!" (if r then "ok" else "failure")(List.length lst);
+	if !about_tests then Format.printf  "--- End of update: %s , %i ---\n%!" (if r then "ok" else "failure")(List.length lst);
       (r,lst)
 ;;
 

@@ -40,7 +40,8 @@ type extrasig =
   { vars : string list ;
     names : int list ;
     params : int list ;
-    tuples : int list }
+    tuples : int list ;
+    hiddenchan : int list}
 val sig_of_term_list : term list -> extrasig
 
 val is_ground : term -> bool

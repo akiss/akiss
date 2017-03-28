@@ -67,7 +67,8 @@ type extrasig = {
   vars : string list ;
   names : int list ;
   params : int list ;
-  tuples : int list
+  tuples : int list ;
+  hiddenchan : int list ;
 }
 
 let rec sig_of_term_list cur = function
@@ -90,18 +91,26 @@ let rec sig_of_term_list cur = function
                let cur = { cur with names = n::cur.names } in
                  sig_of_term_list cur l)
             with Scanf.Scan_failure _ ->
-              sig_of_term_list cur l
+          begin try
+            Scanf.sscanf s "!hidden!Z%d"
+              (fun n ->
+                 let cur = { cur with hiddenchan = n::cur.hiddenchan } in
+                   sig_of_term_list cur l)
+              with Scanf.Scan_failure _ ->
+                sig_of_term_list cur l
+          end
         end
       end
   | Fun (_,l) :: l' ->
       sig_of_term_list cur (List.rev_append l l')
 
 let sig_of_term_list l =
-  let { vars=vars ; names=names ; params=params ; tuples=tuples } =
-    sig_of_term_list { vars = [] ; names = [] ; params = [] ; tuples = [] } l
+  let { vars=vars ; names=names ; params=params ; tuples=tuples ; hiddenchan=hiddenchan} =
+    sig_of_term_list { vars = [] ; names = [] ; params = [] ; tuples = [] ; hiddenchan = [] } l
   in
     { vars = Util.unique vars ; names = Util.unique names ;
-      params = Util.unique params ; tuples = Util.unique tuples }
+      params = Util.unique params ; tuples = Util.unique tuples ;
+      hiddenchan = Util.unique hiddenchan}
 
 let is_ground t = vars_of_term t = []
 

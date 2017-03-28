@@ -55,8 +55,10 @@ let command_line_options_list = [
    "Enable debug output");
   ("--debug", Arg.Unit (fun () -> debug_output := true),
    "Enable debug output");
-  ("--extra", Arg.Int (fun i -> extra_output := i),
-   "<n>  Display information <n>");
+  ("--else", Arg.Unit (fun () -> about_else := true),
+   "Enable debug output about else");
+  (*"--extra", Arg.Int (fun i -> extra_output := i),
+   "<n>  Display information <n>"*)
   ("--output-dot", Arg.String (fun s -> dotfile := Some s),
    "<file>  Output statement graph to <file>");
   ("-j", Arg.Int (fun i -> jobs := i),
@@ -188,35 +190,35 @@ let process_decl = function
   | SetPOR ->
       por := true
   | DeclSymbols symbolList ->
-    verboseOutput "Declaring symbols\n%!";
+    if !verbose_output then Format.printf  "Declaring symbols\n%!";
     declare_symbols symbolList;
     check_atoms ()
   | DeclChannels channelList ->
-    verboseOutput "Declaring channels\n%!";
+    if !verbose_output then Format.printf "Declaring channels\n%!";
     declare_channels channelList;
     check_atoms ()
   | DeclEvChannels evchannelList ->
-    verboseOutput "Declaring channels\n%!";
+    if !verbose_output then Format.printf "Declaring channels\n%!";
     declare_evchannels evchannelList;
     check_atoms ()
   | DeclPrivChannels privchannelList ->
-    verboseOutput "Declaring private channels\n%!";
+    if !verbose_output then Format.printf "Declaring private channels\n%!";
     declare_privchannels privchannelList;
     check_atoms ()
   | DeclPrivate nameList ->
-    verboseOutput "Declaring private names\n%!";
+    if !verbose_output then Format.printf "Declaring private names\n%!";
     declare_names nameList;
     check_atoms ()
   | DeclVar varList ->
-    verboseOutput "Declaring variables\n%!";
+    if !verbose_output then Format.printf "Declaring variables\n%!";
     declare_vars varList;
     check_atoms ()
 
   | DeclRewrite(t1, t2) ->
-    verboseOutput "Declaring rewrite rule\n%!";
+    if !verbose_output then Format.printf "Declaring rewrite rule\n%!";
     declare_rewrite t1 t2
   | DeclEvRewrite(t1, t2) ->
-    verboseOutput "Declaring rewrite rule\n%!";
+    if !verbose_output then Format.printf "Declaring rewrite rule\n%!";
     declare_evrewrite t1 t2
   | _ -> failwith "not preamble"
 
