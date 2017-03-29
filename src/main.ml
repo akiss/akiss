@@ -40,6 +40,10 @@ let reset_count new_count =
   trace_counter := 0 ;
   count_traces := new_count
 
+let reset_count_tests new_count =
+  test_counter := 0 ;
+  count_tests := new_count
+
 let do_count () =
   trace_counter := !trace_counter + 1;
   if !count_traces < 10000 || (!trace_counter mod 100 == 0) then
@@ -49,10 +53,10 @@ let do_count () =
     !trace_counter !count_traces
 
 let do_count_tests test =
-	test_counter := !test_counter +1;
-	if !verbose_output then Format.printf "Test %d/%d : %s \n%!" 
-	!test_counter !count_tests (show_term test)
-
+  test_counter := !test_counter +1;
+  if !count_tests < 10000 || (!test_counter mod 100 == 0) then
+  Format.printf "\x0dPerformed tests %d/%d%!" !test_counter !count_tests
+ 
 let tests_of_trace_job t rew =
   if !verbose_output then Format.printf "Constructing seed statements\n%!";
   let seed = Seed.seed_statements t rew in
@@ -90,15 +94,15 @@ let rec check_one_test source tests current_traces trace_list =
 	match (tests,current_traces) with 
 	| ([],_) -> true
 	| (t::other_tests,tr::other_traces) -> let (r,new_tests) = update_tests source tr t Theory.rewrite_rules in
-		if r then begin do_count ();
-			check_one_test source (new_tests @ other_tests) trace_list trace_list end
+		if r 
+		then check_one_test source (new_tests @ other_tests) trace_list trace_list 
 		else check_one_test source tests other_traces trace_list
 	| (t,[]) ->  normalOutput "\nFAILURE OF \n"; List.iter (fun test -> normalOutput " -*- %s \n" (show_term test)) t; false
 
 let check_test_multi_job source test traces = check_one_test source [test] traces traces
 
 let check_test_multi source test trace_list =
-  do_count_tests test;
+  do_count_tests ();
   Nproc.submit ppool (check_test_multi_job source test) trace_list >>= fun x ->
   match x with
   | Some y -> return y
@@ -168,14 +172,17 @@ let rec remove_duplicate lst =
 	| t :: q -> let qs = remove_duplicate q in 
 		if List.exists (fun x -> (x = t)) qs then qs else t :: qs
 
+let init_counter qs =
+	Format.printf "\n" ;
+	test_counter := 0;
+	qs
 
-let slim_tests lst = 
+let slim_tests lst  = 
 	if !debug_output then Format.printf "\nThere were %d tests in total\n" (List.length lst);
 	let qs = remove_duplicate lst in 
 	(*let qs = List.filter (fun (pr,t) -> not (List.exists (fun x -> (is_smaller_reach_test t x)) qs)) qs in*)
-	count_tests :=  (List.length qs);
-	test_counter := 0;
 	if !verbose_output then Format.printf "There are %d tests to check\n" (List.length qs);
+	count_tests := !count_tests + (List.length qs);
 	qs
 
 let blop (x,lst) =
@@ -195,11 +202,11 @@ let query ?(expected=true) s t =
   let stests =
     Lwt_list.rev_map_p
       (fun x -> (tests_of_trace true x Theory.rewrite_rules) >>= fun y -> return (x, y) >>= wrap1 blop)
-      straces >>= wrap1 List.concat >>= wrap1 slim_tests
+      straces >>= wrap1 List.concat >>= wrap1 slim_tests 
   and ttests =
     Lwt_list.rev_map_p
       (fun x -> (tests_of_trace true x Theory.rewrite_rules) >>= fun y -> return (x, y) >>= wrap1 blop)
-      ttraces >>= wrap1 List.concat >>= wrap1 slim_tests
+      ttraces >>= wrap1 List.concat >>= wrap1 slim_tests >>= wrap1 init_counter
   in
   let fail_stests =
     stests >>=
@@ -238,7 +245,7 @@ let inclusion_ct ?(expected=true) s t =
   let stests =
     Lwt_list.rev_map_p
       (fun x -> tests_of_trace true x Theory.rewrite_rules >>= fun y -> return (x, y) >>= wrap1 blop)
-      straces >>= wrap1 List.concat >>= wrap1 slim_tests
+      straces >>= wrap1 List.concat >>= wrap1 slim_tests >>= wrap1 init_counter
 
   in
     let fail_stests =
