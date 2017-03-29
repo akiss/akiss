@@ -92,12 +92,12 @@ let tests_of_trace show_progress t rew =
 
 let rec check_one_test source tests current_traces trace_list =
 	match (tests,current_traces) with 
-	| ([],_) -> true
+	| ([],_) -> None
 	| (t::other_tests,tr::other_traces) -> let (r,new_tests) = update_tests source tr t Theory.rewrite_rules in
 		if r 
 		then check_one_test source (new_tests @ other_tests) trace_list trace_list 
 		else check_one_test source tests other_traces trace_list
-	| (t,[]) ->  normalOutput "\nFAILURE OF \n"; List.iter (fun test -> normalOutput " -*- %s \n" (show_term test)) t; false
+	| (t::q,[]) ->  Some t
 
 let check_test_multi_job source test traces = check_one_test source [test] traces traces
 
@@ -172,16 +172,13 @@ let rec remove_duplicate lst =
 	| t :: q -> let qs = remove_duplicate q in 
 		if List.exists (fun x -> (x = t)) qs then qs else t :: qs
 
-let init_counter qs =
-	Format.printf "\n" ;
-	test_counter := 0;
-	qs
 
 let slim_tests lst  = 
 	if !debug_output then Format.printf "\nThere were %d tests in total\n" (List.length lst);
 	let qs = remove_duplicate lst in 
 	(*let qs = List.filter (fun (pr,t) -> not (List.exists (fun x -> (is_smaller_reach_test t x)) qs)) qs in*)
 	if !verbose_output then Format.printf "There are %d tests to check\n" (List.length qs);
+	Format.printf "\n" ;
 	count_tests := !count_tests + (List.length qs);
 	qs
 
@@ -189,6 +186,7 @@ let blop (x,lst) =
 	List.map (fun y -> (cut_from y x,y)) lst
 
 let query ?(expected=true) s t =
+  test_counter := 0;
   Printf.printf
     "Checking coarse trace %sequivalence of %s and %s\n%!"
     (if expected then "" else "in")
@@ -206,14 +204,14 @@ let query ?(expected=true) s t =
   and ttests =
     Lwt_list.rev_map_p
       (fun x -> (tests_of_trace true x Theory.rewrite_rules) >>= fun y -> return (x, y) >>= wrap1 blop)
-      ttraces >>= wrap1 List.concat >>= wrap1 slim_tests >>= wrap1 init_counter
+      ttraces >>= wrap1 List.concat >>= wrap1 slim_tests
   in
   let fail_stests =
     stests >>=
-      Lwt_list.filter_p (fun (s,x) -> check_test_multi s x ttraces >>= wrap1 not)
+      Lwt_list.filter_map_p (fun (s,x) -> check_test_multi s x ttraces)
   and fail_ttests =
     ttests >>=
-      Lwt_list.filter_p (fun (s,x) -> check_test_multi s x straces >>= wrap1 not)
+      Lwt_list.filter_map_p (fun (s,x) -> check_test_multi s x straces)
   in
   let fail_stests, fail_ttests = wait_pending2 fail_stests fail_ttests in
   if fail_stests = [] && fail_ttests = [] then begin
@@ -224,10 +222,10 @@ let query ?(expected=true) s t =
   end else begin
     if fail_stests <> [] then
       Printf.printf "The following tests work on %s but not on %s:\n%s\n%!"
-        (show_string_list s) (show_string_list t) (show_tests (List.map (fun (x,y) -> y)fail_stests));
+        (show_string_list s) (show_string_list t) (show_tests fail_stests);
     if fail_ttests <> [] then
       Printf.printf "The following tests work on %s but not on %s:\n%s\n%!"
-        (show_string_list t) (show_string_list s) (show_tests (List.map (fun (x,y) -> y)fail_ttests));
+        (show_string_list t) (show_string_list s) (show_tests fail_ttests);
     if expected then exit 1
   end
 
@@ -245,12 +243,11 @@ let inclusion_ct ?(expected=true) s t =
   let stests =
     Lwt_list.rev_map_p
       (fun x -> tests_of_trace true x Theory.rewrite_rules >>= fun y -> return (x, y) >>= wrap1 blop)
-      straces >>= wrap1 List.concat >>= wrap1 slim_tests >>= wrap1 init_counter
-
+      straces >>= wrap1 List.concat >>= wrap1 slim_tests 
   in
     let fail_stests =
     stests >>=
-      Lwt_list.filter_p (fun (s,x) -> check_test_multi s x ttraces >>= wrap1 not)
+      Lwt_list.filter_map_p (fun (s,x) -> check_test_multi s x ttraces)
   and fail_ttests = return []
   in
   let fail_stests, fail_ttests = wait_pending2 fail_stests fail_ttests in
@@ -262,7 +259,7 @@ let inclusion_ct ?(expected=true) s t =
   end else begin
     if fail_stests <> [] then
       Printf.printf "The following tests work on %s but not on %s:\n%s\n%!"
-        (show_string_list s) (show_string_list t) (show_tests (List.map (fun (x,y) -> y)fail_stests));
+        (show_string_list s) (show_string_list t) (show_tests fail_stests);
     if expected then exit 1
   end
 
