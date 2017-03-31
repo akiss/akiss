@@ -1,0 +1,120 @@
+#set xor;
+symbols f1/2,f2/2,f5/2,pair/2,fst/1,snd/1,macFail/0,syncFail/0,reject/0;
+
+channels C1,C2,S1,S2;
+private sqnSN,sqnSN1,sqnSN2,k,kZ,rand,rand1,rand2;
+
+var X,Y,Z,X1,X2,
+	xrand,msg,xmac,ak,xsqn,mac,res,ck,ik,
+	xrand1,msg1,xmac1,ak1,xsqn1,mac1,res1,ck1,ik1,
+	xrand2,msg2,xmac2,ak2,xsqn2,mac2,res2,ck2,ik2,
+	akSN,akSN1,akSN2,
+	macSN,macSN1,macSN2,
+	autnSN,autnSN1,autnSN2,
+	xresSN,xresSN1,xresSN2,
+	resSN,resSN1,resSN2;
+
+rewrite fst(pair(X, Y)) -> X;
+rewrite snd(pair(X, Y)) -> Y;
+
+akaMS1 = 
+	in(C1,X1).
+	let xrand1 = fst(X1) in
+	let msg1 = fst(snd(X1)) in
+	let xmac1 = snd(snd(X1)) in
+	let ak1 = f5(kZ,xrand1) in
+	let xsqn1 = ak1 + msg1 in
+	let mac1 = f1(kZ,pair(xrand1,xsqn1)) in
+	if xmac1 != mac1 then
+		out(C1,macFail)
+	else
+		out(C1,f2(kZ,xrand1));
+
+
+akaMS2 = 
+	in(C2,X2).
+	let xrand2 = fst(X2) in
+	let msg2 = fst(snd(X2)) in
+	let xmac2 = snd(snd(X2)) in
+	let ak2 = f5(k,xrand2) in
+	let xsqn2 = ak2 + msg2 in
+	let mac2 = f1(k,pair(xrand2,xsqn2)) in
+	if xmac2 != mac2 then
+		out(C2,macFail)
+	else
+		out(C2,f2(k,xrand2));
+
+akaMS = 
+	in(C1,X).
+	let xrand= fst(X) in
+	let msg = fst(snd(X)) in
+	let xmac = snd(snd(X)) in
+	let ak = f5(k,xrand) in
+	let xsqn = ak + msg in
+	let mac = f1(k,pair(xrand,xsqn)) in
+	if xmac != mac then
+		out(C1,macFail) ::
+		akaMS2
+	else
+		out(C1,f2(k,xrand)).
+		
+	in(C2,X2).
+	let xrand2 = fst(X2) in
+	let msg2 = fst(snd(X2)) in
+	let xmac2 = snd(snd(X2)) in
+	let ak2 = f5(k,xrand2) in
+	let xsqn2 = ak2 + msg2 in
+	let mac2 = f1(k,pair(xrand2,xsqn2)) in
+	if xmac2 != mac2 then
+		out(C2,macFail)
+	else
+		if xsqn2 = xsqn
+		then
+			out(C2,syncFail)
+		else
+			out(C2,f2(k,xrand2));
+		
+akaSN1 = 
+	let akSN1 = f5(kZ,rand1) in
+	let macSN1 = f1(kZ,pair(rand1,sqnSN1)) in
+	let autnSN1 = pair(sqnSN1 + akSN1, macSN1) in
+	out(S1,pair(rand1,autnSN1)).
+	in(S1,xresSN1).
+	let resSN1 = f2(kZ,rand1) in
+	if xresSN1 != resSN1
+	then
+		out(S1,reject)
+	else
+		0;
+		
+akaSN2 = 
+ 0;
+
+akaSN = 
+	let akSN = f5(k,rand) in
+	let macSN = f1(k,pair(rand,sqnSN)) in
+	let autnSN = pair(sqnSN + akSN, macSN) in
+	out(S1,pair(rand,autnSN)).
+	in(S1,xresSN).
+	let resSN = f2(k,rand) in
+	if xresSN != resSN
+	then
+		out(S1,reject) ::
+		akaSN2
+	else
+		
+ 0;
+	
+		
+
+
+		
+
+ system1  = 
+	akaMS || akaSN;
+
+ system2  = (akaMS1 :: akaMS2 ) || (akaSN1 :: akaSN2);
+
+
+
+equivalentct? system1 and system2 ; 

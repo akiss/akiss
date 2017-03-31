@@ -1,0 +1,26 @@
+#set xor;
+symbols f1/2,f2/2,f5/2,pair/2,fst/1,snd/1,macFail/0,syncFail/0,reject/0;
+
+channels C1,C2,S1,S2;
+private sqnSN,sqnSN1,sqnSN2,k,kZ,rand,rand1,rand2;
+
+var X,Y,Z,X1,X2,
+	xrand,msg,xmac,ak,xsqn,mac,res,ck,ik,
+	xrand1,msg1,xmac1,ak1,xsqn1,mac1,res1,ck1,ik1,
+	xrand2,msg2,xmac2,ak2,xsqn2,mac2,res2,ck2,ik2,
+	akSN,akSN1,akSN2,
+	macSN,macSN1,macSN2,
+	autnSN,autnSN1,autnSN2,
+	xresSN,xresSN1,xresSN2,
+	resSN,resSN1,resSN2;
+
+rewrite fst(pair(X, Y)) -> X;
+rewrite snd(pair(X, Y)) -> Y;
+
+system1=
+out(S1,pair(rand,pair(sqnSN+f5(k,rand),f1(k,pair(rand,sqnSN))))).in(C1,X).[snd(snd(X))=f1(k,pair(fst(X),f5(k,fst(X))+fst(snd(X))))].out(C1,f2(k,fst(X))).in(S1,xresSN).[xresSN!=f2(k,rand)].out(S1,reject).in(C2,X2).[snd(snd(X2))=f1(k,pair(fst(X2),f5(k,fst(X2))+fst(snd(X2))))].[f5(k,fst(X2))+fst(snd(X2))!=f5(k,fst(X))+fst(snd(X))].out(C2,f2(k,fst(X2))).0;
+
+system2=
+out(S1,pair(rand1,pair(sqnSN1+f5(kZ,rand1),f1(kZ,pair(rand1,sqnSN1))))).in(C1,X1).[snd(snd(X1))=f1(kZ,pair(fst(X1),f5(kZ,fst(X1))+fst(snd(X1))))].out(C1,f2(kZ,fst(X1))).in(S1,xresSN1).[xresSN1!=f2(kZ,rand1)].out(S1,reject).in(C2,X2).[snd(snd(X2))=f1(k,pair(fst(X2),f5(k,fst(X2))+fst(snd(X2))))].out(C2,f2(k,fst(X2))).0;
+
+includedct? system1 in system2 ; 

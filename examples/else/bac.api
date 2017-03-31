@@ -107,7 +107,7 @@ rewrite sdec(senc(X, Y), Y) -> X;
     in(c,y2).
 //    let (me,mm) = y in
   
-    if snd(y2)=mac(fst(y2),ke2) then
+    if snd(y2)=mac(fst(y2),km2) then
 //    if mm = mac(me,km2)
 //    then
 //      let (nr,nt2,kr) = sdec(me,ke2) in
