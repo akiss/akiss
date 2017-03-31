@@ -185,12 +185,23 @@ let slim_tests lst  =
 let blop (x,lst) =
 	List.map (fun y -> (cut_from y x,y)) lst
 
+let check_por s =
+  (*Checks whether processes are action-determinate. Enables por support as a side-effect *)
+  let processlist = List.map (fun x -> List.assoc x !processes) s in
+  if (not Theory.disable_por)  && Theory.privchannels = [] && List.for_all action_determinate processlist then
+    begin
+      Printf.printf "Processes are action determinate : enabling POR optimization\n";
+      flush stdout;
+      Theory.set_por true
+    end
+  
 let query ?(expected=true) s t =
   test_counter := 0;
   Printf.printf
     "Checking coarse trace %sequivalence of %s and %s\n%!"
     (if expected then "" else "in")
     (show_string_list s) (show_string_list t);
+  check_por (s@t);
   let straces = List.concat (List.map (fun x -> traces @@ List.assoc x !processes) s) in
   let ttraces = List.concat (List.map (fun x -> traces @@ List.assoc x !processes) t) in
   let () = List.iter check_free_variables straces in
@@ -235,6 +246,7 @@ let inclusion_ct ?(expected=true) s t =
     "Checking coarse trace %sinclusion of %s in %s\n%!"
     (if expected then "" else "non")
     (show_string_list s) (show_string_list t);
+  check_por (s@t);
   let straces = Util.union (List.map (fun x -> traces @@ List.assoc x !processes) s) in
   let ttraces = Util.union (List.map (fun x -> traces @@ List.assoc x !processes) t) in
   let () = List.iter check_free_variables straces in
@@ -289,6 +301,7 @@ let square ~expected s t =
     "Checking fine grained %sequivalence of %s and %s\n%!"
     (if expected then "" else "in")
     (show_string_list s) (show_string_list t);
+  check_por (s@t);
   let ls = List.concat (List.map (fun x -> traces @@ List.assoc x !processes) s) in
   let lt = List.concat (List.map (fun x -> traces @@ List.assoc x !processes) t) in
   let () = List.iter check_free_variables ls in
@@ -335,6 +348,7 @@ let inclusion_ft ~expected s t =
     "Checking fine grained %sinclusion of %s in %s\n%!"
     (if expected then "" else "non")
     (show_string_list s) (show_string_list t);
+  check_por (s@t);
   let ls = List.concat (List.map (fun x -> traces @@ List.assoc x !processes) s) in
   let lt = List.concat (List.map (fun x -> traces @@ List.assoc x !processes) t) in
   let () = List.iter check_free_variables ls in
@@ -449,6 +463,7 @@ let evequiv ~expected s t =
     (if expected then "in" else "")
     (show_string_list s) (show_string_list t);
   (* list of traces of s, then t *)
+  check_por (s@t);
   let ls =
     List.concat (List.map (fun x -> traces @@ List.assoc x !processes) s)
   in
@@ -502,6 +517,7 @@ let print_trace_list (tlist : trace list) =
 
 let print_traces tnl =
   Printf.printf "Printing the list of traces of %s\n%!" (String.concat ", " tnl);
+  check_por (tnl);
   let tl = List.concat (trmap (fun x -> (traces @@ List.assoc x !processes)) tnl) in
   print_trace_list tl
 

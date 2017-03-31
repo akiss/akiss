@@ -46,6 +46,7 @@ val show_action_lst : action list -> string
 (** {3 Parsing} *)
 
 val parse_process : Ast.tempProcess -> (string * symbProcess) list -> symbProcess
+val action_determinate : symbProcess -> bool
 val traces : symbProcess -> process
 
 

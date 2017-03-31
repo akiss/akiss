@@ -40,6 +40,7 @@ let tamarin_variants = ref false
 
 (** Experimental POR optimization *)
 let por = ref false
+let disable_por = ref false
 
 
 let usage = Printf.sprintf
@@ -57,6 +58,10 @@ let command_line_options_list = [
    "Enable debug output");
   ("--else", Arg.Unit (fun () -> about_else := true),
    "Enable debug output about else");
+  ("--seed", Arg.Unit (fun () -> about_seed := true),
+   "Enable debug output about seed");
+  ("--saturation", Arg.Unit (fun () -> about_saturation := true),
+   "Enable debug output about saturation");
   (*"--extra", Arg.Int (fun i -> extra_output := i),
    "<n>  Display information <n>"*)
   ("--output-dot", Arg.String (fun s -> dotfile := Some s),
@@ -64,7 +69,9 @@ let command_line_options_list = [
   ("-j", Arg.Int (fun i -> jobs := i),
    "<n>  Use <n> parallel jobs (if supported)");
   ("--ac-compatible", Arg.Set ac_toolbox,
-   "Use the AC-compatible toolbox even on non-AC theories (experimental)")
+   "Use the AC-compatible toolbox even on non-AC theories (experimental)");
+  ("--disable-por", Arg.Unit (fun () -> disable_por := true),
+   "Disable partial order reduction (por) optimisations")
 ]
 
 let cmdlist =
@@ -257,7 +264,8 @@ let dotfile = !dotfile
 let jobs = !jobs
 let xor = !xor
 let ac = !ac
-let por = !por
+let set_por b = por:= b
+let disable_por = !disable_por
 let fsymbols = !fsymbols
 let channels = !channels
 let private_names = !private_names
