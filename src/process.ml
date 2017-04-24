@@ -39,6 +39,13 @@ let is_io_action a =
   | Output(_,_) -> true
   | Test (_,_) -> false
   | TestInequal (_,_) -> false
+
+let is_test_action a = 
+  match a with
+  | Input(_,_)
+  | Output(_,_) -> false
+  | Test (_,_) 
+  | TestInequal (_,_) -> true
       
 let remove_term_in_io_action a =
   match a with
@@ -127,19 +134,21 @@ let replace_var_in_term x t term =
 
 type symbProcess =
   | SymbNul
-  | SymbAct of action list (* non-empty list *)
+  | SymbAct of action list (* non-empty list, in reverse order, only tests except the head *)
   | SymbSeq of symbProcess * symbProcess
   | SymbPar of symbProcess * symbProcess
   | SymbAlt of symbProcess * symbProcess
+  | SymbEither of symbProcess * symbProcess
   | SymbPhase of symbProcess * symbProcess
 
 let rec show_symb = function
   | SymbNul -> "0"
-  | SymbAct a -> "(act " ^ String.concat " " (List.map show_action a) ^ ")"
-  | SymbSeq (p1, p2) -> "(seq " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
-  | SymbPar (p1, p2) -> "(par " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
-  | SymbAlt (p1, p2) -> "(alt " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
-  | SymbPhase (p1, p2) -> "(phase " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
+  | SymbAct a -> "[|" ^ String.concat " " (List.map show_action a) ^ "|]"
+  | SymbSeq (p1, p2) -> "seq(" ^ show_symb p1 ^ " :: " ^ show_symb p2 ^ ")"
+  | SymbPar (p1, p2) -> "par(" ^ show_symb p1 ^ " || " ^ show_symb p2 ^ ")"
+  | SymbAlt (p1, p2) -> "alt(" ^ show_symb p1 ^ " ++ " ^ show_symb p2 ^ ")"
+  | SymbEither (p1, p2) -> "(either " ^ show_symb p1 ^ " or " ^ show_symb p2 ^ ")"
+  | SymbPhase (p1, p2) -> "phase(" ^ show_symb p1 ^ " >> " ^ show_symb p2 ^ ")"
 
 let rec actions_of p =
   match p with
@@ -147,6 +156,7 @@ let rec actions_of p =
   | SymbAct a -> ActionSet.of_list (List.rev_map remove_term_in_io_action (List.filter is_io_action a))
   | SymbSeq (p1, p2) 
   | SymbAlt (p1, p2) 
+  | SymbEither (p1, p2) 
   | SymbPhase (p1, p2) 
   | SymbPar (p1, p2) -> ActionSet.union (actions_of p1) (actions_of p2)
 
@@ -161,9 +171,10 @@ let action_determinate p =
     | SymbSeq (p, SymbNul) -> ad p
     | SymbSeq (SymbSeq (p1, p2), p) -> ad p1 &&  ad (SymbSeq (p2, p))
     | SymbPar (p1, p2) -> ActionSet.is_empty (ActionSet.inter (actions_of p1) (actions_of p2)) && ( ad p1 && ad p2 )
+    | SymbEither (p1, p2) -> ad p1 && ad p2
     | SymbSeq (_, _) 
     | SymbPhase (_, _)
-    | SymbAlt (_, _) -> false
+    | SymbAlt (_, _) -> if !about_traces then Format.printf "The process is not action_determinate because of %s\n" (show_symb p); false
   in
   match p with 
   | SymbPhase (p1, p2) -> ad p1 && ad p2
@@ -198,6 +209,10 @@ let rec replace_var_in_symb x t p =
      let p1 = replace_var_in_symb x t p1 in
      let p2 = replace_var_in_symb x t p2 in
      SymbAlt (p1, p2)
+  | SymbEither (p1, p2) ->
+     let p1 = replace_var_in_symb x t p1 in
+     let p2 = replace_var_in_symb x t p2 in
+     SymbEither (p1, p2)
   | SymbPhase (p1, p2) ->
      let p1 = replace_var_in_symb x t p1 in
      let p2 = replace_var_in_symb x t p2 in
@@ -215,6 +230,14 @@ let rec symb_of_temp process processes =
      let p1 = symb_of_temp p1 processes in
      let p2 = symb_of_temp p2 processes in
      SymbPar (p1, p2)
+  | TempChoice (TempSequence (TempAction(TempActionTest(s1,t1)), p1), TempSequence (TempAction(TempActionTestInequal(s2,t2)), p2)) when s1 = s2 && t1 = t2 ->
+     let p1 = symb_of_temp p1 processes in
+     let p2 = symb_of_temp p2 processes in
+     SymbEither (SymbSeq(SymbAct[parse_action (TempActionTest(s1,t1))],p1),SymbSeq(SymbAct[parse_action (TempActionTestInequal(s2,t2))],p2))
+  | TempChoice (TempSequence (TempAction(TempActionTestInequal(s1,t1)), p1), TempSequence (TempAction(TempActionTest(s2,t2)), p2)) when s1 = s2 && t1 = t2 ->
+     let p1 = symb_of_temp p1 processes in
+     let p2 = symb_of_temp p2 processes in
+     SymbEither (SymbSeq(SymbAct[parse_action (TempActionTestInequal(s1,t1))],p1),SymbSeq(SymbAct[parse_action (TempActionTest(s2,t2))],p2))
   | TempChoice (p1, p2) ->
      let p1 = symb_of_temp p1 processes in
      let p2 = symb_of_temp p2 processes in
@@ -243,35 +266,48 @@ let rec simplify = function
      | SymbNul, p -> p
      | p, SymbNul -> p
      | p1, p2 -> SymbPar (p1, p2))
-  | SymbAlt (p1, p2) ->
+  | SymbAlt (p1, p2) as p -> p (* It may be a sequance after it*)
+     (*match simplify p1, simplify p2 with
+     | SymbNul, p -> p
+     | p, SymbNul -> p
+     | p1, p2 -> SymbAlt (p1, p2)*)
+  | SymbEither (p1, p2) ->
      (match simplify p1, simplify p2 with
      | SymbNul, p -> p
      | p, SymbNul -> p
-     | p1, p2 -> SymbAlt (p1, p2))
-  | SymbPhase _ as p -> p
+     | p1, p2 -> SymbEither (p1, p2))
+  | SymbPhase (p1, p2) -> 
+     (match simplify p1, simplify p2 with
+     | SymbNul, p -> p
+     | p1, p2 -> SymbPhase (p1, p2))
+
 
 let rec optimize_tests p =
   if Theory.privchannels = []
-  then unlinearize SymbNul (compress_tests [] [] (linearize p))
+  then (*unlinearize SymbNul (compress_tests [] [] (linearize p))*)
+  begin let res = compress_tests [] p in
+  if !about_traces then Format.printf "Optimized trace %s\n\n" (show_symb res);
+  res
+  end
   else p
 (* this optimization is currently disabled in the presence of private
    channels as it creates a bug in the pre-treatment: tests before a
    private communication are removed, even though they should not
    be *)
 
-and linearize = function
+(*and linearize = function
   | SymbNul -> []
   | SymbAct _ as a -> [a]
   | SymbSeq (p1, p2) -> linearize p1 @ linearize p2
   | SymbPar (p1, p2) -> [SymbPar (optimize_tests p1, optimize_tests p2)]
   | SymbAlt (p1, p2) -> [SymbAlt (optimize_tests p1, optimize_tests p2)]
-  | SymbPhase (p1, p2) -> [SymbPhase (optimize_tests p1, optimize_tests p2)]
+  | SymbPhase (p1, p2) -> [SymbPhase (optimize_tests p1, optimize_tests p2)]*)
 
-and unlinearize res = function
+(*and unlinearize res = function
   | [] -> res
-  | x :: xs -> unlinearize (SymbSeq (x, res)) xs
+  | x :: xs -> unlinearize (SymbSeq (x, res)) xs*)
 
-and compress_tests res accu = function
+(*and compress_tests res accu = function
   | [] -> if accu = [] then res else SymbAct accu :: res
   | SymbAct [Test (_, _) as a] :: xs ->
      compress_tests res (a :: accu) xs
@@ -279,16 +315,46 @@ and compress_tests res accu = function
      compress_tests (SymbAct (a :: accu) :: res) [] xs
   | p :: xs ->
      let res = if accu = [] then res else SymbAct accu :: res in
-     compress_tests (p :: res) [] xs
+     compress_tests (p :: res) [] xs*)
+
+and compress_tests accu p = 
+  match p with
+  | SymbNul -> if accu = [] then SymbNul else SymbAct accu
+  | SymbAct _ -> compress_tests accu (SymbSeq(p,SymbNul))
+  | SymbSeq (SymbAct [t], p1) -> 
+	if is_test_action t 
+	then compress_tests (t :: accu) p1 
+	else SymbSeq (SymbAct(t :: accu), (compress_tests [] p1))
+  | SymbSeq (SymbSeq(p1,p2),p3) -> compress_tests accu (SymbSeq (p1,SymbSeq(p2,p3)))
+  | SymbSeq (p1, p2) -> SymbSeq (compress_tests accu p1,compress_tests [] p2)
+(*  | SymbSeq (p1, p2) -> linearize p1 @ linearize p2*)
+  | SymbPar (p1, p2) -> let res=SymbPar (compress_tests [] p1, compress_tests [] p2)in if accu = [] then res else SymbSeq ( SymbAct accu, res)
+  | SymbEither (p1, p2) -> SymbEither (compress_tests accu p1, compress_tests accu p2)
+  | SymbAlt (p1, p2) -> SymbAlt (compress_tests accu p1, compress_tests accu p2)
+(*  | SymbAlt (p1, p2) -> [SymbAlt (optimize_tests p1, optimize_tests p2)]*)
+  | SymbPhase (p1, p2) -> let res=SymbPhase (compress_tests [] p1, compress_tests [] p2)in if accu = [] then res else SymbSeq ( SymbAct accu, res)
+
+let rec maybe_null = function
+  | SymbNul -> true
+  | SymbAct a -> false
+  | SymbSeq (p1, p2) -> (maybe_null p1) && (maybe_null p2)
+  | SymbAlt (p1, p2) -> (maybe_null p1) || (maybe_null p2)
+  | SymbEither (p1, p2) -> (maybe_null p1) || (maybe_null p2)
+  | SymbPar (p1, p2) -> (maybe_null p1) && (maybe_null p2)
+  | SymbPhase (p1, p2) -> (maybe_null p2)
+
 
 let rec delta = function
   | SymbNul -> []
-  | SymbAct a -> [ a, SymbNul ]
+  | SymbAct a -> [ (a, SymbNul) ]
   | SymbSeq (p1, p2) ->
-     List.fold_left (fun accu (a, p) ->
-       (a, simplify (SymbSeq (p, p2))) :: accu
-     ) [] (delta p1)
+     List.rev_append
+     (List.map (fun (a, p) ->
+       (a, simplify (SymbSeq (p, p2))) 
+     )  (delta p1))
+	(if maybe_null p1 then delta p2 else [])
   | SymbAlt (p1, p2) -> delta p1 @ delta p2
+  | SymbEither (p1, p2) -> delta p1 @ delta p2
   | SymbPar (p1, p2) ->
      let s1 =
        List.fold_left (fun accu (a, p) ->
@@ -303,7 +369,7 @@ let rec delta = function
      s2
   | SymbPhase (p1, p2) ->
       List.rev_append
-        (List.map (fun (a,p) -> a, SymbPhase (p,p2)) (delta p1))
+        (List.map (fun (a,p) -> a, simplify (SymbPhase (p,p2))) (delta p1))
         (delta p2)
 
 type action_classification =
@@ -318,7 +384,6 @@ let classify_action = function
   | Input (c, x) :: _ ->
      if List.mem c Theory.privchannels
      then PrivateInput (c, x) else PublicAction
-(*  | InputMatch (c, t) :: _ -> assert (false) (* Todo *)*)
   | Output (c, t) :: _ ->
      if List.mem c Theory.privchannels
      then PrivateOutput (c, t) else PublicAction
@@ -365,7 +430,7 @@ let rec traces p =
   * We implement the compressed strategy of Baelde, Hirschi & Delaune
   * for the subset of processes that is supported for it. *)
 
-let rec canonize = function
+(*let rec canonize = function
   | SymbSeq (SymbAct [],q) -> assert false
   | SymbSeq (SymbAct [a],q) -> SymbSeq (SymbAct [a], q)
   | SymbSeq (SymbAct l,q) ->
@@ -374,13 +439,13 @@ let rec canonize = function
         q l
   | SymbSeq (p, SymbNul) -> canonize p
   | SymbAct l -> canonize (SymbSeq (SymbAct l, SymbNul))
-  | (SymbPar _ | SymbNul) as p -> p
-  | SymbSeq _ | SymbAlt _ | SymbPhase _ -> failwith "unsupported"
+  | (SymbPar _ | SymbNul | SymbEither _) as p -> p
+  | SymbSeq _ | SymbAlt _ | SymbPhase _ -> failwith "unsupported"*)
 
 let prepend_traces a trace_set =
   TraceSet.fold
     (fun tr accu ->
-       TraceSet.add (trace_prepend [a] tr) accu)
+       TraceSet.add (trace_prepend a tr) accu)
     trace_set
     TraceSet.empty
 
@@ -392,30 +457,38 @@ let traces_por p =
           (* While there are async processes, execute them in a fixed
            * and arbitrary order: break parallels, execute outputs
            * as well as tests *)
-          begin match canonize p with
+          begin match p with
             | SymbNul ->
                 traces async sync
+            | SymbAct l -> (*There is no canonize anymore*)
+                traces (SymbSeq(SymbAct l,SymbNul)::async) sync
             | SymbPar (q1,q2) ->
                 traces (q1::q2::async) sync
-            | SymbSeq (SymbAct [Output (c,t) as a], q) ->
-                prepend_traces a (traces (q::async) sync)
-            | SymbSeq (SymbAct [Test (t,t') as a], q) ->
+            | SymbEither (q1,q2) ->
+                TraceSet.union (traces (q1::async) sync)(traces (q2::async) sync)
+            | SymbSeq (SymbAct ((Output (c,t) :: tests ) as a), q) ->
+                let trset = prepend_traces a (traces (q::async) sync) in
+                if tests = [] then trset else
+                TraceSet.union
+                  trset
+                  (traces async sync)
+            | SymbSeq (SymbAct ((*Test (t,t') as a*) (test :: tests) as a), q) when is_test_action test ->
                 TraceSet.union
                   (prepend_traces a (traces (q::async) sync))
-                  (traces async sync)
-            | SymbSeq (SymbAct [Input _], q) ->
+                  (traces async sync) (* the failure of the test blocks only the current thread *)
+            | SymbSeq (SymbAct (Input _ :: _), q) ->
                 traces async (p::sync)
             | _ ->
                 failwith
                   (Printf.sprintf "unsupported async proc: %s" (show_symb p))
           end
       | [] ->
-          (* Focus a process, execute it until focus can be released *)
+          (* Focus a process, execute it until focus should be released *)
           let rec focus p sync =
-            match canonize p with
-              | SymbSeq (SymbAct [Input (c,x) as a], q) ->
+            match p with
+              | SymbSeq (SymbAct ((Input (c,x) :: tests) as a), q) ->
                   prepend_traces a (focus q sync)
-              | SymbSeq (SymbAct [Test (t,t') as a], q) ->
+              | SymbSeq (SymbAct ((*Test (t,t')*) (test :: tests) as a), q) when is_test_action test ->
                   (* In case the test fails, the continuation is null
                    * so we have an improper block: no need to explore further
                    * traces. *)
@@ -423,7 +496,11 @@ let traces_por p =
               | SymbNul ->
                   (* Obvious improper block *)
                   TraceSet.singleton NullTrace
+              | SymbAct l -> (*There is no canonize anymore*)
+                  focus (SymbSeq(SymbAct l,SymbNul)) sync
               | SymbPar (_,_)
+              | SymbEither (_,_)
+(*              | SymbSeq (SymbEither _, _) *)
               | SymbSeq (SymbAct [Output _], _) ->
                   (* In case of Par, this could be improper
                    * but we don't care and it won't happen in practice. *)
@@ -457,9 +534,9 @@ let traces_por p =
           | Trace (Input _ as a, t) ->
               TraceSet.union
                 (traces_por p2)
-                (prepend_traces a (aux t))
+                (prepend_traces [a] (aux t))
           | Trace (a,t) ->
-              prepend_traces a (aux t)
+              prepend_traces [a] (aux t)
         in
           TraceSet.fold
             (fun t s ->
@@ -469,7 +546,9 @@ let traces_por p =
 
 let traces p =
   let traces = if !Theory.por then traces_por else traces in
-    TraceSet.elements @@ traces @@ simplify @@ optimize_tests p
+  let res = TraceSet.elements @@ traces @@ simplify @@ optimize_tests p in
+  if !about_traces then begin Format.printf "Generated traces\n"; List.iter (fun t -> Format.printf "%s\n" (show_trace t)) res; Format.printf "\n%!"; end;
+  res
 
 let parse_process p ps =
   simplify @@ symb_of_temp p ps

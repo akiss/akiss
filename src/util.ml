@@ -36,6 +36,8 @@ let about_else = ref false
 let about_execution = ref false
 let about_theory = ref false
 let debug_theory = false
+let about_traces = ref false
+let about_maude = ref false
 
 (*let verboseOutput a =
   if !verbose_output || about_verbose then

@@ -158,12 +158,12 @@ let check_free_variables t =
   try
     let xs, _ = variables_of_trace t in
     if not (StringSet.is_empty xs) then begin
-      Printf.eprintf "Process has free variables: %s.\n%!"
-        (String.concat ", " (StringSet.elements xs));
+      Printf.eprintf "Process %s has free variables: %s.\n%!"
+       (show_trace t) (String.concat ", " (StringSet.elements xs));
       exit 2
     end
   with MultiplyBoundVariable x ->
-    Printf.eprintf "Variable %s is bound multiple times.\n%!" x;
+    Printf.eprintf "Variable %s is bound multiple times in %s.\n%!" x (show_trace t);
     exit 2
 
 let rec remove_duplicate lst =

@@ -62,6 +62,10 @@ let command_line_options_list = [
    "Enable debug output about seed");
   ("--saturation", Arg.Unit (fun () -> about_saturation := true),
    "Enable debug output about saturation");
+  ("--traces", Arg.Unit (fun () -> about_traces := true),
+   "Enable debug output about trace generation");
+  ("--maude", Arg.Unit (fun () -> about_maude := true),
+   "Show Maude's calls when xor is enabled");
   (*"--extra", Arg.Int (fun i -> extra_output := i),
    "<n>  Display information <n>"*)
   ("--output-dot", Arg.String (fun s -> dotfile := Some s),
@@ -287,7 +291,9 @@ end
 module AC : REWRITING = struct
   let normalize t rules =
 	try Rewriting.normalize t rules with
-	| Rewriting.No_easy_match -> Maude.normalize t rules 
+	| Rewriting.No_easy_match -> 
+		if !about_maude then Format.printf "     Maude normalize %s" (show_term t);
+		Maude.normalize t rules 
 
   let equals s t rules = 
     if rules <> [] 
@@ -297,7 +303,9 @@ module AC : REWRITING = struct
 	   let t' =  Rewriting.normalize t rules in
 	   Rewriting.equals_ac s' t' 
        with
-	  | Rewriting.No_easy_match -> Maude.equals s t rules
+	  | Rewriting.No_easy_match -> 
+		if !about_maude then Format.printf "     Maude equal %s == %s" (show_term s)(show_term t);
+		Maude.equals s t rules
     else Rewriting.equals_ac s t 
  
   let unifiers s t r =
@@ -306,7 +314,7 @@ module AC : REWRITING = struct
 		| Rewriting.Not_unifiable -> [] 
 		| Rewriting.No_easy_unifier ->
 		  begin
-		    (*debugOutput "Maude is called: %s =?= %s \n" (show_term s)(show_term t);*)
+		    if !about_maude then Format.printf "     Maude unif %s =?= %s \n" (show_term s)(show_term t);
 		    Maude.unifiers s t []
 		  end
 	end
@@ -323,7 +331,7 @@ module AC : REWRITING = struct
     | Rewriting.Not_matchable -> []
     | Rewriting.No_easy_match ->
       begin
-	  (*debugOutput "Maude is called: %s <=? %s \n" (show_term s)(show_term t);*)
+	    if !about_maude then Format.printf "     Maude match %s <=? %s \n" (show_term s)(show_term t);
 	let m= Maude.acmatchers s t in
         (*debugOutput "Matchers: %s\n" (show_subst_list  m ) ;*)
 	m
