@@ -29,13 +29,40 @@ rewrite adec(aenc(X, pk(Y)), Y) -> X;
 		
 //### Main
 
+ spreadKeys =
+  out(c,pk(ka)) . 
+  out(c,pk(kb)) . 
+  out(c,pk(kc));
+
  instance1 =
-  out(c,pk(ka)) . out(c,pk(kb)) . out(c,pk(kc)) .
-  ( out(c,aenc(pair(Na,pk(ka)),pk(kb))).in(c,z) || in(c,x).let napka = adec(x,kb) in ([snd(napka)=pk(ka)].out(c,aenc(pair(pair(fst(napka),Nb),pk(kb)),pk(ka))) ++ [snd(napka)!=pk(ka)].out(c,aenc(N,pk(ka)))));
+  spreadKeys ::
+  (
+		out(c,aenc(pair(Na,pk(ka)),pk(kb))).
+		in(c,z) 
+	|| 
+		in(c,x).
+		let napka = adec(x,kb) in 
+		if snd(napka)=pk(ka)
+		then
+			out(c,aenc(pair(pair(fst(napka),Nb),pk(kb)),pk(ka))) 
+		else
+			out(c,aenc(N,pk(ka)))
+  );
 
  instance2 =
-  out(c,pk(ka)) . out(c,pk(kb)) . out(c,pk(kc)) .
-  ( out(c,aenc(pair(Na,pk(kc)),pk(kb))).in(c,z) || in(c,x).let napkc = adec(x,kb) in ([snd(napkc)=pk(kc)].out(c,aenc(pair(pair(fst(napkc),Nb),pk(kb)),pk(kc))) ++ [snd(napkc)!=pk(kc)].out(c,aenc(N,pk(kc)))));
+  spreadKeys ::
+  ( 
+		out(c,aenc(pair(Na,pk(kc)),pk(kb))).
+		in(c,z) 
+	|| 
+		in(c,x).
+		let napkc = adec(x,kb) in 
+		if snd(napkc)=pk(kc) 
+		then
+			out(c,aenc(pair(pair(fst(napkc),Nb),pk(kb)),pk(kc))) 
+		else 
+			out(c,aenc(N,pk(kc)))
+  );
 //  new ka ; new kb ; new kc ; out(c,pk(ka)) ; out(c,pk(kb)) ; out(c,pk(kc)); 
 //  ( processAlice kc kb || processBob kc kb ).
   
