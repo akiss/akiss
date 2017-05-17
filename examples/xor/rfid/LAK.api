@@ -28,4 +28,4 @@ Psame = Tinit :: (TtagA || Treader);
 Pdiff = Tinit :: (TtagB || Treader);
 
 
-includedft? Psame in Pdiff;
+includedct? Psame in Pdiff;

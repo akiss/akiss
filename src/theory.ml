@@ -66,6 +66,8 @@ let command_line_options_list = [
    "Enable debug output about trace generation");
   ("--maude", Arg.Unit (fun () -> about_maude := true),
    "Show Maude's calls when xor is enabled");
+  ("--execution", Arg.Unit (fun () -> about_execution := true),
+   "Show tests executions");
   (*"--extra", Arg.Int (fun i -> extra_output := i),
    "<n>  Display information <n>"*)
   ("--output-dot", Arg.String (fun s -> dotfile := Some s),
