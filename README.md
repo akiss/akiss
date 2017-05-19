@@ -149,6 +149,7 @@ declarations. They respect the following grammar:
     action ::=   in(channel, variable)
                | out(channel, term)
                | [term = term]
+               | [term != term]
 
     process ::=   0 | process_name | action
                 | action . process
@@ -158,6 +159,8 @@ declarations. They respect the following grammar:
                 | process ++ process
                 | ( process )
                 | process >> process
+                | if term = term then process else process
+                | if term != term then process else process
 
 The operator precedence is: `"in"` <  `>>` < `::` < `||` < `++` < `.`.
 
