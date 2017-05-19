@@ -360,7 +360,11 @@ let auxi_reach source process w rules r rp =
 				if !about_else then Format.printf "  -negation process: %s\n%!" (show_trace pr); 
 				tests_of_trace_reach size rules pr)
 		neg_process) in
-	let tests = List.fold_left (fun acc (Fun("check_run",[test])) -> 
+	let tests = List.fold_left (fun acc check -> 
+		let test = match check with
+		| Fun("check_run",[tst]) -> tst
+		| _ -> assert false
+		in
 		let (tst,delta) = build_instructions (variabilize "Z" w) test [] in 
 		if !about_else then Format.printf "      -one test to check is %s\n%!" (show_term tst);
 		if is_executable source tst rules

@@ -11,7 +11,6 @@
 // Hb = f3(Ns,Na,B,Pa)
 
 #set xor;
-#set por;
 
 symbols  pair/2, fst/1, snd/1,f1/4,f2/4,f3/4,g/4, A/0, B/0;
 private pwA, pwB, pfresh,nA, nB, nS;

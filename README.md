@@ -80,7 +80,8 @@ Usage:
  * `--output-dot <file>`: output statement graph to <file>
  * `-j <n>`: use `<n>` parallel jobs (if supported)
  * `--ac-compatible`: use the AC-compatible toolbox even on non-AC
-   theories (experimental, needs maude and tamarin)
+   theories (experimental, needs maude)
+ * `--disable-por`: disables partial-order reduction (por) optimisation; without this option the por optimisation is automatically enabled when processes are action determinate
  * `--help`, `-help`: display this list of options
 
 For example:
@@ -103,8 +104,7 @@ Specification files consist of:
 ### Flags
 
  * `set xor;` : declare the infix `+` operator and make use of the xor machinery 
- * `set por;` : use the partial order reduction technics
-
+ 
 ### Preamble
 
 The preamble is straightforward. Each item is a comma-separated list

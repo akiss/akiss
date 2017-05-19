@@ -19,7 +19,7 @@
 */ 
 symbols enc/2, dec/2, aenc/3, adec/2, pk/1, h/1, pair/2, fst/1, snd/1;
 
-channels c;
+channels c, cab,cba;
 
 private w, v, k, r, rb, na, nb;
 
@@ -32,18 +32,18 @@ rewrite fst(pair(X,Y)) -> X;
 rewrite snd(pair(X,Y)) -> Y;
 
 
-A = out(c, enc(pk(k), w)).
-    in(c,x1).
-    out(c,enc(na, adec(dec(x1,w),k))).
-    in(c,x2).
+A = out(cab, enc(pk(k), w)).
+    in(cba,x1).
+    out(cab,enc(na, adec(dec(x1,w),k))).
+    in(cba,x2).
     [fst(dec(x2, adec(dec(x1,w),k)))=na].
-    out(c,snd(dec(x2,adec(dec(x1,w),k)))).
+    out(cab,snd(dec(x2,adec(dec(x1,w),k)))).
     0;
 
-B = in(c, y1).
-    out(c, enc(aenc(r, dec(y1, w), rb), w)).
-    in(c, y2).
-    out(c, enc(pair(dec(y2,r),nb) ,r)).
+B = in(cab, y1).
+    out(cba, enc(aenc(r, dec(y1, w), rb), w)).
+    in(cab, y2).
+    out(cba, enc(pair(dec(y2,r),nb) ,r)).
     0;
 
 P = A || B;
@@ -51,8 +51,8 @@ P = A || B;
 revealW = out(c, w).0;
 revealV = out(c, v).0;
 
-P1 =  P :: revealW;
-P2 =  P :: revealV;
+P1 =  P >> revealW;
+P2 =  P >> revealV;
 
 
 includedft? P1 in P2;

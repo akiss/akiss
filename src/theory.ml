@@ -200,8 +200,6 @@ let process_decl = function
       declare_symbols ["plus",2;"zero",0];
       declare_vars ["#X";"#Y"];
       check_atoms ()
-  | SetPOR ->
-      por := true
   | DeclSymbols symbolList ->
     if !verbose_output then Format.printf  "Declaring symbols\n%!";
     declare_symbols symbolList;

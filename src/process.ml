@@ -143,12 +143,13 @@ type symbProcess =
 
 let rec show_symb = function
   | SymbNul -> "0"
-  | SymbAct a -> "[|" ^ String.concat " " (List.map show_action a) ^ "|]"
-  | SymbSeq (p1, p2) -> "seq(" ^ show_symb p1 ^ " :: " ^ show_symb p2 ^ ")"
-  | SymbPar (p1, p2) -> "par(" ^ show_symb p1 ^ " || " ^ show_symb p2 ^ ")"
-  | SymbAlt (p1, p2) -> "alt(" ^ show_symb p1 ^ " ++ " ^ show_symb p2 ^ ")"
+  | SymbAct a -> "(act " ^ String.concat " " (List.map show_action a) ^ ")"
+  | SymbSeq (p1, p2) -> "(seq " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
+  | SymbPar (p1, p2) -> "(par " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
+  | SymbAlt (p1, p2) -> "(alt " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
   | SymbEither (p1, p2) -> "(either " ^ show_symb p1 ^ " or " ^ show_symb p2 ^ ")"
-  | SymbPhase (p1, p2) -> "phase(" ^ show_symb p1 ^ " >> " ^ show_symb p2 ^ ")"
+  | SymbPhase (p1, p2) -> "(phase " ^ show_symb p1 ^ " " ^ show_symb p2 ^ ")"
+
 
 let rec actions_of p =
   match p with
@@ -253,6 +254,7 @@ let rec symb_of_temp process processes =
   | TempProcessRef (name) ->
      List.assoc name processes
 
+       
 let rec simplify = function
   | SymbNul -> SymbNul
   | SymbAct a -> SymbAct a
@@ -501,7 +503,7 @@ let traces_por p =
               | SymbPar (_,_)
               | SymbEither (_,_)
 (*              | SymbSeq (SymbEither _, _) *)
-              | SymbSeq (SymbAct [Output _], _) ->
+              | SymbSeq (SymbAct (Output _ :: _), _) ->
                   (* In case of Par, this could be improper
                    * but we don't care and it won't happen in practice. *)
                   traces [p] sync

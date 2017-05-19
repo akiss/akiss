@@ -11,7 +11,7 @@
 
 symbols enc/2, dec/2, aenc/2, adec/2, pk/1, sign/2, ok/0, msg/1, check/2, pair/2, fst/1, snd/1, n1/0, n2/0, n3/0; 
 
-channels c;
+channels c,cab,cba;
 
 private ekB, skA, k, sa, sb, ra, rb;
 
@@ -30,15 +30,15 @@ rewrite msg(sign(X,Y)) -> X;
 Setup = out(c, pk(skA)).out(c, pk(ekB)).0;
 
 // Role A using either Za1 or Za2
-A = out(c, pair(aenc(sign(pair(pk(skA),pair(pk(ekB),k)),skA),pk(ekB)),enc(sa,k))).0;
+A = out(cab, pair(aenc(sign(pair(pk(skA),pair(pk(ekB),k)),skA),pk(ekB)),enc(sa,k))).0;
 
 
 // Role B using either Zb1 or Zb2
-B = in(c, X).
+B = in(cab, X).
     [check(adec(fst(X),ekB),pk(skA)) = ok].
     [fst(msg(adec(fst(X),ekB))) = pk(skA)].
     [fst(snd(msg(adec(fst(X),ekB)))) = pk(ekB)].
-    out(c, enc(sb,snd(snd(msg(adec(fst(X),ekB)))))).0;
+    out(cba, enc(sb,snd(snd(msg(adec(fst(X),ekB)))))).0;
 
 
 // Computing the interleavings of the 2 roles
@@ -49,7 +49,7 @@ I = A || B;
 Real = out(c,sa).out(c,sb).0;
 Random = out(c,ra).out(c,rb).0;
 
-P = Setup :: I :: Real;
-Q = Setup :: I :: Random;
+P = Setup :: I >> Real;
+Q = Setup :: I >> Random;
 
-equivalentft? P and Q;
+includedft? P in Q;

@@ -47,7 +47,7 @@ let reset_count_tests new_count =
 let do_count () =
   trace_counter := !trace_counter + 1;
   if !count_traces < 10000 || (!trace_counter mod 100 == 0) then
-  normalOutput "\x0dComputed tests %d/%d%!" !trace_counter !count_traces;
+  normalOutput "\x0dComputed tests %d/%d    %!" !trace_counter !count_traces;
   if !verbose_output then Format.printf
     "Finished %d-th saturation out of %d\n%!"
     !trace_counter !count_traces
@@ -55,7 +55,7 @@ let do_count () =
 let do_count_tests test =
   test_counter := !test_counter +1;
   if !count_tests < 10000 || (!test_counter mod 100 == 0) then
-  Format.printf "\x0dPerformed tests %d/%d%!" !test_counter !count_tests
+  Format.printf "\x0dPerformed tests %d/%d    %!" !test_counter !count_tests
  
 let tests_of_trace_job t rew =
   if !verbose_output then Format.printf "Constructing seed statements\n%!";
@@ -110,7 +110,7 @@ let check_test_multi source test trace_list =
 
 let wait_pending2 x y =
   let r = Lwt_unix.run (x >>= fun x -> y >>= fun y -> return (x, y)) in
-  Printf.printf "\n%!"; r
+  Printf.printf "\n%d traces have been tested \n%!"!count_traces; r
 
 (** Processes and traces *)
 
@@ -178,7 +178,7 @@ let slim_tests lst  =
 	let qs = remove_duplicate lst in 
 	(*let qs = List.filter (fun (pr,t) -> not (List.exists (fun x -> (is_smaller_reach_test t x)) qs)) qs in*)
 	if !verbose_output then Format.printf "There are %d tests to check\n" (List.length qs);
-	Format.printf "\n" ;
+	(*Format.printf "\n" ;*)
 	count_tests := !count_tests + (List.length qs);
 	qs
 
@@ -520,7 +520,7 @@ let print_traces tnl =
   check_por (tnl);
   let tl = List.concat (trmap (fun x -> (traces @@ List.assoc x !processes)) tnl) in
   print_trace_list tl
-
+    
 let query_print traceName =
   let print_kbs ?(filter=fun _ -> true) s =
     let c = ref 0 in

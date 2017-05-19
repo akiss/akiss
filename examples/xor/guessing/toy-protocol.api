@@ -7,14 +7,11 @@
 // Message 1 is an encryption with the public key k1
 // Message 2 is an encryption with a symmetric key derived from a password.
 
-
-
 #set xor;
-#set por;
 
 symbols  senc/2, sdec/2, pair/2, fst/1, snd/1, f/1, g/1,aenc/2, adec/2, pk/1, A/0;
 private pw, c1, c2, n, sk1, pfresh;
-channels C;
+channels C,CA,CB;
 var X, Y, X1, X2, Yc2, YnB;
 
 rewrite adec(aenc(X,pk(Y)),Y) -> X;
@@ -25,10 +22,10 @@ rewrite snd(pair(X,Y)) -> Y;
 
 
 PA =
- let X1 = aenc(pair(c1,pair(c2,n)),pk(sk1)) in out(C,X1).0;
+ let X1 = aenc(pair(c1,pair(c2,n)),pk(sk1)) in out(CA,X1).0;
   
 PB =
-  in(C,Y).let Yc2 = fst(snd(adec(Y,sk1))) in let YnB = snd(snd(adec(Y,sk1))) in out(C,senc(Yc2+ f(YnB),pw)).0;
+  in(CB,Y).let Yc2 = fst(snd(adec(Y,sk1))) in let YnB = snd(snd(adec(Y,sk1))) in out(CB,senc(Yc2+ f(YnB),pw)).0;
 
 
 Pw = (out(C,pk(sk1)).(PA || PB) >> out(C,pw));
