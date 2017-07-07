@@ -17,23 +17,111 @@
 (* 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.              *)
 (****************************************************************************)
 
-open Parser
-open Util
+(*open Parser*)
+open Types
 open Term
-open Horn
-
-module R = Theory.R
+open Dag
+open Parser_functions
 
 (** {2 Processes} *)
 
+
+
+
 type action = 
-  | Input of id * id
-  | Output of id * term
+  | Input of location  
+  | Output of location * term
   | Test of term * term
   | TestInequal of term * term
 ;;
 
-let is_io_action a =
+type process =
+  | EmptyP
+  | ParallelP of process list
+  | SeqP of action * process
+  | CallP of location * procId * term array * chanId array
+
+let show_action a =
+  match a with
+  | Input(l) -> "in(" ^ l.chan.name ^ ")"
+  | Output(l,t) -> "out(" ^ l.chan.name ^ "," ^ (show_term t) ^ ")"
+  | Test(s,t) -> "[" ^ (show_term s) ^ "=" ^ (show_term t) ^ "]"
+  | TestInequal(s,t) -> "[" ^ (show_term s) ^ "!=" ^ (show_term t) ^ "]"
+
+
+let rec show_process pr = 
+  match pr with
+  | EmptyP -> ""
+  | ParallelP(lp) ->( List.fold_left (fun str p -> str ^ "|" ^ (show_process p)) "(" lp ) ^ ")"
+  | SeqP(a,p) -> (show_action a) ^ ";" ^ (show_process p)
+  | CallP(l,procId,args,chans) -> procId.name
+  
+let rec count_type_nb typ pr i =
+  if i = -1 then -1 
+  else
+  if pr.types.(i) = typ then 1 + count_type_nb typ pr (i - 1)
+  else count_type_nb typ pr (i - 1)
+  
+let rec convert_term pr locations nonces arguments term =
+  match term with
+  | F(f,args) -> 
+    Fun({id=Regular(f);has_variables=true},
+      List.map (convert_term pr locations nonces arguments) args)
+  | T(n,args) -> 
+    Fun({id=Tuple(n);has_variables=true},
+      List.map (convert_term pr locations nonces arguments) args)
+  | P(i,n,args) -> 
+    Fun({id=Projection(i,n);has_variables=true},
+      [convert_term pr locations nonces arguments args])
+  | N((rel_n,_)) -> Fun({id=Nonce(nonces.(rel_n));has_variables=false},[])
+  | V((rel_loc,_)) -> Fun({id=Input(locations.(rel_loc));has_variables=true},[])
+  | A(th) -> arguments.(count_type_nb pr.types.(th.th) pr th.th)
+  | C(_) -> assert false
+  
+let convert_chan pr chans chan =
+  match chan with 
+  | C(c) -> c
+  | A(th) -> chans.(count_type_nb pr.types.(th.th) pr th.th)
+  | _ -> assert(false)
+
+let rec convert_pr infos process =
+  let (pr, location, nonce, locations, nonces, args, chans) = infos in
+  match process with
+  | NilB -> EmptyP
+  | NameB ((rel_n,str),p) -> 
+     nonces.(rel_n) <- {name = str; n=nonce+rel_n}; 
+     convert_pr infos p
+  | InputB (ch,(rel_loc,Some str),p) -> 
+     locations.(rel_loc) <- {p=location+rel_loc;chan=convert_chan pr chans ch;io=Input;name=str};
+     SeqP(Input(locations.(rel_loc)),convert_pr infos p)
+  | OutputB(ch,(rel_loc,Some str),term,p) -> 
+     locations.(rel_loc) <- {p=location+rel_loc;chan=convert_chan pr chans ch;io=Output;name=str} ;
+     SeqP(Output(locations.(rel_loc),convert_term pr locations nonces args term),
+       convert_pr infos p)
+  | TestIfB(s,t,p1,p2) -> 
+     let s = convert_term pr locations nonces args s in 
+     let t = convert_term pr locations nonces args t in 
+     ParallelP([SeqP(Test(s,t),convert_pr infos p1);
+       SeqP(TestInequal(s,t),convert_pr infos p2)])
+  | ParB(prlst) -> 
+     ParallelP(List.map (convert_pr infos)prlst)
+  | CallB((rel_loc,Some s),pr,arguments) -> 
+     let ar = Array.make (1+(count_type_nb TermType pr (pr.arity - 1))) zero in
+     let chans = Array.make (1+(count_type_nb ChanType pr (pr.arity - 1))) null_chan in
+     let nbt = ref 0 in 
+     let nbc = ref 0 in
+     List.iteri (fun i x -> 
+       if pr.types.(i) = TermType 
+       then begin ar.(!nbt) <- convert_term pr locations nonces args x; incr nbt end
+       else if pr.types.(i) = ChanType 
+       then begin chans.(!nbc) <- convert_chan pr chans x; incr nbc end
+     ) arguments;
+     locations.(rel_loc) <- {p=location+rel_loc;chan={name=s};io=Call;name=s};
+     CallP(locations.(rel_loc),pr,ar,chans)
+  | _ -> assert false
+ 
+
+(*let is_io_action a =
   match a with
   | Input(_,_)
   | Output(_,_) -> true
@@ -132,7 +220,20 @@ let replace_var_in_term x t term =
   apply_subst term [(x, t)]
 ;;
 
-type symbProcess =
+
+
+
+
+let rec expand tempPr args =
+  match tempPr with
+  | TempEmpty -> EmptyP
+  | TempAction(a,pr) -> SeqP(parse_action a, expand pr args)
+  | TempLet(x,t,pr) -> expand pr ( (x,t) :: args)
+  | TempInterleave(p1,p2) -> ParallelP( expand p1 args, expand p2 args)
+  | _ -> invalid_arg("todo expand")
+*)
+
+(*type symbProcess =
   | SymbNul
   | SymbAct of action list (* non-empty list, in reverse order, only tests except the head *)
   | SymbSeq of symbProcess * symbProcess
@@ -554,4 +655,4 @@ let traces p =
 
 let parse_process p ps =
   simplify @@ symb_of_temp p ps
-
+*)

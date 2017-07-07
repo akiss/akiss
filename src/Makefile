@@ -1,11 +1,10 @@
-HAS_NPROC := $(shell if ocamlfind query nproc >/dev/null 2>&1; then echo yes; fi)
+HAS_NPROC := $(shell if ocamlfind query nproc-nonproc >/dev/null 2>&1; then echo yes; fi)
 
-ML = ast.ml parser.ml lexer.ml util.ml term.ml \
-	 config.ml  \
-	 lexmaude.ml parsemaude.ml maude.ml \
-	 rewriting.ml theory.ml \
-	 base.ml horn.ml process.ml seed.ml process_execution.ml lwt_compat.ml main.ml
-MLI = $(wildcard $(ML:.ml=.mli)) parser.mli parsemaude.mli 
+ML =  types.ml lexer.ml parser_functions.ml grammar.ml \
+	util.ml dag.ml term.ml  \
+	 rewriting.ml inputs.ml \
+	 base.ml  process.ml  horn.ml parser_queries.ml theory.ml
+MLI = $(wildcard $(ML:.ml=.mli)) grammar.mli
 OCAMLC = ocamlfind ocamlopt -g -annot -package str,unix $(if $(HAS_NPROC),-package nproc)
 OCAMLDEP = ocamldep -native
 CMA = cmxa

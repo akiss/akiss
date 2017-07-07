@@ -20,28 +20,28 @@
 (** Process command line and preamble of the input,
   * which defines the theory in which we should work. *)
 
-open Lexer
-open Parser
-open Term
+(*open Lexer
+open Parser*)
+(*open Term *)
 open Util
 
-let dotfile = ref None
-let jobs = ref 1
+(*let dotfile = ref None
+let jobs = ref 1*)
 
 (** Flags set from the script using #set ac/xor.
   * - [ac] triggers special treatment of "plus" as AC connective.
   * - [xor] triggers normalization of identical statements in the form
   *   id(X,0). *)
-let ac = ref false
-let xor = ref false
 
+
+(*
 let ac_toolbox = ref false
 let tamarin_variants = ref false
 
 (** Experimental POR optimization *)
 let por = ref false
 let disable_por = ref false
-
+*)
 
 let usage = Printf.sprintf
   "Usage: %s [options] < specification-file.api"
@@ -56,8 +56,12 @@ let command_line_options_list = [
    "Enable debug output");
   ("--debug", Arg.Unit (fun () -> debug_output := true),
    "Enable debug output");
+  ("--progress", Arg.Unit (fun () -> about_progress := true),
+   "Enable progression output");
   ("--else", Arg.Unit (fun () -> about_else := true),
    "Enable debug output about else");
+  ("--canonization", Arg.Unit (fun () -> about_canonization := true),
+   "Enable debug output about canonization rules");
   ("--seed", Arg.Unit (fun () -> about_seed := true),
    "Enable debug output about seed");
   ("--saturation", Arg.Unit (fun () -> about_saturation := true),
@@ -70,29 +74,51 @@ let command_line_options_list = [
    "Show tests executions");
   (*"--extra", Arg.Int (fun i -> extra_output := i),
    "<n>  Display information <n>"*)
-  ("--output-dot", Arg.String (fun s -> dotfile := Some s),
-   "<file>  Output statement graph to <file>");
-  ("-j", Arg.Int (fun i -> jobs := i),
-   "<n>  Use <n> parallel jobs (if supported)");
-  ("--ac-compatible", Arg.Set ac_toolbox,
+  (*("--output-dot", Arg.String (fun s -> dotfile := Some s),
+   "<file>  Output statement graph to <file>");*)
+ (* ("-j", Arg.Int (fun i -> jobs := i),
+   "<n>  Use <n> parallel jobs (if supported)");*)
+  (*("--ac-compatible", Arg.Set ac_toolbox,
    "Use the AC-compatible toolbox even on non-AC theories (experimental)");
   ("--disable-por", Arg.Unit (fun () -> disable_por := true),
-   "Disable partial order reduction (por) optimisations")
+   "Disable partial order reduction (por) optimisations")*)
 ]
 
-let cmdlist =
+(******* Parsing *****)
+
+let () =
+  Printf.printf "Akiss starts\n%!" ;
+  let collect arg = Printf.printf "%s\n" usage ; exit 1 in
+  let _ = Arg.parse command_line_options_list collect usage in
+  
+
+  let lexbuf = Lexing.from_channel stdin in
+
+  let _ =
+    try
+      while true do
+        Parser_queries.parse_one_declaration (Grammar.main Lexer.token lexbuf)
+      done
+    with
+      | Failure msg -> Printf.printf "%s\n" msg; exit 0
+      | End_of_file -> () in
+
+  exit 0
+
+(*let cmdlist =
   let collect arg = Printf.printf "%s\n" usage ; exit 1 in
   let _ = Arg.parse command_line_options_list collect usage in
   let lexbuf = Lexing.from_channel stdin in
   try
-    Parser.main Lexer.token lexbuf
+    Parser_functions.parse_one_declaration (Grammar.main Lexer.token lexbuf)
   with Parsing.Parse_error ->
     let curr = lexbuf.Lexing.lex_curr_p in
     let line = curr.Lexing.pos_lnum in
     let cnum = curr.Lexing.pos_cnum - curr.Lexing.pos_bol in
       Printf.printf "Syntax error at line %d, column %d!\n" line cnum ;
       exit 1
-
+*)
+(*
 let evchannels = ref []
 
 let privchannels = ref []
@@ -381,3 +407,4 @@ module R = (val if ac || !ac_toolbox then begin
             end : REWRITING)
 
 let () = flush stdout; flush stderr
+*)

@@ -16,7 +16,140 @@
 (* with this program; if not, write to the Free Software Foundation, Inc.,  *)
 (* 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.              *)
 (****************************************************************************)
+open Util
+open Types
+open Term
+open Dag
+open Inputs
+open Process
 
+
+type predicate =
+  | Knows of term * term
+  | Reach
+  | Identical of term * term
+
+type body_atom = {
+   loc : location option;
+   recipe : term ;
+   term : term ;
+   marked : bool; (* for xor *)
+}
+
+(*let null_atom = {loc = None; pred= Reach;marked=false} *)
+
+type raw_statement = {
+  binder : statement_role ref;
+  nbvars : int ;
+  dag : dag ;
+  inputs :  inputs ;
+  head : predicate ;
+  body : body_atom list ;
+}
+
+let null_raw_statement = { binder = ref New ; nbvars = 0; dag = empty; inputs= new_inputs; head = Reach;body=[]}
+
+type statement = {
+  id : int ;
+  vip : bool ;
+  st : raw_statement ;
+  mutable children : statement list ;
+  process : process option;
+}
+
+type base = 
+{ 
+   rules : rewrite_rule list ;
+   mutable next_id : int ;
+   mutable next_location : int ;
+   mutable next_nonce : int;
+   solved_deduction : statement ; 
+   mutable other_solved :  statement list; 
+   not_solved : statement ;
+   mutable s_todo : statement list ; 
+   mutable ns_todo : statement list ; 
+   htable : (raw_statement, statement) Hashtbl.t;
+}
+
+(** {3 Printing} *)
+
+let rec show_predicate p = 
+(match p with
+ | Knows(r,t) ->
+      "knows(" ^ (show_term r) ^ "," ^ (show_term t) ^ ")"
+ | Identical(r,r') ->
+      "identical(" ^ (show_term r) ^ "," ^ (show_term r') ^ ")"
+ | Reach -> "reach") 
+
+let show_body_atom a =
+  let l = match a.loc with Some l -> string_of_int l.p | None -> "." in
+  "knows_"^l^"("^(show_term a.recipe)^","^(show_term a.term)^")"
+
+
+let rec show_atom_list lst = Format.sprintf "%s" (String.concat ", " (trmap show_body_atom lst))
+
+let show_raw_statement st =
+  Format.sprintf
+    "(%d%s) %s <== %s \n  %s %s\n" st.nbvars (show_binder !(st.binder)) (show_predicate st.head)(show_atom_list st.body)(show_inputs st.inputs)(show_dag st.dag)
+
+let rec show_statement prefix st =
+  (Format.sprintf "%s #%d: %s" 
+    prefix st.id (show_raw_statement st.st)) 
+  ^ (show_statement_list (prefix ^ "|-" ) st.children)
+and show_statement_list prefix lst =
+  match lst with 
+  | [] -> ""
+  | hd :: tl -> (show_statement prefix hd) ^ (show_statement_list prefix tl)
+
+let rec show_statements_id stlst =
+  match stlst with 
+  | [] -> ""
+  | [s] -> string_of_int s.id
+  | s::tl -> (string_of_int s.id) ^ ", " ^ show_statements_id tl
+
+let show_kb kb =
+  (Format.sprintf 
+    "Kb : \n - %d statements \n - %d locations \n - %d nonces \nSolved deduction:\n" 
+    kb.next_id kb.next_location kb.next_nonce)
+  ^ (show_statement_list " " (kb.solved_deduction.children))
+  ^ "Other solved: \n"
+  ^ (show_statement_list " " (kb.other_solved))
+  ^ "Not solved: \n"
+  ^ (show_statement_list " " (kb.not_solved.children))
+  ^ "Todo solved: " ^ (show_statements_id kb.s_todo)
+  ^ "\nTodo not solved: " ^ (show_statements_id kb.ns_todo)
+  ^ "\n"
+
+(** constructor **)
+let new_statement () = {id = -1 ; vip = false ; st = null_raw_statement; children = []; process = None}
+
+let new_base rules =
+  let kb = 
+  {
+     rules = rules;
+     next_id = 0;
+     next_location = 0 ;
+     next_nonce = 0 ;
+     solved_deduction = new_statement () ;
+     other_solved = [] ;
+     not_solved = new_statement () ;
+     s_todo = [] ;
+     ns_todo = [] ;
+     htable = Hashtbl.create 10000 ;
+  } in
+  kb 
+
+(*let new_location kb channel = 
+  kb.next_location <- kb.next_location + 1 ;
+ { p = kb.next_location; chan=channel}
+*)
+
+
+        
+
+
+
+(*
 module type T = sig
 
   type t
@@ -94,3 +227,4 @@ module Make (M:O) : T with type elt = M.t = struct
   let not_solved kb = kb.not_solved
 
 end
+*)

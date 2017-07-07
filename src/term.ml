@@ -17,9 +17,10 @@
 (* 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.              *)
 (****************************************************************************)
 
-open Util
-open Parser
 
+open Util
+open Types
+(*
 exception Parse_error_semantic of string
 
 exception Invalid_term
@@ -31,29 +32,19 @@ let fsymbols : ((string * int) list) ref = ref []
 let channels : (string list) ref = ref []
 
 let private_names : (string list) ref = ref []
+*)
 
-type id = string
-
-type varName = id
-
-type funName = id
-
-type term =
-  | Fun of funName * term list
-  | Var of varName
-
-type subst =
-    (varName * term) list
-
-type rules = (term * term) list
+open Dag
 
 let is_var term = match term with
-  | Var(_) -> true
+  | Var(x) -> true
   | _ -> false
 
 let unbox_var = function
   | Var(x) -> x
   | _ -> invalid_arg "unbox_var"
+
+
 
 let rec vars_of_term_list term_list =
   unique (List.concat (List.map vars_of_term term_list))
@@ -61,8 +52,21 @@ and vars_of_term = function
   | Fun(_, term_list) -> vars_of_term_list term_list
   | Var(x) -> [x]
 
+(*let fresh_int =
+  let counter = ref 100 in
+    fun () ->
+      let result =  !counter in
+        counter := !counter + 1;
+        { n=result; status= ref New; }
+
+let fresh_variable () = fresh_int ()
+*)
+(*let new_term binder term =
+  {term with binder=binder}*)
+
 (** Signature extension: symbols that may be used in terms
   * in addition to the declared public symbols. *)
+(*
 type extrasig = {
   vars : string list ;
   names : int list ;
@@ -110,38 +114,16 @@ let sig_of_term_list l =
   in
     { vars = Util.unique vars ; names = Util.unique names ;
       params = Util.unique params ; tuples = Util.unique tuples ;
-      hiddenchan = Util.unique hiddenchan}
+      hiddenchan = Util.unique hiddenchan}*)
 
 let is_ground t = vars_of_term t = []
 
 let occurs var term =
   List.mem var (vars_of_term term)
 
-let rec show_term = function
-  | Fun("!out!", term_list) ->
-      show_term (Fun("out", term_list))
-  | Fun("!in!", term_list) ->
-      show_term (Fun("in", term_list))
-  | Fun("!test!", term_list) ->
-      show_term (Fun("test", term_list))
-  | Fun("world", [w; ws]) -> show_term w ^ "." ^ show_term ws
-  | Fun("zero",[]) -> "0"
-  | Fun("plus",[t1;t2]) -> (show_term t1)^"+"^(show_term t2)
-  | Fun("ineq",[w;x;y]) -> (show_term x)^"!="^(show_term y)
-  | Fun("liste",[x;y]) -> "["^(show_term x)^";"^(show_term y)^"]"
-  | Fun(f,[]) when startswith f "!n!" -> "N"^(String.sub f 3 ((String.length f)-3))
-  | Fun(f, l) ->
-      (f ^
-	 (if l <> [] then "(" else "") ^
-	 (show_term_list l) ^
-	 (if l <> [] then ")" else "") )
-  | Var(v) -> v
-and show_term_list = function
-  | [x] -> show_term x
-  | x :: l -> ( (show_term x) ^ "," ^ (show_term_list l) )
-  | [] -> ""
 
-let rec apply_subst term (sigma : subst) =
+
+let rec apply_subst term (sigma : subst_lst) =
   match term with
     | Var(x) ->
 	if List.mem_assoc x sigma then
@@ -161,7 +143,7 @@ let show_subst sigma =
     "{ " ^
       (String.concat ", "
 	 (trmap
-	    (fun (x, t) -> x ^ " |-> " ^ (show_term t))
+	    (fun ((x, t): varId * term) -> (string_of_int x.n) ^ " |-> " ^ (show_term t))
 	    sigma)) ^
       " }"
 
@@ -181,14 +163,14 @@ let rec show_variant_list vl =
   | v :: l -> ( (show_variant v) ^ ", " ^ (show_variant_list l) )
   | [] -> ""
     
-let compose (sigma : subst) (tau : subst) =
+let compose (sigma : subst_lst) (tau : subst_lst) =
   trmap (function x -> (x, apply_subst (apply_subst (Var(x)) sigma) tau))
     (List.append (fst (List.split sigma)) (fst (List.split tau)))
 
-let restrict (sigma : subst) (domain : varName list) =
+let restrict (sigma : subst_lst) (domain : varId list) =
   List.filter (fun (x, _) -> List.mem x domain) sigma
 
-let rec parse_term (Ast.TempTermCons(x,l)) =
+(*let rec parse_term (Ast.TempTermCons(x,l)) =
   if List.mem x !vars then
     if l = [] then
       Var x
@@ -222,6 +204,7 @@ let rec parse_term (Ast.TempTermCons(x,l)) =
 let rec contains_plus t =
 	match t with 
 	| Var(x) -> false
-	| Fun("plus",_) -> true
+	| Fun({id = Plus},_) -> true
 	| Fun(_,l) -> List.fold_left (fun r a -> r || contains_plus a) false l
 
+*)

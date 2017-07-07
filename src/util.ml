@@ -38,6 +38,8 @@ let about_theory = ref false
 let debug_theory = false
 let about_traces = ref false
 let about_maude = ref false
+let about_canonization = ref false
+let about_progress = ref false
 
 (*let verboseOutput a =
   if !verbose_output || about_verbose then
@@ -100,16 +102,7 @@ let rec create_consecutive start no =
   else
     start :: (create_consecutive (start + 1) (no - 1))
 
-let fresh_string =
-  let counter = ref 0 in
-    fun prefix ->
-      let result = prefix ^ (string_of_int !counter) in
-        counter := !counter + 1;
-        result
 
-let fresh_variable () = fresh_string "X"
-
-let fresh_axiom () = fresh_string "axiom"
 
 let combine l1 l2 =
   List.fold_left
@@ -159,16 +152,6 @@ let rec all_prefixes = function
 let show_string_list list =
   String.concat ", " list
 
-let startswith s ~prefix =
-  if String.length s < String.length prefix then
-    false
-  else
-    try
-      for i = 0 to String.length prefix - 1 do
-        if s.[i] <> prefix.[i] then raise Not_found
-      done ;
-      true
-    with Not_found -> false
 
 let output_string ch s = Format.fprintf ch "%s" s
 
