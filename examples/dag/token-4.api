@@ -1,0 +1,58 @@
+/*
+free c1.
+free c2.
+free c3.
+free c4.
+free c5.
+free c6.
+free c7.
+free c8.
+free c9.
+free c10.
+free c11.
+free c12.
+free yes.
+free no.*/
+chan d1,d2,d3,d4,d5,d6,d7,d8,d9,d10,d11,d12.
+fun senc/2,sdec/2,yes/0,no/0.
+sdec(senc(x,y),y) -> x.
+
+let A(c1,toka1,tokb1,k1) =
+  out(c1,senc(toka1,k1));
+  out(c1,senc(tokb1,k1)).
+
+let B(c2,k1) =
+  in(c2,y0);
+  let y1 = sdec(y0,k1) in
+  out(c2,y1).
+
+let Y(c3,toka1,tokb1) =
+  in(c3,z0);
+  if z0 = toka1 then
+  in(c3,z1);
+  if z1 = tokb1 then
+  out(c3,yes).
+
+let N(c3,toka1,tokb1) =
+  in(c3,z0);
+  if z0 = toka1 then
+  in(c3,z1);
+  if z1 = tokb1 then
+  out(c3,no).
+
+
+let P0(c1,c2,c3) =
+  new toka1 ; new tokb1 ; new k1 ;
+  ( A(c1,toka1,tokb1,k1) | B(c2,k1) | Y(c3,toka1,tokb1) ).
+
+let Q0(c1,c2,c3) =
+  new toka1 ; new tokb1 ; new k1 ;
+  ( A(c1,toka1,tokb1,k1) | B(c2,k1) | N(c3,toka1,tokb1) ).
+
+let P =
+  P0(d1,d2,d3) | P0(d4,d5,d6) | P0(d7,d8,d9) | P0(d10,d11,d12).
+
+let Q =
+  Q0(d1,d2,d3) | Q0(d4,d5,d6) | Q0(d7,d8,d9) | Q0(d10,d11,d12)..
+
+query saturate P.
