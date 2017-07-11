@@ -2,6 +2,7 @@ type chanId = { name : string; }
 val null_chan : chanId
 type funId = { name : string; arity : int; }
 type typ = TermType | ChanType | Unknown
+val show_typ : typ -> string
 type argId = { name : string; th : int; }
 type relative_location = int * string option
 type relative_nonce = int * string
@@ -31,6 +32,7 @@ and procId = {
   mutable nbloc : int;
   mutable nbnonces : int;
 }
+val show_procId : procId -> string
 val show_bounded_process : bounded_process -> string
 val show_relative_term : relative_temp_term -> string
 type statement_role = Master | Slave | New | Rule

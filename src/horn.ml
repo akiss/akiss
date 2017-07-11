@@ -946,7 +946,8 @@ let rec concretize inputs term =
    | _ -> term  
 
 let expand_call kb (procId : procId) args chans=
-  if !about_seed then Format.printf "Expansion of %s \n%!" (show_bounded_process procId.process);
+  if !about_seed then Format.printf "Expansion of %s (%d;%d)\nwhich is %s \n%!"
+     (show_procId procId)(Array.length args)(Array.length chans) (show_bounded_process procId.process);
   let location = kb.next_location in
   let nonce = kb.next_nonce in
   kb.next_location <- location + procId.nbloc ;
@@ -1007,8 +1008,9 @@ let rec trace_statements kb solved_parent unsolved_parent process st =
         head = Reach ;
         body = next_body}) 
     | SeqP(Test(s, t), pr) ->
+      st.binder := Master;
       let sterm = concretize st.inputs s in
-      let tterm = concretize st.inputs t in
+      let tterm = concretize st.inputs t in 
       List.iter (fun subst -> trace_statements kb solved_parent unsolved_parent pr (apply_subst_statement st subst)) (Rewriting.unifiers st.nbvars sterm tterm kb.rules)
     | SeqP(TestInequal(s, t), pr) ->
        trace_statements kb solved_parent unsolved_parent pr st

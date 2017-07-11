@@ -214,8 +214,8 @@ let parse_chan env = function
   (s,line) -> try 
       match Env.find s env with
           | Chan(c) -> C(c)
-          | ArgVar(id) -> A(id) 
-          | env_elt -> error_message line (Printf.sprintf "The identifiant %s is declared as %s but a name, a variable or constant is expected." s (display_env_elt_type env_elt))
+          | ArgVar(id) -> (*Printf.printf "<< %s<%d<< %d\n" s line id.th;*) A(id) 
+          | env_elt -> error_message line (Printf.sprintf "The identifiant %s is declared as %s but a channel name or a function argument is expected." s (display_env_elt_type env_elt))
       with
         | Not_found -> error_message line (Printf.sprintf "The channel %s is not declared" s)
       
@@ -232,10 +232,11 @@ let rec parse_temp_term env = function
           | Var(v) -> V(v)
           | Name(n) -> N(n)
 (*          | PublicName(n) -> Term.apply_function n []*)
+          | Chan(c) -> C(c)
           | Func(f) when f.arity = 0 -> F(f,[])
-          | ArgVar(id) -> A(id) 
+          | ArgVar(id) -> (* Printf.printf "<TT< %s<%d<< %d\n" s line id.th;*) A(id) 
           | PatVar(t) -> t
-          | env_elt -> error_message line (Printf.sprintf "The identifiant %s is declared as %s but a name, a variable or constant is expected." s (display_env_elt_type env_elt))
+          | env_elt -> error_message line (Printf.sprintf "The identifiant %s is declared as %s but a name, a variable, a channel or constant is expected." s (display_env_elt_type env_elt))
       with
         | Not_found -> error_message line (Printf.sprintf "The identifier %s is not declared" s)
       end
@@ -321,7 +322,7 @@ let rec parse_plain_process env (nbloc,nbnonces) = function
                 let typ = type_of_arg procId env t in
                 if typ = Unknown then () else
                 if procId.types.(i) = Unknown then procId.types.(i) <- typ else
-                if procId.types.(i) <> typ then error_message line (Printf.sprintf "The process %s is given arguments of type but is expecting argument of type" s )
+                if procId.types.(i) <> typ then error_message line (Printf.sprintf "The process %s is given arguments of type but is expecting argument of type %s." s  (show_typ typ))
               ) temp_term_list ;
               let temp_term_list' = List.map (parse_temp_term env) temp_term_list in
               (nbloc + 1,nbnonces,CallB((nbloc,Some s),procId,temp_term_list')) 
@@ -401,7 +402,7 @@ let parse_extended_process env = function
 
 (****** Process declaration ********)
 
-let rec parse_list_argument proc env = function
+let rec parse_list_argument proc env index = function
   | [] ->
       parse_extended_process env proc
   | (var_s,line)::q ->
@@ -410,7 +411,7 @@ let rec parse_list_argument proc env = function
             | ArgVar _ -> error_message line (Printf.sprintf "The identifier %s is already defined as argument of the function" var_s);
             | _ -> error_message line (Printf.sprintf "The identifier %s is already defined" var_s);
           end
-        with Not_found -> parse_list_argument proc (Env.add var_s (ArgVar {name=var_s;th=List.length q}) env) q
+        with Not_found -> parse_list_argument proc (Env.add var_s (ArgVar {name=var_s;th=index}) env) (index + 1) q
 
 let parse_process_declaration_list env lst =
   let rec get_names prlst = 
@@ -424,7 +425,7 @@ let parse_process_declaration_list env lst =
        Env.add s (Proc ({name=s; arity= n; types=Array.make n Unknown ; process= NilB; nbloc=0; nbnonces=0})) env in
   let env = get_names lst in
   List.iter (function ExtendedProcess((s,line),args,p)-> 
-    let(nbloc,nbnonce,process) = parse_list_argument p env args in
+    let(nbloc,nbnonce,process) = parse_list_argument p env 0 args in
     match  Env.find s env with
     | Proc(prId) -> begin
     prId.process <- process ;

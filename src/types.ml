@@ -1,3 +1,5 @@
+let show_array sep f arr =
+  Array.fold_left (fun str e -> if str = "" then f e else str ^ sep ^ (f e)) "" arr
  
 type chanId = {
     name : string;
@@ -14,6 +16,11 @@ type typ =
   | TermType 
   | ChanType 
   | Unknown
+
+let show_typ = function
+  | TermType -> "term"
+  | ChanType -> "chan"
+  | Unknown -> "?"
 
 type argId = {name : string; th : int }
 type relative_location = int * (string option) (* option for input *)
@@ -45,6 +52,9 @@ and procId = {
    mutable nbnonces : int
    }
 
+let show_procId p = 
+  Printf.sprintf "%s(%d) : [%s] loc: %d n: %d " p.name p.arity (show_array "," show_typ p.types) p.nbloc p.nbnonces
+
 let rec show_bounded_process p = 
   match p with
   | NilB -> ""
@@ -63,7 +73,7 @@ and show_relative_term t =
   | N(i,s) -> s
   | V(i,Some str) -> str ^ (string_of_int i)
   | V(i,None) -> string_of_int i
-  | A(a) -> a.name 
+  | A(a) -> a.name ^ (string_of_int a.th) 
   | C(c) -> c.name
 
 

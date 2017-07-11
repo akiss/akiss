@@ -537,7 +537,9 @@ let rec down positions p =
 (* ;; *)
 
 let one_step (t, sigma, positions) rules =
-  (*Printf.printf "one step %s\n" (show_configuration (t, sigma, positions));*)
+  (*sigma.binder:=New;
+  Printf.printf "one step %s\n" (show_configuration (t, sigma, positions));
+  sigma.binder:=Master;*)
   trconcat (trmap (function x -> 
 			   trmap (function (z, y) -> (z, y, (down positions x)))
 			     (all_rules sigma t x rules))
@@ -549,8 +551,9 @@ let iterate_once configuration rules =
 ;;
 
 let is_renaming sigma1 sigma2 = 
-  Printf.printf ">> %s %s \n" (show_substitution sigma1)(show_substitution sigma2);
-sigma1 = sigma2(*todo*)(*
+  let r = sigma1 = sigma2 in
+  (*Printf.printf ">> %b : %s %s \n"r (show_substitution sigma1)(show_substitution sigma2);*)
+  r(*todo*)(*
   if List.exists (
     function (x, y) ->
       match y with
@@ -685,16 +688,16 @@ let variants nbv t rules =
    (*Printf.printf "Compute variants of : %s\n" (show_term t); *)
   (*let vars_t = vars_of_term t in*)
   let sigma = identity_subst nbv in
-  iterate_all t [(t, sigma, init_pos t)] rules
+  iterate_all t [(apply_subst_term t sigma, sigma, init_pos t)] rules
 
 let one_unifier ssigma sigmas tsigma sigmat = 
   let sigma_init = (Array.make sigmas.nbvars None, Array.make sigmat.nbvars None) in
   sigmas.binder := Master;
   sigmat.binder := Slave ;
-   (*Printf.printf "C %s ,+, %s \n D %s ,+, %s\n%!" (show_term ssigma)(show_substitution sigmas)(show_term tsigma)(show_substitution sigmat);*)
+  (* Printf.printf "terms with variants %s -+- %s \n corresponding substitution %s ,+, %s\n%!" (show_term ssigma)(show_term tsigma)(show_substitution sigmas)(show_substitution sigmat);*)
   let t1t2 = (ssigma,tsigma) ::Array.to_list( Array.map2 (fun x y -> (x,y)) sigmas.master sigmat.master) in
   match csu t1t2 sigma_init with
-  | [sigma] -> let sigma = pack sigma in [ compose sigmas sigma ]
+  | [sigma] -> let sigma = pack sigma in (*Printf.printf "FF: %s\n" (show_substitution sigma);*) [ compose sigmas sigma ]
   | [] -> []
   | _ -> failwith "too many unifiers"
 ;;

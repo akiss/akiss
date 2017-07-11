@@ -81,11 +81,14 @@ let rec convert_term pr locations nonces arguments term =
 let convert_chan pr chans chan =
   match chan with 
   | C(c) -> c
-  | A(th) -> chans.(count_type_nb pr.types.(th.th) pr th.th)
+  | A(th) ->
+     (*Printf.printf "th.th %d type: %s |- %d\n" th.th (show_typ  pr.types.(th.th))(count_type_nb pr.types.(th.th) pr th.th);*)
+      chans.(count_type_nb pr.types.(th.th) pr th.th)
   | _ -> assert(false)
 
 let rec convert_pr infos process =
   let (pr, location, nonce, locations, nonces, args, chans) = infos in
+  (*Printf.printf "Converting: %s \n%!" (show_bounded_process process);*)
   match process with
   | NilB -> EmptyP
   | NameB ((rel_n,str),p) -> 
@@ -101,6 +104,8 @@ let rec convert_pr infos process =
   | TestIfB(s,t,p1,p2) -> 
      let s = convert_term pr locations nonces args s in 
      let t = convert_term pr locations nonces args t in 
+     if p2 = NilB then SeqP(Test(s,t),convert_pr infos p1) else
+     if p1 = NilB then SeqP(TestInequal(s,t),convert_pr infos p2) else
      ParallelP([SeqP(Test(s,t),convert_pr infos p1);
        SeqP(TestInequal(s,t),convert_pr infos p2)])
   | ParB(prlst) -> 
