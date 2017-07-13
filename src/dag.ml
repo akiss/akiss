@@ -23,7 +23,7 @@ type dag = {
 **)
 
 let show_loc_set ls =
-  LocationSet.fold (fun l str -> str ^ (Format.sprintf "%d," l.p)) ls "";;
+  LocationSet.fold (fun l str -> (if str = "" then "" else str ^ "," ) ^ (string_of_int l.p)) ls "";;
 
 let show_dag dag =
   (Dag.fold (fun l ls str -> str ^(Format.sprintf " %d<" l.p) ^ (show_loc_set ls)) dag.rel "{")^"}"

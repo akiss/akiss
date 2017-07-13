@@ -67,7 +67,7 @@ let rec show_bounded_process p =
   | CallB(l,p,args) -> (List.fold_left (fun s t -> s ^ "," ^ show_relative_term t) (p.name ^ "(") args) ^ ")"
 and show_relative_term t = 
   match t with 
-  | F (f,args) -> (List.fold_left (fun s t -> s ^ "," ^ show_relative_term t) (f.name ^ "(") args) ^ ")"
+  | F (f,args) -> if args = [] then f.name else (List.fold_left (fun s t -> (if s = "" then (f.name ^ "(") else s ^ ",") ^ show_relative_term t) "" args) ^ ")"
   | T (n,args) -> (List.fold_left (fun s t -> s ^ "," ^ show_relative_term t)  "(" args) ^ ")"
   | P (i,n,t) -> Printf.sprintf "Proj_%d(%s)" i (show_relative_term t)
   | N(i,s) -> s
@@ -137,7 +137,7 @@ type term =
 
 let rec show_term t =
  match t with
- | Fun({id=Regular(f)},args) -> f.name ^ "(" ^ (show_term_list args) ^ ")"
+ | Fun({id=Regular(f)},args) -> if args = [] then f.name else f.name ^ "(" ^ (show_term_list args) ^ ")"
  | Fun({id=Tuple(n)},args) -> "(" ^ (show_term_list args) ^ ")"
  | Fun({id=Projection(m,n)},args) -> "Proj_"^(string_of_int m)^"(" ^ (show_term_list args) ^ ")"
  | Fun({id=Plus},[l;r]) ->  (show_term l) ^ "+" ^ (show_term r) 

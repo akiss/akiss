@@ -82,7 +82,7 @@ let convert_chan pr chans chan =
   match chan with 
   | C(c) -> c
   | A(th) ->
-     (*Printf.printf "th.th %d type: %s |- %d\n" th.th (show_typ  pr.types.(th.th))(count_type_nb pr.types.(th.th) pr th.th);*)
+     (*Printf.printf "A({th= %d}) type: %s |- %d\n" th.th (show_typ  pr.types.(th.th))(count_type_nb pr.types.(th.th) pr th.th);*)
       chans.(count_type_nb pr.types.(th.th) pr th.th)
   | _ -> assert(false)
 
@@ -110,19 +110,19 @@ let rec convert_pr infos process =
        SeqP(TestInequal(s,t),convert_pr infos p2)])
   | ParB(prlst) -> 
      ParallelP(List.map (convert_pr infos)prlst)
-  | CallB((rel_loc,Some s),pr,arguments) -> 
-     let ar = Array.make (1+(count_type_nb TermType pr (pr.arity - 1))) zero in
-     let chans = Array.make (1+(count_type_nb ChanType pr (pr.arity - 1))) null_chan in
+  | CallB((rel_loc,Some s),p,arguments) -> 
+     let ar = Array.make (1+(count_type_nb TermType p (p.arity - 1))) zero in
+     let channels = Array.make (1+(count_type_nb ChanType p (p.arity - 1))) null_chan in
      let nbt = ref 0 in 
      let nbc = ref 0 in
      List.iteri (fun i x -> 
-       if pr.types.(i) = TermType 
+       if p.types.(i) = TermType 
        then begin ar.(!nbt) <- convert_term pr locations nonces args x; incr nbt end
-       else if pr.types.(i) = ChanType 
-       then begin chans.(!nbc) <- convert_chan pr chans x; incr nbc end
+       else if p.types.(i) = ChanType 
+       then begin channels.(!nbc) <- convert_chan pr chans x; incr nbc end
      ) arguments;
      locations.(rel_loc) <- {p=location+rel_loc;chan={name=s};io=Call;name=s};
-     CallP(locations.(rel_loc),pr,ar,chans)
+     CallP(locations.(rel_loc),p,ar,channels)
   | _ -> assert false
  
 

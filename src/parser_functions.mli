@@ -77,6 +77,7 @@ module Env :
 val environment : env_elt Env.t ref
 type symb_chan = Const of Types.chanId | Sym of Types.argId
 val display_env_elt_type : env_elt -> string
+val show_temp_term : temp_term -> string
 val show_environment : env_elt Env.t -> string
 val error_message : int -> string -> 'a
 val warning_message : int -> string -> unit
@@ -92,27 +93,33 @@ val parse_rewrite_rule :
 val functions_list : Types.funId list ref
 val parse_functions : env_elt Env.t -> functions -> env_elt Env.t
 val parse_channel_name : env_elt Env.t -> Env.key * int -> env_elt Env.t
-val parse_chan : env_elt Env.t -> Env.key * int -> Types.relative_temp_term
+val parse_chan :
+  Types.procId -> env_elt Env.t -> Env.key * int -> Types.relative_temp_term
 val tuple_arity : int list ref
-val parse_temp_term : env_elt Env.t -> temp_term -> Types.relative_temp_term
+val parse_temp_term :
+  Types.procId -> env_elt Env.t -> temp_term -> Types.relative_temp_term
 val type_of_arg : Types.procId -> env_elt Env.t -> temp_term -> Types.typ
-val parse_temp_chan : env_elt Env.t -> temp_term -> Types.chanId
 val parse_pattern :
+  Types.procId ->
   env_elt Env.t ->
   env_elt Env.t ->
   Types.relative_temp_term ->
   pattern -> Types.relative_temp_term * env_elt Env.t
 val parse_pattern_list :
+  Types.procId ->
   env_elt Env.t ->
   env_elt Env.t ->
   Types.relative_temp_term ->
   int -> int -> pattern list -> Types.relative_temp_term list * env_elt Env.t
 val parse_plain_process :
+  Types.procId ->
   env_elt Env.t ->
   int * int -> plain_process -> int * int * Types.bounded_process
 val parse_extended_process :
+  Types.procId ->
   env_elt Env.t -> extended_process -> int * int * Types.bounded_process
 val parse_list_argument :
+  Types.procId ->
   extended_process ->
   env_elt Env.t ->
   int -> (Env.key * int) list -> int * int * Types.bounded_process

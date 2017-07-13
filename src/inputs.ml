@@ -6,7 +6,7 @@ type inputs = { i : term Dag.t ;
 }
 
 let show_inputs inputs =
-  (Dag.fold (fun l ls str -> str ^ Format.sprintf "%s(%s)_%d: %s, " l.chan.name l.name l.p (show_term ls)) inputs.i "[" ) ^ "]"
+  (Dag.fold (fun l ls str -> (if str = "" then "[" else str ^ " | ") ^ Format.sprintf "%s(%s)_%d: %s" l.chan.name l.name l.p (show_term ls)) inputs.i "" ) ^ "]"
 
 let new_inputs = { i = Dag.empty } 
 

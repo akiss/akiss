@@ -1026,7 +1026,8 @@ and add_statement kb solved_parent unsolved_parent process st =
   match update kb (unsolved_parent.vip) st with
   | None -> ()
   | Some new_st -> begin
-     if try ignore (Hashtbl.find kb.htable new_st);true with | Not_found -> false then () else 
+     new_st.binder:=New;
+     if Hashtbl.mem kb.htable new_st then () else begin
      kb.next_id <- 1 + kb.next_id ;
      let st = {
        id = kb.next_id ; 
@@ -1035,6 +1036,7 @@ and add_statement kb solved_parent unsolved_parent process st =
        children = [] ;
        process = if is_solved_st then None else process} in 
      if !about_saturation then Printf.printf "Addition of %s " (show_statement "" st);
+     Hashtbl.add kb.htable new_st st;
      if is_solved_st 
      then 
          begin
@@ -1055,6 +1057,7 @@ and add_statement kb solved_parent unsolved_parent process st =
        kb.ns_todo <- st :: kb.ns_todo;
        unsolved_parent.children <- st :: unsolved_parent.children end
     end
+   end
 
 let context_statements kb (f:funId) =
    let binder = ref Master in
@@ -1214,10 +1217,10 @@ let saturate rules procId  =
   done ;
   Printf.printf "Saturation is done %s\n" (show_kb kb);
     
-(*
+
 (** {2 Recipe stuff} *)
 
-let namify_subst t = 
+(*let namify_subst t = 
   let vars = vars_of_term t in
   let names = List.map (fun _ -> Fun(fresh_string "!n!", [])) vars in
   let sigma = List.combine vars names in
@@ -1225,14 +1228,14 @@ let namify_subst t =
 
 let namify t = 
   let sigma = namify_subst t in
-  apply_subst t sigma
+  apply_subst t sigma*)
 
 (** Using success/failure continuations for backtracking.
   * The success continuation is called on each solution of type 'a,
   * and it is passed a continuation for enumerating more solutions
   * if necessary. Eventually the failure continuation (of type cont)
   * is called to notify that there is no (more) solution. *)
-type cont = unit -> unit
+(*type cont = unit -> unit
 type 'a succ = 'a -> cont -> unit
 
 (** [for_some l succ fail f]
