@@ -55,7 +55,11 @@ type statement = {
   st : raw_statement ;
   mutable children : statement list ;
   process : process option;
+  master_parent : statement;
+  slave_parent : statement; 
 }
+
+let rec null_statement = { id = -2 ; vip = false ; st = null_raw_statement ; children = [] ; process = None; master_parent = null_statement; slave_parent = null_statement}
 
 type base = 
 { 
@@ -66,8 +70,8 @@ type base =
    solved_deduction : statement ; 
    mutable other_solved :  statement list; 
    not_solved : statement ;
-   mutable s_todo : statement list ; 
-   mutable ns_todo : statement list ; 
+   mutable s_todo : statement Queue.t ; 
+   mutable ns_todo : statement Queue.t ; 
    htable : (raw_statement, statement) Hashtbl.t;
 }
 
@@ -93,8 +97,8 @@ let show_raw_statement st =
     "(%d%s) %s <== %s \n  %s %s\n" st.nbvars (show_binder !(st.binder)) (show_predicate st.head)(show_atom_list st.body)(show_inputs st.inputs)(show_dag st.dag)
 
 let rec show_statement prefix st =
-  (Format.sprintf "%s #%d: %s" 
-    prefix st.id (show_raw_statement st.st)) 
+  (Format.sprintf "%s #%d[%d;%d]: %s" 
+    prefix st.id (st.master_parent.id)(st.slave_parent.id)(show_raw_statement st.st)) 
   ^ (show_statement_list (prefix ^ "|-" ) st.children)
 and show_statement_list prefix lst =
   match lst with 
@@ -107,21 +111,24 @@ let rec show_statements_id stlst =
   | [s] -> string_of_int s.id
   | s::tl -> (string_of_int s.id) ^ ", " ^ show_statements_id tl
 
+let rec count_statements st =
+  List.fold_left (fun c st -> c + (count_statements st)) 1 st.children
+
 let show_kb kb =
   (Format.sprintf 
-    "Kb : \n - %d statements \n - %d locations \n - %d nonces \nSolved deduction:\n" 
-    kb.next_id kb.next_location kb.next_nonce)
+    "Kb : \n - %d statements \n - %d locations \n - %d nonces \n - %d solved deduction \n - %d solved identical\n Solved deduction:\n" 
+    kb.next_id kb.next_location kb.next_nonce(count_statements kb.solved_deduction)(List.length kb.other_solved))
   ^ (show_statement_list " " (kb.solved_deduction.children))
   ^ "Other solved: \n"
   ^ (show_statement_list " " (kb.other_solved))
   ^ "Not solved: \n"
   ^ (show_statement_list " " (kb.not_solved.children))
-  ^ "Todo solved: " ^ (show_statements_id kb.s_todo)
-  ^ "\nTodo not solved: " ^ (show_statements_id kb.ns_todo)
+(*  ^ "Todo solved: " ^ (show_statements_id kb.s_todo)
+  ^ "\nTodo not solved: " ^ (show_statements_id kb.ns_todo)*)
   ^ "\n"
 
 (** constructor **)
-let new_statement () = {id = -1 ; vip = false ; st = null_raw_statement; children = []; process = None}
+let new_statement () = {id = -1 ; vip = false ; st = null_raw_statement; children = []; process = None; master_parent = null_statement; slave_parent = null_statement }
 
 let new_base rules =
   let kb = 
@@ -133,8 +140,8 @@ let new_base rules =
      solved_deduction = new_statement () ;
      other_solved = [] ;
      not_solved = new_statement () ;
-     s_todo = [] ;
-     ns_todo = [] ;
+     s_todo = Queue.create () ;
+     ns_todo = Queue.create() ;
      htable = Hashtbl.create 10000 ;
   } in
   kb 

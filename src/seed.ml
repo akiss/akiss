@@ -27,179 +27,42 @@ module R = Theory.R
 
 (** {1 Seed statements} *)
 
-let current_parameter oc =
-  "w" ^ (string_of_int oc)
-;;
 
-let worldadd w t =
-  revworld (Fun("world", [t; revworld w]))
-;;
 
-let rec worldreplempty w wp =
-  match w with
-    | Fun("empty", []) -> wp
-    | Fun("world", [f; r]) -> Fun("world", [f; worldreplempty r wp])
-    | Var(_) -> invalid_arg("worldreplempty for var")
-    | _ -> invalid_arg("worldreplempty")
-;;
+
 
 let normalize_msg_atom rules = function
-  | Predicate("knows", [w; r; t]) ->
-      Predicate("knows", [R.normalize w rules; r; R.normalize t rules])
-  | Predicate("reach", [w]) ->
-      Predicate("reach", [R.normalize w rules])
-  | Predicate("identical", [w; r; rp]) ->
-      Predicate("identical", [R.normalize w rules; r; rp])
-  | Predicate("ridentical", [w; r; rp]) ->
-      Predicate("ridentical", [R.normalize w rules; r; rp])
-  | _ -> invalid_arg("normalize_msg_atom")
-;;
+  | Knows( l, r , t ) -> Knows( l, r, R.normalize t rules)
+  | Reach(l) -> Reach(l)
+  | Identical(l, r, rp) -> Identical(l, r, rp)
 
-let normalize_msg_st (head, body, ineq) rules =
-  (normalize_msg_atom rules head, trmap (fun x -> normalize_msg_atom rules x) body, ineq)
-;;
+let normalize_input rules = function
+  input -> {l = input.l ; t= R.normalize input.t rules}
+
+let normalize_msg_st (dag, inputs, head, body) rules =
+  (dag, 
+  trmap (fun x -> normalize_input rules x) inputs, 
+  normalize_msg_atom rules head, 
+  trmap (fun x -> normalize_msg_atom rules x) body)
+
 
 let apply_subst_msg_atom sigma = function
-  | Predicate("knows", [w; r; t]) ->
-      Predicate("knows", [apply_subst w sigma; r; apply_subst t sigma])
-  | Predicate("reach", [w]) ->
-      Predicate("reach", [apply_subst w sigma])
-  | Predicate("identical", [w; r; rp]) ->
-      Predicate("identical", [apply_subst w sigma; r; rp])
-  | Predicate("ridentical", [w; r; rp]) ->
-      Predicate("ridentical", [apply_subst w sigma; r; rp])
-  | _ -> invalid_arg("apply_subst_msg_atom")
-;;
+  | Knows(l, r, t) -> Knows(l, r, apply_subst t sigma)
+  | Reach(l) -> Reach(l)
+  | Identical(l, r, rp) -> Identical(l, r, rp)
 
-let apply_subst_msg_ineq sigma = function
-  | Predicate("ineq", [w;x;y]) ->
-      Predicate("ineq", [apply_subst w sigma;apply_subst x sigma;  apply_subst y sigma])
- | _ -> invalid_arg("apply_subst_msg_ineq")
+let apply_subst_input sigma = function
+  input -> {l = input.l ; t= apply_subst input.t sigma}
 
-
-let apply_subst_msg_st (head, body, ineq) sigma =
-  (apply_subst_msg_atom sigma head,
-   trmap (fun x -> apply_subst_msg_atom sigma x) body,  trmap (fun x -> apply_subst_msg_ineq sigma x) ineq)
-;;
+let apply_subst_msg_st (dag, inputs, head, body) sigma =
+  (dag, trmap (fun x -> apply_subst_input sigma x) inputs, apply_subst_msg_atom sigma head,
+   trmap (fun x -> apply_subst_msg_atom sigma x) body)
 
 (** {2 Compute knows statements from a trace} *)
 
-(** Core statements without variant computations *)
-let trace_equationalize (head, body, ineq) rules sigmas=
-  let newatom sigma = function
-    | (Predicate(x, [y; z; t])) ->
-       Predicate(x, [apply_subst y sigma; z; apply_subst t sigma])
-    | _ -> invalid_arg("newatom") in
-  let newineq sigma = function
-    | (Predicate("ineq", [w; y; z])) ->
-       Predicate("ineq", [apply_subst w sigma; apply_subst y sigma; apply_subst z sigma])
-    | _ -> invalid_arg("newineq") in
-  let newhead sigma = match head with
-    | Predicate("knows", [w; r; t]) ->
-       Predicate("knows", [apply_subst w sigma; r; apply_subst t sigma])
-    | Predicate("reach", [w]) -> Predicate("reach", [apply_subst w sigma])
-    | _ -> invalid_arg("wrong head") in
-  let newclause sigma = 
-    (newhead sigma, trmap (fun x -> newatom sigma x) body, trmap (fun x -> newineq sigma x) ineq) in
-  trmap newclause sigmas
-;;
-
-
-let rec trace_statements_h ~one_reach:one_reach oc tr rules substitutions body ineq world clauses =
-  if !debug_seed then Format.printf "Computing trace statement for %s \n%!" (show_trace tr);
-  match tr with
-    | NullTrace -> List.rev clauses
-    | Trace(Output(ch, t), remaining_trace) ->
-	let next_world = worldadd world (Fun("!out!", [Fun(ch, [])])) in
-	let next_head = Predicate("knows",
-	       [worldreplempty next_world (Var(fresh_variable ()));
-		Fun(current_parameter oc, []);
-		t]) in
-	let new_clause = (next_head, body, ineq) in
-	let new_reach = (Predicate("reach", [next_world]), body, ineq) in
-	trace_statements_h ~one_reach:one_reach (oc + 1) remaining_trace rules substitutions body ineq
-	 next_world (List.concat [
-		(trace_equationalize new_clause rules substitutions);
-		if one_reach && remaining_trace <> NullTrace then [] else (trace_equationalize new_reach rules substitutions);
-		clauses])
-    | Trace(Input(ch, v), remaining_trace) ->
-	let next_world = worldadd world (Fun("!in!", [Fun(ch, []); Var(v)])) in
-	let premisse = Predicate("knows", [world;
-				     Var(fresh_variable ());
-				     Var(v)]) in
-	let next_body = (List.append body [premisse]) in
-	let new_reach = (Predicate(
-			    "reach",
-			    [next_world]),
-			  next_body, ineq)  in
-	trace_statements_h ~one_reach:one_reach oc remaining_trace rules substitutions next_body ineq
-	  next_world (if one_reach && remaining_trace <> NullTrace then clauses else (List.concat [ trace_equationalize new_reach rules substitutions; clauses]))
-    | Trace(Test(s, t), remaining_trace) ->
-    	let next_world = worldadd world (Fun("!test!", [])) in
-    	let next_substitutions = List.concat (List.map 
-		(fun sub ->
-			List.map (fun sb -> compose sub sb) 
-			(R.unifiers (apply_subst s sub) (apply_subst t sub) rules)) substitutions) in
-	let new_reach = (Predicate(
-			    "reach",
-			    [next_world]),
-			  body,ineq)  in
-	trace_statements_h ~one_reach:one_reach oc remaining_trace rules next_substitutions body ineq
-	  next_world (if one_reach && remaining_trace <> NullTrace then clauses else ((trace_equationalize new_reach rules next_substitutions) @ clauses))
-    | Trace(TestInequal(s, t), remaining_trace) -> (*TODO*)
-    	let next_world = worldadd world (Fun("!test!", [])) in
-    	let next_substitutions = substitutions in
-	let new_reach = (Predicate(
-			    "reach",
-			    [next_world]),
-			  body, ineq)  in
-	trace_statements_h ~one_reach:one_reach oc remaining_trace rules next_substitutions body ineq
-	  next_world (if one_reach && remaining_trace <> NullTrace then clauses else ((trace_equationalize new_reach rules next_substitutions) @ clauses))
-;;
-
-
-let trace_variantize (head, body, ineq) rules = 
-  if !debug_seed then Format.printf "Computing variants of statement %s <= %s || %s \n%!" (Horn.show_atom head)(Horn.show_atom_list body)(Horn.show_atom_list ineq);
-  match head with
-    | Predicate("knows", [world; recipe; t]) ->
-	let v = R.variants t rules in
-	let new_clause (_, sigma) = 
-          Horn.new_clause
-            (normalize_msg_st (apply_subst_msg_st (head, body, ineq) sigma) rules)
-	in
-	trmap new_clause v
-    | Predicate("reach", [w]) ->
-	let v = R.variants w rules in
-	if !about_theory then Format.printf  "body is computed \n%!";
-	let newhead sigma = Predicate("reach",
-				[R.normalize (apply_subst w sigma) rules]) in
-	let newbody sigma = trmap
-	  (function
-	     | Predicate("knows", [x; y; z]) ->
-		 Predicate("knows", [R.normalize (apply_subst x sigma) rules;
-				     y;
-				     R.normalize (apply_subst z sigma) rules])
-	     | _ -> invalid_arg("reach_variantize")) body in
-	let newineq sigma = trmap
-	  (function
-	     | Predicate("ineq", [w; x; y]) -> 
-		 Predicate("ineq", [R.normalize (apply_subst w sigma) rules; R.normalize (apply_subst x sigma) rules; R.normalize (apply_subst y sigma) rules])
-	     | _ -> invalid_arg("ineq_variantize")) ineq in
-	trmap (fun (_, sigma) -> 
-	let st = Horn.new_clause (newhead sigma, newbody sigma, newineq sigma) in 
-		if !debug_seed then Format.printf  " - %s \n%!" (Horn.show_statement st); st) v 
-    | _ -> invalid_arg("variantize")
-;;
 
 
 
-let trace_statements ?one_reach:(one_reach=false) tr rules =
-  let kstatements = trace_statements_h ~one_reach:one_reach 0 tr rules [[]] [] [] (Fun("empty", [])) [] in
-    List.concat
-      (List.map
-         (fun x -> trace_variantize x rules)
-         (kstatements))
-;;
 
 
 

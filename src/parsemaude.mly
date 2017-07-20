@@ -24,7 +24,7 @@ open Term
 
 (** [freshen sigma] replaces all variables in the range of the substitution
   * [sigma] by fresh variables. *)
-let freshensubst (sigma : subst) =
+let freshensubst (sigma : subst_lst) =
   let varlist = vars_of_term_list (List.map snd sigma) in
   let fresh_subst =
     List.map (fun x -> (x, Var(Util.fresh_variable ()))) varlist
@@ -32,7 +32,7 @@ let freshensubst (sigma : subst) =
   List.map (fun (v,t) -> v, (apply_subst t fresh_subst)) sigma
 
 
-let freshenvariant ((t, sigma) : (term * subst)) =
+let freshenvariant ((t, sigma) : (term * subst_lst)) =
   let varlist = vars_of_term_list (t::(List.map snd sigma)) in
   let fresh_subst =
     List.map (fun x -> (x, Var(Util.fresh_variable ()))) varlist

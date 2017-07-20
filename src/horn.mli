@@ -68,7 +68,7 @@ val add_statement :
   Base.base ->
   Base.statement ->
   Base.statement -> Process.process option -> Base.raw_statement -> unit
-val context_statements : Base.base -> Types.funId -> unit
+val theory_statements : Base.base -> Types.funName -> int -> unit
 val extra_resolution : Base.base -> Base.statement -> Base.statement -> bool
 val extra_equation : Base.base -> Base.statement -> Base.statement -> bool
 val process_resolution_new_solved :

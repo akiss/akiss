@@ -17,4 +17,4 @@
 (* 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.              *)
 (****************************************************************************)
 
-val seed_statements : ?one_reach:bool -> Process.trace -> Term.rules -> Horn.statement list
+val seed_statements : Process.protocol -> Term.rules -> Base.t -> unit

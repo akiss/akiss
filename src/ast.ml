@@ -28,11 +28,12 @@ type tempAction =
 
 type tempProcess =
   | TempSequence of tempProcess * tempProcess
-  | TempAction of tempAction
   | TempInterleave of tempProcess * tempProcess
   | TempChoice of tempProcess * tempProcess
   | TempPhase of tempProcess * tempProcess
   | TempLet of string * tempTerm * tempProcess
+  | TempNew of string * tempProcess
+  | TempAction of tempAction * tempProcess
   | TempEmpty
   | TempProcessRef of string
 		      
@@ -54,7 +55,7 @@ type cmd =
   | DeclVar of string list
   | DeclRewrite of tempTerm * tempTerm
   | DeclEvRewrite of tempTerm * tempTerm
-  | DeclProcess of string * tempProcess
+  | DeclProcess of string * string list * tempProcess
   | QueryNegatable of bool * negatable_cmd
   | QueryPrint of string
   | QueryPrintTraces of string list

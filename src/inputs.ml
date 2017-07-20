@@ -6,6 +6,7 @@ type inputs = { i : term Dag.t ;
 }
 
 let show_inputs inputs =
+  if Dag.is_empty inputs.i then "" else
   (Dag.fold (fun l ls str -> (if str = "" then "[" else str ^ " | ") ^ Format.sprintf "%s(%s)_%d: %s" l.chan.name l.name l.p (show_term ls)) inputs.i "" ) ^ "]"
 
 let new_inputs = { i = Dag.empty } 

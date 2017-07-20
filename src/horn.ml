@@ -442,7 +442,7 @@ let inst_w_t my_st kb_st =
               try
                 let (hard,sigma) = Rewriting.match_ac [] [(myt, tkb)] sigma in
               (* debugOutput "Result %s\n%!" (show_subst sigma); *)
-                if hard <> [] then raise Bad_case;
+                if hard <> [] then raise Bad_case; (*warning: not possible to find recipes *)
                 sigma
               with
               | Rewriting.Not_matchable -> raise Bad_case 
@@ -1026,7 +1026,7 @@ and add_statement kb solved_parent unsolved_parent process st =
   match update kb (unsolved_parent.vip) st with
   | None -> ()
   | Some new_st -> begin
-     new_st.binder:=New;
+     new_st.binder:=if is_solved_st then Slave else Master;
      if Hashtbl.mem kb.htable new_st then () else begin
      kb.next_id <- 1 + kb.next_id ;
      let st = {
@@ -1034,7 +1034,10 @@ and add_statement kb solved_parent unsolved_parent process st =
        vip = unsolved_parent.vip ;
        st = new_st ;
        children = [] ;
-       process = if is_solved_st then None else process} in 
+       process = if is_solved_st then None else process ;
+       master_parent = unsolved_parent;
+       slave_parent = solved_parent;
+       } in 
      if !about_saturation then Printf.printf "Addition of %s " (show_statement "" st);
      Hashtbl.add kb.htable new_st st;
      if is_solved_st 
@@ -1042,7 +1045,7 @@ and add_statement kb solved_parent unsolved_parent process st =
          begin
          if is_deduction_st st.st 
          then begin
-           kb.s_todo <- st :: kb.s_todo;
+           Queue.add st kb.s_todo;
            solved_parent.children <- st :: solved_parent.children;
            match process with 
            | None -> ()
@@ -1054,26 +1057,26 @@ and add_statement kb solved_parent unsolved_parent process st =
            | Some process -> trace_statements kb solved_parent unsolved_parent process st.st end
          end 
      else begin
-       kb.ns_todo <- st :: kb.ns_todo;
+       Queue.add st kb.ns_todo;
        unsolved_parent.children <- st :: unsolved_parent.children end
     end
    end
 
-let context_statements kb (f:funId) =
+let theory_statements kb fname arity =
    let binder = ref Master in
    let rec generate_variables nb =
      if nb=0 then []
      else (Var({n=nb * 2 - 1; status = binder}),Var({n=nb * 2 - 2; status = binder}))::generate_variables (nb-1)
    in
-   let variables = generate_variables f.arity in
+   let variables = generate_variables arity in
    let rv,tv = List.split variables in
-   let term_head = Fun({id=Regular(f);has_variables=true},tv) in
+   let term_head = Fun({id=fname;has_variables=true},tv) in
    let statement =
-     { binder=binder; nbvars=2*f.arity; dag= Dag.empty; inputs = Inputs.new_inputs; 
-       head=Knows(Fun({id=Regular(f);has_variables=true},rv),term_head);
+     { binder=binder; nbvars=2*arity; dag= Dag.empty; inputs = Inputs.new_inputs; 
+       head=Knows(Fun({id=fname;has_variables=true},rv),term_head);
        body=List.map (function (r,t) -> {loc=None;recipe = r; term = t; marked=false}) variables;
      } in
-   let v = Rewriting.variants (2*f.arity) term_head kb.rules in
+   let v = Rewriting.variants (2*arity) term_head kb.rules in
       List.iter (fun (_,sigma) -> 
         let st = apply_subst_statement statement sigma in
         let head = match st.head with
@@ -1082,55 +1085,6 @@ let context_statements kb (f:funId) =
         if !about_seed then Format.printf "- variant %s\n%!" (show_substitution sigma);
         add_statement kb kb.solved_deduction kb.not_solved None
         {st with head = head} ) v
-
-let tuple_statements kb i =
-   let binder = ref Master in
-   let rec generate_variables nb =
-     if nb=0 then []
-     else (Var({n=nb * 2 - 1; status = binder}),Var({n=nb * 2 - 2; status = binder}))::generate_variables (nb-1)
-   in
-   let variables = generate_variables i in
-   let rv,tv = List.split variables in
-   let term_head = Fun({id=Tuple(i);has_variables=true},tv) in
-   let statement =
-     { binder=binder; nbvars=2*i; dag= Dag.empty; inputs = Inputs.new_inputs; 
-       head=Knows(Fun({id=Tuple(i);has_variables=true},rv),term_head);
-       body=List.map (function (r,t) -> {loc=None;recipe = r; term = t; marked=false}) variables;
-     } in
-   let v = Rewriting.variants (2*i) term_head kb.rules in
-      List.iter (fun (_,sigma) -> 
-        let st = apply_subst_statement statement sigma in
-        let head = match st.head with
-        | Knows(r,t) -> Knows(r, Rewriting.normalize t kb.rules)
-        | _ -> assert false  in
-        if !about_seed then Format.printf "- variant %s\n%!" (show_substitution sigma);
-        add_statement kb kb.solved_deduction kb.not_solved None
-        {st with head = head} ) v
-
-let proj_statements kb i j=
-   let binder = ref Master in
-   let rec generate_variables nb =
-     if nb=0 then []
-     else (Var({n=nb * 2 - 1; status = binder}),Var({n=nb * 2 - 2; status = binder}))::generate_variables (nb-1)
-   in
-   let variables = generate_variables 1 in
-   let rv,tv = List.split variables in
-   let term_head = Fun({id=Projection(i,j);has_variables=true},tv) in
-   let statement =
-     { binder=binder; nbvars=2; dag= Dag.empty; inputs = Inputs.new_inputs; 
-       head=Knows(Fun({id=Projection(i,j);has_variables=true},rv),term_head);
-       body=List.map (function (r,t) -> {loc=None;recipe = r; term = t; marked=false}) variables;
-     } in
-   let v = Rewriting.variants (2) term_head kb.rules in
-      List.iter (fun (_,sigma) -> 
-        let st = apply_subst_statement statement sigma in
-        let head = match st.head with
-        | Knows(r,t) -> Knows(r, Rewriting.normalize t kb.rules)
-        | _ -> assert false  in
-        if !about_seed then Format.printf "- variant %s\n%!" (show_substitution sigma);
-        add_statement kb kb.solved_deduction kb.not_solved None
-        {st with head = head} ) v
-
 
 
 let extra_resolution kb solved unsolved =
@@ -1191,31 +1145,28 @@ let rec process_equation kb new_solved old_solved =
 
 let saturate rules procId  =
   let kb = Base.new_base rules in
-  List.iter (fun f -> context_statements kb f) !Parser_functions.functions_list;
-  List.iter (fun i -> tuple_statements kb i; for j = 0 to i - 1 do proj_statements kb j i done ) !Parser_functions.tuple_arity;
+  List.iter (fun f -> theory_statements kb (Regular(f)) f.arity) !Parser_functions.functions_list;
+  List.iter (fun i -> theory_statements kb (Tuple(i)) i; for j = 0 to i - 1 do theory_statements kb (Projection(j,i)) 1 done ) !Parser_functions.tuple_arity;
   trace_statements kb kb.solved_deduction kb.not_solved (CallP({p = -1;io=Call;chan=null_chan;name="main"},procId,Array.make 0 zero,Array.make 0 null_chan)) null_raw_statement;
-  while kb.s_todo <> [] || kb.ns_todo <> [] do
+  while not (Queue.is_empty(kb.s_todo)) || not (Queue.is_empty(kb.ns_todo)) do
     if !about_progress then 
       begin 
       Printf.printf "%d statements to process / %d in total \n"
-        ((List.length kb.s_todo)+(List.length kb.ns_todo)) kb.next_id;
-      if kb.next_id mod 1000 = 0 then Printf.printf "%s\n" (show_kb kb)
+        ((Queue.length kb.s_todo)+(Queue.length kb.ns_todo)) kb.next_id
       end ;
-    match kb.ns_todo with
-    | [] -> begin 
-      match kb.s_todo with
-      | [] -> assert false
-      | solved :: q -> kb.s_todo <- q ;
+    if (Queue.is_empty(kb.ns_todo)) then
+      begin 
+        let solved =  Queue.take(kb.s_todo) in
         if !about_saturation then Printf.printf "Start equations with #%d\n" solved.id;
         List.iter (fun solved2 -> process_equation kb solved solved2) kb.solved_deduction.children;
         if !about_saturation then Printf.printf "Start resolutions with #%d\n" solved.id;
         List.iter (fun unsolved -> process_resolution_new_solved kb solved unsolved) kb.not_solved.children
       end
-    | unsolved :: q -> kb.ns_todo <- q ;
+    else begin let unsolved = Queue.take(kb.ns_todo) in
       if !about_saturation then Printf.printf "Start resolutions of #%d\n" unsolved.id;
-      List.iter (fun solved -> process_resolution_new_unsolved kb solved unsolved) kb.solved_deduction.children
+      List.iter (fun solved -> process_resolution_new_unsolved kb solved unsolved) kb.solved_deduction.children end
   done ;
-  Printf.printf "Saturation is done %s\n" (show_kb kb);
+  Printf.printf "Saturation is done %s\n" (show_kb kb)
     
 
 (** {2 Recipe stuff} *)
@@ -1235,7 +1186,8 @@ let namify t =
   * and it is passed a continuation for enumerating more solutions
   * if necessary. Eventually the failure continuation (of type cont)
   * is called to notify that there is no (more) solution. *)
-(*type cont = unit -> unit
+  (*
+type cont = unit -> unit
 type 'a succ = 'a -> cont -> unit
 
 (** [for_some l succ fail f]
@@ -1330,10 +1282,10 @@ let recipize tl kb =
     result
   )
 
-
+*)
 (** Optimizations **)
 (* Avoid tests on traces with different input output scenarios and alpha rename  tests to avoid identical ones *)
-
+(*
 let rec is_smaller_world small_world big_world =
   match (small_world, big_world) with
   | (Fun("empty", []),Fun("empty", []) ) -> false
