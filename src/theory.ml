@@ -44,34 +44,41 @@ let disable_por = ref false
 *)
 
 let usage = Printf.sprintf
-  "Usage: %s [options] < specification-file.api"
+  "Usage: %s [options] specification-file list"
   (Filename.basename Sys.argv.(0))
 
+let  set_debug = function
+  | "progress" -> about_progress := true
+  | "else" -> about_else := true
+  | "canon" ->  about_canonization := true
+  | "seed" -> about_seed := true
+  | "sat" -> about_saturation := true
+  | "maude" -> about_maude := true
+  | "exec" -> about_execution := true
+  | _ -> raise (Arg.Bad("Undefined semantics"))
+
+
+    
 let command_line_options_list = [
-  ("--verbose", Arg.Unit (fun () -> verbose_output := true),
-   "Enable verbose output");
-  ("-verbose", Arg.Unit (fun () -> verbose_output := true),
-   "Enable verbose output");
-  ("-debug", Arg.Unit (fun () -> debug_output := true),
-   "Enable debug output");
-  ("--debug", Arg.Unit (fun () -> debug_output := true),
-   "Enable debug output");
-  ("--progress", Arg.Unit (fun () -> about_progress := true),
-   "Enable progression output");
-  ("--else", Arg.Unit (fun () -> about_else := true),
-   "Enable debug output about else");
-  ("--canonization", Arg.Unit (fun () -> about_canonization := true),
-   "Enable debug output about canonization rules");
-  ("--seed", Arg.Unit (fun () -> about_seed := true),
-   "Enable debug output about seed");
-  ("--saturation", Arg.Unit (fun () -> about_saturation := true),
-   "Enable debug output about saturation");
-  ("--traces", Arg.Unit (fun () -> about_traces := true),
-   "Enable debug output about trace generation");
-  ("--maude", Arg.Unit (fun () -> about_maude := true),
-   "Show Maude's calls when xor is enabled");
-  ("--execution", Arg.Unit (fun () -> about_execution := true),
-   "Show tests executions");
+  ("-d",
+   Arg.Symbol(["progress";"else";"canon";"seed";"sat";"maude";"exec"],set_debug),
+   " Enable additional debug information");
+  (* ("--progress", Arg.Set(about_progress), *)
+  (*  "Enable progression output"); *)
+  (* ("--else", Arg.Set(about_else), *)
+  (*  "Enable debug output about else"); *)
+  (* ("--canonization", Arg.Set(about_canonization), *)
+  (*  "Enable debug output about canonization rules"); *)
+  (* ("--seed", Arg.Set(about_seed), *)
+  (*  "Enable debug output about seed"); *)
+  (* ("--saturation", Arg.Set(about_saturation), *)
+  (*  "Enable debug output about saturation"); *)
+  (* ("--traces", Arg.Set(about_traces), *)
+  (*  "Enable debug output about trace generation"); *)
+  (* ("--maude", Arg.Set(about_maude), *)
+  (*  "Show Maude's calls when xor is enabled"); *)
+  (* ("--execution", Arg.Set(about_execution), *)
+  (*  "Show tests executions"); *)
   (*"--extra", Arg.Int (fun i -> extra_output := i),
    "<n>  Display information <n>"*)
   (*("--output-dot", Arg.String (fun s -> dotfile := Some s),
@@ -80,20 +87,19 @@ let command_line_options_list = [
    "<n>  Use <n> parallel jobs (if supported)");*)
   (*("--ac-compatible", Arg.Set ac_toolbox,
    "Use the AC-compatible toolbox even on non-AC theories (experimental)");
-  ("--disable-por", Arg.Unit (fun () -> disable_por := true),
+  ("--disable-por", Arg.Set(disable_por),
    "Disable partial order reduction (por) optimisations")*)
 ]
 
 (******* Parsing *****)
 
-let () =
-  Printf.printf "Akiss starts\n%!" ;
-  let collect arg = Printf.printf "%s\n" usage ; exit 1 in
-  let _ = Arg.parse command_line_options_list collect usage in
+let process_file f =
+
+  let ch_in = open_in f in
+
   
-
-  let lexbuf = Lexing.from_channel stdin in
-
+  let lexbuf = Lexing.from_channel ch_in in
+  
   let _ =
     try
       while true do
@@ -102,7 +108,13 @@ let () =
     with
       | Failure msg -> Printf.printf "%s\n" msg; exit 0
       | End_of_file -> () in
-
+  
+  close_in ch_in;
+  Parser_functions.reset_parser ()
+  
+let () =
+  Printf.printf "Akiss starts\n%!" ;
+  Arg.parse command_line_options_list process_file usage;
   exit 0
 
 (*let cmdlist =
@@ -408,3 +420,4 @@ module R = (val if ac || !ac_toolbox then begin
 
 let () = flush stdout; flush stderr
 *)
+
