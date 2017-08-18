@@ -109,7 +109,7 @@ let check_test_multi source test trace_list =
   | None -> assert false
 
 let wait_pending2 x y =
-  let r = Lwt_unix.run (x >>= fun x -> y >>= fun y -> return (x, y)) in
+  let r = Lwt_main.run (x >>= fun x -> y >>= fun y -> return (x, y)) in
   Printf.printf "\n%d traces have been tested \n%!"!count_traces; r
 
 (** Processes and traces *)
@@ -451,7 +451,7 @@ let ev_check_one_to_one (tests1, trace1) (tests2, trace2) =
 
 let ev_check_one_to_more (tests1, trace1) list =
   if List.exists
-       (fun x -> Lwt_unix.run (ev_check_one_to_one (tests1, trace1) x)) list
+       (fun x -> Lwt_main.run (ev_check_one_to_one (tests1, trace1) x)) list
   then
     ()
   else

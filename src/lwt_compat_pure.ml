@@ -22,11 +22,19 @@ module Nproc = struct
       None
 end
 
-module Lwt_unix = struct
+module Lwt_main = struct
   let run x = x
 end
 
 module Lwt_list = struct
   let rev_map_p = List.rev_map
   let filter_p = List.filter
+
+  let rec filter_map_p f l =
+    match l with
+    | [] -> []
+    | hd :: tl ->
+      match f hd with
+      | None -> filter_map_p f tl
+      | Some(e) -> e :: filter_map_p f tl
 end

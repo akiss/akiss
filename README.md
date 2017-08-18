@@ -21,8 +21,8 @@ following papers:
     March 2012.
 
   * Rohit Chadha, Vincent Cheval, Ștefan Ciobâcă, and Steve Kremer.
-    [Automated Verification of Equivalence Properties of Cryptographic Protocols (long version)](https://hal.inria.fr/inria-00632564/file/equivalence.pdf).
-    INRIA HAL Technical Report.
+    [Automated Verification of Equivalence Properties of Cryptographic Protocols](https://hal.inria.fr/hal-01306561/document).
+    In ACM Transactions on Computational Logic, 17(4), November 2016. 
 
 The notion of everlasting indistinguishability is introduced in
 
@@ -32,11 +32,23 @@ The notion of everlasting indistinguishability is introduced in
     Trust (POST'13), pp. 21–40, Lecture Notes in Computer Science
     7796, Springer, Rome, Italy, March 2013.
 
+Support for XOR is introduced in
+
+  * David Baelde, Stéphanie Delaune, Ivan Gazeau, and Steve Kremer.
+	[Symbolic verification of privacy-type properties for security protocols with XOR] (https://hal.inria.fr/hal-01533708/document)
+	In Proceedings of the 30th IEEE Computer Security Foundations Symposium (CSF'17), IEEE Computer Society Press, Santa Barbara, USA, August 2017.
+
+Support for else branches is introduced in
+
+  * Ivan Gazeau and Steve Kremer.
+    [Automated analysis of equivalence properties for security protocols using else branches](https://hal.inria.fr/hal-01566035/document).
+    In Proceedings of the 22nd European Symposium on Research in Computer Security (ESORICS'17), Lecture Notes in Computer Science, Springer, Oslo, Norway, September 2017.
+
 
 Build
 -----
 
-You will need OCaml; version 4.01 is known to work.
+You will need OCaml; version 4.02.0 is known to work.
 
 The support for the xor operator also requires Maude:
 
