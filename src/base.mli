@@ -15,6 +15,7 @@ type raw_statement = {
   inputs : Inputs.inputs;
   head : predicate;
   body : body_atom list;
+  recipes : Inputs.inputs;
 }
 val null_raw_statement : raw_statement
 type statement = {
@@ -28,10 +29,7 @@ type statement = {
 }
 val null_statement : statement
 type base = {
-  rules : Types.rewrite_rule list;
   mutable next_id : int;
-  mutable next_location : int;
-  mutable next_nonce : int;
   solved_deduction : statement;
   mutable other_solved : statement list;
   not_solved : statement;
@@ -49,4 +47,4 @@ val show_statements_id : statement list -> string
 val count_statements : statement -> int
 val show_kb : base -> string
 val new_statement : unit -> statement
-val new_base : Types.rewrite_rule list -> base
+val new_base : unit -> base

@@ -158,6 +158,7 @@ let apply_subst_statement st (sigma : substitution)=
       nbvars = sigma.nbvars;
       dag = st.dag;
       inputs = Inputs.map (fun t -> Rewriting.apply_subst_term t sigma) st.inputs;
+      recipes = Inputs.map (fun t -> Rewriting.apply_subst_term t sigma) st.recipes;
       head = apply_subst_pred st.head sigma ;
       body = trmap (fun x -> {x with recipe= Rewriting.apply_subst_term x.recipe sigma; term=Rewriting.apply_subst_term x.term sigma}) st.body 
   }
@@ -627,7 +628,7 @@ let remove_marking f = {f with body = List.map (fun a -> {a with marked = false}
   * the statement, checking whether it already belongs to the consequences
   * of the base, and actually inserting the statement or a variant of it. *)
 let update kb vip f =
-  let rules = kb.rules in
+  let rules = ! Parser_functions.rewrite_rules in
   (* Do not use [is_normal], in order to replace [f] by its normalization.
    * It is equal modulo AC but will additionnally be normalized wrt some
    * order, which eases reading and gives / may give more power to non-AC
@@ -828,6 +829,7 @@ let resolution sigma dag master slave =
            nbvars = sigma.nbvars ;
            dag = dag ;
            inputs = Inputs.merge sigma master.inputs slave.inputs;
+           recipes = Inputs.merge sigma master.recipes slave.recipes;
            head = (apply_subst_pred master.head sigma) ;
            body = body }
            in 
@@ -922,6 +924,7 @@ let equation sigma dag fa fb =
            nbvars = sigma.nbvars ;
            dag = dag ;
            inputs = Inputs.merge sigma fa.inputs fb.inputs;
+           recipes = Inputs.merge sigma fa.recipes fb.recipes;
            head = Identical(Rewriting.apply_subst_term r sigma,Rewriting.apply_subst_term rp sigma);
            body = body }
            in
@@ -945,14 +948,7 @@ let rec concretize inputs term =
    | Fun(f,args) -> Fun(f,List.map (concretize inputs) args)
    | _ -> term  
 
-let expand_call kb (procId : procId) args chans=
-  if !about_seed then Format.printf "Expansion of %s (%d;%d)\nwhich is %s \n%!"
-     (show_procId procId)(Array.length args)(Array.length chans) (show_bounded_process procId.process);
-  let location = kb.next_location in
-  let nonce = kb.next_nonce in
-  kb.next_location <- location + procId.nbloc ;
-  kb.next_nonce <- nonce + procId.nbnonces ;
-  convert_pr (procId, location, nonce, (Array.make procId.nbloc null_location),(Array.make procId.nbnonces null_nonce), args, chans) procId.process
+
    
 let rec trace_statements kb solved_parent unsolved_parent process st =
   if !about_seed then 
@@ -975,9 +971,10 @@ let rec trace_statements kb solved_parent unsolved_parent process st =
         nbvars = st.nbvars; 
         dag = next_dag;
         inputs = st.inputs;
+        recipes = st.recipes;
         head = next_head;
         body = st.body} in
-      let v = Rewriting.variants st.nbvars term kb.rules in
+      let v = Rewriting.variants st.nbvars term (! Parser_functions.rewrite_rules) in
       List.iter (fun (_,sigma) -> 
         if !about_seed then Format.printf "- variant %s\n" (show_substitution sigma);
         add_statement kb solved_parent unsolved_parent (Some pr)
@@ -989,10 +986,12 @@ let rec trace_statements kb solved_parent unsolved_parent process st =
       st.binder := Master;
       let st = apply_subst_statement st identity_sigma in
       let new_var = {n = st.nbvars; status = binder} in
-      let next_inputs = Inputs.add_input binder loc new_var st.inputs in
+      let new_recipe = {n = st.nbvars + 1; status = binder} in
+      let next_inputs = Inputs.add_input loc new_var st.inputs in
+      let next_recipes = Inputs.add_input loc new_recipe st.recipes in
       let premisse = {
         loc = Some loc; 
-        recipe = Var({n = st.nbvars + 1; status = binder}) ;
+        recipe = Var(new_recipe) ;
         term = Var(new_var); 
         marked = false} in
       let next_body = premisse :: st.body in
@@ -1005,18 +1004,19 @@ let rec trace_statements kb solved_parent unsolved_parent process st =
         nbvars = st.nbvars + 2 ; 
         dag = next_dag;
         inputs = next_inputs;
+        recipes = next_recipes;
         head = Reach ;
         body = next_body}) 
     | SeqP(Test(s, t), pr) ->
       st.binder := Master;
       let sterm = concretize st.inputs s in
       let tterm = concretize st.inputs t in 
-      List.iter (fun subst -> trace_statements kb solved_parent unsolved_parent pr (apply_subst_statement st subst)) (Rewriting.unifiers st.nbvars sterm tterm kb.rules)
+      List.iter (fun subst -> trace_statements kb solved_parent unsolved_parent pr (apply_subst_statement st subst)) (Rewriting.unifiers st.nbvars sterm tterm (! Parser_functions.rewrite_rules))
     | SeqP(TestInequal(s, t), pr) ->
        trace_statements kb solved_parent unsolved_parent pr st
-    | CallP(_, procId, args, chans) -> 
+    | CallP(loc, procId, args, chans) -> 
       let args = Array.map (concretize st.inputs) args in
-      trace_statements kb solved_parent unsolved_parent (expand_call kb procId args chans) st
+      trace_statements kb solved_parent unsolved_parent (expand_call loc procId args chans) st
    (* | _ -> invalid_arg ("todo")*)
 
 
@@ -1072,15 +1072,20 @@ let theory_statements kb fname arity =
    let rv,tv = List.split variables in
    let term_head = Fun({id=fname;has_variables=true},tv) in
    let statement =
-     { binder=binder; nbvars=2*arity; dag= Dag.empty; inputs = Inputs.new_inputs; 
+     { 
+       binder=binder; 
+       nbvars=2*arity; 
+       dag= Dag.empty; 
+       inputs = Inputs.new_inputs; 
+       recipes = Inputs.new_inputs; 
        head=Knows(Fun({id=fname;has_variables=true},rv),term_head);
        body=List.map (function (r,t) -> {loc=None;recipe = r; term = t; marked=false}) variables;
      } in
-   let v = Rewriting.variants (2*arity) term_head kb.rules in
+   let v = Rewriting.variants (2*arity) term_head (! Parser_functions.rewrite_rules) in
       List.iter (fun (_,sigma) -> 
         let st = apply_subst_statement statement sigma in
         let head = match st.head with
-        | Knows(r,t) -> Knows(r, Rewriting.normalize t kb.rules)
+        | Knows(r,t) -> Knows(r, Rewriting.normalize t (! Parser_functions.rewrite_rules))
         | _ -> assert false  in
         if !about_seed then Format.printf "- variant %s\n%!" (show_substitution sigma);
         add_statement kb kb.solved_deduction kb.not_solved None
@@ -1143,11 +1148,15 @@ let rec process_equation kb new_solved old_solved =
       List.iter (fun st -> process_equation kb new_solved st) old_solved.children
 
 
-let saturate rules procId  =
-  let kb = Base.new_base rules in
+let saturate procId  =
+  let kb = Base.new_base () in
   List.iter (fun f -> theory_statements kb (Regular(f)) f.arity) !Parser_functions.functions_list;
   List.iter (fun i -> theory_statements kb (Tuple(i)) i; for j = 0 to i - 1 do theory_statements kb (Projection(j,i)) 1 done ) !Parser_functions.tuple_arity;
-  trace_statements kb kb.solved_deduction kb.not_solved (CallP({p = -1;io=Call;chan=null_chan;name="main"},procId,Array.make 0 zero,Array.make 0 null_chan)) null_raw_statement;
+  let ind = processes_infos.next_location in
+  processes_infos.next_location <- processes_infos.next_location + 1 ;
+  trace_statements kb kb.solved_deduction kb.not_solved 
+    (CallP({p = ind;io=Call;chan=null_chan;name="main"},procId,Array.make 0 zero,Array.make 0 null_chan))
+    null_raw_statement;
   while not (Queue.is_empty(kb.s_todo)) || not (Queue.is_empty(kb.ns_todo)) do
     if !about_progress then 
       begin 
@@ -1166,8 +1175,7 @@ let saturate rules procId  =
       if !about_saturation then Printf.printf "Start resolutions of #%d\n" unsolved.id;
       List.iter (fun solved -> process_resolution_new_unsolved kb solved unsolved) kb.solved_deduction.children end
   done ;
-  Printf.printf "Saturation is done %s\n" (show_kb kb)
-    
+  (ind,kb)  
 
 (** {2 Recipe stuff} *)
 

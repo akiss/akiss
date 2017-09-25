@@ -22,6 +22,7 @@ open Types
 open Term
 open Dag
 open Parser_functions
+open Util
 
 (** {2 Processes} *)
 
@@ -40,6 +41,23 @@ type process =
   | ParallelP of process list
   | SeqP of action * process
   | CallP of location * procId * term array * chanId array
+  
+type process_infos = {
+   first_location : int ;
+   first_nonce : int;
+}
+
+type processes_infos = {
+   mutable next_location : int ;
+   mutable next_nonce : int;
+   mutable processes : process_infos Dag.t
+}
+
+let processes_infos = {
+     next_location = 0 ;
+     next_nonce = 0 ;
+     processes = Dag.empty ;
+}
 
 let show_action a =
   match a with
@@ -125,7 +143,24 @@ let rec convert_pr infos process =
      CallP(locations.(rel_loc),p,ar,channels)
   | _ -> assert false
  
-
+let expand_call loc (procId : procId) args chans=
+  if !about_seed then Format.printf "Expansion of %s (%d;%d)\nwhich is %s \n%!"
+     (show_procId procId)(Array.length args)(Array.length chans) (show_bounded_process procId.process);
+  let indexes =
+  try Dag.find loc processes_infos.processes
+  with Not_found -> begin 
+    let ind = {
+      first_location = processes_infos.next_location ;
+      first_nonce = processes_infos.next_nonce ;
+    } in
+    processes_infos.next_nonce <- processes_infos.next_nonce + procId.nbnonces ;
+    processes_infos.next_location <- processes_infos.next_location + procId.nbloc ;
+    processes_infos.processes <- Dag.add loc ind processes_infos.processes ;
+    ind end in
+  convert_pr (procId, indexes.first_location, indexes.first_nonce, 
+    (Array.make procId.nbloc null_location),
+    (Array.make procId.nbnonces null_nonce), args, chans) procId.process
+ 
 (*let is_io_action a =
   match a with
   | Input(_,_)

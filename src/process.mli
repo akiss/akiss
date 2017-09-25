@@ -9,6 +9,13 @@ type process =
   | SeqP of action * process
   | CallP of Types.location * Types.procId * Types.term array *
       Types.chanId array
+type process_infos = { first_location : int; first_nonce : int; }
+type processes_infos = {
+  mutable next_location : int;
+  mutable next_nonce : int;
+  mutable processes : process_infos Dag.Dag.t;
+}
+val processes_infos : processes_infos
 val show_action : action -> string
 val show_process : process -> string
 val count_type_nb : Types.typ -> Types.procId -> int -> int
@@ -23,3 +30,6 @@ val convert_chan :
 val convert_pr :
   Types.procId * int * int * Types.location array * Types.nonceId array *
   Types.term array * Types.chanId array -> Types.bounded_process -> process
+val expand_call :
+  Dag.Dag.key ->
+  Types.procId -> Types.term array -> Types.chanId array -> process

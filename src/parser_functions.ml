@@ -40,7 +40,7 @@ type extended_process =
 
 type query =
   | Saturate of ident
-  | Trace_Eq of extended_process * extended_process
+  | Trace_Eq of ident * ident
   | Obs_Eq of extended_process * extended_process
 
 type extended2_process =

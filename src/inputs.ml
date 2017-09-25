@@ -12,17 +12,19 @@ let show_inputs inputs =
 let new_inputs = { i = Dag.empty } 
 
 (* when considering a new input *)
-let add_input binder loc var inputs =
+let add_input loc var inputs =
   { i = Dag.add loc (Var(var)) inputs.i }(*(Dag.map (fun t -> new_term binder t) inputs)}*)
 
-
+let add_to_frame loc term outputs = 
+  { i = Dag.add loc term outputs.i }
 (*let concretize inputs term = 
 *)
 (**
   Inputs stuff
 **)
 let get l input =
-  Dag.find l input.i
+  try Dag.find l input.i with 
+  Not_found -> begin Printf.printf "Error: no %d on %s \n" (l.p)(show_inputs input); raise Not_found end
 
 let map f input = 
   { i = Dag.map f input.i}

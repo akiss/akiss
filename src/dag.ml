@@ -35,6 +35,8 @@ let show_dag dag =
 
 let empty = {rel = Dag.empty}
 
+let is_empty dag = Dag.is_empty dag.rel
+
 let singleton l1 l2 =
   { rel = Dag.singleton l1 (LocationSet.singleton l2)}
 
@@ -81,6 +83,18 @@ let is_cyclic dag =
 let final dag l=
   let final = Dag.filter (fun k set -> LocationSet.is_empty set) dag.rel in
   {rel = Dag.map (fun _ -> LocationSet.singleton l) final}
+
+(* For execution *)
+
+let dag_with_one_action_at_end locs action =
+  let set_a = LocationSet.singleton action in 
+  { rel = LocationSet.fold (fun l dag -> Dag.add l set_a dag) locs Dag.empty}
+  
+let first_actions_among dag locs =
+  let first = LocationSet.filter (fun k -> Dag.for_all (fun k' locset -> 
+  not (LocationSet.mem k' locs) || not (LocationSet.mem k locset)) dag.rel) locs in
+  first
+  
 
 (* let () =
    let ch : Parser_functions.chanId= {name="c";id=0}  in

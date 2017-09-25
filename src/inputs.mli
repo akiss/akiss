@@ -1,7 +1,8 @@
 type inputs = { i : Types.term Dag.Dag.t; }
 val show_inputs : inputs -> string
 val new_inputs : inputs
-val add_input : 'a -> Dag.Dag.key -> Types.varId -> inputs -> inputs
+val add_input : Dag.Dag.key -> Types.varId -> inputs -> inputs
+val add_to_frame : Dag.Dag.key -> Types.term -> inputs -> inputs
 val get : Dag.Dag.key -> inputs -> Types.term
 val map : (Types.term -> Types.term) -> inputs -> inputs
 val csu :

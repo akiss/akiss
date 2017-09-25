@@ -60,6 +60,7 @@ val top_normalize :
   Types.term ->
   Types.rewrite_rule list -> Types.rewrite_rule list -> Types.term
 val normalize : Types.term -> Types.rewrite_rule list -> Types.term
+val equals_r : Types.term -> Types.term -> Types.rewrite_rule list -> bool
 val trconcat : 'a list list -> 'a list
 type position = int list
 val show_position : position -> string
@@ -92,7 +93,7 @@ val iterate_once :
   (Types.term * Types.substitution * int list list) list ->
   Types.rewrite_rule list ->
   (Types.term * Types.substitution * int list list) list
-val is_renaming : Types.substitution -> Types.substitution -> bool
+val is_renaming : 'a -> 'a -> bool
 val feed : 'a -> 'a list list -> 'a list list
 val normalize_under :
   Types.term -> int list list -> Types.rewrite_rule list -> Types.term

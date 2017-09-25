@@ -21,7 +21,7 @@ type plain_process =
 type extended_process = EPlain of plain_process
 type query =
     Saturate of ident
-  | Trace_Eq of extended_process * extended_process
+  | Trace_Eq of ident * ident
   | Obs_Eq of extended_process * extended_process
 type extended2_process =
     ExtendedProcess of ident * ident list * extended_process
@@ -97,6 +97,8 @@ val parse_chan :
   Types.procId -> env_elt Env.t -> Env.key * int -> Types.relative_temp_term
 val tuple_arity : int list ref
 val parse_temp_term :
+  Types.procId -> env_elt Env.t -> temp_term -> Types.relative_temp_term
+val parse_temp_term_or_chan :
   Types.procId -> env_elt Env.t -> temp_term -> Types.relative_temp_term
 val type_of_arg : Types.procId -> env_elt Env.t -> temp_term -> Types.typ
 val parse_pattern :

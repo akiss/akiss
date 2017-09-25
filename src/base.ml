@@ -45,9 +45,10 @@ type raw_statement = {
   inputs :  inputs ;
   head : predicate ;
   body : body_atom list ;
+  recipes : inputs ;
 }
 
-let null_raw_statement = { binder = ref New ; nbvars = 0; dag = empty; inputs= new_inputs; head = Reach;body=[]}
+let null_raw_statement = { binder = ref New ; nbvars = 0; dag = empty; inputs= new_inputs; head = Reach;body=[];recipes=new_inputs}
 
 type statement = {
   id : int ;
@@ -63,11 +64,8 @@ let rec null_statement = { id = -2 ; vip = false ; st = null_raw_statement ; chi
 
 type base = 
 { 
-   rules : rewrite_rule list ;
    mutable next_id : int ;
-   mutable next_location : int ;
-   mutable next_nonce : int;
-   solved_deduction : statement ; 
+   solved_deduction : statement ; (* to preserve structure solved_deduction link to a statement whose children are the actual ones *)
    mutable other_solved :  statement list; 
    not_solved : statement ;
    mutable s_todo : statement Queue.t ; 
@@ -94,7 +92,7 @@ let rec show_atom_list lst = Format.sprintf "%s" (String.concat ", " (trmap show
 
 let show_raw_statement st =
   Format.sprintf
-    "(%d%s) %s <== %s \n  %s %s\n" st.nbvars (show_binder !(st.binder)) (show_predicate st.head)(show_atom_list st.body)(show_inputs st.inputs)(show_dag st.dag)
+    "(%d%s) %s <== %s \n       %s %s\n       %s\n" st.nbvars (show_binder !(st.binder)) (show_predicate st.head)(show_atom_list st.body)(show_inputs st.inputs)(show_dag st.dag)(show_inputs st.recipes)
 
 let rec show_statement prefix st =
   (Format.sprintf "%s #%d[%d;%d]: %s" 
@@ -116,8 +114,8 @@ let rec count_statements st =
 
 let show_kb kb =
   (Format.sprintf 
-    "Kb : \n - %d statements \n - %d locations \n - %d nonces \n - %d solved deduction \n - %d solved identical\n Solved deduction:\n" 
-    kb.next_id kb.next_location kb.next_nonce(count_statements kb.solved_deduction)(List.length kb.other_solved))
+    "Kb : \n - %d statements \n - %d solved deduction \n - %d solved identical\n Solved deduction:\n" 
+    kb.next_id (count_statements kb.solved_deduction)(List.length kb.other_solved))
   ^ (show_statement_list " " (kb.solved_deduction.children))
   ^ "Other solved: \n"
   ^ (show_statement_list " " (kb.other_solved))
@@ -130,13 +128,10 @@ let show_kb kb =
 (** constructor **)
 let new_statement () = {id = -1 ; vip = false ; st = null_raw_statement; children = []; process = None; master_parent = null_statement; slave_parent = null_statement }
 
-let new_base rules =
+let new_base () =
   let kb = 
   {
-     rules = rules;
      next_id = 0;
-     next_location = 0 ;
-     next_nonce = 0 ;
      solved_deduction = new_statement () ;
      other_solved = [] ;
      not_solved = new_statement () ;

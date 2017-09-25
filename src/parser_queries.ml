@@ -10,10 +10,19 @@ let parse_query env line = function
       let p = try Env.find ident env with Not_found -> error_message line (Printf.sprintf "The process %s is not declared" ident) in
       begin 
         match p with
-          | Proc(procId) -> Horn.saturate !rewrite_rules procId
+          | Proc(procId) -> let (l,kb) = Horn.saturate procId in
+              Printf.printf "Saturation is done %s\n" (Base.show_kb kb) 
           | env_elt -> error_message line (Printf.sprintf "The identifiant %s is declared as %s but a process is expected." ident (display_env_elt_type env_elt))
       end
-  | Trace_Eq(_,_) (*-> query_list := (Process.Trace_Equivalence,parse_extended_process env proc_1, parse_extended_process env proc_2)::!query_list *)
+  | Trace_Eq((ident,line),(ident',line')) -> 
+      let p = try Env.find ident env with Not_found -> error_message line (Printf.sprintf "The process %s is not declared" ident) in
+      let q = try Env.find ident' env with Not_found -> error_message line (Printf.sprintf "The process %s is not declared" ident') in
+      begin 
+        match (p,q) with
+          | (Proc(procId),Proc(procId')) -> Process_execution.equivalence procId procId'  
+          | (env_elt,Proc(_)) 
+          | (_,env_elt) -> error_message line (Printf.sprintf "The identifiant %s is declared as %s but a process is expected." ident (display_env_elt_type env_elt))
+      end
   | Obs_Eq(_,_) -> error_message line "Observational equivalence not implemented yet"
 
 (****** Parse declaration *******)

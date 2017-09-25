@@ -392,7 +392,10 @@ and normalize t rules =
 	top_normalize (Fun(f, List.map (fun x -> normalize x rules) ta)) rules rules
     | Var(x) -> t
 
-
+let equals_r s t rules =
+  let s = normalize s rules in
+  let t = normalize t rules in
+  equals_ac s t
 
 (** Variants and unification modulo R *)
 (*                                    *)

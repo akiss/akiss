@@ -112,4 +112,4 @@ let Q =
  )..
 
 
-query saturate P.
+query trace_equiv (P, Q).

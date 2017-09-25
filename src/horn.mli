@@ -57,9 +57,6 @@ val equation :
   Dag.dag ->
   Base.raw_statement -> Base.raw_statement -> Base.raw_statement list
 val concretize : Inputs.inputs -> Types.term -> Types.term
-val expand_call :
-  Base.base ->
-  Types.procId -> Types.term array -> Types.chanId array -> Process.process
 val trace_statements :
   Base.base ->
   Base.statement ->
@@ -76,4 +73,4 @@ val process_resolution_new_solved :
 val process_resolution_new_unsolved :
   Base.base -> Base.statement -> Base.statement -> unit
 val process_equation : Base.base -> Base.statement -> Base.statement -> unit
-val saturate : Types.rewrite_rule list -> Types.procId -> unit
+val saturate : Types.procId -> int * Base.base
