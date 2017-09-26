@@ -3,70 +3,13 @@ open Types
 open Dag
 open Base
 open Process
-
-type correspondance = { a : location Dag.t}
-
-type status = Done | Fail | Full | Partial
-
-type partial_run = {
-  statement : raw_statement ; (* the solved statement seen as the test to check *)
-  corresp : correspondance ; (* a mapping from the actions of P to the actions of Q *)
-  remaining_actions : LocationSet.t; 
-  frame : Inputs.inputs ; (* the frame for outputs *)
-  dag : dag; (* The run dag: may be more constrained than the Initial one *)
-  qthreads : (LocationSet.t * process) list ; (* The available action of Q, the constrainsts *)
-  mutable status : status ;
-  mutable children : partial_run list ; (* once processed, the list of possible continuation of the execution *)
-}
-
-let show_correspondance c =
-  (Dag.fold (fun lp lq str -> str ^(Format.sprintf " %d => %d ;" lp.p lq.p)) c.a "{|")^"|}"
+open Bijection
 
 
-let show_partial_run pr =
-  (List.fold_left (fun str (lset, p) -> str ^ (show_loc_set lset) ^" : "^(show_process p)^"\n   ")
-  (Format.sprintf "{ \n statement= %s frame= %s\n corresp= %s\n remaining_actions= %s\n qthreads= \n   "
-    (show_raw_statement pr.statement)
-    (Inputs.show_inputs pr.frame)
-    (show_correspondance pr.corresp)
-    (show_loc_set pr.remaining_actions)) 
-  pr.qthreads) ^ "}\n"
-
-type test = {
-  nb_actions : int;
-  test : raw_statement;
-}
-
-(* records which are the partial executions of a test *) 
-type solutions = {
-  mutable partial_runs : partial_run list;
-  mutable partial_runs_todo : partial_run list;
-  mutable possible_runs : partial_run list;
-}
-
-
-module Test =
-       struct
-         type t = test
-         let compare x y =
-           let r = compare x.nb_actions y.nb_actions in
-           if r = 0 then compare x.test y.test else - r
-       end
-
-module Tests = Map.Make(Test)
-
-
-type tests = {
-  tests : solutions Tests.t ;
-}
-
-let loc_p_to_q p corr =
-  Dag.find p corr.a
-
-let rec apply_frame term frame =
+let rec apply_subst_inputs term frame =
   match term with
     | Fun({ id=Input(l)}, []) -> Inputs.get l frame
-    | Fun(f, args) -> Fun(f, List.map (fun x -> apply_frame x frame) args)
+    | Fun(f, args) -> Fun(f, List.map (fun x -> apply_subst_inputs x frame) args)
     | Var(x) -> Var(x)
 
 
@@ -77,14 +20,14 @@ let rec run_until_io process first frame =
   | SeqP(Input(l),p) 
   | SeqP(Output(l,_),p) -> [(first,process)]
   | SeqP(Test(t,t'),p) -> 
-    let t = apply_frame t frame in
-    let t' = apply_frame t' frame in
+    let t = apply_subst_inputs t frame in
+    let t' = apply_subst_inputs t' frame in
     if Rewriting.equals_r t t' (! Parser_functions.rewrite_rules) 
     then run_until_io p first frame 
     else begin (*Printf.printf "test fail %s = %s \n" (show_term t)(show_term t');*) [] end
   | SeqP(TestInequal(t,t'),p) ->
-    let t = apply_frame t frame in
-    let t' = apply_frame t' frame in
+    let t = apply_subst_inputs t frame in
+    let t' = apply_subst_inputs t' frame in
     if not (Rewriting.equals_r t t' (! Parser_functions.rewrite_rules)) 
     then run_until_io p first frame 
     else []
@@ -98,7 +41,6 @@ let init_run statement processQ =
      frame = Inputs.new_inputs; (* inputs maps to received terms and outputs maps to sent terms *)
      dag = empty;
      qthreads = run_until_io processQ LocationSet.empty Inputs.new_inputs  ;
-     status = Full ;
      children = [] ;
    }
   
@@ -115,14 +57,15 @@ let next_partial_run run action full_p proc l frame locs  =
        else (run_until_io proc (LocationSet.add action ls) frame) @ lst 
        )
       [] run.qthreads;
-     status = Full ;
      children = [] ;
   }
   
-let rec recipe_to_term recipe prun =
+
+  
+let rec apply_frame recipe prun =
   match recipe with
-    | Fun({ id=Frame(l)}, []) -> Inputs.get (loc_p_to_q l prun.corresp) prun.frame
-    | Fun(f, args) -> Fun(f, List.map (fun x -> recipe_to_term x prun) args)
+    | Fun({ id=Frame(l)}, []) -> Inputs.get (Bijection.loc_p_to_q l prun.corresp) prun.frame
+    | Fun(f, args) -> Fun(f, List.map (fun x -> apply_frame x prun) args)
     | Var(x) -> Var(x)
 
        
@@ -133,7 +76,7 @@ let try_run run action (locs,process)  =
      then 
        begin 
          let new_frame = Inputs.add_to_frame l 
-            (recipe_to_term (Inputs.get action run.statement.recipes) run) run.frame in
+            (apply_frame (Inputs.get action run.statement.recipes) run) run.frame in
          let npr = next_partial_run run action process p l new_frame locs  in
          (*Printf.printf "%s"(show_partial_run npr) ;*)
          run.children <- npr :: run.children
@@ -155,52 +98,83 @@ let next_run partial_run =
     with
     Not_found -> begin Printf.printf "No run on %s [%s] \n" (show_dag partial_run.statement.dag) (show_loc_set partial_run.remaining_actions); assert false end
   in
-   List.iter (fun lp -> try_run partial_run current_loc lp ) partial_run.qthreads
+  List.iter (fun lp -> try_run partial_run current_loc lp ) partial_run.qthreads;
+  current_loc
 
 
 
 
-let statement_to_tests (statement : raw_statement) otherProcess tests =
-   let test = { nb_actions = Dag.cardinal statement.dag.rel; test= statement} in
+let statement_to_tests (statement : statement) otherProcess tests =
+   let test = { nb_actions = Dag.cardinal statement.st.dag.rel; test= statement} in
    if test.nb_actions = 0 then tests
    else
-     let init = init_run statement otherProcess in
+     let init = init_run statement.st otherProcess in
      Tests.add test { 
        partial_runs = [init] ;
-       partial_runs_todo = [init] ;
-       possible_runs = []
+       partial_runs_todo = [] ;
+       partial_runs_priority_todo = [init] ;
+       possible_runs = [];
+       possible_runs_todo = [];
+       partitions = [] ;
      } tests
    
 let rec statements_to_tests (statement : statement) otherProcess tests =
   List.fold_left (fun tsts st -> statements_to_tests st otherProcess tsts) 
-  (statement_to_tests statement.st otherProcess tests) statement.children
+  (statement_to_tests statement otherProcess tests) statement.children
   
 let base_to_tests base otherProcess = 
-  let tests = List.fold_left (fun tsts st -> statement_to_tests st.st otherProcess tsts) 
+  let tests = List.fold_left (fun tsts st -> statement_to_tests st otherProcess tsts) 
   Tests.empty base.other_solved in
   statements_to_tests base.solved_deduction otherProcess tests 
   
 let next_solution solution =
-  match solution.partial_runs_todo with
+  match solution.partial_runs_priority_todo with
   | [] -> assert false
   | pr :: q -> 
     (*Printf.printf "%s"(show_partial_run pr) ;*)
-    solution.partial_runs_todo <- q ;
-    next_run pr; 
+    solution.partial_runs_priority_todo <- q ;
+    let new_loc = next_run pr in 
     List.iter (fun partial_run -> 
       if LocationSet.is_empty partial_run.remaining_actions 
-      then solution.possible_runs <- partial_run :: solution.possible_runs
-      else solution.partial_runs_todo <- partial_run :: solution.partial_runs_todo
+      then solution.possible_runs_todo <- partial_run :: solution.possible_runs
+      else begin
+        if Bijection.straight new_loc (loc_p_to_q new_loc partial_run.corresp) (* TODO: partial run should not have priority *)
+        then
+          solution.partial_runs_priority_todo <- partial_run :: solution.partial_runs_priority_todo
+        else
+          solution.partial_runs_todo <- partial_run :: solution.partial_runs_todo
+      end
       ) pr.children 
 
 let rec find_possible_run solution =
-  match solution.possible_runs with
+  match solution.possible_runs_todo with
   | [] -> begin
-    if solution.partial_runs_todo = [] then None else
+    if solution.partial_runs_priority_todo = [] then None else
     begin next_solution solution; 
     find_possible_run solution end
     end
-  | t::q -> Some t
+  | pr::q ->
+    Printf.printf "complete run: %s\n"(show_partial_run pr) ;
+    if subset pr.dag pr.statement.dag 
+    then begin
+      let partition = Bijection.whole_partition pr in
+      if Bijection.compatible partition 
+      then begin
+        solution.partitions <- [partition];
+        solution.possible_runs <- pr :: solution.possible_runs;
+        Some [partition]
+        end
+      else begin 
+        solution.possible_runs <- pr :: solution.possible_runs;
+        find_possible_run solution
+        end
+      end
+    else begin
+      Printf.printf "partial dag\n";
+      solution.possible_runs <- pr :: solution.possible_runs;
+      find_possible_run solution
+      end
+    
 
 type equivalence = {
   processP : process ;
@@ -231,7 +205,12 @@ let equivalence p q =
     actions_Q_to_P = { a= Dag.empty} ;
     } in
     Printf.printf "Run \n" ;
-    Tests.iter (fun  test sol -> match find_possible_run sol with None ->  Printf.printf "Fail %s\n" (show_raw_statement test.test)| Some t -> Printf.printf "Success %s \n"(show_raw_statement test.test)) equiv.testsP.tests;
+    Tests.iter 
+      (fun  test sol -> 
+         match find_possible_run sol with 
+         | None ->  Printf.printf "Fail %s\n" (show_raw_statement test.test.st)
+         | Some t -> Printf.printf "Success %s \n"(show_raw_statement test.test.st)) 
+    equiv.testsP.tests;
     Printf.printf "End \n" ;
 (*let rec apply_subst_tr pr sigma = match pr with
   | NullTrace -> NullTrace
@@ -302,7 +281,7 @@ let rec execute_h process frame  instructions rules =
       | (_, Fun("empty", [])) -> frame
       | (Trace(Input(ch, x), pr), Fun("world", [Fun("!in!", [chp; r]); ir])) ->
 	  if chp = Fun(ch, []) then
-	    execute_h (apply_subst_tr pr [(x, (apply_frame r frame))]) frame  ir rules
+	    execute_h (apply_subst_tr pr [(x, (apply_subst_inputs r frame))]) frame  ir rules
 	  else
 	    raise Invalid_instruction
       | (Trace(Test(x, y), pr), Fun("world", _)) -> if !about_execution then Format.printf "> Testing (%s = %s) \n%!" (show_term x)(show_term y); 
@@ -351,7 +330,7 @@ let rec shrink process frame instructions vars =
 		StringSet.fold 
 			(fun v pro -> Trace(Input("!hidden!" ^ v,v),pro)) 
 			new_vars 
-			(Trace(Input(ch,x),Trace(Test(apply_frame rv frame,Var(x)), shrink pr frame  ir next_vars))) 
+			(Trace(Input(ch,x),Trace(Test(apply_subst_inputs rv frame,Var(x)), shrink pr frame  ir next_vars))) 
 	  else
 	    begin if !about_else then Format.printf "    invalid channel: %s\n>%s\n%!" (show_trace process)(show_term instructions); raise Invalid_instruction end
       | (Trace(Test(x, y), pr), Fun("world", _)) -> 
@@ -509,7 +488,7 @@ let rec trace_from_frame frame =
 let interpret (r,t) = r && t = []
 
 (*let rec find_sub_term t frame r =
-	if apply_frame r frame = t then Some r else
+	if apply_subst_inputs r frame = t then Some r else
 	match r with
 	| Fun(f, args) -> List.fold_left (fun x recipe -> match x with | Some r -> Some r | None -> find_sub_term t frame recipe) None args
 	| _ -> None
@@ -538,8 +517,8 @@ let auxi_reach source process w rules r rp =
 	let size = size_of (slim_w) in
 	let frame = execute process [] slim_w rules in
 	if !about_execution then Format.printf  " Result of execution of %s\n%!" (show_term w);
-	let t1 = apply_frame r frame in
-	let t2 = apply_frame rp frame in
+	let t1 = apply_subst_inputs r frame in
+	let t2 = apply_subst_inputs rp frame in
 	if(not (R.equals t1 t2 rules)) then 
 		begin if !about_tests then Format.printf "   The identity of %s and %s is not satisfied\n" (show_term t1)(show_term t2);
 		 (false,[]) end 

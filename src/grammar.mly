@@ -111,7 +111,7 @@ free_name_declaration:
 query_declaration:
   | QUERY SAT ident DOT
       { Saturate $3 }
-  | QUERY TRACEEQ LPAR extended_process COMMA extended_process RPAR DOT
+  | QUERY TRACEEQ LPAR ident COMMA ident RPAR DOT
       { Trace_Eq($4,$6) }
   | QUERY OBSEQ LPAR extended_process COMMA extended_process RPAR DOT
       { Obs_Eq($4,$6) }
