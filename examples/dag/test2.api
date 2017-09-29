@@ -1,0 +1,19 @@
+fun a/0,pair/2,fst/1,snd/1.
+chan c,d,e,f,g.
+
+fst(pair(x,y)) -> x.
+snd(pair(x,y)) -> y.
+
+let P(k)  = 
+  out(c,k).
+
+let S(k) = 
+  in(e,x); 
+  if pair(fst(x),k) = x then
+   out(d,a);
+   0.
+
+let Q = new n;
+  (P(n)|S(n)) ..
+
+query saturate Q.

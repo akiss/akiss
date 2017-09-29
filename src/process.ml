@@ -73,7 +73,15 @@ let rec show_process pr =
   | ParallelP(lp) ->( List.fold_left (fun str p -> str ^ "|" ^ (show_process p)) "(" lp ) ^ ")"
   | SeqP(a,p) -> (show_action a) ^ ";" ^ (show_process p)
   | CallP(l,procId,args,chans) -> procId.name
-  
+
+let rec show_process_start i pr = 
+  if i = 0 then "..." else
+  match pr with
+  | EmptyP -> ""
+  | ParallelP(lp) ->( List.fold_left (fun str p -> str ^ "|" ^ (show_process_start i p)) "(" lp ) ^ ")"
+  | SeqP(a,p) -> (show_action a) ^ ";" ^ (show_process_start (i - 1) p)
+  | CallP(l,procId,args,chans) -> procId.name
+
 let rec count_type_nb typ pr i =
   if i = -1 then -1 
   else

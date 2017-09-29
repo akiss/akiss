@@ -117,4 +117,4 @@ let Q =
     A(ca2,aa,bb,kas) | S(cs2,aa,bb,kas,kbs) | B(cb2,bb,aa,kbs)
   )..
 
-query saturate P.
+query trace_equiv (P,Q).

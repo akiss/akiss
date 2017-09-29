@@ -18,6 +18,7 @@ type processes_infos = {
 val processes_infos : processes_infos
 val show_action : action -> string
 val show_process : process -> string
+val show_process_start : int -> process -> string
 val count_type_nb : Types.typ -> Types.procId -> int -> int
 val convert_term :
   Types.procId ->

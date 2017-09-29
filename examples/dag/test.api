@@ -2,19 +2,14 @@ fun a/0,b/0.
 chan c,d,e,f,g.
 
 
-let P(k)  = 
-  new m;
-  out(c,m);
-  in(c,x);
-  if x = m then
-  out(d,x).
+let P(k)  = new n ;(
+  out(c,n) 
+  ; out(c,n)).
 
 
-let Q = new n; 
-  out(c,n);
-  in(c,x);
-  if x = n then
-  out(d,x).
+let Q = new p; new m;(
+  out(c,m) 
+  |out(c,m)).
 
 let N = 0..
 

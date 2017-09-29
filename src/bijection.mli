@@ -1,29 +1,27 @@
+type which_process = P | Q
 type correspondance = { a : Types.location Dag.Dag.t; }
 val show_correspondance : correspondance -> string
 type partial_run = {
+  process : which_process;
   statement : Base.raw_statement;
   corresp : correspondance;
+  corresp_back : correspondance;
   remaining_actions : Dag.LocationSet.t;
   frame : Inputs.inputs;
   dag : Dag.dag;
   qthreads : (Dag.LocationSet.t * Process.process) list;
   mutable children : partial_run list;
 }
+val show_run : partial_run -> string
 val show_partial_run : partial_run -> string
 type test = { nb_actions : int; test : Base.statement; }
-type partition = {
-  run : partial_run;
-  dag : Dag.dag;
-  equalities : Inputs.inputs;
-  disequalities : (Types.term * Types.term) list;
-}
 type solutions = {
   mutable partial_runs : partial_run list;
   mutable partial_runs_todo : partial_run list;
   mutable partial_runs_priority_todo : partial_run list;
   mutable possible_runs : partial_run list;
   mutable possible_runs_todo : partial_run list;
-  mutable partitions : partition list;
+  mutable partitions : partial_run list;
 }
 module Test : sig type t = test val compare : test -> test -> int end
 module Tests :
@@ -61,14 +59,14 @@ type tests = { tests : solutions Tests.t; }
 type record = {
   locP : Types.location;
   locQ : Types.location;
-  partition : partition;
+  partial_run : partial_run;
 }
 type bijection = { mutable records : record list; }
 val base : bijection
+val show_base : unit -> unit
 val loc_p_to_q : Dag.Dag.key -> correspondance -> Types.location
-val whole_partition : partial_run -> partition
-val add_partition : partition -> unit
-val remove_partition : partition -> unit
+val add_partial_run : partial_run -> unit
+val remove_partition : partial_run -> unit
 val records_for_P : Types.location -> record list
 val straight : Types.location -> Types.location -> bool
-val compatible : partition -> bool
+val compatible : partial_run -> partial_run list

@@ -55,4 +55,4 @@ let P =
 let Q =
   Q0(d1,d2,d3) | Q0(d4,d5,d6) | Q0(d7,d8,d9) | Q0(d10,d11,d12)..
 
-query saturate P.
+query trace_equiv (P,Q).

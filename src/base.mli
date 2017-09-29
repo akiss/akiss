@@ -2,6 +2,7 @@ type predicate =
     Knows of Types.term * Types.term
   | Reach
   | Identical of Types.term * Types.term
+  | Tests of (Types.term * Types.term) list
 type body_atom = {
   loc : Types.location option;
   recipe : Types.term;

@@ -111,6 +111,7 @@ let rec vars_of_atom = function
   | Knows( r , t) -> vars_of_term_list [r;t]
   | Reach -> []
   | Identical(r1,r2) -> vars_of_term_list [r1;r2]
+  | Tests(_) -> assert false
 
 let get_head_recipe = function 
   | Knows( r, _) -> r
@@ -121,6 +122,7 @@ let get_recipes = function
   | Knows( r, _) -> [r]
   | Identical( r1, r2) -> [r1;r2]
   | Reach -> []
+  | Tests(_) -> assert false
 
 let get_term atom = atom.term
 
@@ -151,6 +153,7 @@ match pred with
   | Identical(r,r') -> 
      Identical(Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)
   | Reach -> Reach
+  | Tests(_) -> assert false
 
 let apply_subst_statement st (sigma : substitution)=
   {
@@ -558,6 +561,7 @@ let is_reflexive st =
           if !debug_output then Format.printf "Clause #%s is reflexive, not useful.\n" (show_raw_statement st) ;
           false
         end else true
+    | Tests(_) -> assert false
 
 let normalize_identical f = f (*
   if not (use_xor && normalize_identical) then f else

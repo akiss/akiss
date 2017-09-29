@@ -65,4 +65,4 @@ let Q =
     A(c7,bb,aa,kbs) | S(c8,bb,aa,kbs,kas) | B(c9,aa,bb,kas)
   )..
 
-  query saturate P.
+  query trace_equiv (P,Q).

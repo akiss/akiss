@@ -28,6 +28,7 @@ type predicate =
   | Knows of term * term
   | Reach
   | Identical of term * term
+  | Tests of (term * term) list
 
 type body_atom = {
    loc : location option;
@@ -76,12 +77,13 @@ type base =
 (** {3 Printing} *)
 
 let rec show_predicate p = 
-(match p with
+ match p with
  | Knows(r,t) ->
       "knows(" ^ (show_term r) ^ "," ^ (show_term t) ^ ")"
  | Identical(r,r') ->
       "identical(" ^ (show_term r) ^ "," ^ (show_term r') ^ ")"
- | Reach -> "reach") 
+ | Reach -> "reach"
+ | Tests(l) -> (List.fold_left ( fun str (r,r') -> (if str = "" then "" else str ^ ", ") ^ (show_term r) ^ "=" ^ (show_term r') ) "tests(" l ) ^")"
 
 let show_body_atom a =
   let l = match a.loc with Some l -> string_of_int l.p | None -> "." in
