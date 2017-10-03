@@ -89,9 +89,9 @@ let P =
 
 let Q =
  new kas; new kbs;
- ( A2(c0,a1,b1,kas) | S(c2,a1,b1,kas,kbs) | B(c3,b1,a1,kbs)
+ ( A2(c100,a1,b1,kas) | S(c2,a1,b1,kas,kbs) | B(c3,b1,a1,kbs)
  | A(c4,a1,c0,kas) | S(c5,a1,c0,kas,kcs)| S(c6,c0,b1,kcs,kbs) |  B(c7,b1,c0,kbs)
  | A(c8,b1,a1,kbs) | S(c9,b1,a1,kbs,kas) | B(c10,a1,b1,kas))..
 
 
-query saturate P.
+query trace_equiv (P,Q).

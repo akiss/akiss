@@ -1,4 +1,5 @@
 (** {2 Executing and testing processes} *)
+open Util
 open Types
 open Dag
 open Base
@@ -79,7 +80,11 @@ let rec run_until_io process first frame =
     let t' = apply_subst_inputs t' frame in
     if Rewriting.equals_r t t' (! Parser_functions.rewrite_rules) 
     then run_until_io p first frame 
-    else begin (*Printf.printf "test fail %s = %s \n" (show_term t)(show_term t');*) [] end
+    else begin 
+      (*let t'' = Rewriting.normalize t (! Parser_functions.rewrite_rules) in
+      let t''' = Rewriting.normalize t' (! Parser_functions.rewrite_rules) in
+      Printf.printf "test fail %s = %s \n" (show_term t'')(show_term t'''); *)
+      [] end
   | SeqP(TestInequal(t,t'),p) ->
     let t = apply_subst_inputs t frame in
     let t' = apply_subst_inputs t' frame in
@@ -124,11 +129,13 @@ let next_partial_run run action full_p proc l frame locs  =
 let rec apply_frame recipe prun =
   match recipe with
     | Fun({ id=Frame(l)}, []) -> Inputs.get (Bijection.loc_p_to_q l prun.corresp) prun.frame
+    | Fun({ id=Input(l)}, []) -> Inputs.get l prun.frame
     | Fun(f, args) -> Fun(f, List.map (fun x -> apply_frame x prun) args)
     | Var(x) -> Var(x)
 
        
 let try_run run action (locs,process)  =
+   (*Printf.printf "Testing %s against %s\n" action.chan.name (show_process_start 1 process);*)
    match process with
    | SeqP(Input(l),p) -> 
      if action.io = Input &&  action.chan = l.chan 
@@ -137,15 +144,15 @@ let try_run run action (locs,process)  =
          let new_frame = Inputs.add_to_frame l 
             (apply_frame (Inputs.get action run.statement.recipes) run) run.frame in
          let npr = next_partial_run run action process p l new_frame locs  in
-         (*Printf.printf "%s"(show_partial_run npr) ;*)
+         (*Printf.printf "Possible: %s\n"(show_partial_run npr) ;*)
          run.children <- npr :: run.children
        end
    | SeqP(Output(l,t),p) -> 
      if action.io = Output &&  action.chan = l.chan 
      then begin
-       let new_frame = Inputs.add_to_frame l t run.frame in
+       let new_frame = Inputs.add_to_frame l (apply_subst_inputs t run.frame) run.frame in
        let npr = next_partial_run run action process p l new_frame locs  in
-       (*Printf.printf "%s"(show_partial_run npr) ;*)
+       (*Printf.printf "Possible: %s\n"(show_partial_run npr) ;*)
        run.children <- npr :: run.children
      end
    | _ -> assert false
@@ -160,10 +167,39 @@ let next_run partial_run =
   List.iter (fun lp -> try_run partial_run current_loc lp ) partial_run.qthreads;
   current_loc
 
-
+(* When two recipes are provided for the same term just choose one *)
+let same_term_same_recipe st =
+  let sigma_repl = Array.make st.nbvars None in
+  let sigma = (sigma_repl, Array.make 0 None) in
+  st.binder := Master;
+  (*Printf.printf "simplification of %s\n" (show_raw_statement st);*)
+  let (useless,body) =
+    List.partition
+      (fun a ->
+         let recipe_var = Term.unbox_var a.recipe in
+         let t = a.term in
+         try
+         let is_better =  List.find 
+           (fun a' -> let recipe_var' = Term.unbox_var a'.recipe in
+              recipe_var.n < recipe_var'.n &&
+              t = a'.term ) st.body in
+           let x = Term.unbox_var(is_better.recipe) in
+           sigma_repl.(x.n) <- Some a.recipe ;
+           true       
+         with Not_found -> false
+         )
+       st.body
+  in
+  if !about_canonization then
+    List.iter (fun a -> Format.printf "Removed %s\n" (show_body_atom a)) useless ;
+  if useless = [] then st 
+  else 
+    let sigma = Rewriting.pack sigma in
+    Horn.apply_subst_statement { st with body = body;} sigma
 
 
 let statement_to_tests process_name (statement : statement) otherProcess tests =
+   let statement = {statement with st = same_term_same_recipe statement.st} in
    let test = { nb_actions = Dag.cardinal statement.st.dag.rel; test= statement} in
    if test.nb_actions = 0 then tests
    else
@@ -189,7 +225,10 @@ let base_to_tests process_name base otherProcess =
 let check_recipes partial_run (r,r')=
   let r = apply_frame r partial_run in
   let r' = apply_frame r' partial_run in
-  Printf.printf "recipes %s and %s (%s)\n" (show_term r)(show_term r')(Inputs.show_inputs partial_run.frame);
+  (*let r'' = Rewriting.normalize r (! Parser_functions.rewrite_rules) in
+  let r''' = Rewriting.normalize r' (! Parser_functions.rewrite_rules) in
+  Printf.printf "recipes %s and %s\n %s\n>> %s \n=? %s\n" 
+    (show_term r)(show_term r')(Inputs.show_inputs partial_run.frame)(show_term r'')(show_term r''');*)
   Rewriting.equals_r r r' (! Parser_functions.rewrite_rules) 
 
 let next_solution solution =
@@ -198,6 +237,7 @@ let next_solution solution =
   | pr :: q -> 
     (*Printf.printf "next solution of\n%s"(show_partial_run pr) ;*)
     solution.partial_runs_priority_todo <- q ;
+    solution.partial_runs <- pr :: solution.partial_runs;
     let new_loc = next_run pr in 
     List.iter (fun partial_run -> 
       if LocationSet.is_empty partial_run.remaining_actions 
@@ -241,7 +281,7 @@ let rec find_possible_run solution =
     end
   | pr::q ->
     solution.possible_runs_todo <- q ;
-    (*Printf.printf "complete run: %s\n"(show_partial_run pr) ;*)
+    if !debug_execution then Printf.printf "complete run: %s\n"(show_partial_run pr) ;
     if subset pr.dag pr.statement.dag 
     then begin
       if Bijection.compatible pr = []
@@ -252,12 +292,13 @@ let rec find_possible_run solution =
         Some [pr]
         end
       else begin 
+        if !debug_execution then Printf.printf "Solution in conflict \n";
         solution.possible_runs <- pr :: solution.possible_runs;
         find_possible_run solution
         end
       end
     else begin
-      Printf.printf "partial dag\n";
+      if !debug_execution then Printf.printf "Partial dag\n";
       solution.possible_runs <- pr :: solution.possible_runs;
       find_possible_run solution
       end
@@ -277,6 +318,11 @@ type equivalence = {
 let equivalence p q =
   let (locP,satP) = Horn.saturate p in
   let (locQ,satQ) = Horn.saturate q in
+  if !Util.about_saturation then
+  begin 
+    Printf.printf "Saturation of P:\n %s\n" (Base.show_kb satP);
+    Printf.printf "Saturation of Q:\n %s\n" (Base.show_kb satQ)
+  end ;
   let processP = (CallP({p = locP;io=Call;chan=null_chan;name="main"},
     p,Array.make 0 zero,Array.make 0 null_chan)) in
   let processQ = (CallP({p = locQ;io=Call;chan=null_chan;name="main"}, 
@@ -295,7 +341,9 @@ let equivalence p q =
     let p = Tests.for_all 
       (fun  test sol -> 
          match find_possible_run sol with 
-         | None ->  Printf.printf "Failure %s\n" (show_raw_statement test.test.st); false
+         | None ->  Printf.printf "Failure %s\n" (show_raw_statement test.test.st);
+         List.iter (fun pr -> Printf.printf "%s\n" (show_partial_run pr)) sol.partial_runs;
+         false
          | Some t -> true )(*Printf.printf "Success %s \n"(show_raw_statement test.test.st)) *)
     equiv.testsP.tests in
     Printf.printf "Testing Q on P \n" ;
@@ -305,7 +353,7 @@ let equivalence p q =
          | None ->  Printf.printf "Failure %s\n" (show_raw_statement test.test.st); false
          | Some t -> true )(*Printf.printf "Success %s \n"(show_raw_statement test.test.st)) *)
     equiv.testsQ.tests in
-    Bijection.show_base();
+    if !debug_execution then Bijection.show_base();
     if (p && q)
     then
       Printf.printf "P and Q are trace equivalent. \n" ;    

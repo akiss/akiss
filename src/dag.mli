@@ -76,6 +76,8 @@ exception E
 val subset : dag -> dag -> bool
 val merge : dag -> dag -> dag
 val is_before : dag -> Dag.key option -> LocationSet.elt option -> bool
+val should_be_before :
+  dag -> Dag.key option -> LocationSet.elt option -> bool
 val is_cyclic : dag -> bool
 val final : dag -> LocationSet.elt -> dag
 val dag_with_one_action_at_end : LocationSet.t -> LocationSet.elt -> dag

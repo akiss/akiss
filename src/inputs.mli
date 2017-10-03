@@ -11,3 +11,6 @@ val csu :
   inputs -> (Types.term option array * Types.term option array) list
 val csm : inputs -> inputs -> (Types.varId * Types.term) list list
 val merge : Types.substitution -> inputs -> inputs -> inputs
+val merge_recipes : Types.substitution -> inputs -> inputs -> inputs
+val apply_subst_recipes : Types.substitution -> inputs -> inputs
+val are_normal : inputs -> bool

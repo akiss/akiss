@@ -53,6 +53,7 @@ let  set_debug = function
   | "canon" ->  about_canonization := true
   | "seed" -> about_seed := true
   | "sat" -> about_saturation := true
+  | "saturation" -> about_saturation := true ; debug_saturation := true
   | "maude" -> about_maude := true
   | "exec" -> about_execution := true
   | _ -> raise (Arg.Bad("Undefined semantics"))
@@ -61,7 +62,7 @@ let  set_debug = function
     
 let command_line_options_list = [
   ("-d",
-   Arg.Symbol(["progress";"else";"canon";"seed";"sat";"maude";"exec"],set_debug),
+   Arg.Symbol(["progress";"else";"canon";"seed";"sat";"saturation";"maude";"exec"],set_debug),
    " Enable additional debug information");
   (* ("--progress", Arg.Set(about_progress), *)
   (*  "Enable progression output"); *)
@@ -69,16 +70,16 @@ let command_line_options_list = [
   (*  "Enable debug output about else"); *)
   (* ("--canonization", Arg.Set(about_canonization), *)
   (*  "Enable debug output about canonization rules"); *)
-  (* ("--seed", Arg.Set(about_seed), *)
-  (*  "Enable debug output about seed"); *)
-  (* ("--saturation", Arg.Set(about_saturation), *)
-  (*  "Enable debug output about saturation"); *)
-  (* ("--traces", Arg.Set(about_traces), *)
-  (*  "Enable debug output about trace generation"); *)
-  (* ("--maude", Arg.Set(about_maude), *)
-  (*  "Show Maude's calls when xor is enabled"); *)
-  (* ("--execution", Arg.Set(about_execution), *)
-  (*  "Show tests executions"); *)
+   ("-seed", Arg.Set(about_seed), 
+    "Enable debug output about seed"); 
+   ("-sat", Arg.Set(about_saturation), 
+    "Enable verbose output about saturation"); 
+   ("-saturation", Arg.Set(debug_saturation), 
+    "Enable debug output about saturation"); 
+   ("-exe", Arg.Set(about_execution), 
+    "Show tests correspondance");
+   ("-execution", Arg.Set(debug_execution), 
+    "Show tests executions debuuging"); 
   (*"--extra", Arg.Int (fun i -> extra_output := i),
    "<n>  Display information <n>"*)
   (*("--output-dot", Arg.String (fun s -> dotfile := Some s),

@@ -142,9 +142,9 @@ let rec show_term t =
  | Fun({id=Projection(m,n)},args) -> "Proj_"^(string_of_int m)^"(" ^ (show_term_list args) ^ ")"
  | Fun({id=Plus},[l;r]) ->  (show_term l) ^ "+" ^ (show_term r) 
  | Fun({id=Zero},[]) ->   "0" 
- | Fun({id=Nonce(n)},[]) -> n.name ^ "_" ^ (string_of_int n.n)
- | Fun({id=Input(l)},[]) ->  l.name 
- | Fun({id=Frame(l)},[]) -> "w["^(l.name)^"]"^(string_of_int l.p)
+ | Fun({id=Nonce(n)},[]) -> Format.sprintf "n[%d]_%s" n.n n.name  
+ | Fun({id=Input(l)},[]) -> Format.sprintf "i[%d]_%s" l.p (l.chan.name) 
+ | Fun({id=Frame(l)},[]) -> Format.sprintf "w[%d]_%s" l.p (l.chan.name)
  | Var(id) -> (show_binder !(id.status)) ^ (string_of_int id.n)
  | _ -> invalid_arg ("Todo")
 and show_term_list = function
@@ -181,5 +181,5 @@ type substitution = {
 let show_substitution subst =
   Array.fold_left (fun str t -> str ^  ", " ^(show_term t))
   ((Array.fold_left (fun str t -> str ^ ", " ^ (show_term t)) 
-    ("substitution  (" ^  (string_of_int subst.nbvars) ^(show_binder !(subst.binder)) ^ ") : ") 
-  subst.master) ^ "; ") subst.slave
+    (Printf.sprintf "substitution  (%d%s) : \nmaster: " subst.nbvars (show_binder !(subst.binder))) 
+  subst.master) ^ "\nslave: ") subst.slave

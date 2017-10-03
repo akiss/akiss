@@ -22,15 +22,16 @@ type partial_run = {
 }
 
 let show_run pr =
-  Format.sprintf "{ \n statement= %s frame= %s\n corresp= %s\n"
+  Format.sprintf "{ \n statement= %s frame= %s\n corresp= %s\n dag = %s\n"
     (show_raw_statement pr.statement)
     (Inputs.show_inputs pr.frame)
     (show_correspondance pr.corresp)
+    (show_dag pr.dag)
     
     
 let show_partial_run pr =
   (List.fold_left (fun str (lset, p) -> str ^ (show_loc_set lset) ^" : "^(Process.show_process_start 2 p)^"\n   ")
-  ((show_run pr) ^ " remaining_actions= " ^ (show_loc_set pr.remaining_actions) ^ "\nqthreads= \n   ") 
+  ((show_run pr) ^ " remaining_actions= " ^ (show_loc_set pr.remaining_actions) ^ "\n qthreads= \n   ") 
   pr.qthreads) ^ "}\n"
 
 type test = {

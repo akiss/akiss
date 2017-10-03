@@ -77,6 +77,18 @@ let is_before dag l1 l2 =
   | None , Some _ -> true
   | _ -> false
 
+(* To replace a recipe by a one that should be created before *)
+let should_be_before dag l1 l2 =
+  match l1, l2 with 
+  | Some l1, Some l2 -> begin
+   try
+   LocationSet.mem l2 (Dag.find l1 dag.rel)
+   with 
+   | Not_found -> false end 
+  | None , Some _ -> false
+  | Some _, None -> true
+  | None,None -> false (* in this case the recipe number matter *)
+
 let is_cyclic dag =
   Dag.exists (fun l ls -> LocationSet.exists (fun l' -> l=l') ls) dag.rel
 

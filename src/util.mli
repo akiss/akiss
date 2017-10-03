@@ -8,11 +8,12 @@ val verbose_output : bool ref
 val about_seed : bool ref
 val debug_seed : bool ref
 val about_saturation : bool ref
-val debug_saturation : bool
+val debug_saturation : bool ref
 val about_tests : bool ref
 val debug_tests : bool ref
 val about_else : bool ref
 val about_execution : bool ref
+val debug_execution : bool ref
 val about_theory : bool ref
 val debug_theory : bool
 val about_traces : bool ref

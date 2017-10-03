@@ -284,7 +284,6 @@ let nb_flexibles t = nb_flexibles 0 [t]*)
 
 
 (** {2 Knowledge base update} *)
-exception TODO
 let rule_rename st = (*
   let sorted_body = List.sort (fun x y -> 
    if x.loc = y.loc then 0 else 
@@ -357,14 +356,14 @@ let rule_shift st =
 			 end
 		| _ -> st
 	end
-  | Knows( r , Var(x)) ->
+  | Knows( r , Var(x)) -> st (* (*Bugguy when no xor*)
     begin let stt = {st with head = 
       Knows(Fun({ id = Plus; has_variables = true},[get_recipe (Var(x)) (st.body); r]), 
         Fun({ id = Zero; has_variables = false},[]))} in 
       if !debug_output 
       then Format.printf "shift 0 on the statement: %s \n" (show_raw_statement stt); 
       stt
-    end
+    end *)
   | _ -> st
 
 
@@ -374,27 +373,42 @@ let rule_shift st =
   * statement as long as one derivation remains. *)
 let simplify_statement st =
   let hvars = vars_of_term_list (get_recipes st.head) in
-  let useless,body =
+  (*Printf.printf "simplification of %s\n" (show_raw_statement st);*)
+  let sigma_repl = Array.make st.nbvars None in
+  let sigma = (sigma_repl, Array.make 0 None) in
+  st.binder := Master;
+  let (useless,body) =
     List.partition
       (fun a ->
          let recipe_var = unbox_var a.recipe in
          not (List.mem recipe_var hvars) &&
          let t = a.term in
          let l = a.loc in
-           List.exists (fun a' ->
-                          let recipe_var' = unbox_var a'.recipe in
-                          recipe_var.n < recipe_var'.n &&
-                          Dag.is_before (st.dag) l (a'.loc) &&
-                          Rewriting.equals_ac t (a'.term) ) st.body)
-      st.body
+         try
+         let is_better =  List.find 
+           (fun a' ->
+              let recipe_var' = unbox_var a'.recipe in
+              (( recipe_var.n < recipe_var'.n && l = a'.loc)
+                || Dag.should_be_before (st.dag) l (a'.loc)) 
+                && Rewriting.equals_ac t (a'.term) ) st.body in
+           let x = unbox_var(is_better.recipe) in
+               (*Printf.printf " %d >> %s \n" x.n (show_term a.recipe);*)
+           sigma_repl.(x.n) <- Some a.recipe ;
+           true       
+         with Not_found -> false
+         )
+       st.body
   in
   if !about_canonization then
     List.iter (fun a -> Format.printf "Removed %s\n" (show_body_atom a)) useless ;
-  if useless = [] then st else { st with body = body }
+  if useless = [] then st 
+  else 
+    let sigma = Rewriting.pack sigma in
+    apply_subst_statement { st with body = body;} sigma
 
 let canonical_form statement =
   if is_deduction_st statement && is_solved statement then
-    let f = if use_xor then 
+    let f = if true || use_xor then 
         iterate rule_shift (simplify_statement statement) 
       else iterate rule_remove (iterate rule_rename statement) in
       if !about_canonization then Format.printf "Canonized: %s\n" (show_raw_statement f) ;
@@ -454,18 +468,6 @@ let inst_w_t my_st kb_st =
             | [] -> raise Bad_World
           end
     | _ -> invalid_arg("inst_w_t "^(show_raw_statement my_st) ^(show_raw_statement kb_st))
-
-(*let inst_w_t_ac my_head head_kb =
-  match (my_head, head_kb) with
-    | (Predicate(_, [myw; _; myt]), Predicate(_, [wkb; _; tkb])) ->
-	let t1 = Fun("!tuple!", [myw; myt]) in
-	let t2 = Fun("!tuple!", [wkb; tkb]) in
-        (*extraOutput about_else "Matching %s against %s\n%!" (show_term t1) (show_term t2); *)
-        R.matchers t2 t1 [] 
-        (*List.iter (fun sigma -> extraOutput about_else "Result %s\n%!" (show_subst sigma)) s;*)
-    | _ -> invalid_arg("inst_w_t_ac")
-    *)
-
 
 (** Formatter for printing conseq traces, which are essentially derivations. *)
 let rec print_trace chan = function
@@ -582,50 +584,30 @@ let normalize_identical f = f (*
   * This version of the function checks that the skeleton of the clause is
   * normal, and drops the clause otherwise. Non-normal recipes are allowed
   * and are re-normalized. *)
-let normalize_new_statement rules f = Some f
-(*  let process t =
-    if drop_non_normal_skel then
-      let t' = Rewriting.normalize t rules in
-        if not (Rewriting.equals_ac t t') then begin
-          (*if !debug_output then*) Format.printf "Non-normal term in clause #%d.\n" (get_id f) ;
-          None
-        end else
-          (* Return t' rather than t because it is more canonical. *)
-          Some t'
-    else
-      Some t
-  in
-  let renorm r = if renormalize_recipes then Rewriting.normalize r rules else r in
-  let process = function
-    | Knows,[w;r;t]) ->
-        begin match process t, process w with
-          | Some t', Some w' -> Some (Predicate ("knows",[w';renorm r;t']))
-          | None,_ | _,None -> None
-        end
-    | Predicate ("reach",[w]) ->
-        begin match process w with
-          | Some w' -> Some (Predicate ("reach",[w']))
-          | None -> None
-        end
-    | Predicate (id,[w;r;r']) -> (* covers identical and ridentical *)
-        begin match process w with
-          | Some w' -> Some (Predicate (id,[w';renorm r;renorm r']))
-          | None -> None
-        end
-    | _ -> assert false
-  in
-  let get_some = function
-    | Some x -> x
-    | None -> failwith "get_some"
-  in
-    try
-      Some
-        { f with
-          head = get_some (process f.head) ;
-          body = List.map (fun p -> get_some (process p)) f.body }
-    with
-      | Failure "get_some" -> None
-*)
+let normalize_new_statement f = (* This opti slow down the algo a bit much*)
+  if not (Inputs.are_normal f.inputs) 
+  then begin (*Printf.printf "input: %s\n" (show_raw_statement f);*) None end
+  else
+  if not (List.for_all 
+    (fun a -> let t' = Rewriting.normalize a.term (!Parser_functions.rewrite_rules) in Rewriting.equals_ac a.term t')
+    f.body)
+  then begin (*Printf.printf "terms: %s\n" (show_raw_statement f);*) None end
+  else 
+  match f.head with 
+  | Reach -> Some f
+  | Knows(r,t) -> 
+    let t' = Rewriting.normalize t (!Parser_functions.rewrite_rules) in 
+    if not (Rewriting.equals_ac t t')
+    then begin (*Printf.printf "hea: %s\n" (show_raw_statement f); *)
+      Some {f with head = Reach} end (* A knows is also a reach statement *)
+    else Some {f with head = Knows(Rewriting.normalize r (!Parser_functions.rewrite_rules),t)}
+  | Identical(r,r') -> Some {f with 
+      head = Identical(Rewriting.normalize r (!Parser_functions.rewrite_rules),
+            Rewriting.normalize r' (!Parser_functions.rewrite_rules))}
+  | Tests(ts) -> Some f
+
+
+
 let remove_marking f = {f with body = List.map (fun a -> {a with marked = false}) f.body }
 
 (** Update a knowledge base with a new statement. This involves canonizing
@@ -638,9 +620,10 @@ let update kb vip f =
    * order, which eases reading and gives / may give more power to non-AC
    * tests, eg. in consequence. *)
   let f = normalize_identical f in
-  match normalize_new_statement rules f with
-    | None -> None
-    | Some f ->
+  (* A bit expensive to do twice: there is no that many non normal statement*)
+  (*match normalize_new_statement f with
+    | None ->  None
+    | Some f ->*)
 
   (** Freshen only now to avoid freshening the (many) non-normal clauses
     * that the procedure generates. We don't want to do it too late, though:
@@ -654,7 +637,7 @@ let update kb vip f =
     else
       (* Canonize, normalize again and keep only normal clauses. *)
       let f = canonical_form f in
-        normalize_new_statement rules f
+        normalize_new_statement f
   with None -> None | Some fc ->
 
   if drop_reflexive && is_reflexive fc then None else
@@ -814,7 +797,7 @@ let resolution sigma dag master slave =
     List.map
       (fun sigma ->
           let sigma = Rewriting.pack sigma in
-          if !about_saturation then Printf.printf "Found: %s\n" (show_substitution sigma);
+          if !debug_saturation then Printf.printf "Found: %s\n" (show_substitution sigma);
           let result =
              let body =
                List.map (fun x -> {
@@ -833,11 +816,11 @@ let resolution sigma dag master slave =
            nbvars = sigma.nbvars ;
            dag = dag ;
            inputs = Inputs.merge sigma master.inputs slave.inputs;
-           recipes = Inputs.merge sigma master.recipes slave.recipes;
+           recipes = Inputs.merge_recipes sigma master.recipes slave.recipes;
            head = (apply_subst_pred master.head sigma) ;
            body = body }
            in 
-           if !about_saturation then Format.printf "RESO: %s\n\n"
+           if !debug_saturation then Format.printf "RESO: %s\n\n"
                (show_raw_statement result);
            result)
         sigmas 
@@ -865,7 +848,7 @@ let equation sigma dag fa fb =
 
   match fa.head, fb.head with
     | (Knows( r, t), Knows( rp, tp)) -> begin
-      if !about_saturation then Format.printf "Equation:\n %s\n %s\n%!"
+      if !debug_saturation then Format.printf "Equation:\n %s\n %s\n%!"
          (show_raw_statement fa) (show_raw_statement fb) ;
       let sigmas = Rewriting.csu [(t,tp)] sigma in
             (*let sigmas =
@@ -912,7 +895,7 @@ let equation sigma dag fa fb =
     List.map
       (fun sigma ->
           let sigma = Rewriting.pack sigma in
-          if !about_saturation then Printf.printf "Found: %s\n" (show_substitution sigma);
+          if !debug_saturation then Printf.printf "Found: %s\n" (show_substitution sigma);
           let result =
              let body =
                List.map (fun x -> {
@@ -928,11 +911,11 @@ let equation sigma dag fa fb =
            nbvars = sigma.nbvars ;
            dag = dag ;
            inputs = Inputs.merge sigma fa.inputs fb.inputs;
-           recipes = Inputs.merge sigma fa.recipes fb.recipes;
+           recipes = Inputs.merge_recipes sigma fa.recipes fb.recipes;
            head = Identical(Rewriting.apply_subst_term r sigma,Rewriting.apply_subst_term rp sigma);
            body = body }
            in
-           if !about_saturation then Format.printf "RESO: %s\n\n"
+           if !debug_saturation then Format.printf "RESO: %s\n\n"
                (show_raw_statement result);
            result)
         sigmas 
@@ -965,7 +948,7 @@ let rec trace_statements kb solved_parent unsolved_parent process st =
     | SeqP(Output(loc, t), pr) ->
       let next_dag = Dag.put_at_end st.dag loc in
       let identity_sigma = Rewriting.identity_subst st.nbvars in
-      let term = concretize st.inputs t in
+      let term = Rewriting.normalize (concretize st.inputs t) (! Parser_functions.rewrite_rules)in
       let binder = identity_sigma.binder in
       st.binder := Master;
       let st = apply_subst_statement st identity_sigma in
@@ -1025,7 +1008,7 @@ let rec trace_statements kb solved_parent unsolved_parent process st =
 
 
 and add_statement kb solved_parent unsolved_parent process st = 
-  if !about_saturation then Format.printf "Adding statement %s \n%!" (show_raw_statement st);
+  if !debug_saturation then Format.printf "Adding statement %s \n%!" (show_raw_statement st);
   let is_solved_st = is_solved st in
   match update kb (unsolved_parent.vip) st with
   | None -> ()
@@ -1042,7 +1025,7 @@ and add_statement kb solved_parent unsolved_parent process st =
        master_parent = unsolved_parent;
        slave_parent = solved_parent;
        } in 
-     if !about_saturation then Printf.printf "Addition of %s " (show_statement "" st);
+     if !debug_saturation then Printf.printf "Addition of %s \n" (show_statement "" st);
      Hashtbl.add kb.htable new_st st;
      if is_solved_st 
      then 
@@ -1097,7 +1080,7 @@ let theory_statements kb fname arity =
 
 
 let extra_resolution kb solved unsolved =
-  if !about_saturation then Printf.printf "Try resolution between #%d and #%d\n" solved.id unsolved.id;
+  if !debug_saturation then Printf.printf "Try resolution between #%d and #%d\n" solved.id unsolved.id;
   (* Printf.printf "%s \n %s\n" (show_raw_statement solved.st) (show_raw_statement unsolved.st); *)
   let merged_dag = Dag.merge unsolved.st.dag solved.st.dag in
   if Dag.is_cyclic merged_dag then false else
@@ -1113,7 +1096,7 @@ let extra_resolution kb solved unsolved =
     true end
 
 let extra_equation kb solved1 solved2 =
-  if !about_saturation then Printf.printf "Try equation between #%d and #%d\n" solved1.id solved2.id;
+  if !debug_saturation then Printf.printf "Try equation between #%d and #%d\n" solved1.id solved2.id;
   (*Printf.printf "%s \n %s\n" (show_raw_statement solved.st) (show_raw_statement unsolved.st);*)
   let merged_dag = Dag.merge solved1.st.dag solved2.st.dag in
   if Dag.is_cyclic merged_dag then false else
@@ -1170,13 +1153,13 @@ let saturate procId  =
     if (Queue.is_empty(kb.ns_todo)) then
       begin 
         let solved =  Queue.take(kb.s_todo) in
-        if !about_saturation then Printf.printf "Start equations with #%d\n" solved.id;
+        if !debug_saturation then Printf.printf "Start equations with #%d\n" solved.id;
         List.iter (fun solved2 -> process_equation kb solved solved2) kb.solved_deduction.children;
-        if !about_saturation then Printf.printf "Start resolutions with #%d\n" solved.id;
+        if !debug_saturation then Printf.printf "Start resolutions with #%d\n" solved.id;
         List.iter (fun unsolved -> process_resolution_new_solved kb solved unsolved) kb.not_solved.children
       end
     else begin let unsolved = Queue.take(kb.ns_todo) in
-      if !about_saturation then Printf.printf "Start resolutions of #%d\n" unsolved.id;
+      if !debug_saturation then Printf.printf "Start resolutions of #%d\n" unsolved.id;
       List.iter (fun solved -> process_resolution_new_unsolved kb solved unsolved) kb.solved_deduction.children end
   done ;
   (ind,kb)  

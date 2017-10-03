@@ -24,7 +24,6 @@ val get_body : Base.raw_statement -> Base.body_atom list
 val apply_subst_pred : Base.predicate -> Types.substitution -> Base.predicate
 val apply_subst_statement :
   Base.raw_statement -> Types.substitution -> Base.raw_statement
-exception TODO
 val rule_rename : 'a -> 'a
 val rule_remove : 'a -> 'a
 val rule_shift : Base.raw_statement -> Base.raw_statement
@@ -43,7 +42,7 @@ val consequence :
   Base.raw_statement -> Base.base -> Types.rewrite_rule list -> Types.term
 val is_reflexive : Base.raw_statement -> bool
 val normalize_identical : 'a -> 'a
-val normalize_new_statement : 'a -> 'b -> 'b option
+val normalize_new_statement : Base.raw_statement -> Base.raw_statement option
 val remove_marking : Base.raw_statement -> Base.raw_statement
 val update :
   Base.base -> bool -> Base.raw_statement -> Base.raw_statement option
