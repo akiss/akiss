@@ -33,6 +33,7 @@ val por : bool ref
 val disable_por : bool
 val set_por : bool -> unit
 val fsymbols : (string * int) list
+val privfsymbols : (string * int) list
 val evchannels : string list
 val privchannels : string list
 val rewrite_rules : rules

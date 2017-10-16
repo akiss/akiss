@@ -28,6 +28,8 @@ let vars : (string list) ref = ref []
 
 let fsymbols : ((string * int) list) ref = ref []
 
+let privfsymbols : ((string * int) list) ref = ref []
+
 let channels : (string list) ref = ref []
 
 let private_names : (string list) ref = ref []
@@ -188,6 +190,19 @@ let compose (sigma : subst) (tau : subst) =
 let restrict (sigma : subst) (domain : varName list) =
   List.filter (fun (x, _) -> List.mem x domain) sigma
 
+let f_arity x =
+  try
+    List.assoc x !fsymbols
+  with
+  | Not_found ->
+    try
+      List.assoc x !privfsymbols
+    with
+    | Not_found ->
+      raise
+	(Parse_error_semantic
+	   (Printf.sprintf "undeclared function symbol %s" x))
+	
 let rec parse_term (Ast.TempTermCons(x,l)) =
   if List.mem x !vars then
     if l = [] then
@@ -202,23 +217,17 @@ let rec parse_term (Ast.TempTermCons(x,l)) =
         raise (Parse_error_semantic
                  (Printf.sprintf "private name %s used as function symbol" x))
   else
-      try
-        let arity = List.assoc x !fsymbols in
-          if List.length l = arity then
-            Fun(x, trmap parse_term l)
-          else
-            raise
-              (Parse_error_semantic
-                 (Printf.sprintf
-                    "function symbol %s has arity %d \
+    let arity = f_arity x in
+    if List.length l = arity then
+      Fun(x, trmap parse_term l)
+    else
+      raise
+        (Parse_error_semantic
+           (Printf.sprintf
+              "function symbol %s has arity %d \
                                 but is used here with arity %d"
-                    x arity (List.length l)))
-      with
-        | Not_found ->
-            raise
-              (Parse_error_semantic
-                 (Printf.sprintf "undeclared function symbol %s" x))
-
+              x arity (List.length l)))
+	
 let rec contains_plus t =
 	match t with 
 	| Var(x) -> false

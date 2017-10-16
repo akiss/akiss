@@ -23,6 +23,7 @@ exception Invalid_term
 val vars : string list ref
 val channels : string list ref
 val fsymbols : (string * int) list ref
+val privfsymbols : (string * int) list ref
 val private_names : string list ref
 
 type id = string

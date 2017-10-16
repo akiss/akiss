@@ -26,7 +26,7 @@ open Ast
 %token <string> Identifier
 %token <int> Int
 %token XOR AC
-%token Symbols Private Var Rewrite EvRewrite Channels EvChannels Let
+%token Symbols PrivSymbols Private Var Rewrite EvRewrite Channels EvChannels Let
 %token PrivChannels
 %token LeftP RightP LeftB RightB
 %token Arrow Equals Inequals Dot Slash Comma Semicolon
@@ -61,6 +61,7 @@ main:
  | XOR { SetXOR }
  | AC { SetAC }
  | Symbols symbollist { DeclSymbols $2 }
+ | PrivSymbols symbollist { DeclPrivSymbols $2 }
  | Private namelist { DeclPrivate $2 }
  | Channels namelist { DeclChannels $2 }
  | EvChannels namelist { DeclEvChannels $2 }
