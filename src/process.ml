@@ -432,7 +432,7 @@ let rec traces p =
   * We implement the compressed strategy of Baelde, Hirschi & Delaune
   * for the subset of processes that is supported for it. *)
 
-(*let rec canonize = function
+let rec canonize = function
   | SymbSeq (SymbAct [],q) -> assert false
   | SymbSeq (SymbAct [a],q) -> SymbSeq (SymbAct [a], q)
   | SymbSeq (SymbAct l,q) ->
@@ -442,7 +442,7 @@ let rec traces p =
   | SymbSeq (p, SymbNul) -> canonize p
   | SymbAct l -> canonize (SymbSeq (SymbAct l, SymbNul))
   | (SymbPar _ | SymbNul | SymbEither _) as p -> p
-  | SymbSeq _ | SymbAlt _ | SymbPhase _ -> failwith "unsupported"*)
+  | SymbSeq _ | SymbAlt _ | SymbPhase _ -> failwith "unsupported"
 
 let prepend_traces a trace_set =
   TraceSet.fold
@@ -459,11 +459,11 @@ let traces_por p =
           (* While there are async processes, execute them in a fixed
            * and arbitrary order: break parallels, execute outputs
            * as well as tests *)
-          begin match p with
+          begin match canonize p with
             | SymbNul ->
                 traces async sync
             | SymbAct l -> (*There is no canonize anymore*)
-                traces (SymbSeq(SymbAct l,SymbNul)::async) sync
+                (*traces (SymbSeq(SymbAct l,SymbNul)::async) sync*) assert false
             | SymbPar (q1,q2) ->
                 traces (q1::q2::async) sync
             | SymbEither (q1,q2) ->
@@ -487,7 +487,7 @@ let traces_por p =
       | [] ->
           (* Focus a process, execute it until focus should be released *)
           let rec focus p sync =
-            match p with
+            match canonize p with
               | SymbSeq (SymbAct ((Input (c,x) :: tests) as a), q) ->
                   prepend_traces a (focus q sync)
               | SymbSeq (SymbAct ((*Test (t,t')*) (test :: tests) as a), q) when is_test_action test ->
@@ -499,7 +499,7 @@ let traces_por p =
                   (* Obvious improper block *)
                   TraceSet.singleton NullTrace
               | SymbAct l -> (*There is no canonize anymore*)
-                  focus (SymbSeq(SymbAct l,SymbNul)) sync
+                  (*focus (SymbSeq(SymbAct l,SymbNul)) sync*) assert false
               | SymbPar (_,_)
               | SymbEither (_,_)
 (*              | SymbSeq (SymbEither _, _) *)
