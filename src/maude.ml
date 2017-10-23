@@ -103,6 +103,7 @@ let print_module rules extrasig chan () =
          else
            op f n)
       !fsymbols ;
+    List.iter (fun (f,n) -> op f n) !privfsymbols ;
     List.iter (fun v -> op v 0) !private_names ;
 
     (* Tuples, parameters, names and variables not declared in input file

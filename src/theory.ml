@@ -108,6 +108,9 @@ let addto lref e = appendto lref [e];;
 let declare_symbols symbolList =
   appendto fsymbols symbolList
 
+let declare_priv_symbols symbolList =
+  appendto privfsymbols symbolList
+
 let declare_names nameList =
   appendto private_names nameList
 
@@ -155,6 +158,7 @@ let check_atoms () =
   let atoms = 
     List.concat [
       List.map (fun (x, y) -> (x, Symbol(y))) !fsymbols;
+      List.map (fun (x, y) -> (x, Symbol(y))) !privfsymbols;
       List.map (fun x -> (x, Channel)) !channels;
       List.map (fun x -> (x, PrivChannel)) !privchannels;
       List.map (fun x -> (x, Variable)) !vars;
@@ -203,6 +207,10 @@ let process_decl = function
   | DeclSymbols symbolList ->
     if !verbose_output then Format.printf  "Declaring symbols\n%!";
     declare_symbols symbolList;
+    check_atoms ()
+  | DeclPrivSymbols symbolList ->
+    if !verbose_output then Format.printf  "Declaring symbols\n%!";
+    declare_priv_symbols symbolList;
     check_atoms ()
   | DeclChannels channelList ->
     if !verbose_output then Format.printf "Declaring channels\n%!";
@@ -271,6 +279,7 @@ let ac = !ac
 let set_por b = por:= b
 let disable_por = !disable_por
 let fsymbols = !fsymbols
+let privfsymbols = !privfsymbols
 let channels = !channels
 let private_names = !private_names
 let evchannels = !evchannels

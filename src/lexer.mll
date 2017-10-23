@@ -41,6 +41,7 @@ rule token = parse
     | "#set ac;"  { AC }
     | "#set ac+;" { AC }
     | "symbols" { Symbols }
+    | "privsymbols" { PrivSymbols }
     | "private" { Private }
     | "channels" { Channels }
     | "evchannels" { EvChannels }

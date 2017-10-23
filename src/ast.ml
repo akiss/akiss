@@ -47,6 +47,7 @@ type cmd =
   | SetXOR | SetAC
   | SetPOR
   | DeclSymbols of (string * int) list
+  | DeclPrivSymbols of (string * int) list
   | DeclPrivate of string list
   | DeclChannels of string list
   | DeclEvChannels of string list
