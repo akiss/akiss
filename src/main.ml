@@ -321,12 +321,12 @@ let square ~expected s t =
   let stests, ttests = wait_pending2 stests ttests in
   try
     ignore
-      (List.iter
-         (fun x -> check_one_to_more x ttests Theory.rewrite_rules)
+      (Lwt_list.iter_p
+         (fun x -> wrap1 (fun x -> ()) (check_one_to_more x ttests Theory.rewrite_rules))
          stests);
     ignore
-      (List.iter
-         (fun x -> check_one_to_more x stests Theory.rewrite_rules)
+      (Lwt_list.iter_p
+         (fun x -> wrap1 (fun x -> ()) (check_one_to_more x stests Theory.rewrite_rules))
          ttests);
     Printf.printf "%s and %s are fine-grained trace equivalent\n%!"
       (show_string_list s) (show_string_list t);
@@ -368,8 +368,8 @@ let inclusion_ft ~expected s t =
   let stests, ttests = wait_pending2 stests ttests in
   try
     ignore
-      (List.iter
-         (fun x -> check_one_to_more x ttests Theory.rewrite_rules)
+      (Lwt_list.iter_p
+         (fun x -> wrap1 (fun x -> ()) (check_one_to_more x ttests Theory.rewrite_rules))
          stests);
     Printf.printf "%s is fine-grained trace included in %s\n%!"
       (show_string_list s) (show_string_list t);
