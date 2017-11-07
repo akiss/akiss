@@ -1,22 +1,3 @@
-(****************************************************************************)
-(* Akiss                                                                    *)
-(* Copyright (C) 2011-2014 Baelde, Ciobaca, Delaune, Kremer                 *)
-(*                                                                          *)
-(* This program is free software; you can redistribute it and/or modify     *)
-(* it under the terms of the GNU General Public License as published by     *)
-(* the Free Software Foundation; either version 2 of the License, or        *)
-(* (at your option) any later version.                                      *)
-(*                                                                          *)
-(* This program is distributed in the hope that it will be useful,          *)
-(* but WITHOUT ANY WARRANTY; without even the implied warranty of           *)
-(* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            *)
-(* GNU General Public License for more details.                             *)
-(*                                                                          *)
-(* You should have received a copy of the GNU General Public License along  *)
-(* with this program; if not, write to the Free Software Foundation, Inc.,  *)
-(* 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.              *)
-(****************************************************************************)
-
 (*open Parser*)
 open Types
 open Term
@@ -40,6 +21,7 @@ type process =
   | EmptyP
   | ParallelP of process list
   | SeqP of action * process
+  | ChoiceP of location * ((int * process) list)
   | CallP of location * procId * term array * chanId array
   
 type process_infos = {
@@ -50,19 +32,21 @@ type process_infos = {
 type processes_infos = {
    mutable next_location : int ;
    mutable next_nonce : int;
-   mutable processes : process_infos Dag.t
+   mutable processes : process_infos Dag.t;
+   mutable location_list : location list;
 }
 
 let processes_infos = {
      next_location = 0 ;
      next_nonce = 0 ;
      processes = Dag.empty ;
+     location_list = [];
 }
 
 let show_action a =
   match a with
-  | Input(l) -> "in(" ^ l.chan.name ^ ")"
-  | Output(l,t) -> "out(" ^ l.chan.name ^ "," ^ (show_term t) ^ ")"
+  | Input(l) -> Printf.sprintf "in(%d)" l.p
+  | Output(l,t) -> Printf.sprintf "out(%d: %s)" l.p  (show_term t)
   | Test(s,t) -> "[" ^ (show_term s) ^ "=" ^ (show_term t) ^ "]"
   | TestInequal(s,t) -> "[" ^ (show_term s) ^ "!=" ^ (show_term t) ^ "]"
 
@@ -72,6 +56,7 @@ let rec show_process pr =
   | EmptyP -> ""
   | ParallelP(lp) ->( List.fold_left (fun str p -> str ^ "|" ^ (show_process p)) "(" lp ) ^ ")"
   | SeqP(a,p) -> (show_action a) ^ ";" ^ (show_process p)
+  | ChoiceP(l,lp)->( List.fold_left (fun str (i,p) -> str ^ "+" ^ (show_process p)) "(" lp ) ^ ")"
   | CallP(l,procId,args,chans) -> procId.name
 
 let rec show_process_start i pr = 
@@ -79,6 +64,7 @@ let rec show_process_start i pr =
   match pr with
   | EmptyP -> ""
   | ParallelP(lp) ->( List.fold_left (fun str p -> str ^ "|" ^ (show_process_start i p)) "(" lp ) ^ ")"
+  | ChoiceP(l,lp)->( List.fold_left (fun str (i,p) -> str ^ "+" ^ (show_process_start i p)) "(" lp ) ^ ")"
   | SeqP(a,p) -> (show_action a) ^ ";" ^ (show_process_start (i - 1) p)
   | CallP(l,procId,args,chans) -> procId.name
 
@@ -111,6 +97,18 @@ let convert_chan pr chans chan =
      (*Printf.printf "A({th= %d}) type: %s |- %d\n" th.th (show_typ  pr.types.(th.th))(count_type_nb pr.types.(th.th) pr th.th);*)
       chans.(count_type_nb pr.types.(th.th) pr th.th)
   | _ -> assert(false)
+  
+let new_location (pr : procId) p chan ( io : io ) str =
+  try List.find (fun l -> l.p = p) processes_infos.location_list
+  with
+  | Not_found-> 
+    begin if true then match io with 
+    | Input -> Printf.printf "%d : in(%s) of %s \n" p str pr.name   
+    | Output -> Printf.printf "%d : out(%s) of %s \n" p str pr.name
+    | _ -> () end ;
+    let l = {p=p;chan=chan;io=io;name=str} in
+    processes_infos.location_list <- l :: processes_infos.location_list;
+    l
 
 let rec convert_pr infos process =
   let (pr, location, nonce, locations, nonces, args, chans) = infos in
@@ -121,21 +119,27 @@ let rec convert_pr infos process =
      nonces.(rel_n) <- {name = str; n=nonce+rel_n}; 
      convert_pr infos p
   | InputB (ch,(rel_loc,Some str),p) -> 
-     locations.(rel_loc) <- {p=location+rel_loc;chan=convert_chan pr chans ch;io=Input;name=str};
+     locations.(rel_loc) <- new_location pr (location+rel_loc) (convert_chan pr chans ch) Input str;
      SeqP(Input(locations.(rel_loc)),convert_pr infos p)
   | OutputB(ch,(rel_loc,Some str),term,p) -> 
-     locations.(rel_loc) <- {p=location+rel_loc;chan=convert_chan pr chans ch;io=Output;name=str} ;
+     locations.(rel_loc) <- new_location pr (location+rel_loc) (convert_chan pr chans ch) Output str ;
      SeqP(Output(locations.(rel_loc),convert_term pr locations nonces args term),
        convert_pr infos p)
-  | TestIfB(s,t,p1,p2) -> 
+  | TestIfB((rel_loc,Some str),s,t,p1,p2) -> 
      let s = convert_term pr locations nonces args s in 
      let t = convert_term pr locations nonces args t in 
+     locations.(rel_loc) <- new_location pr (location+rel_loc) {name=str} Choice str;
      if p2 = NilB then SeqP(Test(s,t),convert_pr infos p1) else
      if p1 = NilB then SeqP(TestInequal(s,t),convert_pr infos p2) else
-     ParallelP([SeqP(Test(s,t),convert_pr infos p1);
-       SeqP(TestInequal(s,t),convert_pr infos p2)])
+     begin
+       ChoiceP(locations.(rel_loc),[(1,SeqP(Test(s,t),convert_pr infos p1));
+       (0,SeqP(TestInequal(s,t),convert_pr infos p2))])
+     end
   | ParB(prlst) -> 
      ParallelP(List.map (convert_pr infos)prlst)
+  | ChoiceB((rel_loc,Some s),lb) -> 
+     locations.(rel_loc) <- new_location pr (location+rel_loc) {name=s} Choice s;
+     ChoiceP(locations.(rel_loc),List.mapi (fun i p -> (i, convert_pr infos p)) lb)
   | CallB((rel_loc,Some s),p,arguments) -> 
      let ar = Array.make (1+(count_type_nb TermType p (p.arity - 1))) zero in
      let channels = Array.make (1+(count_type_nb ChanType p (p.arity - 1))) null_chan in
@@ -147,7 +151,7 @@ let rec convert_pr infos process =
        else if p.types.(i) = ChanType 
        then begin channels.(!nbc) <- convert_chan pr chans x; incr nbc end
      ) arguments;
-     locations.(rel_loc) <- {p=location+rel_loc;chan={name=s};io=Call;name=s};
+     locations.(rel_loc) <- new_location pr (location+rel_loc) {name=s} Call s;
      CallP(locations.(rel_loc),p,ar,channels)
   | _ -> assert false
  

@@ -44,12 +44,13 @@ type raw_statement = {
   nbvars : int ;
   dag : dag ;
   inputs :  inputs ;
+  choices : choices ;
   head : predicate ;
   body : body_atom list ;
   recipes : inputs ;
 }
 
-let null_raw_statement = { binder = ref New ; nbvars = 0; dag = empty; inputs= new_inputs; head = Reach;body=[];recipes=new_inputs}
+let null_raw_statement = { binder = ref New ; nbvars = 0; dag = empty; inputs= new_inputs; choices= new_choices; head = Reach;body=[];recipes=new_inputs}
 
 type statement = {
   id : int ;

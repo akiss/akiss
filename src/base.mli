@@ -14,6 +14,7 @@ type raw_statement = {
   nbvars : int;
   dag : Dag.dag;
   inputs : Inputs.inputs;
+  choices : Inputs.choices;
   head : predicate;
   body : body_atom list;
   recipes : Inputs.inputs;

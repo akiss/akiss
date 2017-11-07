@@ -2,29 +2,49 @@ open Types
 open Dag
 open Term 
 
+exception Incompatible_choices
 type inputs = { i : term Dag.t ;
 }
+type choices = { c : int Dag.t}
 
 let show_inputs inputs =
   if Dag.is_empty inputs.i then "" else
   (Dag.fold (fun l ls str -> (if str = "" then "[" else str ^ " | ") ^ Format.sprintf "[%d]_%s: %s" l.p  l.name (show_term ls)) inputs.i "" ) ^ "]"
 
 let new_inputs = { i = Dag.empty } 
+let new_choices = { c = Dag.empty }
 
 (* when considering a new input *)
 let add_input loc var inputs =
   { i = Dag.add loc (Var(var)) inputs.i }(*(Dag.map (fun t -> new_term binder t) inputs)}*)
+let add_choice loc i choices =
+  { c = Dag.add loc i choices.c}
 
 let add_to_frame loc term outputs = 
   { i = Dag.add loc term outputs.i }
 (*let concretize inputs term = 
 *)
 (**
+  Choice stuff
+**)
+let merge_choices c1 c2 =
+  try Some
+  { c =
+  Dag.merge (fun loc i1 i2 -> 
+    match (i1,i2) with
+    | (Some i1, Some i2) -> if i1 = i2 then Some(i1) else raise Incompatible_choices
+    | (Some i , None)  
+    | (None , Some i) -> Some(i) 
+    | (None,None) -> None) c1.c c2.c 
+  }
+  with Incompatible_choices -> None
+
+(**
   Inputs stuff
 **)
 let get l input =
   try Dag.find l input.i with 
-  Not_found -> begin Printf.printf "Error: no %d on %s \n" (l.p)(show_inputs input); raise Not_found end
+  Not_found -> begin Printf.printf "Error: no %d on %s \n%!" (l.p)(show_inputs input); raise Not_found end
 
 let map f input = 
   { i = Dag.map f input.i}
@@ -69,13 +89,13 @@ let merge_recipes sigma inputs1 inputs2 =
   { i =
   Dag.merge (fun loc i1 i2 -> 
     match (i1,i2) with
-    | (Some i1, Some i2) -> Some(Rewriting.apply_subst_term i1 sigma)
-    (*Printf.printf "eeer" ;
-      if Term.vars_of_term i1 = [] 
+    | (Some i1, Some i2) -> (*Some(Rewriting.apply_subst_term i1 sigma)*)
+    (*Printf.printf "eeer" ;*)
+      if (i1 = i2) || (Term.vars_of_term i1 = [] )
       then Some(Rewriting.apply_subst_term i1 sigma)
       else if Term.vars_of_term i2 = [] 
       then Some(Rewriting.apply_subst_term i2 sigma)
-      else failwith "Not implemented yet"*)
+      else failwith (Printf.sprintf "Merge recipe not implemented yet: %s and %s\n" (show_term i1)(show_term i2))
     | (Some i , None)  
     | (None , Some i) -> Some(Rewriting.apply_subst_term i sigma) 
     | (None,None) -> None) inputs1.i inputs2.i 

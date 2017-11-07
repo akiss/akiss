@@ -2,48 +2,43 @@ val merge_tests :
   Base.raw_statement -> Base.raw_statement -> Base.raw_statement list
 val apply_subst_inputs : Types.term -> Inputs.inputs -> Types.term
 val run_until_io :
-  Process.process -> 'a -> Inputs.inputs -> ('a * Process.process) list
+  Process.process ->
+  'a ->
+  Inputs.inputs ->
+  (Inputs.choices * 'a * Process.process) list *
+  (Inputs.choices * 'a * Process.process) list
 val init_run :
   Bijection.which_process ->
-  Base.raw_statement -> Process.process -> Bijection.partial_run
+  Base.raw_statement ->
+  Process.process -> Bijection.test -> Bijection.partial_run
 val next_partial_run :
   Bijection.partial_run ->
+  Dag.LocationSet.elt ->
+  Process.process ->
+  Process.process ->
   Dag.Dag.key ->
-  Process.process ->
-  Process.process ->
-  Dag.Dag.key -> Inputs.inputs -> Dag.LocationSet.t -> Bijection.partial_run
+  Inputs.inputs ->
+  Dag.LocationSet.t -> Inputs.choices -> Bijection.partial_run
 val apply_frame : Types.term -> Bijection.partial_run -> Types.term
 val try_run :
   Bijection.partial_run ->
-  Dag.Dag.key -> Dag.LocationSet.t * Process.process -> unit
-val next_run : Bijection.partial_run -> Dag.LocationSet.elt
+  Dag.Dag.key ->
+  Inputs.choices * Dag.LocationSet.t * Process.process ->
+  Bijection.partial_run list
+val next_run :
+  Bijection.partial_run -> Bijection.partial_run list * Dag.LocationSet.elt
+val same_term_same_recipe : Base.raw_statement -> Base.raw_statement
 val statement_to_tests :
   Bijection.which_process ->
-  Base.statement ->
-  Process.process ->
-  Bijection.solutions Bijection.Tests.t ->
-  Bijection.solutions Bijection.Tests.t
+  Bijection.origin -> Base.raw_statement -> Process.process -> unit
 val statements_to_tests :
-  Bijection.which_process ->
-  Base.statement ->
-  Process.process ->
-  Bijection.solutions Bijection.Tests.t ->
-  Bijection.solutions Bijection.Tests.t
+  Bijection.which_process -> Base.statement -> Process.process -> unit
 val base_to_tests :
-  Bijection.which_process ->
-  Base.base -> Process.process -> Bijection.solutions Bijection.Tests.t
+  Bijection.which_process -> Base.base -> Process.process -> unit
 val check_recipes : Bijection.partial_run -> Types.term * Types.term -> bool
 val next_solution : Bijection.solutions -> unit
-val find_possible_run :
-  Bijection.solutions -> Bijection.partial_run list option
-type equivalence = {
-  processP : Process.process;
-  processQ : Process.process;
-  tracesP : Base.base;
-  tracesQ : Base.base;
-  mutable actions_P_to_Q : Bijection.correspondance;
-  mutable actions_Q_to_P : Bijection.correspondance;
-  testsP : Bijection.tests;
-  testsQ : Bijection.tests;
-}
+val find_all_run : Bijection.solutions -> unit
+exception Attack
+val add_merged_tests : Bijection.partial_run * Bijection.RunSet.t -> unit
+val find_possible_run : Bijection.solutions -> Bijection.partial_run option
 val equivalence : Types.procId -> Types.procId -> unit

@@ -382,6 +382,17 @@ let rec parse_plain_process procId env (nbloc,nbnonces) = function
         | pr1, ParB l_2 -> ParB (pr1::l_2)
         | pr1, pr2 -> ParB ([pr1;pr2])
       )
+  | Choice(p1,Choice(p2,p3)) -> parse_plain_process procId env (nbloc,nbnonces) (Choice(Choice(p1,p2),p3))
+  | Choice(p1,p2) ->
+      let (nbl,nbn,pr1)=parse_plain_process procId env (nbloc,nbnonces) p1 in
+      let (nbl,nbn,pr2)=parse_plain_process procId env (nbl,nbn) p2 in
+      begin
+       match pr1, pr2 with
+        | ChoiceB (l_1,lp1), ChoiceB (l_2,lp2) -> assert false
+        | ChoiceB (l_1,lp1), proc2 -> (nbl,nbn,ChoiceB (l_1, proc2 :: lp1))
+        | pr1, ChoiceB (l_2,lp2) -> assert false
+        | pr1, pr2 -> let l=(nbl,Some ("?")) in (nbl+1,nbn,ChoiceB(l,[pr1;pr2]))
+      end
 (*  | Bang(n,proc,line) ->
       if n < 1
       then error_message line "The integer should be at least 1.";
@@ -419,16 +430,17 @@ let rec parse_plain_process procId env (nbloc,nbnonces) = function
       let pat',env' = parse_pattern procId env env t' pat in
       let (nbl,nbn,proc_then') = parse_plain_process procId env' (nbloc,nbnonces) proc_then in
       if pat' = t' then (nbl,nbn,proc_then')
-      else 
-      let (nbl,nbn,proc_else') = parse_plain_process procId env (nbl,nbn) proc_else in
-
-      (nbl,nbn,TestIfB(pat',t',proc_then',proc_else'))
+      else
+        let l=(nbl,Some ("?")) in 
+        let (nbl,nbn,proc_else') = parse_plain_process procId env (nbl+1,nbn) proc_else in
+        (nbl,nbn,TestIfB(l,pat',t',proc_then',proc_else'))
   | IfThenElse(t1,t2,p1,p2) ->
       let t1' = parse_temp_term procId env t1 in
       let t2' = parse_temp_term procId env t2 in
-      let (nbl,nbn,pr1)=parse_plain_process procId env (nbloc,nbnonces) p1 in
+      let l=(nbloc,Some ("?")) in 
+      let (nbl,nbn,pr1)=parse_plain_process procId env (nbloc +1,nbnonces) p1 in
       let (nbl,nbn,pr2)=parse_plain_process procId env (nbl,nbn) p2 in
-      (nbl,nbn, TestIfB (t1',t2',pr1,pr2))
+      (nbl,nbn, TestIfB (l, t1',t2',pr1,pr2))
 
 let parse_extended_process procId env = function
   | EPlain proc -> 

@@ -39,8 +39,9 @@ type bounded_process =
   | NameB of relative_nonce * bounded_process
   | InputB of relative_temp_term * relative_location * bounded_process
   | OutputB of relative_temp_term * relative_location * relative_temp_term * bounded_process
-  | TestIfB of relative_temp_term * relative_temp_term * bounded_process * bounded_process
+  | TestIfB of relative_location * relative_temp_term * relative_temp_term * bounded_process * bounded_process
   | ParB of bounded_process list
+  | ChoiceB of relative_location * (bounded_process list)
   | CallB of relative_location * procId * relative_temp_term list 
 (*  | LetB of relative_pattern * relative_temp_term * bounded_process * bounded_process*)
 and procId = { 
@@ -62,8 +63,9 @@ let rec show_bounded_process p =
   | InputB(ch,(i,_),p) -> "in(" ^ (show_relative_term ch) ^ "," ^ (string_of_int i) ^ ");" ^ show_bounded_process p
   | OutputB(ch,(i,_),t,p) -> 
       "out(" ^ (show_relative_term ch) ^ (string_of_int i)^ "," ^ (show_relative_term t) ^ ");" ^ show_bounded_process p
-  | TestIfB(s,t,p1,p2) -> Printf.sprintf "if %s = %s then %s else %s" (show_relative_term s)(show_relative_term t)(show_bounded_process p1)(show_bounded_process p2)
+  | TestIfB(l,s,t,p1,p2) -> Printf.sprintf "if %s = %s then %s else %s" (show_relative_term s)(show_relative_term t)(show_bounded_process p1)(show_bounded_process p2)
   | ParB(lst) -> (List.fold_left (fun s t -> s ^ " || " ^ show_bounded_process t) "(" lst) ^ ")"
+  | ChoiceB(l,lst) -> (List.fold_left (fun s t -> s ^ " ++ " ^ show_bounded_process t) "(" lst) ^ ")"
   | CallB(l,p,args) -> (List.fold_left (fun s t -> s ^ "," ^ show_relative_term t) (p.name ^ "(") args) ^ ")"
 and show_relative_term t = 
   match t with 
@@ -84,8 +86,8 @@ type statement_role =
   | Rule
 
 let show_binder = function 
-  | Master -> "Y"
-  | Slave -> "X"
+  | Master -> "M"
+  | Slave -> "s"
   | New -> "x"
   | Rule -> "r"
 
@@ -105,6 +107,7 @@ type io =
    | Input
    | Output
    | Phase
+   | Choice
    | Call
 
 type location = {
@@ -142,9 +145,9 @@ let rec show_term t =
  | Fun({id=Projection(m,n)},args) -> "Proj_"^(string_of_int m)^"(" ^ (show_term_list args) ^ ")"
  | Fun({id=Plus},[l;r]) ->  (show_term l) ^ "+" ^ (show_term r) 
  | Fun({id=Zero},[]) ->   "0" 
- | Fun({id=Nonce(n)},[]) -> Format.sprintf "n[%d]_%s" n.n n.name  
- | Fun({id=Input(l)},[]) -> Format.sprintf "i[%d]_%s" l.p (l.chan.name) 
- | Fun({id=Frame(l)},[]) -> Format.sprintf "w[%d]_%s" l.p (l.chan.name)
+ | Fun({id=Nonce(n)},[]) -> Format.sprintf "n[%d]" n.n  
+ | Fun({id=Input(l)},[]) -> Format.sprintf "i[%d]" l.p  
+ | Fun({id=Frame(l)},[]) -> Format.sprintf "w[%d]" l.p
  | Var(id) -> (show_binder !(id.status)) ^ (string_of_int id.n)
  | _ -> invalid_arg ("Todo")
 and show_term_list = function

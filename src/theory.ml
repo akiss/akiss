@@ -68,8 +68,8 @@ let command_line_options_list = [
   (*  "Enable progression output"); *)
   (* ("--else", Arg.Set(about_else), *)
   (*  "Enable debug output about else"); *)
-  (* ("--canonization", Arg.Set(about_canonization), *)
-  (*  "Enable debug output about canonization rules"); *)
+   ("-canonization", Arg.Set(about_canonization),
+    "Enable debug output about canonization rules");
    ("-seed", Arg.Set(about_seed), 
     "Enable debug output about seed"); 
    ("-sat", Arg.Set(about_saturation), 

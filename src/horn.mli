@@ -49,10 +49,12 @@ val update :
 exception Impossible
 val resolution :
   Types.term option array * Types.term option array ->
+  Inputs.choices ->
   Dag.dag ->
   Base.raw_statement -> Base.raw_statement -> Base.raw_statement list
 val equation :
   Types.term option array * Types.term option array ->
+  Inputs.choices ->
   Dag.dag ->
   Base.raw_statement -> Base.raw_statement -> Base.raw_statement list
 val concretize : Inputs.inputs -> Types.term -> Types.term

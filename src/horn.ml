@@ -153,13 +153,14 @@ match pred with
   | Identical(r,r') -> 
      Identical(Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)
   | Reach -> Reach
-  | Tests(_) -> assert false
+  | Tests(lst) -> Tests(List.map (fun (r,r') -> (Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)) lst)
 
 let apply_subst_statement st (sigma : substitution)=
   {
       binder = sigma.binder;
       nbvars = sigma.nbvars;
       dag = st.dag;
+      choices = st.choices;
       inputs = Inputs.map (fun t -> Rewriting.apply_subst_term t sigma) st.inputs;
       recipes = Inputs.map (fun t -> Rewriting.apply_subst_term t sigma) st.recipes;
       head = apply_subst_pred st.head sigma ;
@@ -389,18 +390,19 @@ let simplify_statement st =
            (fun a' ->
               let recipe_var' = unbox_var a'.recipe in
               (( recipe_var.n < recipe_var'.n && l = a'.loc)
-                || Dag.should_be_before (st.dag) l (a'.loc)) 
+                || Dag.should_be_before (st.dag) (a'.loc) l)
                 && Rewriting.equals_ac t (a'.term) ) st.body in
            let x = unbox_var(is_better.recipe) in
-               (*Printf.printf " %d >> %s \n" x.n (show_term a.recipe);*)
-           sigma_repl.(x.n) <- Some a.recipe ;
+           if !about_canonization then
+               Printf.printf "Atom %s removed due to %s\n" (show_body_atom a) (show_body_atom is_better);
+           sigma_repl.(recipe_var.n) <- Some is_better.recipe ;
            true       
          with Not_found -> false
          )
        st.body
   in
-  if !about_canonization then
-    List.iter (fun a -> Format.printf "Removed %s\n" (show_body_atom a)) useless ;
+  (*if !about_canonization then
+    List.iter (fun a -> Format.printf "Simplify statement removes %s\n" (show_body_atom a)) useless ;*)
   if useless = [] then st 
   else 
     let sigma = Rewriting.pack sigma in
@@ -458,7 +460,7 @@ let inst_w_t my_st kb_st =
             match Inputs.csm kb_st.inputs my_st.inputs with
             | sigma :: q -> begin
               try
-                let (hard,sigma) = Rewriting.match_ac [] [(myt, tkb)] sigma in
+                let (hard,sigma) = Rewriting.match_ac [] [(tkb, myt)] sigma in
               (* debugOutput "Result %s\n%!" (show_subst sigma); *)
                 if hard <> [] then raise Bad_case; (*warning: not possible to find recipes *)
                 sigma
@@ -486,8 +488,9 @@ let rec print_trace chan = function
   * will be added to indicate that the two recipes have the same result,
   * instead of the new useless deduction statement.
   * See Definition 14 and Lemma 2 in the paper. *)
-let consequence st kb rules =
+let consequence st kb rules = 
   (*Printf.printf "Conseq of %s \non %s" (show_raw_statement st) (show_kb kb);*)
+  (*st.binder := Rule;*)
   let apply_subst_list_atom atom sigma  = 
    Knows(apply_subst atom.recipe sigma, apply_subst atom.term sigma) in
   assert (is_solved st) ;
@@ -546,8 +549,9 @@ let consequence st kb rules =
   in
   let trace,r = aux st kb in
     if !about_canonization then
-      Format.printf "Conseq derivation for #%s: %a\n" (show_raw_statement st) print_trace trace ;
+      Format.printf "Conseq derivation for #%s:\nrecipe %s\ntrace %a\n" (show_raw_statement st) (show_term r) print_trace trace ;
     r
+
 
 (** Detect reflexive identities.
   * Note: even with the simplification of non-solved clauses, there are
@@ -777,7 +781,7 @@ let resolution_plus master =
              result)
         sigmas
 *)
-let resolution sigma dag master slave =
+let resolution sigma choices dag master slave =
    try begin
    let atom = List.find (fun x -> not (is_var ( x.term))) master.body in
    let dag =
@@ -815,8 +819,9 @@ let resolution sigma dag master slave =
            binder = sigma.binder ;
            nbvars = sigma.nbvars ;
            dag = dag ;
+           choices = choices ;
            inputs = Inputs.merge sigma master.inputs slave.inputs;
-           recipes = Inputs.merge_recipes sigma master.recipes slave.recipes;
+           recipes = Inputs.merge(*_recipes*) sigma master.recipes slave.recipes;
            head = (apply_subst_pred master.head sigma) ;
            body = body }
            in 
@@ -832,7 +837,7 @@ let resolution sigma dag master slave =
   * unified, generate a clause concluding that the recipes are "identical".
   * This corresponds to the "Equation" rule in the paper.
   * It returns [] if it fails to produce any new clause. *)
-let equation sigma dag fa fb =
+let equation sigma choices dag fa fb =
 
  (* if
     is_deduction_st fa && is_deduction_st fb &&
@@ -850,6 +855,7 @@ let equation sigma dag fa fb =
     | (Knows( r, t), Knows( rp, tp)) -> begin
       if !debug_saturation then Format.printf "Equation:\n %s\n %s\n%!"
          (show_raw_statement fa) (show_raw_statement fb) ;
+      if (Rewriting.equals_ac r rp) then [] else
       let sigmas = Rewriting.csu [(t,tp)] sigma in
             (*let sigmas =
               (* Performing equation on twice the same clause is useless
@@ -910,8 +916,9 @@ let equation sigma dag fa fb =
            binder = sigma.binder ;
            nbvars = sigma.nbvars ;
            dag = dag ;
+           choices = choices ;
            inputs = Inputs.merge sigma fa.inputs fb.inputs;
-           recipes = Inputs.merge_recipes sigma fa.recipes fb.recipes;
+           recipes = Inputs.merge(*_recipes*) sigma fa.recipes fb.recipes;
            head = Identical(Rewriting.apply_subst_term r sigma,Rewriting.apply_subst_term rp sigma);
            body = body }
            in
@@ -945,6 +952,11 @@ let rec trace_statements kb solved_parent unsolved_parent process st =
     | EmptyP -> ()
     | ParallelP(plist) -> 
       List.iter (fun p -> trace_statements kb solved_parent unsolved_parent  p st) plist
+    | ChoiceP(l,plist) -> 
+      List.iter (fun (i,p) -> 
+        let choices = Inputs.add_choice l i st.choices in
+        let st = {st with choices = choices} in
+        trace_statements kb solved_parent unsolved_parent p st) plist
     | SeqP(Output(loc, t), pr) ->
       let next_dag = Dag.put_at_end st.dag loc in
       let identity_sigma = Rewriting.identity_subst st.nbvars in
@@ -957,6 +969,7 @@ let rec trace_statements kb solved_parent unsolved_parent process st =
         binder = binder; 
         nbvars = st.nbvars; 
         dag = next_dag;
+        choices = st.choices;
         inputs = st.inputs;
         recipes = st.recipes;
         head = next_head;
@@ -990,6 +1003,7 @@ let rec trace_statements kb solved_parent unsolved_parent process st =
         binder = binder; 
         nbvars = st.nbvars + 2 ; 
         dag = next_dag;
+        choices = st.choices ;
         inputs = next_inputs;
         recipes = next_recipes;
         head = Reach ;
@@ -1060,9 +1074,10 @@ let theory_statements kb fname arity =
    let term_head = Fun({id=fname;has_variables=true},tv) in
    let statement =
      { 
-       binder=binder; 
-       nbvars=2*arity; 
-       dag= Dag.empty; 
+       binder = binder; 
+       nbvars = 2*arity; 
+       dag = Dag.empty; 
+       choices = Inputs.new_choices; 
        inputs = Inputs.new_inputs; 
        recipes = Inputs.new_inputs; 
        head=Knows(Fun({id=fname;has_variables=true},rv),term_head);
@@ -1082,6 +1097,9 @@ let theory_statements kb fname arity =
 let extra_resolution kb solved unsolved =
   if !debug_saturation then Printf.printf "Try resolution between #%d and #%d\n" solved.id unsolved.id;
   (* Printf.printf "%s \n %s\n" (show_raw_statement solved.st) (show_raw_statement unsolved.st); *)
+  match Inputs.merge_choices unsolved.st.choices solved.st.choices with
+    None -> false
+  | Some merged_choice ->
   let merged_dag = Dag.merge unsolved.st.dag solved.st.dag in
   if Dag.is_cyclic merged_dag then false else
   let sigma = ((Array.make unsolved.st.nbvars None),(Array.make solved.st.nbvars None)) in
@@ -1092,12 +1110,15 @@ let extra_resolution kb solved unsolved =
   else begin 
     List.iter (fun sigma -> List.iter 
       (fun st -> add_statement kb solved unsolved unsolved.process st )
-       (resolution sigma merged_dag unsolved.st solved.st)) sigmas;
+       (resolution sigma merged_choice merged_dag unsolved.st solved.st)) sigmas;
     true end
 
 let extra_equation kb solved1 solved2 =
   if !debug_saturation then Printf.printf "Try equation between #%d and #%d\n" solved1.id solved2.id;
   (*Printf.printf "%s \n %s\n" (show_raw_statement solved.st) (show_raw_statement unsolved.st);*)
+  match Inputs.merge_choices solved1.st.choices solved2.st.choices with
+    None -> false
+  | Some merged_choice ->
   let merged_dag = Dag.merge solved1.st.dag solved2.st.dag in
   if Dag.is_cyclic merged_dag then false else
   let sigma = ((Array.make solved1.st.nbvars None),(Array.make solved2.st.nbvars None)) in
@@ -1108,7 +1129,7 @@ let extra_equation kb solved1 solved2 =
   else begin 
     List.iter (fun sigma -> List.iter 
       (fun st -> add_statement kb solved1 kb.not_solved None st )
-       (equation sigma merged_dag solved1.st solved2.st)) sigmas;
+       (equation sigma merged_choice merged_dag solved1.st solved2.st)) sigmas;
     true end
 
 

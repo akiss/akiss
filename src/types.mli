@@ -1,3 +1,4 @@
+val show_array : string -> ('a -> string) -> 'a array -> string
 type chanId = { name : string; }
 val null_chan : chanId
 type funId = { name : string; arity : int; }
@@ -20,9 +21,10 @@ type bounded_process =
   | InputB of relative_temp_term * relative_location * bounded_process
   | OutputB of relative_temp_term * relative_location * relative_temp_term *
       bounded_process
-  | TestIfB of relative_temp_term * relative_temp_term * bounded_process *
-      bounded_process
+  | TestIfB of relative_location * relative_temp_term * relative_temp_term *
+      bounded_process * bounded_process
   | ParB of bounded_process list
+  | ChoiceB of relative_location * bounded_process list
   | CallB of relative_location * procId * relative_temp_term list
 and procId = {
   name : string;
@@ -40,7 +42,7 @@ val show_binder : statement_role -> string
 type varId = { n : int; status : statement_role ref; }
 type nonceId = { name : string; n : int; }
 val null_nonce : nonceId
-type io = Input | Output | Phase | Call
+type io = Input | Output | Phase | Choice | Call
 type location = { p : int; chan : chanId; io : io; name : string; }
 val null_location : location
 type funName =

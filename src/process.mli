@@ -7,6 +7,7 @@ type process =
     EmptyP
   | ParallelP of process list
   | SeqP of action * process
+  | ChoiceP of Types.location * (int * process) list
   | CallP of Types.location * Types.procId * Types.term array *
       Types.chanId array
 type process_infos = { first_location : int; first_nonce : int; }
@@ -14,6 +15,7 @@ type processes_infos = {
   mutable next_location : int;
   mutable next_nonce : int;
   mutable processes : process_infos Dag.Dag.t;
+  mutable location_list : Types.location list;
 }
 val processes_infos : processes_infos
 val show_action : action -> string
@@ -28,6 +30,8 @@ val convert_term :
 val convert_chan :
   Types.procId ->
   Types.chanId array -> Types.relative_temp_term -> Types.chanId
+val new_location :
+  Types.procId -> int -> Types.chanId -> Types.io -> string -> Types.location
 val convert_pr :
   Types.procId * int * int * Types.location array * Types.nonceId array *
   Types.term array * Types.chanId array -> Types.bounded_process -> process
