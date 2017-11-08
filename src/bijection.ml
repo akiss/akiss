@@ -4,6 +4,9 @@ open Base
 
 type which_process = P | Q
 
+let show_which_process p =
+match p with P -> "P" | Q -> "Q"
+
 type correspondance = { a : location Dag.t}
 
 let show_correspondance c =
@@ -13,6 +16,9 @@ let show_correspondance c =
 
 
 module IntegerSet = Set.Make(struct type t = int let compare = compare end)  
+
+let show_int_set s =
+  (IntegerSet.fold (fun e str -> (if str = "" then "((" else (str^",")) ^(string_of_int e)) s "" ) ^"))"
 
 type partial_run = {
   (*process :  which_process ; *)
@@ -37,8 +43,9 @@ and test = {
   id : int;
   from : IntegerSet.t;
   nb_actions : int; (* used to order the tests *)
-  new_actions : int; (* compared to the base actions, used to order the tests *)
+  mutable new_actions : int; (* compared to the base actions, used to order the tests *)
 }
+
 
 let show_run pr =
   Format.sprintf "{ \n frame= %s\n corresp= %s\n dag = %s\n"
@@ -54,15 +61,18 @@ let show_partial_run pr =
   pr.qthreads) ^ " fthreads=\n") pr.failed_qthreads) ^ "}\n"
 
 
+  
 let rec show_origin o =
   match o with 
   |Initial(st) -> Format.sprintf "%d" (st.id)
-  |Composed(t1,t2) -> Format.sprintf "<%s : %s>" (show_origin t1.origin) (show_origin t2.origin) 
+  |Composed(t1,t2) -> Format.sprintf "[ %d:%s | %d:%s]"  t1.id (show_origin t1.origin)  t2.id (show_origin t2.origin) 
   
 and show_test t =
-  Format.sprintf "Test[%d]: %s ((%d,%d))\n%s\n" t.id(show_origin t.origin) t.new_actions t.nb_actions(show_raw_statement t.statement)
+  Format.sprintf "Test[%d]: %s %s {%d,%d} %s\n%s\n" t.id (show_origin t.origin) (show_int_set t.from) t.new_actions t.nb_actions (show_which_process t.process_name) (show_raw_statement t.statement)
 
-  
+
+
+ 
 module PartialRun =
        struct
          type t = partial_run
@@ -73,14 +83,30 @@ module PartialRun =
 
 module RunSet = Set.Make(PartialRun)
 
+type possible_runs = {
+  execution : partial_run;
+  conflicts : RunSet.t ;
+  score : int;
+}
+
+module PossibleRuns =
+  struct
+    type t = possible_runs
+    let compare x y =
+      let r = compare x.score y.score in
+      if r = 0 then compare x.execution y.execution else r
+  end
+  
+module Solutions = Set.Make(PossibleRuns) 
+
 (* records which are the partial executions of a test *) 
 type solutions = {
   mutable partial_runs : partial_run list;
   mutable partial_runs_todo : partial_run list;
   mutable partial_runs_priority_todo : partial_run list; (* Partial execution compatible with the bijection *)
-  mutable possible_runs : (partial_run * (RunSet.t)) list; (* Run which are not compatible for the current bijection, to test if no other option *)
+  mutable possible_runs_todo : partial_run list; (* Queue here before processing *)
+  mutable possible_runs : Solutions.t; (* Run which are not compatible for the current bijection, to test if no other option *)
   mutable possible_restricted_runs : partial_run list; 
-  mutable possible_runs_todo : partial_run list;
   mutable failed_partial_run : partial_run list;
   mutable failed_run : partial_run list; (* execution but on of the identity fails *)
   mutable partitions : partial_run list; (* Current solution under testing *)
@@ -110,11 +136,6 @@ module Test =
 module Tests = Map.Make(Test)
 
 
-(*type tests = {
-  tests : solutions Tests.t ;
-}
-*)
-
 
 
 type record = {
@@ -135,7 +156,7 @@ type bijection = {
   mutable next_id : int;
   mutable tests : solutions Tests.t; (* The remaining tests to test on the other process *)
   mutable locs : LocationSet.t; (* the locations already in the tests of the base *)
-  htable : (IntegerSet.t,unit) Hashtbl.t;
+  htable : (int list , origin) Hashtbl.t;
 }
 
 let base = {
@@ -166,26 +187,30 @@ let other name =
   match name with 
   | P -> Q
   | Q -> P
+  
+let reorder_int_set s =
+  IntegerSet.fold (fun e set -> IntegerSet.add e s) s IntegerSet.empty
 
 let push (statement : raw_statement) process_name origin init =
+  let int_set = match origin with 
+      Initial _ -> IntegerSet.singleton base.next_id 
+      | Composed(t1,t2) ->  (IntegerSet.union t1.from t2.from) in
+  let int_lst = IntegerSet.elements int_set in
+  statement.binder := New;
+  if Hashtbl.mem base.htable int_lst then ()  else begin
+  Hashtbl.add base.htable int_lst origin;
+  
   base.next_id <- base.next_id + 1 ;
+
   let nb = Dag.cardinal statement.dag.rel in
-  let new_actions =
-    match origin with 
-    | Composed _ -> 0
-    | Initial st -> Dag.fold (fun l _ nb -> if LocationSet.mem l base.locs then nb else begin base.locs<-LocationSet.add l base.locs;  1 end ) st.st.dag.rel 0
-  in
   let test = {
     nb_actions = nb;
-    new_actions = new_actions;
+    new_actions = 0;
     process_name = process_name;
     statement = statement;
     origin = origin;
     id = base.next_id;
-    from = 
-      match origin with 
-      Initial _ -> IntegerSet.singleton base.next_id 
-      | Composed(t1,t2) -> IntegerSet.union t1.from t2.from ;
+    from = int_set;
   } in
   let solution =
   { 
@@ -193,15 +218,26 @@ let push (statement : raw_statement) process_name origin init =
        partial_runs_todo = [] ;
        partial_runs_priority_todo = [init test] ;
        possible_restricted_runs = [];
-       possible_runs = [];
+       possible_runs = Solutions.empty;
        possible_runs_todo = [];
        failed_partial_run = [];
        failed_run = [];
        partitions = [] ;
      } in
   Printf.printf "Adding new test: %s\n" (show_test test);
-  if base.next_id mod 2000 = 0 then show_base ();
+  (*if base.next_id mod 10000 = 0 then (*Hashtbl.iter (fun k v -> Printf.printf "%s" (show_raw_statement k)) base.htable;*)show_base ();*)
   base.tests <- Tests.add test solution base.tests 
+  end
+  
+let reorder_tests () = 
+  base.tests <- Tests.fold (fun test sol map -> 
+    test.new_actions <-  
+      Dag.fold (fun l _ nb -> 
+        if LocationSet.mem l base.locs 
+        then nb 
+        else begin base.locs<-LocationSet.add l base.locs; nb + 1 end)
+      test.statement.dag.rel 0;
+    Tests.add test sol map) base.tests Tests.empty
   
 let pop () = 
   let (test, sol) = Tests.min_binding base.tests in
@@ -242,23 +278,25 @@ let compatible partial_run =
     then (partial_run.corresp,partial_run.corresp_back)
     else (partial_run.corresp_back,partial_run.corresp)
   in
-  RunSet.union
-  (Dag.fold (fun locP locQ set -> 
+  let conflicts = ref RunSet.empty in
+  let score = ref 0 in
+  (Dag.iter (fun locP locQ -> 
     try
       let p = (Dag.find locP base.indexP) in 
-      let aux_set = Dag.fold (fun lq runset aux_set ->
-        if lq = locQ 
-        then aux_set
-        else RunSet.union runset aux_set) p RunSet.empty in
-      RunSet.union aux_set set
-    with Not_found -> set) corresp.a RunSet.empty)
-   (Dag.fold (fun locP locQ set -> 
+      Dag.iter (fun lq runset ->
+        if lq <> locQ 
+        then begin conflicts := RunSet.union runset !conflicts; score := !score + (RunSet.cardinal runset) end) p  
+    with Not_found -> ()) corresp.a);
+   (Dag.iter (fun locP locQ-> 
     try
       let q = (Dag.find locQ base.indexQ) in 
-      let aux_set = Dag.fold (fun lp runset aux_set ->
-        if lp = locP 
-        then aux_set
-        else RunSet.union runset aux_set) q RunSet.empty in
-      RunSet.union aux_set set
-    with Not_found -> set) corresp.a RunSet.empty)
+      Dag.iter (fun lp runset ->
+        if lp <> locP 
+        then begin conflicts := RunSet.union runset !conflicts; score := !score + (RunSet.cardinal runset) end) q 
+    with Not_found -> ()) corresp.a);
+    {
+      execution = partial_run;
+      conflicts = !conflicts;
+      score = !score;
+    }
          

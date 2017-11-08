@@ -122,7 +122,7 @@ let get_recipes = function
   | Knows( r, _) -> [r]
   | Identical( r1, r2) -> [r1;r2]
   | Reach -> []
-  | Tests(_) -> assert false
+  | Tests(l) -> List.fold_left (fun lst (r,r') -> r :: r' :: lst) [] l
 
 let get_term atom = atom.term
 
@@ -392,7 +392,6 @@ let simplify_statement st =
               (( recipe_var.n < recipe_var'.n && l = a'.loc)
                 || Dag.should_be_before (st.dag) (a'.loc) l)
                 && Rewriting.equals_ac t (a'.term) ) st.body in
-           let x = unbox_var(is_better.recipe) in
            if !about_canonization then
                Printf.printf "Atom %s removed due to %s\n" (show_body_atom a) (show_body_atom is_better);
            sigma_repl.(recipe_var.n) <- Some is_better.recipe ;
@@ -608,7 +607,9 @@ let normalize_new_statement f = (* This opti slow down the algo a bit much*)
   | Identical(r,r') -> Some {f with 
       head = Identical(Rewriting.normalize r (!Parser_functions.rewrite_rules),
             Rewriting.normalize r' (!Parser_functions.rewrite_rules))}
-  | Tests(ts) -> Some f
+  | Tests(ts) -> Some {f with 
+      head = Tests(List.map (fun (r,r') -> Rewriting.normalize r (!Parser_functions.rewrite_rules),
+            Rewriting.normalize r' (!Parser_functions.rewrite_rules))ts) } (* this case is not used *)
 
 
 

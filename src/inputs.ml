@@ -89,13 +89,14 @@ let merge_recipes sigma inputs1 inputs2 =
   { i =
   Dag.merge (fun loc i1 i2 -> 
     match (i1,i2) with
-    | (Some i1, Some i2) -> (*Some(Rewriting.apply_subst_term i1 sigma)*)
-    (*Printf.printf "eeer" ;*)
-      if (i1 = i2) || (Term.vars_of_term i1 = [] )
+    | (Some i1, Some i2) -> 
+      if Rewriting.csm i1 i2 <> [] then Some(Rewriting.apply_subst_term i2 sigma) else 
+      if Rewriting.csm i2 i1 <> [] then Some(Rewriting.apply_subst_term i1 sigma) else 
+      (*if Term.vars_of_term i1 = [] 
       then Some(Rewriting.apply_subst_term i1 sigma)
       else if Term.vars_of_term i2 = [] 
-      then Some(Rewriting.apply_subst_term i2 sigma)
-      else failwith (Printf.sprintf "Merge recipe not implemented yet: %s and %s\n" (show_term i1)(show_term i2))
+      then Some(Rewriting.apply_subst_term i2 sigma) else*)
+      failwith (Printf.sprintf "Merge recipe not implemented yet: %s and %s\n" (show_term i1)(show_term i2))
     | (Some i , None)  
     | (None , Some i) -> Some(Rewriting.apply_subst_term i sigma) 
     | (None,None) -> None) inputs1.i inputs2.i 
@@ -106,3 +107,24 @@ let apply_subst_recipes sigma inputs =
  
 let are_normal inputs =
   Dag.for_all (fun l t -> let t' = Rewriting.normalize t (!Parser_functions.rewrite_rules) in Rewriting.equals_ac t t') inputs.i
+
+  (* To avoid merging too much tests *)
+let contains input1 input2 =
+ let r = Dag.merge (fun loc i1 i2 -> 
+    match (i1,i2) with
+    | (Some i1, Some i2) -> if i1 = i2 then None else Some false
+    | (Some i , None)  -> None
+    | (None , Some i) -> Some false
+    | (None,None) -> None) input1.i input2.i in
+  Dag.is_empty r
+
+let debug input1 input2 =
+ let r = Dag.merge (fun loc i1 i2 -> 
+    match (i1,i2) with
+    | (Some i1, Some i2) -> if i1 = i2 then None else Some loc
+    | (Some i , None)  -> Some loc
+    | (None , Some i) -> Some loc
+    | (None,None) -> None) input1.i input2.i in
+    try
+  let (a,b) = Dag.choose r in a.p  
+  with Not_found -> 0

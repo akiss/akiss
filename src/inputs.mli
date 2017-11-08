@@ -19,3 +19,5 @@ val merge : Types.substitution -> inputs -> inputs -> inputs
 val merge_recipes : Types.substitution -> inputs -> inputs -> inputs
 val apply_subst_recipes : Types.substitution -> inputs -> inputs
 val are_normal : inputs -> bool
+val contains : inputs -> inputs -> bool
+val debug : inputs -> inputs -> int

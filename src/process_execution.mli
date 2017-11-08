@@ -8,7 +8,7 @@ val run_until_io :
   (Inputs.choices * 'a * Process.process) list *
   (Inputs.choices * 'a * Process.process) list
 val init_run :
-  Bijection.which_process ->
+  'a ->
   Base.raw_statement ->
   Process.process -> Bijection.test -> Bijection.partial_run
 val next_partial_run :
@@ -39,6 +39,7 @@ val check_recipes : Bijection.partial_run -> Types.term * Types.term -> bool
 val next_solution : Bijection.solutions -> unit
 val find_all_run : Bijection.solutions -> unit
 exception Attack
+val get_lst_of_test : Base.predicate -> (Types.term * Types.term) list
 val add_merged_tests : Bijection.partial_run * Bijection.RunSet.t -> unit
 val find_possible_run : Bijection.solutions -> Bijection.partial_run option
 val equivalence : Types.procId -> Types.procId -> unit

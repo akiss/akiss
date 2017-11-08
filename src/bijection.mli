@@ -1,4 +1,5 @@
 type which_process = P | Q
+val show_which_process : which_process -> string
 type correspondance = { a : Types.location Dag.Dag.t; }
 val show_correspondance : correspondance -> string
 module IntegerSet :
@@ -32,6 +33,7 @@ module IntegerSet :
     val find : elt -> t -> elt
     val of_list : elt list -> t
   end
+val show_int_set : IntegerSet.t -> string
 type partial_run = {
   test : test;
   corresp : correspondance;
@@ -52,7 +54,7 @@ and test = {
   id : int;
   from : IntegerSet.t;
   nb_actions : int;
-  new_actions : int;
+  mutable new_actions : int;
 }
 val show_run : partial_run -> string
 val show_partial_run : partial_run -> string
@@ -91,13 +93,54 @@ module RunSet :
     val find : elt -> t -> elt
     val of_list : elt list -> t
   end
+type possible_runs = {
+  execution : partial_run;
+  conflicts : RunSet.t;
+  score : int;
+}
+module PossibleRuns :
+  sig
+    type t = possible_runs
+    val compare : possible_runs -> possible_runs -> int
+  end
+module Solutions :
+  sig
+    type elt = PossibleRuns.t
+    type t = Set.Make(PossibleRuns).t
+    val empty : t
+    val is_empty : t -> bool
+    val mem : elt -> t -> bool
+    val add : elt -> t -> t
+    val singleton : elt -> t
+    val remove : elt -> t -> t
+    val union : t -> t -> t
+    val inter : t -> t -> t
+    val diff : t -> t -> t
+    val compare : t -> t -> int
+    val equal : t -> t -> bool
+    val subset : t -> t -> bool
+    val iter : (elt -> unit) -> t -> unit
+    val fold : (elt -> 'a -> 'a) -> t -> 'a -> 'a
+    val for_all : (elt -> bool) -> t -> bool
+    val exists : (elt -> bool) -> t -> bool
+    val filter : (elt -> bool) -> t -> t
+    val partition : (elt -> bool) -> t -> t * t
+    val cardinal : t -> int
+    val elements : t -> elt list
+    val min_elt : t -> elt
+    val max_elt : t -> elt
+    val choose : t -> elt
+    val split : elt -> t -> t * bool * t
+    val find : elt -> t -> elt
+    val of_list : elt list -> t
+  end
 type solutions = {
   mutable partial_runs : partial_run list;
   mutable partial_runs_todo : partial_run list;
   mutable partial_runs_priority_todo : partial_run list;
-  mutable possible_runs : (partial_run * RunSet.t) list;
-  mutable possible_restricted_runs : partial_run list;
   mutable possible_runs_todo : partial_run list;
+  mutable possible_runs : Solutions.t;
+  mutable possible_restricted_runs : partial_run list;
   mutable failed_partial_run : partial_run list;
   mutable failed_run : partial_run list;
   mutable partitions : partial_run list;
@@ -148,18 +191,20 @@ type bijection = {
   mutable next_id : int;
   mutable tests : solutions Tests.t;
   mutable locs : Dag.LocationSet.t;
-  htable : (IntegerSet.t, unit) Hashtbl.t;
+  htable : (int list, origin) Hashtbl.t;
 }
 val base : bijection
 val show_base : unit -> unit
 val proc : which_process -> Process.process
 val other : which_process -> which_process
+val reorder_int_set : IntegerSet.t -> IntegerSet.t
 val push :
   Base.raw_statement ->
   which_process -> origin -> (test -> partial_run) -> unit
+val reorder_tests : unit -> unit
 val pop : unit -> Tests.key * solutions
 val loc_p_to_q : Dag.Dag.key -> correspondance -> Types.location
 val add_partial_run : RunSet.elt -> unit
 val remove_partition : 'a -> unit
 val straight : Dag.Dag.key -> Dag.Dag.key -> bool
-val compatible : partial_run -> RunSet.t
+val compatible : partial_run -> possible_runs

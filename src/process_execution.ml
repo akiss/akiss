@@ -37,14 +37,9 @@ let merge_tests (fa : raw_statement) (fb : raw_statement) =
         | Identical(r,r') -> [(r,r')]
         | Knows(_)
         | Reach -> [] in  
-    (*List.concat( *)
+    let r =
     List.map
       (fun sigm ->
-        let sigma = match Inputs.csu sigm fa.recipes fb.recipes with
-        [] -> sigma (*failwith (Printf.sprintf "recipes merge failure %s and %s\n" (Inputs.show_inputs fa.recipes)(Inputs.show_inputs fb.recipes))*)
-        | sigma :: _ -> sigma in
-        (*List.map
-        (fun sigma ->*)
           let sigma = Rewriting.pack sigma in
           if !debug_execution then Printf.printf "A merge has been found: %s\n%!" (show_substitution sigma);
           let result =
@@ -68,14 +63,20 @@ let merge_tests (fa : raw_statement) (fb : raw_statement) =
            head = Tests( List.map 
              (fun (r,rp) -> 
                Rewriting.apply_subst_term r sigma,Rewriting.apply_subst_term rp sigma)
-             (fa_head @ fb_head));
+             (Util.unique(fa_head @ fb_head)));
            body = body }
            in
+           (*if !debug_execution then Format.printf "The merged test: %s\n"
+               (show_raw_statement result);*)
+           let result = Horn.simplify_statement result in
            if !debug_execution then Format.printf "New merged test: %s\n"
                (show_raw_statement result);
            result)
         sigmas
-      (* )sigmas)*)
+    in
+    fa.binder:= New;
+    fb.binder:= New;  
+    r
 
 let rec apply_subst_inputs term frame =
   match term with
@@ -100,12 +101,13 @@ let rec run_until_io process first frame =
   | SeqP(Test(t,t'),p) -> 
     let t = apply_subst_inputs t frame in
     let t' = apply_subst_inputs t' frame in
-    (*let t'' = Rewriting.normalize t (! Parser_functions.rewrite_rules) in
-    let t''' = Rewriting.normalize t' (! Parser_functions.rewrite_rules) in
-    Printf.printf "Test if %s = %s \n" (show_term t'')(show_term t''');*) 
+    (**) 
     if Rewriting.equals_r t t' (! Parser_functions.rewrite_rules) 
     then run_until_io p first frame 
     else begin 
+    (*let t'' = Rewriting.normalize t (! Parser_functions.rewrite_rules) in
+    let t''' = Rewriting.normalize t' (! Parser_functions.rewrite_rules) in
+    Printf.printf "Test fail %s = %s \n" (show_term t'')(show_term t''');*)
       ([],[(Inputs.new_choices,first,process)]) end
   | SeqP(TestInequal(t,t'),p) ->
     let t = apply_subst_inputs t frame in
@@ -115,7 +117,7 @@ let rec run_until_io process first frame =
     else ([],[])
   | CallP(l,p,terms,chans) -> run_until_io (expand_call l p terms chans) first frame
   
-let init_run process_name (statement : raw_statement) processQ test =
+let init_run process_name (statement : raw_statement) processQ test : partial_run=
   let (qt,fqt) = run_until_io processQ LocationSet.empty Inputs.new_inputs in
    {
      test = test ;
@@ -127,7 +129,7 @@ let init_run process_name (statement : raw_statement) processQ test =
      dag = empty;
      qthreads = qt ;
      failed_qthreads = fqt;
-   }
+   } 
   
 let next_partial_run run action full_p proc l frame locs choices =
   (*Printf.printf "next_partial_run %s \n" (show_process_start 3 full_p);*)
@@ -192,7 +194,7 @@ let try_run run action (choices,locs,process)  =
    | _ -> assert false
 
 let next_run partial_run = 
-  if ! debug_execution then Printf.printf "Next execution step on %s \n" (show_partial_run partial_run);
+  if ! debug_execution then Printf.printf "Next execution step on %s" (show_partial_run partial_run);
   let first_actions = first_actions_among partial_run.test.statement.dag partial_run.remaining_actions in
   let current_loc = 
     try LocationSet.choose first_actions 
@@ -267,6 +269,7 @@ let next_solution solution =
     solution.partial_runs_priority_todo <- q ;
     solution.partial_runs <- pr :: solution.partial_runs;
     let (new_runs,new_loc) = next_run pr in 
+    if !debug_execution && new_runs = [] then Printf.printf "No possible run from this trace \n"  ;
     List.iter (fun partial_run -> 
       if LocationSet.is_empty partial_run.remaining_actions 
       then begin
@@ -277,16 +280,18 @@ let next_solution solution =
         | Identical(t,t') -> check_recipes partial_run (t,t') 
         | Tests(l) -> List.for_all (check_recipes partial_run) l 
         then 
-          solution.possible_runs_todo <- partial_run :: solution.possible_runs_todo
+          begin if !debug_execution then Printf.printf "Solution succeeds the tests \n"  ;
+          solution.possible_runs_todo <- partial_run :: solution.possible_runs_todo end
         else
-          solution.failed_run <- partial_run :: solution.failed_run
+          begin if !debug_execution then Printf.printf "Solution fails the tests \n"  ;
+          solution.failed_run <- partial_run :: solution.failed_run end
       end
       else begin
         if Bijection.straight new_loc (loc_p_to_q new_loc partial_run.corresp) (* TODO: partial run should not have priority *)
-        then
-          solution.partial_runs_priority_todo <- partial_run :: solution.partial_runs_priority_todo
-        else
-          solution.partial_runs_todo <- partial_run :: solution.partial_runs_todo
+        then begin if !debug_execution then Printf.printf "Straight \n"  ;
+          solution.partial_runs_priority_todo <- partial_run :: solution.partial_runs_priority_todo end
+        else begin if !debug_execution then Printf.printf "Not Straight \n"  ;
+          solution.partial_runs_todo <- partial_run :: solution.partial_runs_todo end
       end
       ) new_runs 
 
@@ -299,6 +304,12 @@ let find_all_run solution =
       
 exception Attack   
 
+let get_lst_of_test test =
+  match test with 
+  Tests(t) -> t
+  | Identical(r,r') -> [(r,r')]
+  | _ -> []
+
 (* Create new tests from prun which is in conflict with all tests in runset *)
 let add_merged_tests (prun,runset) =
   if !debug_execution 
@@ -308,10 +319,12 @@ let add_merged_tests (prun,runset) =
     then Printf.printf "   with %s\n" (show_test par.test); 
     if prun.test.process_name = par.test.process_name 
     then
-      let union_set = IntegerSet.union prun.test.from par.test.from in
-      if Hashtbl.mem base.htable union_set then () else begin
-        Hashtbl.add base.htable union_set ();
-        let merged_statements =   merge_tests prun.test.statement par.test.statement in
+      
+      if ((Inputs.contains prun.test.statement.inputs par.test.statement.inputs) &&  (Util.list_diff (get_lst_of_test par.test.statement.head)(get_lst_of_test prun.test.statement.head) =[]))
+      || ((Inputs.contains par.test.statement.inputs prun.test.statement.inputs) &&  (Util.list_diff (get_lst_of_test prun.test.statement.head)(get_lst_of_test par.test.statement.head) =[]))
+      then ()  else
+      begin
+        let merged_statements =   merge_tests prun.test.statement par.test.statement in (* only one without xor *)
         List.iter (fun raw_st -> 
           if !debug_execution then Printf.printf "New test %s \n" (show_raw_statement raw_st);
           statement_to_tests prun.test.process_name (Composed(prun.test,par.test)) raw_st (proc (other prun.test.process_name))
@@ -331,17 +344,18 @@ let rec find_possible_run solution =
     then begin 
       if solution.partial_runs_todo = []
       then 
-        match solution.possible_runs with
-        | [] -> begin
+        if Solutions.is_empty solution.possible_runs 
+        then begin
           if solution.possible_restricted_runs = [] then
             None
-          else begin Printf.printf "Further investigation are required (%d partial dags not considered).\n" (List.length solution.possible_runs); 
+          else begin Printf.printf "Further investigation are required (%d partial dags not considered).\n" (List.length solution.possible_restricted_runs); 
             None end 
           end
-        | (pr,rset) :: q -> begin
-          add_merged_tests (pr,rset); 
-          Bijection.add_partial_run pr;
-          Some pr end 
+        else begin
+          let sol = Solutions.min_elt solution.possible_runs in
+          add_merged_tests (sol.execution,sol.conflicts); 
+          Bijection.add_partial_run sol.execution;
+          Some sol.execution end 
       else begin
         if !debug_execution then Printf.printf "No priority partial run anymore \n" ;
         solution.partial_runs_priority_todo <- solution.partial_runs_todo ;
@@ -358,7 +372,7 @@ let rec find_possible_run solution =
     if subset pr.dag pr.test.statement.dag 
     then begin
       let conflicts = Bijection.compatible pr in
-      if RunSet.is_empty conflicts then
+      if conflicts.score = 0 then
         begin
         Bijection.add_partial_run pr;
         solution.partitions <- [pr];
@@ -367,7 +381,7 @@ let rec find_possible_run solution =
         end
       else begin 
         if !debug_execution then Printf.printf "Solution in conflict \n";
-        solution.possible_runs <- (pr,conflicts) :: solution.possible_runs;
+        solution.possible_runs <- Solutions.add conflicts solution.possible_runs;
         find_possible_run solution
         end
       end
