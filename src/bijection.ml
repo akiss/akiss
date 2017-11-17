@@ -27,14 +27,15 @@ type partial_run = {
   corresp_back : correspondance ; (* the reverse mapping from the actions of Q to the actions of P *)
   remaining_actions : LocationSet.t; 
   frame : Inputs.inputs ; (* the frame for outputs *)
-  choices : Inputs.choices ;
+  choices : Inputs.choices ; (* the choices on Q that have been made in this trace *)
   dag : dag; (* The run dag: may be more constrained than the Initial one *)
-  qthreads : (Inputs.choices * LocationSet.t * Process.process) list ; (* The available action of Q, the constrainsts *)
-  failed_qthreads : (Inputs.choices * LocationSet.t * Process.process) list ; (* The action that might be availble for a specific substitution *)
+  disequalities : (term * term) list; (*All the disequalities that have been encountred during the trace *)
+  qthreads : (Inputs.choices * LocationSet.t * (term * term) list * Process.process) list ; (* The available action of Q, the constrainsts *)
+  failed_qthreads : (Inputs.choices * LocationSet.t * (term * term) list * Process.process) list ; (* The action that might be availble for a specific substitution *)
   (*mutable children : partial_run list ; (* once processed, the list of possible continuation of the execution *)*)
 }
 
-and origin = Initial of statement | Composed of test * test
+and origin = Initial of statement | Composed of test * test | Refined of test * statement | Else
   
 and test = {
   process_name : which_process; (* Is it a test of P or of Q?*)
@@ -48,15 +49,17 @@ and test = {
 
 
 let show_run pr =
-  Format.sprintf "{ \n frame= %s\n corresp= %s\n dag = %s\n"
+  (List.fold_left (fun str (t,t') -> str ^ (show_term t)  ^ " != " ^ (show_term t') ^ ", " )
+    (Format.sprintf "{ \n frame= %s\n corresp= %s\n dag = %s\n diseq = "
     (Inputs.show_inputs pr.frame)
     (show_correspondance pr.corresp)
-    (show_dag pr.dag)
+    (show_dag pr.dag))
+    pr.disequalities) ^"\n"
     
     
 let show_partial_run pr =
-  (List.fold_left (fun str (choices,lset, p) -> str ^ "   " ^(show_loc_set lset) ^" : "^(Process.show_process_start 2 p)^"\n")
-  ((List.fold_left (fun str (choices,lset, p) -> str ^ "   " ^ (show_loc_set lset) ^" : "^(Process.show_process_start 2 p)^"\n")
+  (List.fold_left (fun str (choices,lset,diseq, p) -> str ^ "   " ^(show_loc_set lset) ^" : "^(Process.show_process_start 2 p)^"\n")
+  ((List.fold_left (fun str (choices,lset,diseq, p) -> str ^ "   " ^ (show_loc_set lset) ^" : "^(Process.show_process_start 2 p)^"\n")
   ((show_run pr) ^ " remaining_actions= " ^ (show_loc_set pr.remaining_actions) ^ "\n qthreads= \n") 
   pr.qthreads) ^ " fthreads=\n") pr.failed_qthreads) ^ "}\n"
 
@@ -64,8 +67,10 @@ let show_partial_run pr =
   
 let rec show_origin o =
   match o with 
-  |Initial(st) -> Format.sprintf "%d" (st.id)
-  |Composed(t1,t2) -> Format.sprintf "[ %d:%s | %d:%s]"  t1.id (show_origin t1.origin)  t2.id (show_origin t2.origin) 
+  | Initial(st) -> Format.sprintf "%d" (st.id)
+  | Composed(t1,t2) -> Format.sprintf "[ %d:%s | %d:%s]"  t1.id (show_origin t1.origin)  t2.id (show_origin t2.origin) 
+  | Refined(t1,st) -> Format.sprintf "{ %d:%s < #%d}"  t1.id (show_origin t1.origin)  st.id 
+  | Else -> "else"
   
 and show_test t =
   Format.sprintf "Test[%d]: %s %s {%d,%d} %s\n%s\n" t.id (show_origin t.origin) (show_int_set t.from) t.new_actions t.nb_actions (show_which_process t.process_name) (show_raw_statement t.statement)
@@ -99,6 +104,9 @@ module PossibleRuns =
   
 module Solutions = Set.Make(PossibleRuns) 
 
+let show_solution_set sol =
+  Solutions.iter (fun prun -> Printf.printf "possible run: %s"  (show_run prun.execution)) sol
+
 (* records which are the partial executions of a test *) 
 type solutions = {
   mutable partial_runs : partial_run list;
@@ -131,6 +139,10 @@ module Test =
               if r = 0 then 
               compare x.id y.id 
               else -r
+          | (Refined _, Refined _) -> compare x.id y.id
+          | (Refined _, _) -> -1
+          | (_, Refined _) ->  1
+          | (_,_) -> assert false 
    end
 
 module Tests = Map.Make(Test)
@@ -151,6 +163,8 @@ type bijection = {
   (*mutable records : record list;*)
   mutable p : Process.process ; (* The process P *)
   mutable q : Process.process ;
+  mutable satP : Base.base ;
+  mutable satQ : Base.base ;
   mutable indexP : index ;
   mutable indexQ : index ;
   mutable next_id : int;
@@ -159,10 +173,14 @@ type bijection = {
   htable : (int list , origin) Hashtbl.t;
 }
 
-let base = {
+let base = 
+  let nb = Base.new_base () in
+{
   (*records = [];*)
   p = Process.EmptyP ; 
   q = Process.EmptyP ;
+  satP = nb ;
+  satQ = nb ;
   indexP = Dag.empty ;
   indexQ = Dag.empty ;
   next_id = 0 ;
@@ -193,15 +211,15 @@ let reorder_int_set s =
 
 let push (statement : raw_statement) process_name origin init =
   let int_set = match origin with 
-      Initial _ -> IntegerSet.singleton base.next_id 
-      | Composed(t1,t2) ->  (IntegerSet.union t1.from t2.from) in
+      | Initial _ -> IntegerSet.singleton base.next_id 
+      | Refined(t1,st) -> IntegerSet.singleton base.next_id
+      | Composed(t1,t2) ->  (IntegerSet.union t1.from t2.from)
+      | Else -> assert false in
   let int_lst = IntegerSet.elements int_set in
   statement.binder := New;
   if Hashtbl.mem base.htable int_lst then ()  else begin
   Hashtbl.add base.htable int_lst origin;
-  
   base.next_id <- base.next_id + 1 ;
-
   let nb = Dag.cardinal statement.dag.rel in
   let test = {
     nb_actions = nb;

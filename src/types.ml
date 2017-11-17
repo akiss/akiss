@@ -104,20 +104,20 @@ type nonceId = {
 let null_nonce = {name = "null" ; n= -1}
 
 type io =
-   | Input
-   | Output
+   | Input of chanId
+   | Output of chanId
    | Phase
    | Choice
    | Call
+   | Virtual of varId
 
 type location = {
  p : int;
- chan : chanId;
  io : io;
  name : string;
 }
 
-let null_location = { p = -1; chan = null_chan; io = Phase; name = "null_loc"}
+let null_location = { p = -1; io = Phase; name = "null_loc"}
 
 type funName = 
   | Regular of funId (* f,g,h *)

@@ -31,7 +31,7 @@ val convert_chan :
   Types.procId ->
   Types.chanId array -> Types.relative_temp_term -> Types.chanId
 val new_location :
-  Types.procId -> int -> Types.chanId -> Types.io -> string -> Types.location
+  Types.procId -> int -> Types.io -> string -> Types.location
 val convert_pr :
   Types.procId * int * int * Types.location array * Types.nonceId array *
   Types.term array * Types.chanId array -> Types.bounded_process -> process

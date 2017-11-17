@@ -92,11 +92,11 @@ let merge_recipes sigma inputs1 inputs2 =
     | (Some i1, Some i2) -> 
       if Rewriting.csm i1 i2 <> [] then Some(Rewriting.apply_subst_term i2 sigma) else 
       if Rewriting.csm i2 i1 <> [] then Some(Rewriting.apply_subst_term i1 sigma) else 
-      (*if Term.vars_of_term i1 = [] 
+      if Term.vars_of_term i1 = [] 
       then Some(Rewriting.apply_subst_term i1 sigma)
       else if Term.vars_of_term i2 = [] 
-      then Some(Rewriting.apply_subst_term i2 sigma) else*)
-      failwith (Printf.sprintf "Merge recipe not implemented yet: %s and %s\n" (show_term i1)(show_term i2))
+      then Some(Rewriting.apply_subst_term i2 sigma) else
+      failwith (Printf.sprintf "Merge recipe not implemented yet: %s and %s\n%!" (show_term i1)(show_term i2))
     | (Some i , None)  
     | (None , Some i) -> Some(Rewriting.apply_subst_term i sigma) 
     | (None,None) -> None) inputs1.i inputs2.i 

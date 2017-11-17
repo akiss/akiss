@@ -629,13 +629,6 @@ let update kb vip f =
   (*match normalize_new_statement f with
     | None ->  None
     | Some f ->*)
-
-  (** Freshen only now to avoid freshening the (many) non-normal clauses
-    * that the procedure generates. We don't want to do it too late, though:
-    * freshening should come before normalization to preserve the (weak)
-    * canonical forms it provides. *)
-  (*let f = fresh_statement f in*)
-
   match
     if use_xor then let f = canonical_form f in
       Some (if is_solved f then remove_marking f else f)
@@ -1013,7 +1006,8 @@ let rec trace_statements kb solved_parent unsolved_parent process st =
       st.binder := Master;
       let sterm = concretize st.inputs s in
       let tterm = concretize st.inputs t in 
-      List.iter (fun subst -> trace_statements kb solved_parent unsolved_parent pr (apply_subst_statement st subst)) (Rewriting.unifiers st.nbvars sterm tterm (! Parser_functions.rewrite_rules))
+      let unifiers = Rewriting.unifiers st.nbvars sterm tterm (! Parser_functions.rewrite_rules) in 
+      List.iter (fun subst -> trace_statements kb solved_parent unsolved_parent pr (apply_subst_statement st subst)) unifiers
     | SeqP(TestInequal(s, t), pr) ->
        trace_statements kb solved_parent unsolved_parent pr st
     | CallP(loc, procId, args, chans) -> 
@@ -1027,9 +1021,9 @@ and add_statement kb solved_parent unsolved_parent process st =
   let is_solved_st = is_solved st in
   match update kb (unsolved_parent.vip) st with
   | None -> ()
-  | Some new_st -> begin
+  | Some new_st -> begin 
      new_st.binder:=if is_solved_st then Slave else Master;
-     if Hashtbl.mem kb.htable new_st then () else begin
+     if Hashtbl.mem kb.htable new_st then () else begin 
      kb.next_id <- 1 + kb.next_id ;
      let st = {
        id = kb.next_id ; 
@@ -1040,7 +1034,7 @@ and add_statement kb solved_parent unsolved_parent process st =
        master_parent = unsolved_parent;
        slave_parent = solved_parent;
        } in 
-     if !debug_saturation then Printf.printf "Addition of %s \n" (show_statement "" st);
+     if !debug_saturation then Printf.printf "Addition of %s \n%!" (show_statement "" st);
      Hashtbl.add kb.htable new_st st;
      if is_solved_st 
      then 
@@ -1096,7 +1090,7 @@ let theory_statements kb fname arity =
 
 
 let extra_resolution kb solved unsolved =
-  if !debug_saturation then Printf.printf "Try resolution between #%d and #%d\n" solved.id unsolved.id;
+  if !debug_saturation then Printf.printf "Try resolution between #%d and #%d\n%!" solved.id unsolved.id;
   (* Printf.printf "%s \n %s\n" (show_raw_statement solved.st) (show_raw_statement unsolved.st); *)
   match Inputs.merge_choices unsolved.st.choices solved.st.choices with
     None -> false
@@ -1115,7 +1109,7 @@ let extra_resolution kb solved unsolved =
     true end
 
 let extra_equation kb solved1 solved2 =
-  if !debug_saturation then Printf.printf "Try equation between #%d and #%d\n" solved1.id solved2.id;
+  if !debug_saturation then Printf.printf "Try equation between #%d and #%d\n%!" solved1.id solved2.id;
   (*Printf.printf "%s \n %s\n" (show_raw_statement solved.st) (show_raw_statement unsolved.st);*)
   match Inputs.merge_choices solved1.st.choices solved2.st.choices with
     None -> false
@@ -1164,7 +1158,7 @@ let saturate procId  =
   let ind = processes_infos.next_location in
   processes_infos.next_location <- processes_infos.next_location + 1 ;
   trace_statements kb kb.solved_deduction kb.not_solved 
-    (CallP({p = ind;io=Call;chan=null_chan;name="main"},procId,Array.make 0 zero,Array.make 0 null_chan))
+    (CallP({p = ind;io=Call;name="main"},procId,Array.make 0 zero,Array.make 0 null_chan))
     null_raw_statement;
   while not (Queue.is_empty(kb.s_todo)) || not (Queue.is_empty(kb.ns_todo)) do
     if !about_progress then 

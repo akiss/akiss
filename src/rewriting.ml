@@ -1,21 +1,3 @@
-(****************************************************************************)
-(* Akiss                                                                    *)
-(* Copyright (C) 2011-2014 Baelde, Ciobaca, Delaune, Kremer                 *)
-(*                                                                          *)
-(* This program is free software; you can redistribute it and/or modify     *)
-(* it under the terms of the GNU General Public License as published by     *)
-(* the Free Software Foundation; either version 2 of the License, or        *)
-(* (at your option) any later version.                                      *)
-(*                                                                          *)
-(* This program is distributed in the hope that it will be useful,          *)
-(* but WITHOUT ANY WARRANTY; without even the implied warranty of           *)
-(* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            *)
-(* GNU General Public License for more details.                             *)
-(*                                                                          *)
-(* You should have received a copy of the GNU General Public License along  *)
-(* with this program; if not, write to the Free Software Foundation, Inc.,  *)
-(* 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.              *)
-(****************************************************************************)
 
 open Types
 open Term
@@ -89,7 +71,7 @@ let rec explode_term t sigma =
    | Fun(f,l)-> if is_constant (Fun(f,l)) then ([],[f],[Fun(f,l)]) else ([],[f],[])
 
 
-let rec occurs x t sigma =
+let rec occurs x t sigma = 
     match t with 
     | Fun(f, args) -> occurs_list x args sigma
     | Var(y) when x = y -> true
@@ -104,6 +86,8 @@ and occurs_list x l sigma =
     | h::q -> occurs x h sigma || occurs_list x q sigma
 
 let rec unify hard pairlst sigma =
+let s1,s2 = sigma in
+  (*Printf.printf "Subst%s,%s \n%!" (show_subst_array s1) (show_subst_array s2);*)
   let rec combine l1 l2 l =
     match (l1,l2) with
     | (h1::q1,h2::q2) -> (h1,h2)::(combine q1 q2 l)
@@ -166,6 +150,10 @@ and may_unify_plus hard sa ta pairlst sigma =
 (*let rec mgu nbs nbt s t = unify [(s,t)] (Array.make nbs None,Array.make nbt None) *)
 
 let csu pairlst sigma = 
+  (*let s1,s2 = sigma in
+  Printf.printf "subst%s,%s \n%!"(show_subst_array s1) (show_subst_array s2);
+  List.iter (fun (t1,t2) -> 
+  Printf.printf "term %s %s\n%!" (show_term t1)(show_term t2)) pairlst;*)
   try
   let hard = unify [] pairlst sigma in
   if hard = [] then [sigma]
@@ -421,7 +409,7 @@ let show_positions positions =
 ;;
 
 let show_configuration (t, sigma, positions) =
-  (show_term t) ^ ", " ^ (show_substitution sigma) ^ ", " ^ (show_positions positions)
+  (show_term t) ^ ", sig: " ^ (show_substitution sigma) ^ ", pos : " ^ (show_positions positions)
 ;;
 
 let rec show_configurations c =
@@ -666,7 +654,7 @@ let rec simplify term_t config_list rules =
 
 
 let rec iterate_all term_t configuration rules =
-  (*Printf.printf "Configurations : %s\n" (show_configurations configuration); *)
+  (*Printf.printf "Term %s\n Configurations : %s\n" (show_term term_t)(show_configurations configuration); *)
   let next_dumb = iterate_once configuration rules in
   let next_simpl  = simplify term_t next_dumb rules in
   (
@@ -688,26 +676,30 @@ let rec max_var maxi t =
 
 
 let variants nbv t rules =
-   (*Printf.printf "Compute variants of : %s\n" (show_term t); *)
+  (* Printf.printf "Compute variants of : %s\n" (show_term t); *)
   (*let vars_t = vars_of_term t in*)
   let sigma = identity_subst nbv in
   iterate_all t [(apply_subst_term t sigma, sigma, init_pos t)] rules
 
 let one_unifier ssigma sigmas tsigma sigmat = 
+  let sigmas = { binder = ref Master; nbvars = sigmas.nbvars; master = Array.copy sigmas.master; slave = Array.copy sigmas.slave} in
   let sigma_init = (Array.make sigmas.nbvars None, Array.make sigmat.nbvars None) in
+   (*Printf.printf "terms with variants %s -+- %s \n corresponding substitution sigma s =  %s \nsigma t = %s\n%!" 
+    (show_term ssigma)(show_term tsigma)(show_substitution sigmas)(show_substitution sigmat);*)
   sigmas.binder := Master;
   sigmat.binder := Slave ;
-  (* Printf.printf "terms with variants %s -+- %s \n corresponding substitution %s ,+, %s\n%!" (show_term ssigma)(show_term tsigma)(show_substitution sigmas)(show_substitution sigmat);*)
   let t1t2 = (ssigma,tsigma) ::Array.to_list( Array.map2 (fun x y -> (x,y)) sigmas.master sigmat.master) in
   match csu t1t2 sigma_init with
-  | [sigma] -> let sigma = pack sigma in (*Printf.printf "FF: %s\n" (show_substitution sigma);*) [ compose sigmas sigma ]
+  | [sigma] -> let sigma = pack sigma in [ compose sigmas sigma ]
   | [] -> []
   | _ -> failwith "too many unifiers"
 ;;
 
 let unifiers nbv s t rules =
   let vs = variants nbv s rules in
+  (*Printf.printf "result s: %s\n variants of %s\n" (show_configurations vs)(show_term t);*)
   let vt = variants nbv t rules in
+  (*Printf.printf "result t: %s\n"(show_configurations vt);*)
   let w = combine vs vt in
   trconcat (trmap (fun ((x, y, _), (z, t, _)) ->
 			   one_unifier x y z t) w)

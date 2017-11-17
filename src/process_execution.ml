@@ -5,7 +5,7 @@ open Dag
 open Base
 open Process
 open Bijection
-
+open Term
 
 
 (* from two statements (ie tests) generate the merge of these tests, like equation rule *)
@@ -85,6 +85,7 @@ let rec apply_subst_inputs term frame =
     | Var(x) -> Var(x)
 
 
+(* return a tuple : the updated threads, the threads which have failed due to a test *)
 let rec run_until_io process first frame =
   (*Printf.printf "run until io %s \n" (show_process_start 3 process);*)
   match process with
@@ -94,10 +95,10 @@ let rec run_until_io process first frame =
     List.fold_left (fun (lst1,lst2) (x,y) -> (x @ lst1 , y @ lst2)) ([],[])
     (List.map (fun (i,p) -> 
       let (lst1,lst2) = run_until_io p first frame in
-      (List.map (fun (c,ls,p) -> (Inputs.add_choice l i c, ls, p)) lst1, lst2)
+      (List.map (fun (c,ls,diseq,p) -> (Inputs.add_choice l i c, ls,diseq, p)) lst1, lst2)
       ) proclst)
   | SeqP(Input(l),p) 
-  | SeqP(Output(l,_),p) -> ([(Inputs.new_choices,first,process)],[])
+  | SeqP(Output(l,_),p) -> ([(Inputs.new_choices,first,[],process)],[])
   | SeqP(Test(t,t'),p) -> 
     let t = apply_subst_inputs t frame in
     let t' = apply_subst_inputs t' frame in
@@ -108,13 +109,14 @@ let rec run_until_io process first frame =
     (*let t'' = Rewriting.normalize t (! Parser_functions.rewrite_rules) in
     let t''' = Rewriting.normalize t' (! Parser_functions.rewrite_rules) in
     Printf.printf "Test fail %s = %s \n" (show_term t'')(show_term t''');*)
-      ([],[(Inputs.new_choices,first,process)]) end
+      ([],[(Inputs.new_choices,first,[],process)]) end
   | SeqP(TestInequal(t,t'),p) ->
     let t = apply_subst_inputs t frame in
     let t' = apply_subst_inputs t' frame in
     if not (Rewriting.equals_r t t' (! Parser_functions.rewrite_rules)) 
-    then run_until_io p first frame 
-    else ([],[])
+    then let (lst1,lst2) = run_until_io p first frame in
+      (List.map (fun (c,ls,diseq,p) -> (c,ls, (t,t')::diseq,p)) lst1, lst2)  
+    else ([],[(Inputs.new_choices,first,[],process)])
   | CallP(l,p,terms,chans) -> run_until_io (expand_call l p terms chans) first frame
   
 let init_run process_name (statement : raw_statement) processQ test : partial_run=
@@ -127,16 +129,19 @@ let init_run process_name (statement : raw_statement) processQ test : partial_ru
      frame = Inputs.new_inputs; (* inputs maps to received terms and outputs maps to sent terms *)
      choices = Inputs.new_choices;
      dag = empty;
+     disequalities = [] ;
      qthreads = qt ;
      failed_qthreads = fqt;
    } 
-  
-let next_partial_run run action full_p proc l frame locs choices =
+
+(* Technical function called twice in try_run *)
+(* Produce a new partial_run object from already computed elements except the remaining threads *)
+let next_partial_run run action full_p proc l frame locs choices diseq =
   (*Printf.printf "next_partial_run %s \n" (show_process_start 3 full_p);*)
   let (qt,fqt) = List.fold_left 
-    (fun (lst,flst) (chs,ls,p) -> 
+    (fun (lst,flst) (chs,ls,diseq,p) -> 
       if p != full_p 
-      then ((chs,ls,p) :: lst,flst)
+      then ((chs,ls,diseq,p) :: lst,flst)
       else begin
         (*Printf.printf "start run until io %s \n" (show_process_start 3 proc);*)
         let (lqt,flqt)= (run_until_io proc (LocationSet.add action ls) frame) in 
@@ -151,6 +156,7 @@ let next_partial_run run action full_p proc l frame locs choices =
      frame = frame;
      choices = choices;
      dag = merge run.dag (dag_with_one_action_at_end locs action);
+     disequalities = diseq @ run.disequalities;
      qthreads = qt ;
      failed_qthreads = fqt @ run.failed_qthreads ;
   }
@@ -164,35 +170,36 @@ let rec apply_frame recipe prun =
     | Fun(f, args) -> Fun(f, List.map (fun x -> apply_frame x prun) args)
     | Var(x) -> Var(x)
 
-       
-let try_run run action (choices,locs,process)  =
+(* Given a partial_run run, try to execute action action on one of the available threads of Q *)        
+let try_run run action (choices,locs,diseq,process)  =
    (*Printf.printf "Testing %s against %s\n" action.chan.name (show_process_start 1 process);*)
    match Inputs.merge_choices run.choices choices with
    | None -> []
    | Some choices -> 
    match process with
    | SeqP(Input(l),p) -> 
-     if action.io = Input &&  action.chan = l.chan 
+     if action.io = l.io (* make sure channel still work *)
      then 
        begin 
          let new_frame = Inputs.add_to_frame l 
             (apply_frame (Inputs.get action run.test.statement.recipes) run) run.frame in
-         let npr = next_partial_run run action process p l new_frame locs choices in
+         let npr = next_partial_run run action process p l new_frame locs choices diseq in
          (*Printf.printf "Possible: %s\n"(show_partial_run npr) ;*)
         [npr] 
        end
        else []
    | SeqP(Output(l,t),p) -> 
-     if action.io = Output &&  action.chan = l.chan 
+     if action.io = l.io 
      then begin
        let new_frame = Inputs.add_to_frame l (apply_subst_inputs t run.frame) run.frame in
-       let npr = next_partial_run run action process p l new_frame locs choices in
+       let npr = next_partial_run run action process p l new_frame locs choices diseq in
        (*Printf.printf "Possible: %s\n"(show_partial_run npr) ;*)
        [npr]
      end
      else []
    | _ -> assert false
 
+(* Given a partial_run select an action to execute and test this action on all available threads of Q *)
 let next_run partial_run = 
   if ! debug_execution then Printf.printf "Next execution step on %s" (show_partial_run partial_run);
   let first_actions = first_actions_among partial_run.test.statement.dag partial_run.remaining_actions in
@@ -240,7 +247,8 @@ let statement_to_tests process_name origin (statement : raw_statement) otherProc
   let nb = Dag.cardinal statement.dag.rel in
   if nb != 0 
   then
-     let init = init_run process_name statement otherProcess in
+     let init = init_run process_name statement otherProcess in 
+     (* init is a partial function to allow cycle reference between test and partial run *)
      push statement process_name origin init 
    
 let rec statements_to_tests process_name (statement : statement) otherProcess =
@@ -295,12 +303,226 @@ let next_solution solution =
       end
       ) new_runs 
 
-let find_all_run solution =
-  while solution.partial_runs_priority_todo != [] 
-  do next_solution solution done ;
-  solution.partial_runs_priority_todo <- solution.partial_runs_todo ;
-  while solution.partial_runs_priority_todo != [] 
-  do next_solution solution done ;
+ let next_solution_else constraints constraints_back solution =
+  match solution.partial_runs_priority_todo with
+  | [] -> assert false
+  | pr :: q -> 
+    (*Printf.printf "next solution of\n%s"(show_partial_run pr) ;*)
+    solution.partial_runs_priority_todo <- q ;
+    solution.partial_runs <- pr :: solution.partial_runs;
+    let (new_runs,new_loc) = next_run pr in 
+    if !debug_execution && new_runs = [] then Printf.printf "No possible run from this trace \n"  ;
+    List.iter (fun partial_run -> 
+        (*Printf.printf "constraints: %s\n" (show_correspondance constraints);*)
+        if try
+          (loc_p_to_q new_loc partial_run.corresp) = (Dag.find new_loc constraints.a) 
+          with Not_found -> begin 
+            try
+          (Dag.find (loc_p_to_q new_loc partial_run.corresp) constraints_back.a)  =  new_loc 
+          with Not_found -> true end
+        then 
+        begin 
+          if LocationSet.is_empty partial_run.remaining_actions 
+          then begin
+            if !debug_execution then Printf.printf "The reverse trace ends \n"  ;
+            solution.possible_runs_todo <- partial_run :: solution.possible_runs_todo 
+          end
+          else begin if !debug_execution then Printf.printf "Straight \n"  ;
+          solution.partial_runs_priority_todo <- partial_run :: solution.partial_runs_priority_todo end
+        end
+        else if !debug_execution then Printf.printf "Not allowed \n"  
+      ) new_runs      
+      
+ let rec find_all_run constraints constraints_back solution =
+  match solution.possible_runs_todo with
+  | [] -> begin
+    if solution.partial_runs_priority_todo = [] 
+    then begin 
+      if solution.partial_runs_todo = []
+      then 
+        if Solutions.is_empty solution.possible_runs 
+        then begin
+          if solution.possible_restricted_runs = [] then
+            Solutions.empty
+          else begin Printf.printf "Further investigation are required (%d partial dags not considered).\n" (List.length solution.possible_restricted_runs); 
+            Solutions.empty end 
+          end
+        else begin (* All possible run have been tested, return the resulting set *)
+          solution.possible_runs 
+        end 
+      else begin
+        if !debug_execution then Printf.printf "No priority partial run anymore \n" ;
+        solution.partial_runs_priority_todo <- solution.partial_runs_todo ;
+        solution.partial_runs_todo <- [];
+        find_all_run constraints constraints_back solution end
+      end
+    else (* All solutions from the last execution have been performed, start a new one *)
+      begin next_solution_else constraints constraints_back solution; 
+      find_all_run constraints constraints_back solution end
+    end
+  | pr::q ->
+    solution.possible_runs_todo <- q ;
+    if !debug_execution then Printf.printf "complete run: %s\n"(show_run pr) ;
+    if subset pr.dag pr.test.statement.dag 
+    then begin
+      let conflicts = Bijection.compatible pr in
+      solution.possible_runs <- Solutions.add conflicts solution.possible_runs;
+      find_all_run constraints constraints_back solution
+    end
+    else begin
+      if !debug_execution then Printf.printf "Partial dag\n";
+      solution.possible_restricted_runs <- pr :: solution.possible_restricted_runs;
+      find_all_run constraints constraints_back solution
+      end
+
+let rec transpose term corresp = 
+  match term with
+  | Var(_) -> term
+  | Fun({id=Frame(loc)} as f, []) -> Fun({f with id=Frame(loc_p_to_q loc corresp)}, [])
+  | Fun(f,args) -> Fun(f,List.map (fun t -> transpose t corresp) args)
+  
+let apply_var_set_pred predi subst corresp =
+  Printf.printf "corresp %s \n" (show_correspondance corresp);
+  match predi with
+  | Reach -> Reach
+  | Knows(_) -> Reach
+  | Identical(r,r') -> 
+    Identical(apply_var_set_subst (transpose r corresp) subst,apply_var_set_subst (transpose r' corresp) subst)
+  | Tests(lst) -> Tests(List.map (fun (r,r') -> 
+    (apply_var_set_subst (transpose r corresp) subst,apply_var_set_subst (transpose r' corresp) subst)) lst)
+
+let partial_run_to_shrink_statement pr =
+  Printf.printf "run to shrink %s\n" (show_run pr);
+  let binder = ref Master in
+  let (body,map,map_loc_recipe,map_recipe,nbv) = 
+    Dag.fold (fun loc t (body,map,map_loc_recipe,map_recipe',nb) -> 
+      match loc.io with 
+      | Input(_) -> 
+      let (body,map,map_recipe,nb) = 
+        VariableSet.fold (fun x (body,map,map_recipe,nb) ->  
+          let (x',nw,map) =
+            try (VarMap.find x map,0,map)
+            with Not_found -> begin 
+              let x' = Var{n = nb; status = binder} in  
+              (x',1,VarMap.add x x' map) end
+          in
+          let new_recipe = Var {n = nb + nw; status = binder} in
+          let map_recipe = VarMap.add x new_recipe map_recipe in
+          let premisse = {
+            loc = Some loc; 
+            recipe = new_recipe ;
+            term = x'; 
+            marked = false} in
+          (premisse :: body, map,map_recipe, nb + 1 + nw))
+        (Term.var_set_of_term (VariableSet.empty) t) (body,map,VarMap.empty,nb) in
+      (body, map, Dag.add loc map_recipe map_loc_recipe, VarMap.union (fun x r r' -> Some r) map_recipe map_recipe' , nb)
+      | _ -> (body,map,map_loc_recipe,map_recipe',nb)
+      ) pr.frame.i ([],VarMap.empty,Dag.empty,VarMap.empty,0) in
+  let binder = ref Master in
+  Printf.printf "which test is %s \n" (show_raw_statement pr.test.statement);
+  ({
+    binder = binder ;
+    nbvars = nbv ;
+    dag = { rel = Dag.fold (fun loc locset dag -> 
+        Dag.add (loc_p_to_q loc pr.corresp) (LocationSet.map (fun l -> loc_p_to_q l pr.corresp) locset) dag) 
+      pr.dag.rel Dag.empty} ;
+    inputs = { i = Dag.map (fun term -> apply_var_set_subst term map) 
+      (Dag.filter (fun loc _ -> 
+        match loc.io with 
+        Input(_) -> true 
+        | _ -> false) pr.frame.i) };
+    recipes = { i = Dag.fold (fun loc term dag -> 
+      match loc.io with 
+      | Virtual _ -> Dag.add loc term dag
+      | Input _ ->
+      let loc = loc_p_to_q loc pr.corresp in 
+      Dag.add loc
+      (transpose (apply_var_set_subst term (
+        try Dag.find loc map_loc_recipe 
+        with Not_found ->  failwith "stop")) pr.corresp)
+      dag) 
+      pr.test.statement.recipes.i (
+        VarMap.fold (fun x r recipe -> 
+          let p = Process.processes_infos.next_location + 1 in
+          Process.processes_infos.next_location <- p ;
+          Dag.add {p= p; io = Virtual(x); name = "v"} r recipe) map_recipe Dag.empty)};
+    choices = pr.choices ;
+    head = Reach ;
+    body = body ; 
+  },map)
+  
+let refine_recipes test st corresp =
+  let (recipes,varset) = Dag.fold (fun loc t (recipes,varset) -> 
+    match loc.io with 
+    | Virtual(x) -> (recipes,VarMap.add x t varset)
+    | _ -> (Dag.add loc t recipes, varset)) st.recipes.i (Dag.empty,VarMap.empty) in
+  {
+    st with
+    recipes = {i = recipes} ;
+    head = apply_var_set_pred test.head varset corresp
+  }
+  
+let consider_disequalities partial_run =
+  if partial_run.disequalities = [] then ()
+  else 
+    let (st,subst) = partial_run_to_shrink_statement partial_run in
+    if true then Printf.printf "shrunk statement %s" (show_raw_statement st);
+    let kb = match partial_run.test.process_name with
+    | P -> base.satQ
+    | Q -> base.satP in
+    kb.other_solved <- [] ; (* All new tests will be collected here, need to clean from previous tests *)
+    List.iter (fun (t,t') ->
+      let t = apply_var_set_subst (apply_subst_inputs t  partial_run.frame) subst in
+      let t'= apply_var_set_subst (apply_subst_inputs t' partial_run.frame) subst in
+      Printf.printf "-diseq %s = %s\n" (show_term t)(show_term t'); 
+      List.iter 
+        (fun subst -> 
+          let raw_st = Horn.apply_subst_statement st subst in
+          Horn.add_statement kb null_statement kb.not_solved None raw_st;
+          while not (Queue.is_empty(kb.ns_todo)) do
+            begin let unsolved = Queue.take(kb.ns_todo) in
+            if !debug_saturation then Printf.printf "[else] Start resolutions of #%d\n" unsolved.id;
+            List.iter (fun solved -> Horn.process_resolution_new_unsolved kb solved unsolved) kb.solved_deduction.children end
+          done 
+        ) 
+        (Rewriting.unifiers st.nbvars t t' (! Parser_functions.rewrite_rules)))
+      partial_run.disequalities ;
+    List.iter (fun st -> 
+      Printf.printf "Trace to test %s \n" (show_statement ">" st);
+      let test = {
+        nb_actions = 0;
+        new_actions = 0;
+        process_name = (other partial_run.test.process_name);
+        statement = st.st;
+        origin = Else;
+        id = 0;
+        from = IntegerSet.empty;
+      }   
+      in
+      let prun = init_run (other partial_run.test.process_name) st.st (proc partial_run.test.process_name) test in
+      let solution =
+      {
+        partial_runs = [prun] ;
+        partial_runs_todo = [] ;
+        partial_runs_priority_todo = [prun] ;
+        possible_restricted_runs = [];
+        possible_runs = Solutions.empty;
+        possible_runs_todo = [];
+        failed_partial_run = [];
+        failed_run = [];
+        partitions = [] ;
+      } in
+      let solutions = find_all_run partial_run.corresp_back partial_run.corresp solution in
+      show_solution_set solutions;
+      Solutions.iter (fun pr -> 
+        let(raw_st,_) = partial_run_to_shrink_statement {pr.execution with dag = merge pr.execution.dag st.st.dag} in 
+        Printf.printf "** %s \n %s" (show_raw_statement raw_st)(show_run pr.execution);
+        let raw_st = refine_recipes partial_run.test.statement raw_st pr.execution.corresp_back in
+        Printf.printf "++ %s " (show_raw_statement raw_st);
+        statement_to_tests partial_run.test.process_name (Refined(partial_run.test,st)) raw_st (proc (other partial_run.test.process_name))
+        )
+        solutions 
+    ) kb.other_solved
       
 exception Attack   
 
@@ -351,10 +573,11 @@ let rec find_possible_run solution =
           else begin Printf.printf "Further investigation are required (%d partial dags not considered).\n" (List.length solution.possible_restricted_runs); 
             None end 
           end
-        else begin
+        else begin (* All possible run have been tested, we take the better one and add the tests of its conflicts *)
           let sol = Solutions.min_elt solution.possible_runs in
           add_merged_tests (sol.execution,sol.conflicts); 
           Bijection.add_partial_run sol.execution;
+          solution.partitions <- [sol.execution];
           Some sol.execution end 
       else begin
         if !debug_execution then Printf.printf "No priority partial run anymore \n" ;
@@ -362,7 +585,7 @@ let rec find_possible_run solution =
         solution.partial_runs_todo <- [];
         find_possible_run solution end
       end
-    else
+    else (* All solutions from the last execution have been performed, start a new one *)
       begin next_solution solution; 
       find_possible_run solution end
     end
@@ -376,6 +599,7 @@ let rec find_possible_run solution =
         begin
         Bijection.add_partial_run pr;
         solution.partitions <- [pr];
+        consider_disequalities pr;
         (*solution.possible_runs <- pr :: solution.possible_runs;*)
         Some pr
         end
@@ -396,24 +620,26 @@ let rec find_possible_run solution =
 
 
 let equivalence p q =
+  Printf.printf "Saturating P\n";
   let (locP,satP) = Horn.saturate p in
-  if !Util.about_saturation then
-  begin 
+  if  !Util.about_saturation then
     Printf.printf "Saturation of P:\n %s\n" (Base.show_kb satP);
-  end ;
+  Printf.printf "Saturating Q:\n";
    let (locQ,satQ) = Horn.saturate q in
-  if !Util.about_saturation then
-  begin 
-    Printf.printf "Saturation of Q:\n %s\n" (Base.show_kb satQ)
-  end ;
-  let processP = (CallP({p = locP;io=Call;chan=null_chan;name="main"},
+  if  !Util.about_saturation then
+    Printf.printf "Saturation of Q:\n %s\n" (Base.show_kb satQ);
+  let processP = (CallP({p = locP;io=Call;name="main"},
     p,Array.make 0 zero,Array.make 0 null_chan)) in
-  let processQ = (CallP({p = locQ;io=Call;chan=null_chan;name="main"}, 
+  let processQ = (CallP({p = locQ;io=Call;name="main"}, 
     q,Array.make 0 zero,Array.make 0 null_chan)) in 
   base.p <- processP ;
   base.q <- processQ ;
+  base.satP <- satP ;
+  base.satQ <- satQ ;
+  Printf.printf "Building tests\n";
   base_to_tests P satP processQ ;
   base_to_tests Q satQ processP ; 
+  Bijection.reorder_tests () ;
   Printf.printf "Testing \n%!" ;
   try
     while not (Tests.is_empty base.tests) do

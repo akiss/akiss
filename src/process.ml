@@ -98,15 +98,15 @@ let convert_chan pr chans chan =
       chans.(count_type_nb pr.types.(th.th) pr th.th)
   | _ -> assert(false)
   
-let new_location (pr : procId) p chan ( io : io ) str =
+let new_location (pr : procId) p ( io : io ) str =
   try List.find (fun l -> l.p = p) processes_infos.location_list
   with
   | Not_found-> 
     begin if true then match io with 
-    | Input -> Printf.printf "%d : in(%s) of %s \n" p str pr.name   
-    | Output -> Printf.printf "%d : out(%s) of %s \n" p str pr.name
+    | Input(chan) -> Printf.printf "%d : in(%s) of %s \n" p str pr.name   
+    | Output(chan) -> Printf.printf "%d : out(%s) of %s \n" p str pr.name
     | _ -> () end ;
-    let l = {p=p;chan=chan;io=io;name=str} in
+    let l = {p=p;io=io;name=str} in
     processes_infos.location_list <- l :: processes_infos.location_list;
     l
 
@@ -119,16 +119,16 @@ let rec convert_pr infos process =
      nonces.(rel_n) <- {name = str; n=nonce+rel_n}; 
      convert_pr infos p
   | InputB (ch,(rel_loc,Some str),p) -> 
-     locations.(rel_loc) <- new_location pr (location+rel_loc) (convert_chan pr chans ch) Input str;
+     locations.(rel_loc) <- new_location pr (location+rel_loc) (Input(convert_chan pr chans ch))  str;
      SeqP(Input(locations.(rel_loc)),convert_pr infos p)
   | OutputB(ch,(rel_loc,Some str),term,p) -> 
-     locations.(rel_loc) <- new_location pr (location+rel_loc) (convert_chan pr chans ch) Output str ;
+     locations.(rel_loc) <- new_location pr (location+rel_loc) (Output(convert_chan pr chans ch))  str ;
      SeqP(Output(locations.(rel_loc),convert_term pr locations nonces args term),
        convert_pr infos p)
   | TestIfB((rel_loc,Some str),s,t,p1,p2) -> 
      let s = convert_term pr locations nonces args s in 
      let t = convert_term pr locations nonces args t in 
-     locations.(rel_loc) <- new_location pr (location+rel_loc) {name=str} Choice str;
+     locations.(rel_loc) <- new_location pr (location+rel_loc) Choice str;
      if p2 = NilB then SeqP(Test(s,t),convert_pr infos p1) else
      if p1 = NilB then SeqP(TestInequal(s,t),convert_pr infos p2) else
      begin
@@ -138,7 +138,7 @@ let rec convert_pr infos process =
   | ParB(prlst) -> 
      ParallelP(List.map (convert_pr infos)prlst)
   | ChoiceB((rel_loc,Some s),lb) -> 
-     locations.(rel_loc) <- new_location pr (location+rel_loc) {name=s} Choice s;
+     locations.(rel_loc) <- new_location pr (location+rel_loc) Choice s;
      ChoiceP(locations.(rel_loc),List.mapi (fun i p -> (i, convert_pr infos p)) lb)
   | CallB((rel_loc,Some s),p,arguments) -> 
      let ar = Array.make (1+(count_type_nb TermType p (p.arity - 1))) zero in
@@ -151,7 +151,7 @@ let rec convert_pr infos process =
        else if p.types.(i) = ChanType 
        then begin channels.(!nbc) <- convert_chan pr chans x; incr nbc end
      ) arguments;
-     locations.(rel_loc) <- new_location pr (location+rel_loc) {name=s} Call s;
+     locations.(rel_loc) <- new_location pr (location+rel_loc) Call s;
      CallP(locations.(rel_loc),p,ar,channels)
   | _ -> assert false
  

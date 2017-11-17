@@ -100,7 +100,7 @@ let final dag l=
 
 let dag_with_one_action_at_end locs action =
   let set_a = LocationSet.singleton action in 
-  { rel = LocationSet.fold (fun l dag -> Dag.add l set_a dag) locs Dag.empty}
+  { rel = LocationSet.fold (fun l dag -> Dag.add l set_a dag) locs (Dag.singleton action LocationSet.empty)}
   
 let first_actions_among dag locs =
   let first = LocationSet.filter (fun k -> Dag.for_all (fun k' locset -> 

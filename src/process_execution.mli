@@ -5,8 +5,8 @@ val run_until_io :
   Process.process ->
   'a ->
   Inputs.inputs ->
-  (Inputs.choices * 'a * Process.process) list *
-  (Inputs.choices * 'a * Process.process) list
+  (Inputs.choices * 'a * (Types.term * Types.term) list * Process.process)
+  list * (Inputs.choices * 'a * 'b list * Process.process) list
 val init_run :
   'a ->
   Base.raw_statement ->
@@ -18,13 +18,14 @@ val next_partial_run :
   Process.process ->
   Dag.Dag.key ->
   Inputs.inputs ->
-  Dag.LocationSet.t -> Inputs.choices -> Bijection.partial_run
+  Dag.LocationSet.t ->
+  Inputs.choices -> (Types.term * Types.term) list -> Bijection.partial_run
 val apply_frame : Types.term -> Bijection.partial_run -> Types.term
 val try_run :
   Bijection.partial_run ->
   Dag.Dag.key ->
-  Inputs.choices * Dag.LocationSet.t * Process.process ->
-  Bijection.partial_run list
+  Inputs.choices * Dag.LocationSet.t * (Types.term * Types.term) list *
+  Process.process -> Bijection.partial_run list
 val next_run :
   Bijection.partial_run -> Bijection.partial_run list * Dag.LocationSet.elt
 val same_term_same_recipe : Base.raw_statement -> Base.raw_statement
@@ -37,7 +38,22 @@ val base_to_tests :
   Bijection.which_process -> Base.base -> Process.process -> unit
 val check_recipes : Bijection.partial_run -> Types.term * Types.term -> bool
 val next_solution : Bijection.solutions -> unit
-val find_all_run : Bijection.solutions -> unit
+val next_solution_else :
+  Bijection.correspondance ->
+  Bijection.correspondance -> Bijection.solutions -> unit
+val find_all_run :
+  Bijection.correspondance ->
+  Bijection.correspondance -> Bijection.solutions -> Bijection.Solutions.t
+val transpose : Types.term -> Bijection.correspondance -> Types.term
+val apply_var_set_pred :
+  Base.predicate ->
+  Types.term Term.VarMap.t -> Bijection.correspondance -> Base.predicate
+val partial_run_to_shrink_statement :
+  Bijection.partial_run -> Base.raw_statement * Types.term Term.VarMap.t
+val refine_recipes :
+  Base.raw_statement ->
+  Base.raw_statement -> Bijection.correspondance -> Base.raw_statement
+val consider_disequalities : Bijection.partial_run -> unit
 exception Attack
 val get_lst_of_test : Base.predicate -> (Types.term * Types.term) list
 val add_merged_tests : Bijection.partial_run * Bijection.RunSet.t -> unit

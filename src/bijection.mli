@@ -19,6 +19,7 @@ module IntegerSet :
     val equal : t -> t -> bool
     val subset : t -> t -> bool
     val iter : (elt -> unit) -> t -> unit
+    val map : (elt -> elt) -> t -> t
     val fold : (elt -> 'a -> 'a) -> t -> 'a -> 'a
     val for_all : (elt -> bool) -> t -> bool
     val exists : (elt -> bool) -> t -> bool
@@ -42,11 +43,21 @@ type partial_run = {
   frame : Inputs.inputs;
   choices : Inputs.choices;
   dag : Dag.dag;
-  qthreads : (Inputs.choices * Dag.LocationSet.t * Process.process) list;
+  disequalities : (Types.term * Types.term) list;
+  qthreads :
+    (Inputs.choices * Dag.LocationSet.t * (Types.term * Types.term) list *
+     Process.process)
+    list;
   failed_qthreads :
-    (Inputs.choices * Dag.LocationSet.t * Process.process) list;
+    (Inputs.choices * Dag.LocationSet.t * (Types.term * Types.term) list *
+     Process.process)
+    list;
 }
-and origin = Initial of Base.statement | Composed of test * test
+and origin =
+    Initial of Base.statement
+  | Composed of test * test
+  | Refined of test * Base.statement
+  | Else
 and test = {
   process_name : which_process;
   statement : Base.raw_statement;
@@ -79,6 +90,7 @@ module RunSet :
     val equal : t -> t -> bool
     val subset : t -> t -> bool
     val iter : (elt -> unit) -> t -> unit
+    val map : (elt -> elt) -> t -> t
     val fold : (elt -> 'a -> 'a) -> t -> 'a -> 'a
     val for_all : (elt -> bool) -> t -> bool
     val exists : (elt -> bool) -> t -> bool
@@ -120,6 +132,7 @@ module Solutions :
     val equal : t -> t -> bool
     val subset : t -> t -> bool
     val iter : (elt -> unit) -> t -> unit
+    val map : (elt -> elt) -> t -> t
     val fold : (elt -> 'a -> 'a) -> t -> 'a -> 'a
     val for_all : (elt -> bool) -> t -> bool
     val exists : (elt -> bool) -> t -> bool
@@ -134,6 +147,7 @@ module Solutions :
     val find : elt -> t -> elt
     val of_list : elt list -> t
   end
+val show_solution_set : Solutions.t -> unit
 type solutions = {
   mutable partial_runs : partial_run list;
   mutable partial_runs_todo : partial_run list;
@@ -186,6 +200,8 @@ type index = RunSet.t Dag.Dag.t Dag.Dag.t
 type bijection = {
   mutable p : Process.process;
   mutable q : Process.process;
+  mutable satP : Base.base;
+  mutable satQ : Base.base;
   mutable indexP : index;
   mutable indexQ : index;
   mutable next_id : int;

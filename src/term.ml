@@ -1,23 +1,3 @@
-(****************************************************************************)
-(* Akiss                                                                    *)
-(* Copyright (C) 2011-2014 Baelde, Ciobaca, Delaune, Kremer                 *)
-(*                                                                          *)
-(* This program is free software; you can redistribute it and/or modify     *)
-(* it under the terms of the GNU General Public License as published by     *)
-(* the Free Software Foundation; either version 2 of the License, or        *)
-(* (at your option) any later version.                                      *)
-(*                                                                          *)
-(* This program is distributed in the hope that it will be useful,          *)
-(* but WITHOUT ANY WARRANTY; without even the implied warranty of           *)
-(* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            *)
-(* GNU General Public License for more details.                             *)
-(*                                                                          *)
-(* You should have received a copy of the GNU General Public License along  *)
-(* with this program; if not, write to the Free Software Foundation, Inc.,  *)
-(* 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.              *)
-(****************************************************************************)
-
-
 open Util
 open Types
 (*
@@ -36,6 +16,26 @@ let private_names : (string list) ref = ref []
 
 open Dag
 
+module VarAux =      struct
+         type t = varId
+         let compare =
+           compare 
+       end  
+
+module VariableSet = Set.Make(VarAux)
+module VarMap = Map.Make(VarAux)
+
+let rec var_set_of_term_list vs term_list =
+  List.fold_left (fun vset term -> (var_set_of_term vset term)) vs term_list
+and var_set_of_term vs = function
+  | Fun(_, term_list) -> var_set_of_term_list vs term_list
+  | Var(x) -> VariableSet.add x vs
+  
+type dag = {
+  rel : LocationSet.t Dag.t ;
+}
+
+
 let is_var term = match term with
   | Var(x) -> true
   | _ -> false
@@ -51,18 +51,14 @@ let rec vars_of_term_list term_list =
 and vars_of_term = function
   | Fun(_, term_list) -> vars_of_term_list term_list
   | Var(x) -> [x]
+  
+let rec apply_var_set_subst term sigma  =
+  match term with
+  | Var(x) -> begin try VarMap.find x sigma with Not_found -> term end
+  | Fun(symbol, list) ->
+    Fun(symbol, trmap (function x -> apply_var_set_subst x sigma) list)
 
-(*let fresh_int =
-  let counter = ref 100 in
-    fun () ->
-      let result =  !counter in
-        counter := !counter + 1;
-        { n=result; status= ref New; }
 
-let fresh_variable () = fresh_int ()
-*)
-(*let new_term binder term =
-  {term with binder=binder}*)
 
 (** Signature extension: symbols that may be used in terms
   * in addition to the declared public symbols. *)

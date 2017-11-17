@@ -42,8 +42,14 @@ val show_binder : statement_role -> string
 type varId = { n : int; status : statement_role ref; }
 type nonceId = { name : string; n : int; }
 val null_nonce : nonceId
-type io = Input | Output | Phase | Choice | Call
-type location = { p : int; chan : chanId; io : io; name : string; }
+type io =
+    Input of chanId
+  | Output of chanId
+  | Phase
+  | Choice
+  | Call
+  | Virtual of varId
+type location = { p : int; io : io; name : string; }
 val null_location : location
 type funName =
     Regular of funId
