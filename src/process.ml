@@ -102,9 +102,10 @@ let new_location (pr : procId) p ( io : io ) str =
   try List.find (fun l -> l.p = p) processes_infos.location_list
   with
   | Not_found-> 
-    begin if true then match io with 
-    | Input(chan) -> Printf.printf "%d : in(%s) of %s \n" p str pr.name   
-    | Output(chan) -> Printf.printf "%d : out(%s) of %s \n" p str pr.name
+    begin if !about_location then match io with 
+    | Input(chan) -> Printf.printf "%d : in(%s)\n" p str  
+    | Output(chan) -> Printf.printf "%d : out(%s)\n" p str 
+    | Call -> Printf.printf " %d : %s \n" p str 
     | _ -> () end ;
     let l = {p=p;io=io;name=str} in
     processes_infos.location_list <- l :: processes_infos.location_list;
@@ -165,6 +166,8 @@ let expand_call loc (procId : procId) args chans=
       first_location = processes_infos.next_location ;
       first_nonce = processes_infos.next_nonce ;
     } in
+    if !about_location 
+    then Format.printf "Locations of %d : %s \n%!" loc.p (procId.name) ;
     processes_infos.next_nonce <- processes_infos.next_nonce + procId.nbnonces ;
     processes_infos.next_location <- processes_infos.next_location + procId.nbloc ;
     processes_infos.processes <- Dag.add loc ind processes_infos.processes ;

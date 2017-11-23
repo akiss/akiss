@@ -1,6 +1,8 @@
 type which_process = P | Q
 val show_which_process : which_process -> string
 type correspondance = { a : Types.location Dag.Dag.t; }
+val empty_correspondance : correspondance
+val is_empty_correspondance : correspondance -> bool
 val show_correspondance : correspondance -> string
 module IntegerSet :
   sig
@@ -55,8 +57,8 @@ type partial_run = {
 }
 and origin =
     Initial of Base.statement
-  | Composed of test * test
-  | Refined of test * Base.statement
+  | Composed of partial_run * partial_run
+  | Refined of partial_run * Base.statement
   | Else
 and test = {
   process_name : which_process;
@@ -66,6 +68,8 @@ and test = {
   from : IntegerSet.t;
   nb_actions : int;
   mutable new_actions : int;
+  mutable constraints : correspondance;
+  mutable constraints_back : correspondance;
 }
 val show_run : partial_run -> string
 val show_partial_run : partial_run -> string
@@ -109,6 +113,7 @@ type possible_runs = {
   execution : partial_run;
   conflicts : RunSet.t;
   score : int;
+  conflicts_loc : Dag.LocationSet.t;
 }
 module PossibleRuns :
   sig
@@ -206,11 +211,12 @@ type bijection = {
   mutable indexQ : index;
   mutable next_id : int;
   mutable tests : solutions Tests.t;
+  mutable registered_tests : solutions Tests.t;
   mutable locs : Dag.LocationSet.t;
   htable : (int list, origin) Hashtbl.t;
 }
-val base : bijection
-val show_base : unit -> unit
+val bijection : bijection
+val show_bijection : unit -> unit
 val proc : which_process -> Process.process
 val other : which_process -> which_process
 val reorder_int_set : IntegerSet.t -> IntegerSet.t
@@ -219,8 +225,9 @@ val push :
   which_process -> origin -> (test -> partial_run) -> unit
 val reorder_tests : unit -> unit
 val pop : unit -> Tests.key * solutions
+exception LocPtoQ of int
 val loc_p_to_q : Dag.Dag.key -> correspondance -> Types.location
-val add_partial_run : RunSet.elt -> unit
-val remove_partition : 'a -> unit
+val add_run : solutions -> RunSet.elt -> unit
+val remove_run : RunSet.elt -> unit
 val straight : Dag.Dag.key -> Dag.Dag.key -> bool
 val compatible : partial_run -> possible_runs

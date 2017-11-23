@@ -12,6 +12,7 @@ val debug_saturation : bool ref
 val about_tests : bool ref
 val debug_tests : bool ref
 val about_else : bool ref
+val debug_else : bool ref
 val about_execution : bool ref
 val debug_execution : bool ref
 val about_theory : bool ref
@@ -20,6 +21,7 @@ val about_traces : bool ref
 val about_maude : bool ref
 val about_canonization : bool ref
 val about_progress : bool ref
+val about_location : bool ref
 val normalOutput : ('a, Format.formatter, unit) format -> 'a
 val trmap : ('a -> 'b) -> 'a list -> 'b list
 val union : 'a list list -> 'a list

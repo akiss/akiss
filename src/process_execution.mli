@@ -36,6 +36,12 @@ val statements_to_tests :
   Bijection.which_process -> Base.statement -> Process.process -> unit
 val base_to_tests :
   Bijection.which_process -> Base.base -> Process.process -> unit
+val compatible :
+  Bijection.correspondance ->
+  Bijection.correspondance -> Dag.Dag.key -> Dag.Dag.key -> bool
+val compatible_prun :
+  Bijection.correspondance ->
+  Bijection.correspondance -> Bijection.partial_run -> bool
 val check_recipes : Bijection.partial_run -> Types.term * Types.term -> bool
 val next_solution : Bijection.solutions -> unit
 val next_solution_else :
@@ -54,8 +60,13 @@ val refine_recipes :
   Base.raw_statement ->
   Base.raw_statement -> Bijection.correspondance -> Base.raw_statement
 val consider_disequalities : Bijection.partial_run -> unit
+val find_compatible_run :
+  Bijection.solutions -> Bijection.Solutions.elt option
+val find_compatible_run_init :
+  Bijection.correspondance ->
+  Bijection.correspondance -> Bijection.RunSet.elt -> bool
 exception Attack
 val get_lst_of_test : Base.predicate -> (Types.term * Types.term) list
-val add_merged_tests : Bijection.partial_run * Bijection.RunSet.t -> unit
-val find_possible_run : Bijection.solutions -> Bijection.partial_run option
+val add_merged_tests : Bijection.possible_runs -> unit
+val find_possible_run : Bijection.solutions -> Bijection.Solutions.elt option
 val equivalence : Types.procId -> Types.procId -> unit

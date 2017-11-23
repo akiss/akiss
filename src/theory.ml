@@ -66,8 +66,8 @@ let command_line_options_list = [
    " Enable additional debug information");
   (* ("--progress", Arg.Set(about_progress), *)
   (*  "Enable progression output"); *)
-  (* ("--else", Arg.Set(about_else), *)
-  (*  "Enable debug output about else"); *)
+   ("-else", Arg.Set(debug_else), 
+    "Enable debug output about else"); 
    ("-canonization", Arg.Set(about_canonization),
     "Enable debug output about canonization rules");
    ("-seed", Arg.Set(about_seed), 
@@ -76,10 +76,14 @@ let command_line_options_list = [
     "Enable verbose output about saturation"); 
    ("-saturation", Arg.Set(debug_saturation), 
     "Enable debug output about saturation"); 
-   ("-exe", Arg.Set(about_execution), 
+   ("-bij", Arg.Set(about_execution), 
     "Show tests correspondance");
+   ("-loc", Arg.Set(about_location), 
+    "Show location information");
    ("-execution", Arg.Set(debug_execution), 
-    "Show tests executions debuuging"); 
+    "Show tests executions debugging"); 
+   ("-tests", Arg.Set(debug_tests), 
+    "Show information about tests");
   (*"--extra", Arg.Int (fun i -> extra_output := i),
    "<n>  Display information <n>"*)
   (*("--output-dot", Arg.String (fun s -> dotfile := Some s),
