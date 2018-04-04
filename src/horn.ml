@@ -122,6 +122,7 @@ let get_recipes = function
   | Knows( r, _) -> [r]
   | Identical( r1, r2) -> [r1;r2]
   | Reach -> []
+  | Unreachable -> []
   | Tests(l) -> List.fold_left (fun lst (r,r') -> r :: r' :: lst) [] l
 
 let get_term atom = atom.term
@@ -153,6 +154,7 @@ match pred with
   | Identical(r,r') -> 
      Identical(Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)
   | Reach -> Reach
+  | Unreachable -> Unreachable
   | Tests(lst) -> Tests(List.map (fun (r,r') -> (Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)) lst)
 
 let apply_subst_statement st (sigma : substitution)=
@@ -598,6 +600,7 @@ let normalize_new_statement f = (* This opti slow down the algo a bit much*)
   else 
   match f.head with 
   | Reach -> Some f
+  | Unreachable -> Some f
   | Knows(r,t) -> 
     let t' = Rewriting.normalize t (!Parser_functions.rewrite_rules) in 
     if not (Rewriting.equals_ac t t')
@@ -938,19 +941,30 @@ let rec concretize inputs term =
 
 
    
-let rec trace_statements kb solved_parent unsolved_parent process st =
+let rec trace_statements kb ineqs solved_parent unsolved_parent process st =
+  let rec add_ineqs_statements ineqs idsigma st =
+  match ineqs with
+  | [] -> ()
+  | (s,t)::q -> 
+    let st = apply_subst_statement {st with head = Unreachable} idsigma in
+    st.binder := Master;
+    let sterm = concretize st.inputs s in
+    let tterm = concretize st.inputs t in 
+    let unifiers = Rewriting.unifiers st.nbvars sterm tterm (! Parser_functions.rewrite_rules) in 
+      List.iter (fun subst -> add_statement kb solved_parent unsolved_parent None (apply_subst_statement st subst)) unifiers
+  in
   if !about_seed then 
     Format.printf "Computing seed statement for {%s}\n with %s \n%!"  
         (show_process process)(show_raw_statement st);
   match process with
     | EmptyP -> ()
     | ParallelP(plist) -> 
-      List.iter (fun p -> trace_statements kb solved_parent unsolved_parent  p st) plist
+      List.iter (fun p -> trace_statements kb ineqs solved_parent unsolved_parent  p st) plist
     | ChoiceP(l,plist) -> 
       List.iter (fun (i,p) -> 
         let choices = Inputs.add_choice l i st.choices in
         let st = {st with choices = choices} in
-        trace_statements kb solved_parent unsolved_parent p st) plist
+        trace_statements kb ineqs solved_parent unsolved_parent p st) plist
     | SeqP(Output(loc, t), pr) ->
       let next_dag = Dag.put_at_end st.dag loc in
       let identity_sigma = Rewriting.identity_subst st.nbvars in
@@ -969,10 +983,12 @@ let rec trace_statements kb solved_parent unsolved_parent process st =
         head = next_head;
         body = st.body} in
       let v = Rewriting.variants st.nbvars term (! Parser_functions.rewrite_rules) in
+      begin 
       List.iter (fun (_,sigma) -> 
         if !about_seed then Format.printf "- variant %s\n" (show_substitution sigma);
         add_statement kb solved_parent unsolved_parent (Some pr)
-          (apply_subst_statement st sigma)) v
+          (apply_subst_statement st sigma)) v ;
+      add_ineqs_statements ineqs identity_sigma st end
     | SeqP(Input(loc), pr) ->
       let next_dag = Dag.put_at_end st.dag loc in
       let identity_sigma = Rewriting.identity_subst st.nbvars in
@@ -989,11 +1005,7 @@ let rec trace_statements kb solved_parent unsolved_parent process st =
         term = Var(new_var); 
         marked = false} in
       let next_body = premisse :: st.body in
-      (if is_solved st 
-      then add_statement kb solved_parent unsolved_parent (Some pr)
-      else add_statement kb solved_parent unsolved_parent (Some pr))
-       (
-       {
+      let st = {
         binder = binder; 
         nbvars = st.nbvars + 2 ; 
         dag = next_dag;
@@ -1001,18 +1013,21 @@ let rec trace_statements kb solved_parent unsolved_parent process st =
         inputs = next_inputs;
         recipes = next_recipes;
         head = Reach ;
-        body = next_body}) 
+        body = next_body} in
+      begin
+      add_statement kb solved_parent unsolved_parent (Some pr) st ;
+      add_ineqs_statements ineqs identity_sigma st end
     | SeqP(Test(s, t), pr) ->
       st.binder := Master;
       let sterm = concretize st.inputs s in
       let tterm = concretize st.inputs t in 
       let unifiers = Rewriting.unifiers st.nbvars sterm tterm (! Parser_functions.rewrite_rules) in 
-      List.iter (fun subst -> trace_statements kb solved_parent unsolved_parent pr (apply_subst_statement st subst)) unifiers
+      List.iter (fun subst -> trace_statements kb ineqs solved_parent unsolved_parent pr (apply_subst_statement st subst)) unifiers
     | SeqP(TestInequal(s, t), pr) ->
-       trace_statements kb solved_parent unsolved_parent pr st
+       trace_statements kb ((s,t)::ineqs) solved_parent unsolved_parent pr st
     | CallP(loc, procId, args, chans) -> 
       let args = Array.map (concretize st.inputs) args in
-      trace_statements kb solved_parent unsolved_parent (expand_call loc procId args chans) st
+      trace_statements kb ineqs solved_parent unsolved_parent (expand_call loc procId args chans) st
    (* | _ -> invalid_arg ("todo")*)
 
 
@@ -1039,18 +1054,20 @@ and add_statement kb solved_parent unsolved_parent process st =
      if is_solved_st 
      then 
          begin
-         if is_deduction_st st.st 
-         then begin
+         match st.st.head with
+         | Knows(_) -> 
+           begin
            Queue.add st kb.s_todo;
            solved_parent.children <- st :: solved_parent.children;
            match process with 
            | None -> ()
-           | Some process -> trace_statements kb st unsolved_parent process st.st end
-         else begin
+           | Some process -> trace_statements kb [] st unsolved_parent process st.st end
+         | Unreachable -> kb.unreachable_solved <- st :: kb.unreachable_solved
+         | _ -> begin
            kb.other_solved <- st :: kb.other_solved;
            match process with 
            | None -> ()
-           | Some process -> trace_statements kb solved_parent unsolved_parent process st.st end
+           | Some process -> trace_statements kb [] solved_parent unsolved_parent process st.st end
          end 
      else begin
        Queue.add st kb.ns_todo;
@@ -1157,7 +1174,7 @@ let saturate procId  =
   List.iter (fun i -> theory_statements kb (Tuple(i)) i; for j = 0 to i - 1 do theory_statements kb (Projection(j,i)) 1 done ) !Parser_functions.tuple_arity;
   let ind = processes_infos.next_location in
   processes_infos.next_location <- processes_infos.next_location + 1 ;
-  trace_statements kb kb.solved_deduction kb.not_solved 
+  trace_statements kb [] kb.solved_deduction kb.not_solved 
     (CallP({p = ind;io=Call;name="main"},procId,Array.make 0 zero,Array.make 0 null_chan))
     null_raw_statement;
   while not (Queue.is_empty(kb.s_todo)) || not (Queue.is_empty(kb.ns_todo)) do

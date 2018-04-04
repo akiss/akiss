@@ -60,6 +60,7 @@ val equation :
 val concretize : Inputs.inputs -> Types.term -> Types.term
 val trace_statements :
   Base.base ->
+  (Types.term * Types.term) list ->
   Base.statement ->
   Base.statement -> Process.process -> Base.raw_statement -> unit
 val add_statement :

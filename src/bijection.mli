@@ -163,6 +163,7 @@ type solutions = {
   mutable failed_partial_run : partial_run list;
   mutable failed_run : partial_run list;
   mutable partitions : partial_run list;
+  mutable movable : int;
 }
 module Test : sig type t = test val compare : test -> test -> int end
 module Tests :
@@ -229,5 +230,7 @@ exception LocPtoQ of int
 val loc_p_to_q : Dag.Dag.key -> correspondance -> Types.location
 val add_run : solutions -> RunSet.elt -> unit
 val remove_run : RunSet.elt -> unit
+val mappings_of : which_process -> Dag.Dag.key -> RunSet.t Dag.Dag.t
+val mapping_exists : which_process -> Dag.Dag.key -> Dag.Dag.key -> bool
 val straight : Dag.Dag.key -> Dag.Dag.key -> bool
 val compatible : partial_run -> possible_runs

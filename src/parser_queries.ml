@@ -19,7 +19,7 @@ let parse_query env line = function
       let q = try Env.find ident' env with Not_found -> error_message line (Printf.sprintf "The process %s is not declared" ident') in
       begin 
         match (p,q) with
-          | (Proc(procId),Proc(procId')) -> Process_execution.equivalence procId procId'  
+          | (Proc(procId),Proc(procId')) -> Tests.equivalence procId procId'  
           | (env_elt,Proc(_)) 
           | (_,env_elt) -> error_message line (Printf.sprintf "The identifiant %s is declared as %s but a process is expected." ident (display_env_elt_type env_elt))
       end

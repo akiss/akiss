@@ -3,7 +3,9 @@ HAS_NPROC := $(shell if ocamlfind query nproc-nonproc >/dev/null 2>&1; then echo
 ML =  types.ml lexer.ml parser_functions.ml grammar.ml \
 	util.ml dag.ml term.ml  \
 	 rewriting.ml inputs.ml \
-	 base.ml  process.ml  horn.ml bijection.ml process_execution.ml parser_queries.ml theory.ml
+	 base.ml  process.ml  horn.ml \
+	 bijection.ml process_execution.ml tests.ml\
+	 parser_queries.ml theory.ml
 MLI = $(wildcard $(ML:.ml=.mli)) grammar.mli
 OCAMLC = ocamlfind ocamlopt -g -annot -package str,unix $(if $(HAS_NPROC),-package nproc)
 OCAMLDEP = ocamldep -native

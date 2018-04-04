@@ -126,9 +126,11 @@ type solutions = {
   mutable possible_runs_todo : partial_run list; (* Queue here before processing *)
   mutable possible_runs : Solutions.t; (* Run which are not compatible for the current bijection, to test if no other option *)
   mutable possible_restricted_runs : partial_run list; 
-  mutable failed_partial_run : partial_run list;
+  mutable failed_partial_run : partial_run list; (* not used *)
   mutable failed_run : partial_run list; (* execution but on of the identity fails *)
   mutable partitions : partial_run list; (* Current solution under testing *)
+  mutable movable : int; (*Number of tests which are merged require to consider changing the partition *) 
+  (*mutable reverse : partial_run Dag.t; *)(* record partial_run from existing trace for backward search (diseq and identities) *)
 }
 
 
@@ -171,7 +173,6 @@ type record = {
 type index = ((RunSet.t) Dag.t) Dag.t
 
 type bijection = {
-  (*mutable records : record list;*)
   mutable p : Process.process ; (* The process P *)
   mutable q : Process.process ;
   mutable satP : Base.base ;
@@ -258,6 +259,7 @@ let push (statement : raw_statement) process_name origin init =
        failed_partial_run = [];
        failed_run = [];
        partitions = [] ;
+       movable = 0 ;
      } in
   if !Util.debug_tests then Printf.printf "Adding new test: %s\n" (show_test test);
   (*if bijection.next_id mod 10000 = 0 then (*Hashtbl.iter (fun k v -> Printf.printf "%s" (show_raw_statement k)) bijection.htable;*)show_bijection ();*)
@@ -312,8 +314,16 @@ let remove_run partial_run =
     bijection.indexQ <- Dag.add lq (Dag.add lp (RunSet.remove partial_run reclstQ) recintQ) bijection.indexQ;
     ) 
     (if partial_run.test.process_name = P then partial_run.corresp.a else partial_run.corresp_back.a) 
-  
 
+let mappings_of process loc = 
+  try Dag.find loc
+    (match process with P -> bijection.indexP | Q -> bijection.indexQ)
+  with Not_found -> Dag.empty
+
+let mapping_exists process loc1 loc2 =
+  try not (RunSet.is_empty (Dag.find loc1 (Dag.find loc2 
+    (match process with P -> bijection.indexQ | Q -> bijection.indexP)))) with Not_found -> false
+  
 let straight locP locQ = 
   try
   let p = (Dag.find locP bijection.indexP) in 

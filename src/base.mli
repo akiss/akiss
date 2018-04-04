@@ -3,6 +3,7 @@ type predicate =
   | Reach
   | Identical of Types.term * Types.term
   | Tests of (Types.term * Types.term) list
+  | Unreachable
 type body_atom = {
   loc : Types.location option;
   recipe : Types.term;
@@ -34,6 +35,7 @@ type base = {
   mutable next_id : int;
   solved_deduction : statement;
   mutable other_solved : statement list;
+  mutable unreachable_solved : statement list;
   not_solved : statement;
   mutable s_todo : statement Queue.t;
   mutable ns_todo : statement Queue.t;

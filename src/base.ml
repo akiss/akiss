@@ -11,6 +11,7 @@ type predicate =
   | Reach
   | Identical of term * term
   | Tests of (term * term) list
+  | Unreachable
 
 type body_atom = {
    loc : location option;
@@ -51,6 +52,7 @@ type base =
    mutable next_id : int ;
    solved_deduction : statement ; (* to preserve structure solved_deduction link to a statement whose children are the actual ones *)
    mutable other_solved :  statement list; 
+   mutable unreachable_solved : statement list; 
    not_solved : statement ;
    mutable s_todo : statement Queue.t ; 
    mutable ns_todo : statement Queue.t ; 
@@ -66,6 +68,7 @@ let rec show_predicate p =
  | Identical(r,r') ->
       "identical(" ^ (show_term r) ^ "," ^ (show_term r') ^ ")"
  | Reach -> "reach"
+ | Unreachable -> "unreach"
  | Tests(l) -> (List.fold_left ( fun str (r,r') -> (if str = "" then "" else str ^ ", ") ^ (show_term r) ^ "=" ^ (show_term r') ) "tests(" l ) ^")"
 
 let show_body_atom a =
@@ -102,8 +105,10 @@ let show_kb kb =
     "Kb : \n - %d statements \n - %d solved deduction \n - %d solved identical\n Solved deduction:\n" 
     kb.next_id (count_statements kb.solved_deduction)(List.length kb.other_solved))
   ^ (show_statement_list " " (kb.solved_deduction.children))
-  ^ "Other solved: \n"
+  ^ "Reach and Identity solved: \n"
   ^ (show_statement_list " " (kb.other_solved))
+  ^ "Unreachable solved: \n"
+  ^ (show_statement_list " " (kb.unreachable_solved))
   ^ "Not solved: \n"
   ^ (show_statement_list " " (kb.not_solved.children))
 (*  ^ "Todo solved: " ^ (show_statements_id kb.s_todo)
@@ -119,6 +124,7 @@ let new_base () =
      next_id = 0;
      solved_deduction = new_statement () ;
      other_solved = [] ;
+     unreachable_solved = [] ;
      not_solved = new_statement () ;
      s_todo = Queue.create () ;
      ns_todo = Queue.create() ;
