@@ -69,6 +69,7 @@ module Dag :
 type dag = { rel : LocationSet.t Dag.t; }
 val show_loc_set : LocationSet.t -> string
 val show_dag : dag -> string
+val canonize_dag : dag -> dag
 val empty : dag
 val is_empty : dag -> bool
 val singleton : Dag.key -> LocationSet.elt -> dag
@@ -83,3 +84,5 @@ val is_cyclic : dag -> bool
 val final : dag -> LocationSet.elt -> dag
 val dag_with_one_action_at_end : LocationSet.t -> LocationSet.elt -> dag
 val first_actions_among : dag -> LocationSet.t -> LocationSet.t
+val last_actions_among : dag -> LocationSet.t -> LocationSet.t
+val locations_of_dag : dag -> LocationSet.t

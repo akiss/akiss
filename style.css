@@ -1,0 +1,71 @@
+tests, unreachables{
+  display:block;
+  margin:20px 0;
+}
+st {
+  display:list-item;
+  margin-left:20px;
+}
+children{
+}
+statement{
+  color:blue;
+}
+inputs, choices{
+  font-size:0.8em;
+  display:inline-block;
+}
+dag{
+  display:inline-block;
+  color:green;
+  font-size:0.7em;
+}
+recipes{
+  display:none;
+}
+rec{
+  font-weight:bold;}
+term{
+}
+pred loc{
+  vertical-align: sub;
+    font-size: smaller;
+}
+input loc{
+  color:green;
+  vertical-align:default;
+}
+choices input loc{
+  color:#FF00dd;
+  vertical-align:default;
+}
+findex{
+  font-weight:bold;
+}
+succ{
+  font-size:0.5em;
+  color:#777777;
+}
+test raw_st{
+  display:block;
+}
+opentest{
+  margin:10px;
+  display:block;
+}
+idtest{
+color:red;
+}
+infos{
+  display:none;
+}
+origin {
+  display:inline-block;
+  padding:0 5px;
+}
+origin initial{
+  color:#888800;
+}
+origin composed{
+  color:#00dddd;
+}

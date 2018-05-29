@@ -64,7 +64,6 @@ module VarMap :
   end
 val var_set_of_term_list : VariableSet.t -> Types.term list -> VariableSet.t
 val var_set_of_term : VariableSet.t -> Types.term -> VariableSet.t
-type dag = { rel : Dag.LocationSet.t Dag.Dag.t; }
 val is_var : Types.term -> bool
 val unbox_var : Types.term -> Types.varId
 val vars_of_term_list : Types.term list -> Types.varId list

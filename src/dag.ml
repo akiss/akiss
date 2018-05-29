@@ -26,12 +26,21 @@ let show_loc_set ls =
   LocationSet.fold (fun l str -> (if str = "" then "" else str ^ "," ) ^ (string_of_int l.p)) ls "";;
 
 let show_dag dag =
+  if !Util.use_xml then 
+  (Dag.fold (fun l ls str -> str ^(if LocationSet.is_empty ls 
+    then (Format.sprintf "<findex>%d</findex>" l.p) 
+    else ((Format.sprintf "<index>%d</index><succ>" l.p) ^ (show_loc_set ls) ^ "</succ>")
+    )) dag.rel "<dag>")^"</dag>"
+  else
   (Dag.fold (fun l ls str -> str ^(Format.sprintf " %d<" l.p) ^ (show_loc_set ls)) dag.rel "{")^"}"
 
 
 (**
   Dag stuff
 **)
+
+(* for hash tables *)
+let canonize_dag dag = {rel = List.fold_left (fun dag' (l,ls) -> Dag.add l (LocationSet.of_list (LocationSet.elements ls)) dag') Dag.empty (Dag.bindings dag.rel)}
 
 let empty = {rel = Dag.empty}
 
@@ -107,7 +116,13 @@ let first_actions_among dag locs =
   not (LocationSet.mem k' locs) || not (LocationSet.mem k locset)) dag.rel) locs in
   first
   
+let last_actions_among dag locs =
+  let last = LocationSet.filter ( fun k -> LocationSet.equal (LocationSet.diff locs (Dag.find k dag.rel) ) locs) locs in
+  last
 
+let locations_of_dag dag =   
+  Dag.fold (fun loc _ locset -> LocationSet.add loc locset) dag.rel LocationSet.empty
+  
 (* let () =
    let ch : Parser_functions.chanId= {name="c";id=0}  in
    let l1 = {p= 1; chan=ch} in

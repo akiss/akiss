@@ -31,9 +31,9 @@ and var_set_of_term vs = function
   | Fun(_, term_list) -> var_set_of_term_list vs term_list
   | Var(x) -> VariableSet.add x vs
   
-type dag = {
+(*type dag = {
   rel : LocationSet.t Dag.t ;
-}
+}*)
 
 
 let is_var term = match term with

@@ -62,9 +62,11 @@ val trace_statements :
   Base.base ->
   (Types.term * Types.term) list ->
   Base.statement ->
+  Base.statement ->
   Base.statement -> Process.process -> Base.raw_statement -> unit
 val add_statement :
   Base.base ->
+  Base.statement ->
   Base.statement ->
   Base.statement -> Process.process option -> Base.raw_statement -> unit
 val theory_statements : Base.base -> Types.funName -> int -> unit

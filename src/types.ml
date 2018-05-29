@@ -115,9 +115,10 @@ type location = {
  p : int;
  io : io;
  name : string;
+ parent : location option; (*the previous i/o of the syntax tree *)
 }
 
-let null_location = { p = -1; io = Phase; name = "null_loc"}
+let rec null_location = { p = -1; io = Phase; name = "null_loc"; parent = None}
 
 type funName = 
   | Regular of funId (* f,g,h *)

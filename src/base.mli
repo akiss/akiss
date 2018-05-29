@@ -2,7 +2,8 @@ type predicate =
     Knows of Types.term * Types.term
   | Reach
   | Identical of Types.term * Types.term
-  | Tests of (Types.term * Types.term) list
+  | Tests of
+      ((Types.term * Types.term) list * (Types.term * Types.term) list)
   | Unreachable
 type body_atom = {
   loc : Types.location option;
@@ -20,6 +21,15 @@ type raw_statement = {
   body : body_atom list;
   recipes : Inputs.inputs;
 }
+type hash_statement = {
+  hbinder : Types.statement_role ref;
+  hnbvars : int;
+  hdag : Dag.dag;
+  hinputs : Inputs.inputs;
+  hchoices : Inputs.choices;
+  hhead : predicate;
+  hbody : body_atom list;
+}
 val null_raw_statement : raw_statement
 type statement = {
   id : int;
@@ -29,17 +39,18 @@ type statement = {
   process : Process.process option;
   master_parent : statement;
   slave_parent : statement;
+  test_parent : statement;
 }
 val null_statement : statement
 type base = {
   mutable next_id : int;
   solved_deduction : statement;
-  mutable other_solved : statement list;
+  rid_solved : statement;
   mutable unreachable_solved : statement list;
   not_solved : statement;
   mutable s_todo : statement Queue.t;
   mutable ns_todo : statement Queue.t;
-  htable : (raw_statement, statement) Hashtbl.t;
+  htable : (hash_statement, statement) Hashtbl.t;
 }
 val show_predicate : predicate -> string
 val show_body_atom : body_atom -> string
@@ -52,3 +63,5 @@ val count_statements : statement -> int
 val show_kb : base -> string
 val new_statement : unit -> statement
 val new_base : unit -> base
+val canonize_statement : raw_statement -> raw_statement
+val raw_to_hash_statement : raw_statement -> hash_statement

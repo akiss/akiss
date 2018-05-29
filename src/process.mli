@@ -1,6 +1,7 @@
 type action =
     Input of Types.location
   | Output of Types.location * Types.term
+  | OutputA of Types.location * Types.term
   | Test of Types.term * Types.term
   | TestInequal of Types.term * Types.term
 type process =
@@ -31,10 +32,12 @@ val convert_chan :
   Types.procId ->
   Types.chanId array -> Types.relative_temp_term -> Types.chanId
 val new_location :
-  Types.procId -> int -> Types.io -> string -> Types.location
+  Types.procId ->
+  int -> Types.io -> string -> Types.location option -> Types.location
 val convert_pr :
   Types.procId * int * int * Types.location array * Types.nonceId array *
-  Types.term array * Types.chanId array -> Types.bounded_process -> process
+  Types.term array * Types.chanId array ->
+  Types.bounded_process -> Types.location option -> process
 val expand_call :
   Dag.Dag.key ->
   Types.procId -> Types.term array -> Types.chanId array -> process

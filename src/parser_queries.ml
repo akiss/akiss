@@ -11,7 +11,7 @@ let parse_query env line = function
       begin 
         match p with
           | Proc(procId) -> let (l,kb) = Horn.saturate procId in
-              Printf.printf "Saturation is done %s\n" (Base.show_kb kb) 
+              Printf.printf (if !use_xml then "<?xml-stylesheet type='text/css' href='style.css' ?>%s" else "Saturation is done %s\n") (Base.show_kb kb) 
           | env_elt -> error_message line (Printf.sprintf "The identifiant %s is declared as %s but a process is expected." ident (display_env_elt_type env_elt))
       end
   | Trace_Eq((ident,line),(ident',line')) -> 

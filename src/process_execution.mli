@@ -27,15 +27,9 @@ val try_run :
   Process.process -> (Bijection.partial_run * Types.location) option
 val next_run :
   bool ->
-  Bijection.partial_run -> Bijection.partial_run list * Dag.LocationSet.elt
+  Bijection.partial_run -> Bijection.partial_run list * Types.location
+val next_run_reverse : 'a -> 'b -> unit
 val same_term_same_recipe : Base.raw_statement -> Base.raw_statement
-val statement_to_tests :
-  Bijection.which_process ->
-  Bijection.origin -> Base.raw_statement -> Process.process -> unit
-val statements_to_tests :
-  Bijection.which_process -> Base.statement -> Process.process -> unit
-val base_to_tests :
-  Bijection.which_process -> Base.base -> Process.process -> unit
 val compatible :
   Bijection.correspondance ->
   Bijection.correspondance -> Dag.Dag.key -> Dag.Dag.key -> bool
@@ -55,3 +49,4 @@ val refine_recipes :
   Base.raw_statement -> Bijection.correspondance -> Base.raw_statement
 val find_compatible_run :
   Bijection.solutions -> Bijection.Solutions.elt option
+val find_possible_run : Bijection.solutions -> Bijection.Solutions.elt option

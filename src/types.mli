@@ -49,7 +49,12 @@ type io =
   | Choice
   | Call
   | Virtual of varId
-type location = { p : int; io : io; name : string; }
+type location = {
+  p : int;
+  io : io;
+  name : string;
+  parent : location option;
+}
 val null_location : location
 type funName =
     Regular of funId

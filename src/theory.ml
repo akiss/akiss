@@ -49,7 +49,7 @@ let usage = Printf.sprintf
 
 let  set_debug = function
   | "progress" -> about_progress := true
-  | "else" -> about_else := true
+  | "else" -> about_completion := true
   | "canon" ->  about_canonization := true
   | "seed" -> about_seed := true
   | "sat" -> about_saturation := true
@@ -62,12 +62,12 @@ let  set_debug = function
     
 let command_line_options_list = [
   ("-d",
-   Arg.Symbol(["progress";"else";"canon";"seed";"sat";"saturation";"maude";"exec"],set_debug),
+   Arg.Symbol(["progress";"completion";"canon";"seed";"sat";"saturation";"maude";"exec"],set_debug),
    " Enable additional debug information");
   (* ("--progress", Arg.Set(about_progress), *)
   (*  "Enable progression output"); *)
-   ("-else", Arg.Set(debug_else), 
-    "Enable debug output about else"); 
+   ("-comp", Arg.Set(about_completion), 
+    "Enable debug output about completions"); 
    ("-canonization", Arg.Set(about_canonization),
     "Enable debug output about canonization rules");
    ("-seed", Arg.Set(about_seed), 
@@ -84,6 +84,8 @@ let command_line_options_list = [
     "Show tests executions debugging"); 
    ("-tests", Arg.Set(debug_tests), 
     "Show information about tests");
+   ("-xml", Arg.Set(use_xml),
+    "Print info in xml format");
   (*"--extra", Arg.Int (fun i -> extra_output := i),
    "<n>  Display information <n>"*)
   (*("--output-dot", Arg.String (fun s -> dotfile := Some s),
@@ -118,7 +120,7 @@ let process_file f =
   Parser_functions.reset_parser ()
   
 let () =
-  Printf.printf "Akiss starts\n%!" ;
+  (*Printf.printf "Akiss starts\n%!" ;*)
   Arg.parse command_line_options_list process_file usage;
   exit 0
 

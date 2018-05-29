@@ -1,6 +1,7 @@
 open Types
 open Dag
 open Base
+open Util
 
 type which_process = P | Q
 
@@ -14,6 +15,9 @@ let empty_correspondance = {a = Dag.empty}
 let is_empty_correspondance corr = Dag.is_empty corr.a
 
 let show_correspondance c =
+  if !use_xml then
+  (Dag.fold (fun lp lq str -> str ^(Format.sprintf  "%d =&gt; %d ;"  lp.p lq.p)) c.a "<corresp>")^"</corresp>"
+  else
   (Dag.fold (fun lp lq str -> str ^(Format.sprintf " %d => %d ;" lp.p lq.p)) c.a "{|")^"|}"
 
 
@@ -42,8 +46,7 @@ type partial_run = {
 and origin = 
   | Initial of statement 
   | Composed of partial_run * partial_run 
-  | Refined of partial_run * statement 
-  | Else
+  | Completion
   
 and test = {
   process_name : which_process; (* Is it a test of P or of Q?*)
@@ -76,23 +79,50 @@ let show_partial_run pr =
 
   
 let rec show_origin o =
+  if !use_xml then 
+  match o with 
+  | Initial(st) -> Format.sprintf "<initial>%d</initial>" (st.id)
+  | Composed(run1,run2) -> Format.sprintf "<composed><idtest>%d</idtest>:%s | <idtest>%d</idtest>:%s</composed>"  run1.test.id (show_origin run1.test.origin)  run2.test.id (show_origin run2.test.origin) 
+ (* | Refined(run,st) -> Format.sprintf "{ %d:%s < #%d}"  run.test.id (show_origin run.test.origin)  st.id *)
+  | Completion -> "comp"
+  else    
   match o with 
   | Initial(st) -> Format.sprintf "%d" (st.id)
   | Composed(run1,run2) -> Format.sprintf "[ %d:%s | %d:%s]"  run1.test.id (show_origin run1.test.origin)  run2.test.id (show_origin run2.test.origin) 
-  | Refined(run,st) -> Format.sprintf "{ %d:%s < #%d}"  run.test.id (show_origin run.test.origin)  st.id 
-  | Else -> "else"
+  (*| Refined(run,st) -> Format.sprintf "{ %d:%s < #%d}"  run.test.id (show_origin run.test.origin)  st.id *)
+  | Completion -> "comp"
   
 and show_test t =
-  Format.sprintf "Test[%d]: %s %s {%d,%d} %s\n%s\n" t.id (show_origin t.origin) (show_int_set t.from) t.new_actions t.nb_actions (show_which_process t.process_name) (show_raw_statement t.statement)
+  Format.sprintf 
+  (if !use_xml then "<test><idtest>%d</idtest><origin>%s</origin><infos>%s %d,%d</infos><prname>%s</prname>%s</test>"
+  else "Test[%d]: %s %s {%d,%d} %s\n%s\n") t.id (show_origin t.origin) (show_int_set t.from) t.new_actions t.nb_actions (show_which_process t.process_name) (show_raw_statement t.statement)
 
 
+type completion = {
+  initial_statement : raw_statement ; (* the unreach or identity from which the completion is issued *) 
+  st_c : raw_statement ;
+  corresp_c : correspondance ;
+  corresp_back_c : correspondance ;
+  missing_actions :  LocationSet.t; 
+  mutable most_general_completions : completion list;
+}
 
+let show_completion completion = 
+  Format.sprintf "compl. %s\n %s \n %s\n" (show_raw_statement completion.st_c) (show_correspondance completion.corresp_c) (show_loc_set completion.missing_actions)
  
+let show_all_completions daglst = 
+   Dag.iter (fun loc listcomp -> 
+    Printf.printf "loc %d\n" (loc.p);
+    List.iter ( fun c -> Printf.printf "%s\n" (show_completion c)) listcomp) ( daglst)  ;
+
 module PartialRun =
        struct
          type t = partial_run
          let compare x y =
-           compare x y
+            let z = compare x.test.id y.test.id in
+            if z = 0 then
+              compare x y
+            else z
        end
 
 
@@ -142,9 +172,13 @@ module Test =
         match (x.origin , y.origin) with
           | (Initial st1, Initial st2) ->
             let r = compare (x.new_actions, x.nb_actions) (y.new_actions, y.nb_actions) in
-            if r = 0 then 
+            if r = 0 then begin
+              match x.statement.head,y.statement.head with
+              | Identical(_) ,Reach -> -1
+              | Reach,Identical(_) -> 1
+              | _ -> 
               let r = - (compare st1.id st2.id) in
-              if r = 0 then compare x.process_name y.process_name else - r else - r
+              if r = 0 then compare x.process_name y.process_name else - r end else - r
            | (Initial _, Composed _) -> 1
            | (Composed _ , Initial _) -> -1
            | (Composed(_), Composed(_)) ->
@@ -152,9 +186,9 @@ module Test =
               if r = 0 then 
               compare x.id y.id 
               else -r
-          | (Refined _, Refined _) -> compare x.id y.id
-          | (Refined _, _) -> -1
-          | (_, Refined _) ->  1
+          | (Completion _, Completion _) -> compare x.id y.id
+          | (Completion _, _) -> -1
+          | (_, Completion _) ->  1
           | (_,_) -> assert false 
    end
 
@@ -179,10 +213,14 @@ type bijection = {
   mutable satQ : Base.base ;
   mutable indexP : index ;
   mutable indexQ : index ;
-  mutable next_id : int;
+  mutable next_id : int; (* the index for tests id *)
   mutable tests : solutions Tests.t; (* The remaining tests to test on the other process *)
   mutable registered_tests : solutions Tests.t; (* The tests that are set in *)
-  mutable locs : LocationSet.t; (* the locations already in the tests of the base *)
+  mutable runs_for_completions_P : partial_run list; (* the run which may complete a partial completion *)
+  mutable runs_for_completions_Q : partial_run list; (* the run which may complete a partial completion *)
+  mutable to_be_completed_P : (completion list) Dag.t; (* The pending completions *)
+  mutable to_be_completed_Q : (completion list) Dag.t; (* The pending completions *)
+  mutable locs : LocationSet.t; (* the locations already in the tests of the base, for optimization only *)
   htable : (int list , origin) Hashtbl.t;
 }
 
@@ -199,6 +237,10 @@ let bijection =
   next_id = 0 ;
   tests = Tests.empty;
   registered_tests = Tests.empty;
+  runs_for_completions_P = [];
+  runs_for_completions_Q = [];
+  to_be_completed_P = Dag.empty;
+  to_be_completed_Q = Dag.empty;
   locs = LocationSet.empty;
   htable = Hashtbl.create 1000 ;
 }
@@ -224,13 +266,13 @@ let other name =
 let reorder_int_set s =
   IntegerSet.fold (fun e set -> IntegerSet.add e s) s IntegerSet.empty
 
-(* Add a test to test in the queue *)
+(* Add a test to the tests in the queue *)
 let push (statement : raw_statement) process_name origin init =
   let int_set = match origin with 
       | Initial _ -> IntegerSet.singleton bijection.next_id 
-      | Refined(run,st) -> IntegerSet.singleton bijection.next_id
+      | Completion -> assert false (*TODO *);
       | Composed(run1,run2) ->  (IntegerSet.union run1.test.from run2.test.from)
-      | Else -> assert false in
+  in
   let int_lst = IntegerSet.elements int_set in
   statement.binder := New;
   if Hashtbl.mem bijection.htable int_lst then ()  else begin
@@ -261,7 +303,7 @@ let push (statement : raw_statement) process_name origin init =
        partitions = [] ;
        movable = 0 ;
      } in
-  if !Util.debug_tests then Printf.printf "Adding new test: %s\n" (show_test test);
+  if !Util.debug_tests then Printf.printf "\nAdding new test: %s\n" (show_test test);
   (*if bijection.next_id mod 10000 = 0 then (*Hashtbl.iter (fun k v -> Printf.printf "%s" (show_raw_statement k)) bijection.htable;*)show_bijection ();*)
   bijection.tests <- Tests.add test solution bijection.tests 
   end
@@ -282,6 +324,18 @@ let pop () =
   bijection.tests <- Tests.remove test bijection.tests ; 
   (test,sol)
 
+(* add a partial completion to the todo list *)  
+let register_completion which_process completion =
+  let to_be_completed = if which_process = P then bijection.to_be_completed_P else bijection.to_be_completed_Q in
+  let last = last_actions_among completion.st_c.dag completion.missing_actions in
+  try
+  let loc = LocationSet.choose last in
+  let new_list = Dag.add loc (completion:: (try Dag.find loc to_be_completed with Not_found -> [])) to_be_completed in
+  if !about_completion then Printf.printf "New completion: %s\n" (show_completion completion);
+  if which_process = P then bijection.to_be_completed_P <- new_list else bijection.to_be_completed_Q <- new_list
+  with Not_found -> Printf.printf ">>%s\n" (show_loc_set completion.missing_actions)
+ 
+
 exception LocPtoQ of int
 
 let loc_p_to_q p corr =
@@ -291,6 +345,11 @@ let loc_p_to_q p corr =
 (* Register a solution to a test *)
 let add_run solution partial_run =
     bijection.registered_tests <- Tests.add partial_run.test solution bijection.registered_tests;
+    if partial_run.test.process_name = P 
+    then 
+      bijection.runs_for_completions_P <- partial_run :: bijection.runs_for_completions_P
+    else 
+      bijection.runs_for_completions_Q <- partial_run :: bijection.runs_for_completions_Q;
     Dag.iter (fun lp lq -> 
     (*let r = {locP = lp; locQ = lq; partial_run = partial_run;} in*)
     let recintP = try Dag.find lp bijection.indexP with Not_found -> Dag.empty in 
@@ -304,6 +363,11 @@ let add_run solution partial_run =
   
 let remove_run partial_run = 
   bijection.registered_tests <- Tests.remove partial_run.test bijection.registered_tests;
+  if partial_run.test.process_name = P 
+  then 
+    bijection.runs_for_completions_P <- List.filter (fun pr -> pr != partial_run) bijection.runs_for_completions_P
+  else 
+    bijection.runs_for_completions_Q <- List.filter (fun pr -> pr != partial_run) bijection.runs_for_completions_Q ;
   Dag.iter (fun lp lq -> 
     (*let r = {locP = lp; locQ = lq; partial_run = partial_run;} in*)
     let recintP = try Dag.find lp bijection.indexP with Not_found -> Dag.empty in 

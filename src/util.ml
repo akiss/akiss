@@ -14,8 +14,8 @@ let about_saturation = ref false
 let debug_saturation = ref false
 let about_tests = ref false
 let debug_tests = ref false
-let about_else = ref false
-let debug_else = ref false
+let about_completion = ref false
+let debug_completion = ref false
 let about_execution = ref false
 let debug_execution = ref false
 let about_theory = ref false
@@ -25,6 +25,7 @@ let about_maude = ref false
 let about_canonization = ref false
 let about_progress = ref false
 let about_location = ref false
+let use_xml = ref false
 
 (*let verboseOutput a =
   if !verbose_output || about_verbose then

@@ -58,8 +58,7 @@ type partial_run = {
 and origin =
     Initial of Base.statement
   | Composed of partial_run * partial_run
-  | Refined of partial_run * Base.statement
-  | Else
+  | Completion
 and test = {
   process_name : which_process;
   statement : Base.raw_statement;
@@ -75,8 +74,21 @@ val show_run : partial_run -> string
 val show_partial_run : partial_run -> string
 val show_origin : origin -> string
 val show_test : test -> string
+type completion = {
+  initial_statement : Base.raw_statement;
+  st_c : Base.raw_statement;
+  corresp_c : correspondance;
+  corresp_back_c : correspondance;
+  missing_actions : Dag.LocationSet.t;
+  mutable most_general_completions : completion list;
+}
+val show_completion : completion -> string
+val show_all_completions : completion list Dag.Dag.t -> unit
 module PartialRun :
-  sig type t = partial_run val compare : 'a -> 'a -> int end
+  sig
+    type t = partial_run
+    val compare : partial_run -> partial_run -> int
+  end
 module RunSet :
   sig
     type elt = PartialRun.t
@@ -213,6 +225,10 @@ type bijection = {
   mutable next_id : int;
   mutable tests : solutions Tests.t;
   mutable registered_tests : solutions Tests.t;
+  mutable runs_for_completions_P : partial_run list;
+  mutable runs_for_completions_Q : partial_run list;
+  mutable to_be_completed_P : completion list Dag.Dag.t;
+  mutable to_be_completed_Q : completion list Dag.Dag.t;
   mutable locs : Dag.LocationSet.t;
   htable : (int list, origin) Hashtbl.t;
 }
@@ -226,6 +242,7 @@ val push :
   which_process -> origin -> (test -> partial_run) -> unit
 val reorder_tests : unit -> unit
 val pop : unit -> Tests.key * solutions
+val register_completion : which_process -> completion -> unit
 exception LocPtoQ of int
 val loc_p_to_q : Dag.Dag.key -> correspondance -> Types.location
 val add_run : solutions -> RunSet.elt -> unit

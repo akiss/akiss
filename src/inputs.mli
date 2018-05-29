@@ -2,8 +2,11 @@ exception Incompatible_choices
 type inputs = { i : Types.term Dag.Dag.t; }
 type choices = { c : int Dag.Dag.t; }
 val show_inputs : inputs -> string
+val show_choices : choices -> string
 val new_inputs : inputs
 val new_choices : choices
+val canonize_inputs : inputs -> inputs
+val canonize_choices : choices -> choices
 val add_input : Dag.Dag.key -> Types.varId -> inputs -> inputs
 val add_choice : Dag.Dag.key -> int -> choices -> choices
 val add_to_frame : Dag.Dag.key -> Types.term -> inputs -> inputs

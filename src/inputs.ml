@@ -1,6 +1,7 @@
 open Types
 open Dag
-open Term 
+open Term
+open Util
 
 exception Incompatible_choices
 type inputs = { i : term Dag.t ;
@@ -8,12 +9,29 @@ type inputs = { i : term Dag.t ;
 type choices = { c : int Dag.t}
 
 let show_inputs inputs =
-  if Dag.is_empty inputs.i then "" else
+  if Dag.is_empty inputs.i then "" 
+  else if !use_xml then 
+  (Dag.fold (fun l ls str -> (if str = "" then "<inputs>" else str ^ " , ") ^ Format.sprintf "<input><loc>%d:</loc><term>%s</term></input>" l.p (show_term ls)) inputs.i "" ) ^ "</inputs>"
+  else
   (Dag.fold (fun l ls str -> (if str = "" then "[" else str ^ " | ") ^ Format.sprintf "[%d]_%s: %s" l.p  l.name (show_term ls)) inputs.i "" ) ^ "]"
+
+let show_choices choices =
+  if Dag.is_empty choices.c then "" 
+  else if !use_xml then 
+  (Dag.fold (fun l i str -> (if str = "" then "<choices>" else str ^ " , ") ^ Format.sprintf "<input><loc>%d:</loc><term>%d</term></input>" l.p i) choices.c "" ) ^ "</choices>"
+  else
+  (Dag.fold (fun l i str -> (if str = "" then "[" else str ^ " | ") ^ Format.sprintf "<%d>: %d" l.p  i) choices.c "" ) ^ "]"
 
 let new_inputs = { i = Dag.empty } 
 let new_choices = { c = Dag.empty }
 
+(*hashing...*)
+let canonize_inputs inputs = 
+ { i = List.fold_left (fun i' (l,t) -> Dag.add l t i') Dag.empty (Dag.bindings inputs.i)}
+ 
+let canonize_choices choices =
+ { c = List.fold_left (fun c' (l,i) -> Dag.add l i c') Dag.empty (Dag.bindings choices.c)}
+ 
 (* when considering a new input *)
 let add_input loc var inputs =
   { i = Dag.add loc (Var(var)) inputs.i }(*(Dag.map (fun t -> new_term binder t) inputs)}*)
