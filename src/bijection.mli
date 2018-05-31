@@ -54,6 +54,8 @@ type partial_run = {
     (Inputs.choices * Dag.LocationSet.t * (Types.term * Types.term) list *
      Process.process)
     list;
+  last_exe : Types.location;
+  weird_assoc : int;
 }
 and origin =
     Initial of Base.statement
@@ -75,11 +77,13 @@ val show_partial_run : partial_run -> string
 val show_origin : origin -> string
 val show_test : test -> string
 type completion = {
+  from_base : which_process;
   initial_statement : Base.raw_statement;
   st_c : Base.raw_statement;
   corresp_c : correspondance;
   corresp_back_c : correspondance;
   missing_actions : Dag.LocationSet.t;
+  selected_action : Types.location;
   mutable most_general_completions : completion list;
 }
 val show_completion : completion -> string
@@ -167,8 +171,7 @@ module Solutions :
 val show_solution_set : Solutions.t -> unit
 type solutions = {
   mutable partial_runs : partial_run list;
-  mutable partial_runs_todo : partial_run list;
-  mutable partial_runs_priority_todo : partial_run list;
+  mutable partial_runs_todo : Solutions.t;
   mutable possible_runs_todo : partial_run list;
   mutable possible_runs : Solutions.t;
   mutable possible_restricted_runs : partial_run list;
@@ -227,8 +230,10 @@ type bijection = {
   mutable registered_tests : solutions Tests.t;
   mutable runs_for_completions_P : partial_run list;
   mutable runs_for_completions_Q : partial_run list;
-  mutable to_be_completed_P : completion list Dag.Dag.t;
-  mutable to_be_completed_Q : completion list Dag.Dag.t;
+  mutable partial_completions_P : completion list Dag.Dag.t;
+  mutable partial_completions_Q : completion list Dag.Dag.t;
+  mutable todo_completion_P : completion list;
+  mutable todo_completion_Q : completion list;
   mutable locs : Dag.LocationSet.t;
   htable : (int list, origin) Hashtbl.t;
 }
@@ -242,7 +247,7 @@ val push :
   which_process -> origin -> (test -> partial_run) -> unit
 val reorder_tests : unit -> unit
 val pop : unit -> Tests.key * solutions
-val register_completion : which_process -> completion -> unit
+val register_completion : completion -> unit
 exception LocPtoQ of int
 val loc_p_to_q : Dag.Dag.key -> correspondance -> Types.location
 val add_run : solutions -> RunSet.elt -> unit

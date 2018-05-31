@@ -115,7 +115,8 @@ let first_actions_among dag locs =
   let first = LocationSet.filter (fun k -> Dag.for_all (fun k' locset -> 
   not (LocationSet.mem k' locs) || not (LocationSet.mem k locset)) dag.rel) locs in
   first
-  
+
+(* For execution and completions *)  
 let last_actions_among dag locs =
   let last = LocationSet.filter ( fun k -> LocationSet.equal (LocationSet.diff locs (Dag.find k dag.rel) ) locs) locs in
   last
@@ -123,6 +124,12 @@ let last_actions_among dag locs =
 let locations_of_dag dag =   
   Dag.fold (fun loc _ locset -> LocationSet.add loc locset) dag.rel LocationSet.empty
   
+let pick_last_or_null dag locs =
+  let last = last_actions_among dag locs in
+  try 
+    LocationSet.choose last
+  with Not_found -> null_location
+
 (* let () =
    let ch : Parser_functions.chanId= {name="c";id=0}  in
    let l1 = {p= 1; chan=ch} in

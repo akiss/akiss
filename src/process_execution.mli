@@ -20,15 +20,12 @@ val next_partial_run :
   Inputs.choices -> (Types.term * Types.term) list -> Bijection.partial_run
 val apply_frame : Types.term -> Bijection.partial_run -> Types.term
 val try_run :
-  bool ->
   Bijection.partial_run ->
   Dag.Dag.key ->
   Inputs.choices * Dag.LocationSet.t * (Types.term * Types.term) list *
   Process.process -> (Bijection.partial_run * Types.location) option
 val next_run :
-  bool ->
   Bijection.partial_run -> Bijection.partial_run list * Types.location
-val next_run_reverse : 'a -> 'b -> unit
 val same_term_same_recipe : Base.raw_statement -> Base.raw_statement
 val compatible :
   Bijection.correspondance ->
@@ -38,15 +35,6 @@ val compatible_prun :
   Bijection.correspondance -> Bijection.partial_run -> bool
 val check_recipes : Bijection.partial_run -> Types.term * Types.term -> bool
 val next_solution : Bijection.solutions -> unit
-val next_solution_else : Bijection.solutions -> unit
-val find_all_run : Bijection.solutions -> Bijection.Solutions.t
-val transpose : Types.term -> Bijection.correspondance -> Types.term
-val apply_var_set_pred :
-  Base.predicate ->
-  Types.term Term.VarMap.t -> Bijection.correspondance -> Base.predicate
-val refine_recipes :
-  Base.raw_statement ->
-  Base.raw_statement -> Bijection.correspondance -> Base.raw_statement
 val find_compatible_run :
   Bijection.solutions -> Bijection.Solutions.elt option
 val find_possible_run : Bijection.solutions -> Bijection.Solutions.elt option

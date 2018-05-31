@@ -5,10 +5,13 @@ val get_lst_of_test : Base.predicate -> (Types.term * Types.term) list
 val map_dag : Dag.dag -> Bijection.correspondance -> Dag.dag
 val transpose_inputs :
   Inputs.inputs -> Bijection.partial_run -> Inputs.inputs
+val transpose_recipes :
+  Inputs.inputs -> Bijection.partial_run -> Inputs.inputs
 val conj : Bijection.partial_run -> Base.raw_statement
 val add_to_completion : Bijection.partial_run -> Bijection.completion -> unit
 val negate_statement : Base.raw_statement -> Base.raw_statement
-val statement_to_completion : Base.raw_statement -> Bijection.completion
+val statement_to_completion :
+  Bijection.which_process -> Base.raw_statement -> Bijection.completion
 val statement_to_tests :
   Bijection.which_process ->
   Bijection.origin -> Base.raw_statement -> Process.process -> unit

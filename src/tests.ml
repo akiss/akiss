@@ -7,6 +7,19 @@ open Bijection
 open Term
 open Process_execution
 
+let recipes_of_head head = 
+  match head with
+  | Tests(equal,diseq) -> equal , diseq
+  | Identical(r,r') -> [(r,r')],[]
+  | Knows(_)
+  | Reach -> [],[] 
+
+let get_lst_of_test test =
+  match test with 
+  Tests(equal,diseq) -> equal
+  | Identical(r,r') -> [(r,r')]
+  | _ -> []
+
 (* from two statements (ie tests) generate the merge of these tests, like equation rule *)
 let merge_tests (fa : raw_statement) (fb : raw_statement) =
   if ! debug_execution then Printf.printf "Try to merge: %s\n and %s\n" (show_raw_statement fa)(show_raw_statement fb);
@@ -24,18 +37,8 @@ let merge_tests (fa : raw_statement) (fb : raw_statement) =
     if sigmas = [] 
     then []
     else 
-      let fa_head_equal = 
-        match fa.head with
-        | Tests(equal,diseq) -> equal
-        | Identical(r,r') -> [(r,r')]
-        | Knows(_)
-        | Reach -> [] in
-      let fb_head_equal = 
-        match fb.head with
-        | Tests(equal,diseq) -> equal
-        | Identical(r,r') -> [(r,r')]
-        | Knows(_)
-        | Reach -> [] in  
+    let fa_head_equal, fa_head_diseq = recipes_of_head fa.head in
+    let fb_head_equal, fb_head_diseq = recipes_of_head fb.head in  
     let r =
     List.map
       (fun sigm ->
@@ -62,13 +65,17 @@ let merge_tests (fa : raw_statement) (fb : raw_statement) =
            head = Tests( List.map 
              (fun (r,rp) -> 
                Rewriting.apply_subst_term r sigma,Rewriting.apply_subst_term rp sigma)
-             (Util.unique(fa_head_equal @ fb_head_equal)), []); (* TODO > diseq *)
+             (Util.unique(fa_head_equal @ fb_head_equal)),
+             List.map 
+             (fun (r,rp) -> 
+               Rewriting.apply_subst_term r sigma,Rewriting.apply_subst_term rp sigma)
+             (Util.unique(fa_head_diseq @ fb_head_diseq))); 
            body = body }
            in
            (*if !debug_execution then Format.printf "The merged test: %s\n"
                (show_raw_statement result);*)
            let result = Horn.simplify_statement result in
-           if !debug_execution then Format.printf "New merged test: %s\n"
+           if !debug_execution then Format.printf "New merged test: %s\n%!"
                (show_raw_statement result);
            result)
         sigmas
@@ -79,18 +86,24 @@ let merge_tests (fa : raw_statement) (fb : raw_statement) =
 
     exception Attack   
 
-let get_lst_of_test test =
-  match test with 
-  Tests(equal,diseq) -> equal
-  | Identical(r,r') -> [(r,r')]
-  | _ -> []
 
 let map_dag dag corresp =
   {rel = Dag.fold (fun key lset ndag -> Dag.add (loc_p_to_q key corresp) (LocationSet.map (fun l -> loc_p_to_q l corresp) lset) ndag) dag.rel (Dag.empty)}
 
 let transpose_inputs (recipes : Inputs.inputs) (run : partial_run) : Inputs.inputs =
   {i = Dag.fold (fun key recipe ninputs -> Dag.add (loc_p_to_q key run.corresp) (apply_frame recipe run) ninputs) recipes.i (Dag.empty)}
+
+let rec transpose_recipe recipe (prun : partial_run) =
+  match recipe with
+    | Fun({ id=Frame(l)}, []) ->  Fun({ id=Frame(Bijection.loc_p_to_q l prun.corresp);has_variables=false }, []) 
+    | Fun({ id=Input(l)}, []) -> assert false
+    | Fun(f, args) -> Fun(f, List.map (fun x -> apply_frame x prun) args)
+    | Var(x) -> Var(x) 
   
+let transpose_recipes (recipes : Inputs.inputs) (run : partial_run) : Inputs.inputs =
+  {i = Dag.fold (fun key recipe nrec -> Dag.add (loc_p_to_q key run.corresp) (transpose_recipe recipe run) nrec) recipes.i (Dag.empty)}
+
+(* take a run and provide a statement which is the test of the run transposed in the other process *)  
 let conj run =
   let stP = run.test.statement in
   let identity_sigma = Rewriting.identity_subst stP.nbvars in
@@ -103,31 +116,94 @@ let conj run =
   dag = map_dag st.dag run.corresp;
   inputs =  transpose_inputs st.recipes run  ;
   choices = run.choices ;
-  head = st.head ;
-  body = st.body ;
-  recipes = st.recipes ; 
+  head = (let eq, diseq = recipes_of_head st.head in Tests(
+    List.map (fun (s,t) -> (transpose_recipe s run,transpose_recipe t run)) eq,
+    List.map (fun (s,t) -> (transpose_recipe s run,transpose_recipe t run)) diseq));
+  body = List.map (fun ba -> {
+    loc = (match ba.loc with None -> None | Some l -> Some (loc_p_to_q l run.corresp));
+    recipe = transpose_recipe ba.recipe run;
+    term = apply_frame ba.recipe run;
+    marked = false;
+    }) st.body ;
+  recipes = transpose_recipes st.recipes run ; 
   }
+  
+  
+let statement_to_tests process_name origin (statement : raw_statement) otherProcess =
+  let statement = match origin with Initial _ -> same_term_same_recipe statement | _-> statement in
+  let nb = Dag.cardinal statement.dag.rel in
+  if nb != 0 
+  then
+     let init = init_run process_name statement otherProcess in 
+     (* init is a partial function to allow cycle reference between test and partial run *)
+     push statement process_name origin init 
+   
 
+let completion_to_test comp =
+  let test = {
+    nb_actions = 0;
+    new_actions = 0;
+    process_name = comp.from_base;
+    statement = comp.st_c;
+    origin = Completion;
+    id = - 6 ;
+    from = IntegerSet.empty;
+    constraints = comp.corresp_back_c;
+    constraints_back = comp.corresp_c;
+  } in
+  let run_init = init_run comp.from_base comp.st_c (proc (other comp.from_base )) test in
+  let solution =
+  { 
+       partial_runs = [run_init] ;
+       partial_runs_todo = Solutions.singleton {execution = run_init; conflicts = RunSet.empty; score = 0; conflicts_loc = LocationSet.empty;};
+       possible_restricted_runs = [];
+       possible_runs = Solutions.empty;
+       possible_runs_todo = [];
+       failed_partial_run = [];
+       failed_run = [];
+       partitions = [] ;
+       movable = 0 ;
+     } in
+  match find_compatible_run solution with
+    None -> if !about_completion then Printf.printf "No solution \n" 
+  | Some sol -> 
+    if !about_completion then Printf.printf "Solution of the completion  %s\n" (show_run sol.execution);
+    statement_to_tests (other comp.from_base) Completion (conj sol.execution)(proc (other comp.from_base ))
   
 let add_to_completion (run : partial_run) (completion : completion) = 
-  if !about_completion then Printf.printf "Try comp %s \n with %s\n" (show_run run) (show_completion completion);
+  if !about_completion then Printf.printf "Try for comp \n run %s \n with %s\n" (show_run run) (show_completion completion);
   let exception NonBij in
   try
   let corr = { a = Dag.union (fun locP x y -> if x = y then Some x else raise NonBij) run.corresp.a completion.corresp_c.a } in
   let corr_back = { a = Dag.union (fun locQ x y -> if x = y then Some x else raise NonBij) run.corresp_back.a completion.corresp_back_c.a } in
-  let missing = LocationSet.filter (fun loc -> try ignore (Dag.find loc corr.a); false with Not_found -> true) completion.missing_actions in
-  let sts = merge_tests run.test.statement completion.st_c in
+  let missing = LocationSet.filter (fun loc -> try ignore (Dag.find loc corr_back.a); false with Not_found -> true) completion.missing_actions in
+  let conjrun = conj run in
+  if !about_completion then Printf.printf "Conj = %s " (show_raw_statement conjrun);
+  let sts = merge_tests conjrun completion.st_c in
   List.iter (fun st -> 
-    if LocationSet.is_empty missing then Printf.printf "Todo add test %s\n" (show_raw_statement st)(*todo*)
-    else
-    register_completion (other run.test.process_name){
-      initial_statement = completion.initial_statement;
-      st_c = st;
-      corresp_c = corr;
-      corresp_back_c = corr_back;
-      missing_actions = missing ;
-      most_general_completions = [];
-    }
+    let new_comp = {
+        from_base = completion.from_base;
+        initial_statement = completion.initial_statement;
+        st_c = st;
+        corresp_c = corr;
+        corresp_back_c = corr_back;
+        missing_actions = missing ;
+        selected_action = pick_last_or_null st.dag missing ;
+        most_general_completions = [];
+      } in
+    register_completion new_comp ;  
+    if LocationSet.is_empty missing 
+    then begin
+      if !about_completion then Printf.printf "Todo add test %s\n" (show_raw_statement st)(*todo*);
+      completion_to_test new_comp
+    end
+    else begin
+      if !about_completion then Printf.printf "Adding partial completion %s" (show_raw_statement st);
+      if completion.from_base = P then 
+        bijection.todo_completion_P <- new_comp :: bijection.todo_completion_P
+      else
+        bijection.todo_completion_Q <- new_comp :: bijection.todo_completion_Q
+    end
   ) sts
   with 
   | NonBij -> ()
@@ -139,29 +215,23 @@ let negate_statement (st : raw_statement) =
   | Identical(s,t) -> {st with head = Tests([],[(s,t)])}
 
   
-let statement_to_completion st =
+let statement_to_completion process_name (st : raw_statement) =
+  let locs = locations_of_dag st.dag in 
   {
-  initial_statement = st ;
-  st_c = st ;
-  corresp_c = empty_correspondance ;
-  corresp_back_c = empty_correspondance ;
-  missing_actions = locations_of_dag st.dag ;
-  most_general_completions = [];
+    from_base = process_name ;
+    initial_statement = st ;
+    st_c = st ;
+    corresp_c = empty_correspondance ;
+    corresp_back_c = empty_correspondance ;
+    missing_actions = locs ;
+    selected_action = pick_last_or_null st.dag locs ;
+    most_general_completions = [];
   }
 
-let statement_to_tests process_name origin (statement : raw_statement) otherProcess =
-  let statement = match origin with Initial _ -> same_term_same_recipe statement | _-> statement in
-  let nb = Dag.cardinal statement.dag.rel in
-  if nb != 0 
-  then
-     let init = init_run process_name statement otherProcess in 
-     (* init is a partial function to allow cycle reference between test and partial run *)
-     push statement process_name origin init 
-   
 let rec statements_to_tests process_name (statement : statement) otherProcess =
   statement_to_tests process_name (Initial(statement)) (statement.st) otherProcess;
   match statement.st.head with
-  | Identical _ -> register_completion process_name (statement_to_completion (negate_statement statement.st)) (* Identical don't have children *)
+  | Identical _ -> register_completion (statement_to_completion process_name (negate_statement statement.st)) (* Identical don't have children *)
   | _ -> List.iter (fun st -> statements_to_tests process_name st otherProcess) statement.children
     
   
@@ -221,15 +291,13 @@ and find_compatible_run_init constraints constraints_back run  =
   if  (compatible_prun constraints constraints_back run) then true
   else
   let solution = try Tests.find run.test bijection.registered_tests 
-    with Not_found -> Printf.eprintf "error  test %d not found\n%!" run.test.id; raise Not_found in
+    with Not_found -> Printf.eprintf "error test %d not found\n%!" run.test.id; raise Not_found in
   match 
     try Some (Solutions.choose (Solutions.filter (fun sol -> 
       compatible_prun constraints constraints_back sol.execution) solution.possible_runs))
     with 
     | Not_found ->
-      let (prio, not_prio) = List.partition (compatible_prun constraints constraints_back ) (solution.partial_runs_todo @ solution.partial_runs_priority_todo) in
-      solution.partial_runs_todo <- not_prio ;
-      solution.partial_runs_priority_todo <- prio ;
+      solution.partial_runs_todo <- Solutions.filter (fun x -> compatible_prun constraints constraints_back x.execution) (solution.partial_runs_todo);
       run.test.constraints <- constraints ;
       run.test.constraints_back <- constraints_back ;
       find_compatible_run solution
@@ -244,18 +312,34 @@ and find_compatible_run_init constraints constraints_back run  =
 
 
 
-      
+(* Compute the completions from the base of process_name *)      
 let rec compute_new_completions process_name  =
-  match if process_name = P then bijection.runs_for_completions_P else bijection.runs_for_completions_Q with
-  | [] -> ()
-  | run :: lst -> Printf.printf "xxx %s\n" (show_run run);
-    if process_name = P then bijection.runs_for_completions_P <- lst else bijection.runs_for_completions_Q <- lst ;
-    List.iter (fun (l,_) ->
+  match if process_name = P then bijection.runs_for_completions_Q else bijection.runs_for_completions_P with
+  (* First match all run with all completions *)
+  | run :: lst -> 
+    if !about_completion then Printf.printf "considering run %s\n" (show_run run);
+    if process_name = P then bijection.runs_for_completions_Q <- lst else bijection.runs_for_completions_P <- lst ;
+    List.iter (fun (_,l) ->
     List.iter (fun completion -> add_to_completion run completion) 
-      (try Dag.find l (if process_name = P then bijection.to_be_completed_P else bijection.to_be_completed_Q) with Not_found -> []))
-    (Dag.bindings run.dag.rel);
+      (try Dag.find l (if process_name = P then bijection.partial_completions_P else bijection.partial_completions_Q) with Not_found -> []))
+    (Dag.bindings run.corresp.a);
     compute_new_completions process_name
-  
+  (* Then for all new partial completion just created match them with all runs *)  
+  | [] -> 
+    if !about_completion then Printf.printf "\nCompleting new completions\n "; (show_bijection());
+    while (if process_name = P then bijection.todo_completion_P else bijection.todo_completion_Q) != [] do
+      let todo_completion = if process_name = P then bijection.todo_completion_P else bijection.todo_completion_Q in
+      let comp :: lst = todo_completion in 
+      if !about_completion then Printf.printf "Remains %d completions, processing %s \n" (List.length todo_completion)(show_completion comp);
+      if process_name = P then bijection.todo_completion_P <- lst else bijection.todo_completion_Q <- lst ;
+      Dag.iter (fun locQ runset ->
+        Printf.printf "l>>%d\n" locQ.p;
+        RunSet.iter (fun run -> 
+          if run.test.process_name <> process_name 
+          then add_to_completion run comp ) runset)
+      (try Dag.find comp.selected_action (if process_name = P then bijection.indexP else bijection.indexQ) with Not_found -> Dag.empty)
+    done
+ 
 
 let base_to_tests process_name base process other_process = 
   (*List.iter (fun st -> 
@@ -266,7 +350,7 @@ let base_to_tests process_name base process other_process =
     statement_to_tests process_name (Initial(st)) st.st other_process
     ) base.reachable_solved;*)
   List.iter (fun st -> 
-    register_completion process_name (statement_to_completion (negate_statement st.st))
+    register_completion (statement_to_completion process_name (negate_statement st.st))
     ) base.unreachable_solved;
   statements_to_tests process_name base.rid_solved other_process 
 
@@ -290,46 +374,49 @@ let equivalence p q =
   Printf.printf "Building tests\n%!";
   base_to_tests P satP processP processQ ;
   base_to_tests Q satQ processQ processP ; 
-  Printf.printf "Completions\n%!";
   if !about_completion then
-    begin show_all_completions bijection.to_be_completed_P;
-    Printf.printf "Q\n";
-    show_all_completions bijection.to_be_completed_Q end ;
+    begin 
+    Printf.printf "Completions of P\n%!";
+    show_all_completions bijection.partial_completions_P;
+    Printf.printf "Completions of Q\n";
+    show_all_completions bijection.partial_completions_Q end ;
   Bijection.reorder_tests () ;
   Printf.printf "Testing %d tests\n%!" (Tests.cardinal bijection.tests);
   try
     while not (Tests.is_empty bijection.tests) do
-    while not (Tests.is_empty bijection.tests) do
-      let (test, solution) = pop () in
-      (* We check that the two tests to merge have not been replaced by a different mapping *)
-      let valid = 
-        match test.origin with
-        | Initial _ -> true
-        | Composed (run1,run2) -> begin try
-          let sol1 = Tests.find run1.test bijection.registered_tests in
-          let sol2 = Tests.find run2.test bijection.registered_tests in
-          (List.mem run1 sol1.partitions) && (List.mem run2 sol2.partitions)
-          with Not_found -> Printf.printf "Error on main \n%!"; raise Not_found end
-       (* | Refined(run,st) -> let sol = Tests.find run.test bijection.registered_tests in
-          List.mem run sol.partitions *)
-        | Completion -> assert false 
-      in
-      if valid then begin
-        if !debug_tests then Printf.printf (if !use_xml then "<opentest>%s" else "Open %s\n%!") (show_test test);
-        match find_possible_run solution with 
-        | None ->  Printf.printf "Failure to pass %s\n" (show_test test);
-            List.iter (fun (pr : partial_run) -> Printf.printf "%s\n" (show_correspondance pr.corresp)) solution.partial_runs;
-          raise Attack;
-        | Some sol -> register_solution solution sol; if !debug_tests && !use_xml then Printf.printf "</opentest>"
-      end
-    done ;
+      while not (Tests.is_empty bijection.tests) do
+        let (test, solution) = pop () in
+        (* We check that the two tests to merge have not been replaced by a different mapping *)
+        let valid = 
+          match test.origin with
+          | Initial _ -> true
+          | Composed (run1,run2) -> begin try
+            let sol1 = Tests.find run1.test bijection.registered_tests in
+            let sol2 = Tests.find run2.test bijection.registered_tests in
+            (List.mem run1 sol1.partitions) && (List.mem run2 sol2.partitions)
+            with Not_found -> Printf.printf "Error on main \n%!"; raise Not_found end
+        (* | Refined(run,st) -> let sol = Tests.find run.test bijection.registered_tests in
+            List.mem run sol.partitions *)
+          | Completion -> true 
+        in
+        if valid then begin
+          if !debug_tests then Printf.printf (if !use_xml then "<opentest>%s" else "Open %s\n%!") (show_test test);
+          match find_possible_run solution with 
+          | None ->  Printf.printf "Failure to pass %s\n" (show_test test);
+              List.iter (fun (pr : partial_run) -> Printf.printf "%s\n" (show_correspondance pr.corresp)) solution.partial_runs;
+            raise Attack;
+          | Some sol -> register_solution solution sol; if !debug_tests && !use_xml then Printf.printf "</opentest>"
+        end
+      done ;
     if !about_completion then 
-      Printf.printf "Actualization of completions (P: %d runs, Q: %d runs) \n" (List.length bijection.runs_for_completions_P)(List.length bijection.runs_for_completions_Q);
+      Printf.printf "Actualization of completions of P (%d runs)\n" (List.length bijection.runs_for_completions_Q);
     compute_new_completions P ; 
+    if !about_completion then 
+      Printf.printf "Actualization of completions of Q (%d runs)\n" (List.length bijection.runs_for_completions_P);
     compute_new_completions Q ; 
     done ;
     if !about_execution then Bijection.show_bijection();
-    Printf.printf "P and Q are coarse trace equivalent. \n" ;
+    Printf.printf "P and Q are trace equivalent. \n" ;
     if ! use_xml then Printf.printf "</all>"
   with
   | Attack -> begin 
