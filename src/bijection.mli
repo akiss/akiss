@@ -172,7 +172,7 @@ val show_solution_set : Solutions.t -> unit
 type solutions = {
   mutable partial_runs : partial_run list;
   mutable partial_runs_todo : Solutions.t;
-  mutable possible_runs_todo : partial_run list;
+  mutable possible_runs_todo : Solutions.t;
   mutable possible_runs : Solutions.t;
   mutable possible_restricted_runs : partial_run list;
   mutable failed_partial_run : partial_run list;
@@ -254,5 +254,5 @@ val add_run : solutions -> RunSet.elt -> unit
 val remove_run : RunSet.elt -> unit
 val mappings_of : which_process -> Dag.Dag.key -> RunSet.t Dag.Dag.t
 val mapping_exists : which_process -> Dag.Dag.key -> Dag.Dag.key -> bool
-val straight : Dag.Dag.key -> Dag.Dag.key -> bool
+val straight : which_process -> Dag.Dag.key -> Dag.Dag.key -> bool
 val compatible : partial_run -> possible_runs

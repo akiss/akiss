@@ -86,7 +86,37 @@ let merge_tests (fa : raw_statement) (fb : raw_statement) =
 
     exception Attack   
 
+let actual_test process_name (st : raw_statement) =
+  let corr = {a = Dag.mapi (fun k _ -> k) st.dag.rel} in
+  let test = {
+    nb_actions = 0;
+    new_actions = 0;
+    process_name = process_name;
+    statement = st;
+    origin = Completion;(*irrelevant*)
+    id = - 7 ;
+    from = IntegerSet.empty;
+    constraints = corr;
+    constraints_back = corr;
+  } in
+  let run_init = init_run process_name st (proc process_name) test in
+  let solution =
+  { 
+       partial_runs = [run_init] ;
+       partial_runs_todo = Solutions.singleton {execution = run_init; conflicts = RunSet.empty; score = 0; conflicts_loc = LocationSet.empty;};
+       possible_restricted_runs = [];
+       possible_runs = Solutions.empty;
+       possible_runs_todo = Solutions.empty;
+       failed_partial_run = [];
+       failed_run = [];
+       partitions = [] ;
+       movable = 0 ;
+     } in
+  match find_compatible_run solution with
+    None ->  false 
+  | Some sol -> true
 
+    
 let map_dag dag corresp =
   {rel = Dag.fold (fun key lset ndag -> Dag.add (loc_p_to_q key corresp) (LocationSet.map (fun l -> loc_p_to_q l corresp) lset) ndag) dag.rel (Dag.empty)}
 
@@ -132,7 +162,7 @@ let conj run =
 let statement_to_tests process_name origin (statement : raw_statement) otherProcess =
   let statement = match origin with Initial _ -> same_term_same_recipe statement | _-> statement in
   let nb = Dag.cardinal statement.dag.rel in
-  if nb != 0 
+  if nb != 0 && actual_test process_name statement
   then
      let init = init_run process_name statement otherProcess in 
      (* init is a partial function to allow cycle reference between test and partial run *)
@@ -158,7 +188,7 @@ let completion_to_test comp =
        partial_runs_todo = Solutions.singleton {execution = run_init; conflicts = RunSet.empty; score = 0; conflicts_loc = LocationSet.empty;};
        possible_restricted_runs = [];
        possible_runs = Solutions.empty;
-       possible_runs_todo = [];
+       possible_runs_todo = Solutions.empty;
        failed_partial_run = [];
        failed_run = [];
        partitions = [] ;
@@ -326,14 +356,14 @@ let rec compute_new_completions process_name  =
     compute_new_completions process_name
   (* Then for all new partial completion just created match them with all runs *)  
   | [] -> 
-    if !about_completion then Printf.printf "\nCompleting new completions\n "; (show_bijection());
+    if !about_completion then (Printf.printf "\nCompleting new completions\n "; show_bijection());
     while (if process_name = P then bijection.todo_completion_P else bijection.todo_completion_Q) != [] do
       let todo_completion = if process_name = P then bijection.todo_completion_P else bijection.todo_completion_Q in
       let comp :: lst = todo_completion in 
       if !about_completion then Printf.printf "Remains %d completions, processing %s \n" (List.length todo_completion)(show_completion comp);
       if process_name = P then bijection.todo_completion_P <- lst else bijection.todo_completion_Q <- lst ;
       Dag.iter (fun locQ runset ->
-        Printf.printf "l>>%d\n" locQ.p;
+        if !about_completion then Printf.printf "- at loc %d:\n" locQ.p;
         RunSet.iter (fun run -> 
           if run.test.process_name <> process_name 
           then add_to_completion run comp ) runset)
@@ -394,7 +424,7 @@ let equivalence p q =
             let sol1 = Tests.find run1.test bijection.registered_tests in
             let sol2 = Tests.find run2.test bijection.registered_tests in
             (List.mem run1 sol1.partitions) && (List.mem run2 sol2.partitions)
-            with Not_found -> Printf.printf "Error on main \n%!"; raise Not_found end
+            with Not_found -> Printf.eprintf "Error on main \n%!"; raise Not_found end
         (* | Refined(run,st) -> let sol = Tests.find run.test bijection.registered_tests in
             List.mem run sol.partitions *)
           | Completion -> true 

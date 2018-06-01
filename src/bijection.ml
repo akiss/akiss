@@ -157,7 +157,7 @@ type solutions = {
   mutable partial_runs : partial_run list;
   mutable partial_runs_todo : Solutions.t; (*partial_run list;
   mutable partial_runs_priority_todo : partial_run list; (* Partial execution compatible with the bijection *)*)
-  mutable possible_runs_todo : partial_run list; (* Queue here before processing *)
+  mutable possible_runs_todo : Solutions.t; (* Queue here before processing *)
   mutable possible_runs : Solutions.t; (* Run which are not compatible for the current bijection, to test if no other option *)
   mutable possible_restricted_runs : partial_run list; 
   mutable failed_partial_run : partial_run list; (* not used *)
@@ -305,7 +305,7 @@ let push (statement : raw_statement) process_name origin init =
        partial_runs_todo = Solutions.singleton {execution = init_test; conflicts = RunSet.empty; score = 0; conflicts_loc = LocationSet.empty;};
        possible_restricted_runs = [];
        possible_runs = Solutions.empty;
-       possible_runs_todo = [];
+       possible_runs_todo = Solutions.empty;
        failed_partial_run = [];
        failed_run = [];
        partitions = [] ;
@@ -402,6 +402,9 @@ let straight locP locQ =
   with Not_found -> 
     try ignore (Dag.find locQ bijection.indexQ); false
     with Not_found -> true
+    
+let straight pr locP locQ =
+  if pr = P then straight locP locQ else straight locQ locP 
 
 let compatible partial_run = 
   let (corresp,corresp_back) = 
