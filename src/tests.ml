@@ -10,15 +10,10 @@ open Process_execution
 let recipes_of_head head = 
   match head with
   | Tests(equal,diseq) -> equal , diseq
-  | Identical(r,r') -> [(r,r')],[]
+  | Identical(r,r') -> EqualitiesSet.singleton (r,r'),EqualitiesSet.empty
   | Knows(_)
-  | Reach -> [],[] 
+  | Reach -> EqualitiesSet.empty,EqualitiesSet.empty
 
-let get_lst_of_test test =
-  match test with 
-  Tests(equal,diseq) -> equal
-  | Identical(r,r') -> [(r,r')]
-  | _ -> []
 
 (* from two statements (ie tests) generate the merge of these tests, like equation rule *)
 let merge_tests (fa : raw_statement) (fb : raw_statement) =
@@ -62,14 +57,14 @@ let merge_tests (fa : raw_statement) (fb : raw_statement) =
            choices = merged_choice ;
            inputs = Inputs.merge sigma fa.inputs fb.inputs;
            recipes = Inputs.merge_recipes sigma fa.recipes fb.recipes;
-           head = Tests( List.map 
+           head = Tests( EqualitiesSet.map 
              (fun (r,rp) -> 
-               Rewriting.apply_subst_term r sigma,Rewriting.apply_subst_term rp sigma)
-             (Util.unique(fa_head_equal @ fb_head_equal)),
-             List.map 
+               Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term rp sigma)
+             (EqualitiesSet.union fa_head_equal fb_head_equal),
+             EqualitiesSet.map 
              (fun (r,rp) -> 
-               Rewriting.apply_subst_term r sigma,Rewriting.apply_subst_term rp sigma)
-             (Util.unique(fa_head_diseq @ fb_head_diseq))); 
+               Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term rp sigma)
+             (EqualitiesSet.union fa_head_diseq fb_head_diseq)); 
            body = body }
            in
            (*if !debug_execution then Format.printf "The merged test: %s\n"
@@ -103,7 +98,7 @@ let actual_test process_name (st : raw_statement) =
   let solution =
   { 
        partial_runs = [run_init] ;
-       partial_runs_todo = Solutions.singleton {execution = run_init; conflicts = RunSet.empty; score = 0; conflicts_loc = LocationSet.empty;};
+       partial_runs_todo = Solutions.singleton run_init;
        possible_restricted_runs = [];
        possible_runs = Solutions.empty;
        possible_runs_todo = Solutions.empty;
@@ -147,8 +142,8 @@ let conj run =
   inputs =  transpose_inputs st.recipes run  ;
   choices = run.choices ;
   head = (let eq, diseq = recipes_of_head st.head in Tests(
-    List.map (fun (s,t) -> (transpose_recipe s run,transpose_recipe t run)) eq,
-    List.map (fun (s,t) -> (transpose_recipe s run,transpose_recipe t run)) diseq));
+    EqualitiesSet.map (fun (s,t) -> (transpose_recipe s run,transpose_recipe t run)) eq,
+    EqualitiesSet.map (fun (s,t) -> (transpose_recipe s run,transpose_recipe t run)) diseq));
   body = List.map (fun ba -> {
     loc = (match ba.loc with None -> None | Some l -> Some (loc_p_to_q l run.corresp));
     recipe = transpose_recipe ba.recipe run;
@@ -185,7 +180,7 @@ let completion_to_test comp =
   let solution =
   { 
        partial_runs = [run_init] ;
-       partial_runs_todo = Solutions.singleton {execution = run_init; conflicts = RunSet.empty; score = 0; conflicts_loc = LocationSet.empty;};
+       partial_runs_todo = Solutions.singleton run_init;
        possible_restricted_runs = [];
        possible_runs = Solutions.empty;
        possible_runs_todo = Solutions.empty;
@@ -195,10 +190,11 @@ let completion_to_test comp =
        movable = 0 ;
      } in
   match find_compatible_run solution with
-    None -> if !about_completion then Printf.printf "No solution \n" 
-  | Some sol -> 
-    if !about_completion then Printf.printf "Solution of the completion  %s\n" (show_run sol.execution);
-    statement_to_tests (other comp.from_base) Completion (conj sol.execution)(proc (other comp.from_base ))
+    None -> if !about_completion then Printf.printf "The completion is not executable \n" 
+  | Some [sol] -> 
+    if !about_completion then Printf.printf "Execution of the completion  %s\n" (show_run sol);
+    statement_to_tests (other comp.from_base) Completion (conj sol)(proc (comp.from_base ))
+  | Some _ -> assert false
   
 let add_to_completion (run : partial_run) (completion : completion) = 
   if !about_completion then Printf.printf "Try for comp \n run %s \n with %s\n" (show_run run) (show_completion completion);
@@ -211,6 +207,8 @@ let add_to_completion (run : partial_run) (completion : completion) =
   if !about_completion then Printf.printf "Conj = %s " (show_raw_statement conjrun);
   let sts = merge_tests conjrun completion.st_c in
   List.iter (fun st -> 
+    let eq, diseq = recipes_of_head st.head in
+    if EqualitiesSet.is_empty (EqualitiesSet.inter eq diseq) then begin
     let new_comp = {
         from_base = completion.from_base;
         initial_statement = completion.initial_statement;
@@ -224,16 +222,19 @@ let add_to_completion (run : partial_run) (completion : completion) =
     register_completion new_comp ;  
     if LocationSet.is_empty missing 
     then begin
-      if !about_completion then Printf.printf "Todo add test %s\n" (show_raw_statement st)(*todo*);
+      if !about_completion then Printf.printf "Completion complete, checking test %s\n" (show_raw_statement st)(*todo*);
       completion_to_test new_comp
     end
     else begin
-      if !about_completion then Printf.printf "Adding partial completion %s" (show_raw_statement st);
+      if !about_completion then Printf.printf "Adding partial completion %s\n" (show_raw_statement st);
       if completion.from_base = P then 
         bijection.todo_completion_P <- new_comp :: bijection.todo_completion_P
       else
         bijection.todo_completion_Q <- new_comp :: bijection.todo_completion_Q
     end
+    end
+    else
+    if !about_completion then Printf.printf "Absurd completion\n";
   ) sts
   with 
   | NonBij -> ()
@@ -241,8 +242,8 @@ let add_to_completion (run : partial_run) (completion : completion) =
 let negate_statement (st : raw_statement) =
   match st.head with
   | Unreachable -> 
-    {st with head = Tests([],[])}
-  | Identical(s,t) -> {st with head = Tests([],[(s,t)])}
+    {st with head = Tests(EqualitiesSet.empty,EqualitiesSet.empty)}
+  | Identical(s,t) -> {st with head = Tests(EqualitiesSet.empty,EqualitiesSet.singleton (s,t))}
 
   
 let statement_to_completion process_name (st : raw_statement) =
@@ -258,64 +259,98 @@ let statement_to_completion process_name (st : raw_statement) =
     most_general_completions = [];
   }
 
+(* From solved statements create tests. 
+Opti: when children are identical with same world merge them with the reach parent to reduce number of tests *)  
 let rec statements_to_tests process_name (statement : statement) otherProcess =
-  statement_to_tests process_name (Initial(statement)) (statement.st) otherProcess;
-  match statement.st.head with
-  | Identical _ -> register_completion (statement_to_completion process_name (negate_statement statement.st)) (* Identical don't have children *)
-  | _ -> List.iter (fun st -> statements_to_tests process_name st otherProcess) statement.children
+   match statement.st.head with
+  | Identical _ -> 
+    statement_to_tests process_name (Initial(statement)) (statement.st) otherProcess;
+    register_completion (statement_to_completion process_name (negate_statement statement.st)) (* Identical don't have children *)
+  | _ -> let new_eq = List.fold_left 
+    (fun new_eq st -> let is_identical = match st.st.head with Identical _ -> true | _ -> false in
+      if is_identical && (st.st.inputs,st.st.dag,st.st.choices,st.st.body) = (statement.st.inputs,statement.st.dag,statement.st.choices,statement.st.body) 
+      then begin
+        match st.st.head with 
+        Identical (s,t) -> 
+          register_completion (statement_to_completion process_name (negate_statement st.st));
+          EqualitiesSet.add (s,t) new_eq
+        | _ -> assert false end
+      else begin
+        statements_to_tests process_name st otherProcess; 
+        new_eq end)
+    (EqualitiesSet.empty) statement.children in
+    statement_to_tests process_name (Initial(statement)) {statement.st with head = Tests(new_eq,EqualitiesSet.empty)} otherProcess
     
   
 
 (* Create new tests from prun which is in conflict with all tests in runset *)
-let add_merged_tests sol =
-  let (prun,runset)=sol.execution,sol.conflicts in
+let add_merged_tests prun =
+  (* let (prun,runset)=sol.execution,sol.conflicts in *)
+  let runset = Bijection.compatible prun in 
   if !debug_tests && not (RunSet.is_empty runset) 
-  then Printf.printf "Conflicts on %s\n with " (show_loc_set sol.conflicts_loc); 
+  then Printf.printf "Conflicts with " ; 
   RunSet.iter (fun par ->
     if !debug_tests 
     then Printf.printf "[%d] " (par.test.id); 
     if prun.test.process_name = par.test.process_name 
     then
-      
-      if ((Inputs.contains prun.test.statement.inputs par.test.statement.inputs) &&  (Util.list_diff (get_lst_of_test par.test.statement.head)(get_lst_of_test prun.test.statement.head) =[]))
-      || ((Inputs.contains par.test.statement.inputs prun.test.statement.inputs) &&  (Util.list_diff (get_lst_of_test prun.test.statement.head)(get_lst_of_test par.test.statement.head) =[]))
-      then ()  else
+      let eq_par, diseq_par = recipes_of_head par.test.statement.head in
+      let eq_prun, diseq_prun = recipes_of_head prun.test.statement.head in
+      if ((Inputs.contains prun.test.statement.inputs par.test.statement.inputs) 
+        &&  (EqualitiesSet.subset (eq_par)(eq_prun)) 
+        &&  (EqualitiesSet.subset (eq_par)(eq_prun)))
+      || ((Inputs.contains par.test.statement.inputs prun.test.statement.inputs) 
+        &&  (EqualitiesSet.subset (diseq_prun)(diseq_par)) 
+        && (EqualitiesSet.subset (diseq_prun)(diseq_par)))
+      then (if !debug_tests then Printf.printf "s ,")  else
       begin
         let merged_statements =   merge_tests prun.test.statement par.test.statement in (* only one without xor *)
         List.iter (fun raw_st -> 
-          if false && !debug_tests then Printf.printf "New test %s \n" (show_raw_statement raw_st);
+          if !debug_tests then Printf.printf "New test %s \n" (show_raw_statement raw_st);
           statement_to_tests prun.test.process_name (Composed(prun,par)) raw_st (proc (other prun.test.process_name))
           ) merged_statements
       end
-    (* else begin
-      if !debug_execution 
-      then Printf.printf "\n TODO : coarse equivalence not enough\n" ; 
+     else begin
+      if !debug_tests  
+      then Printf.printf "P/Q ," ; 
       (*raise Attack*)()
-   end *)
+      end 
   ) runset;
   if !debug_tests  then Printf.printf "\n"
   
-let rec register_solution solution sol =
-  let pr = sol.execution in
-  let test = pr.test in
-  let cardi = IntegerSet.cardinal test.from in
-  if ! debug_tests then if !use_xml then Printf.printf "%s\n" (show_correspondance pr.corresp) else Printf.printf "Success of test %d: %s \n\n" test.id (show_correspondance pr.corresp);
-  if solution.movable >= cardi 
-  || match test.origin with
-    | Composed (run1,run2) -> 
-        if find_compatible_run_init pr.corresp pr.corresp_back run1 &&
-        find_compatible_run_init pr.corresp pr.corresp_back run2 
-        then begin if ! debug_tests then Printf.printf "The initial tests have been changed \n"; false end
-        (* ne pas ajouter le test... *)
-        else begin if ! debug_tests then Printf.printf "Actual conflict \n"; true end
-    | _ -> true
-  then begin
-    add_merged_tests sol;
-    Bijection.add_run solution pr;
-    solution.partitions <- [pr];
-    solution.movable <- cardi;
-    (*consider_disequalities pr;*)
-  end
+let rec register_solution solution (sol : partial_run list) =
+  match sol with
+  | [] -> assert false
+  | [pr] ->  begin
+    let test = pr.test in
+    let cardi = IntegerSet.cardinal test.from in
+    if ! debug_tests then 
+      if !use_xml 
+      then Printf.printf "%s\n" (show_correspondance pr.corresp) 
+      else Printf.printf "Success of test %d: %s \n\n" test.id (show_correspondance pr.corresp);
+    if solution.movable >= cardi 
+    || match test.origin with
+      | Composed (run1,run2) -> 
+          if find_compatible_run_init pr.corresp pr.corresp_back run1 &&
+          find_compatible_run_init pr.corresp pr.corresp_back run2 
+          then begin if ! debug_tests then Printf.printf "The initial tests have been changed \n"; false end
+          (* ne pas ajouter le test... *)
+          else begin if ! debug_tests then Printf.printf "Actual conflict \n"; true end
+      | _ -> true
+    then begin
+      add_merged_tests pr;
+      Bijection.add_run solution pr;
+      solution.partitions <- [pr];
+      solution.movable <- cardi
+    end
+  end 
+  | pr1 :: _  -> 
+    if ! debug_tests then  Printf.printf "Solution made of several runs\n";
+    solution.partitions <- sol;
+    List.iter (fun pr -> 
+      add_merged_tests pr;
+      Bijection.add_run solution pr;
+      solution.movable <- 100000) sol
   
 and find_compatible_run_init constraints constraints_back run  =
   if  (compatible_prun constraints constraints_back run) then true
@@ -323,22 +358,22 @@ and find_compatible_run_init constraints constraints_back run  =
   let solution = try Tests.find run.test bijection.registered_tests 
     with Not_found -> Printf.eprintf "error test %d not found\n%!" run.test.id; raise Not_found in
   match 
-    try Some (Solutions.choose (Solutions.filter (fun sol -> 
-      compatible_prun constraints constraints_back sol.execution) solution.possible_runs))
+    try Some [(Solutions.choose (Solutions.filter (fun sol -> 
+      compatible_prun constraints constraints_back sol) solution.possible_runs))]
     with 
     | Not_found ->
-      solution.partial_runs_todo <- Solutions.filter (fun x -> compatible_prun constraints constraints_back x.execution) (solution.partial_runs_todo);
+      solution.partial_runs_todo <- Solutions.filter (fun x -> compatible_prun constraints constraints_back x) (solution.partial_runs_todo);
       run.test.constraints <- constraints ;
       run.test.constraints_back <- constraints_back ;
       find_compatible_run solution
   with
-  | Some sol -> 
+  | Some [sol] -> 
       Bijection.remove_run run; 
-      register_solution solution sol;
-      if !debug_tests then Printf.printf "Solution %s replaced by %s \n" (show_run run) (show_run sol.execution);
+      register_solution solution [sol];
+      if !debug_tests then Printf.printf "Solution %s replaced by %s \n" (show_run run) (show_run sol);
       true
   | None -> false
-
+  | Some _ -> assert false
 
 
 
@@ -347,7 +382,7 @@ let rec compute_new_completions process_name  =
   match if process_name = P then bijection.runs_for_completions_Q else bijection.runs_for_completions_P with
   (* First match all run with all completions *)
   | run :: lst -> 
-    if !about_completion then Printf.printf "considering run %s\n" (show_run run);
+    if !about_completion then Printf.printf "\nChecking if run can complete a completion %s\n" (show_run run);
     if process_name = P then bijection.runs_for_completions_Q <- lst else bijection.runs_for_completions_P <- lst ;
     List.iter (fun (_,l) ->
     List.iter (fun completion -> add_to_completion run completion) 
@@ -431,6 +466,7 @@ let equivalence p q =
         in
         if valid then begin
           if !debug_tests then Printf.printf (if !use_xml then "<opentest>%s" else "Open %s\n%!") (show_test test);
+          (*if test.id = 335 then debug_execution := true ;*)
           match find_possible_run solution with 
           | None ->  Printf.printf "Failure to pass %s\n" (show_test test);
               List.iter (fun (pr : partial_run) -> Printf.printf "%s\n" (show_correspondance pr.corresp)) solution.partial_runs;
@@ -439,10 +475,10 @@ let equivalence p q =
         end
       done ;
     if !about_completion then 
-      Printf.printf "Actualization of completions of P (%d runs)\n" (List.length bijection.runs_for_completions_Q);
+      Printf.printf "\n\n __Actualization of completions of P (%d runs)__\n" (List.length bijection.runs_for_completions_Q);
     compute_new_completions P ; 
     if !about_completion then 
-      Printf.printf "Actualization of completions of Q (%d runs)\n" (List.length bijection.runs_for_completions_P);
+      Printf.printf "\n\n __Actualization of completions of Q (%d runs)__\n" (List.length bijection.runs_for_completions_P);
     compute_new_completions Q ; 
     done ;
     if !about_execution then Bijection.show_bijection();

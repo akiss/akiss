@@ -54,8 +54,12 @@ type partial_run = {
     (Inputs.choices * Dag.LocationSet.t * (Types.term * Types.term) list *
      Process.process)
     list;
+  restrictions : Dag.LocationSet.t;
+  parent : partial_run option;
+  next_action : Types.location option;
   last_exe : Types.location;
   weird_assoc : int;
+  score : int;
 }
 and origin =
     Initial of Base.statement
@@ -74,6 +78,8 @@ and test = {
 }
 val show_run : partial_run -> string
 val show_partial_run : partial_run -> string
+val null_test : test
+val empty_run : partial_run
 val show_origin : origin -> string
 val show_test : test -> string
 type completion = {
@@ -125,16 +131,10 @@ module RunSet :
     val find : elt -> t -> elt
     val of_list : elt list -> t
   end
-type possible_runs = {
-  execution : partial_run;
-  conflicts : RunSet.t;
-  score : int;
-  conflicts_loc : Dag.LocationSet.t;
-}
 module PossibleRuns :
   sig
-    type t = possible_runs
-    val compare : possible_runs -> possible_runs -> int
+    type t = partial_run
+    val compare : partial_run -> partial_run -> int
   end
 module Solutions :
   sig
@@ -244,7 +244,7 @@ val other : which_process -> which_process
 val reorder_int_set : IntegerSet.t -> IntegerSet.t
 val push :
   Base.raw_statement ->
-  which_process -> origin -> (test -> partial_run) -> unit
+  which_process -> origin -> (test -> Solutions.elt) -> unit
 val reorder_tests : unit -> unit
 val pop : unit -> Tests.key * solutions
 val register_completion : completion -> unit
@@ -255,4 +255,4 @@ val remove_run : RunSet.elt -> unit
 val mappings_of : which_process -> Dag.Dag.key -> RunSet.t Dag.Dag.t
 val mapping_exists : which_process -> Dag.Dag.key -> Dag.Dag.key -> bool
 val straight : which_process -> Dag.Dag.key -> Dag.Dag.key -> bool
-val compatible : partial_run -> possible_runs
+val compatible : partial_run -> RunSet.t

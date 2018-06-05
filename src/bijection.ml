@@ -41,9 +41,14 @@ type partial_run = {
   qthreads : (Inputs.choices * LocationSet.t * (term * term) list * Process.process) list ; (* The available action of Q, the constraints *)
   failed_qthreads : (Inputs.choices * LocationSet.t * (term * term) list * Process.process) list ; (* The action that might be availble for a specific substitution *)
   (*mutable children : partial_run list ; (* once processed, the list of possible continuation of the execution *)*)
+  restrictions : LocationSet.t;
+  (*performed_restrictions : LocationSet.t;*)
+  parent : partial_run option;
+  next_action : location option;
   (* for scoring *)
   last_exe : location ; (* the action whose run lead to this pr *)
   weird_assoc : int ; (* when the parent of an action is not associated to the parent of the associated action *)
+  score : int ;
 }
 
 and origin = 
@@ -66,8 +71,8 @@ and test = {
 
 let show_run pr =
   (*(List.fold_left (fun str (t,t') -> str ^ (show_term t)  ^ " != " ^ (show_term t') ^ ", " )*)
-    (Format.sprintf "{ %s: (%d weird)\n frame= %s\n corresp= %s\n dag = %s\n"
-    (show_which_process pr.test.process_name) pr.weird_assoc
+    (Format.sprintf "{ %s: \n frame= %s\n corresp= %s\n dag = %s\n"
+    (show_which_process pr.test.process_name)
     (Inputs.show_inputs pr.frame)
     (show_correspondance pr.corresp)
     (show_dag pr.dag))
@@ -78,9 +83,40 @@ let show_partial_run pr =
   (List.fold_left (fun str (choices,lset,diseq, p) -> str ^ "   " ^(show_loc_set lset) ^" : "^(Process.show_process_start 2 p)^"\n")
   ((List.fold_left (fun str (choices,lset,diseq, p) -> str ^ "   " ^ (show_loc_set lset) ^" : "^(Process.show_process_start 2 p)^"\n")
   ((show_run pr) ^ " remaining_actions= " ^ (show_loc_set pr.remaining_actions) ^ "\n qthreads= \n") 
-  pr.qthreads) ^ " fthreads=\n") pr.failed_qthreads) ^ "}\n"
+  pr.qthreads) ^ " fthreads=\n") pr.failed_qthreads) ^ (Format.sprintf "\n weird = %d ; score = %d ; restricted = %s }\n"  pr.weird_assoc pr.score (show_loc_set pr.restrictions))
 
+let null_test = {
+  process_name = P ;
+  statement = null_raw_statement;
+  origin = Completion;
+  id = -100;
+  from = IntegerSet.empty;
+  nb_actions = -100;
+  new_actions= -100;
+  constraints = empty_correspondance;
+  constraints_back= empty_correspondance;
+}
 
+let empty_run =
+   {
+     test = null_test ;
+     corresp = empty_correspondance ;
+     corresp_back = empty_correspondance ;
+     remaining_actions = LocationSet.empty ;
+     frame = Inputs.new_inputs; (* inputs maps to received terms and outputs maps to sent terms *)
+     choices = Inputs.new_choices;
+     dag = empty;
+     disequalities = [] ;
+     qthreads = [] ;
+     failed_qthreads = [];
+     restrictions = LocationSet.empty;
+     (*performed_restrictions = LocationSet.empty;*)
+     parent = None;
+     next_action = None;
+     last_exe = null_location ;
+     weird_assoc = 0;
+     score = 0 ;
+   } 
   
 let rec show_origin o =
   if !use_xml then 
@@ -134,23 +170,25 @@ module PartialRun =
 
 module RunSet = Set.Make(PartialRun)
 
-type possible_runs = {
+(*type possible_runs = {
   execution : partial_run;
   conflicts : RunSet.t ;
   score : int;
   conflicts_loc : LocationSet.t
-}
+}*)
 
 module PossibleRuns =
   struct
-    type t = possible_runs
-    let compare x y = compare (x.execution.weird_assoc,-x.score,x.execution)(y.execution.weird_assoc,-y.score,y.execution)
+    type t = partial_run
+    let compare x y = 
+      compare (LocationSet.cardinal x.restrictions,x.weird_assoc,-x.score,x)
+              (LocationSet.cardinal y.restrictions,y.weird_assoc,-y.score,y)
   end
   
 module Solutions = Set.Make(PossibleRuns) 
 
 let show_solution_set sol =
-  Solutions.iter (fun prun -> Printf.printf "possible run: %s"  (show_run prun.execution)) sol
+  Solutions.iter (fun prun -> Printf.printf "possible run: %s"  (show_run prun)) sol
 
 (* records which are the partial executions of a test *) 
 type solutions = {
@@ -190,10 +228,10 @@ module Test =
               if r = 0 then 
               compare x.id y.id 
               else -r
-          | (Completion _, Completion _) -> compare x.id y.id
-          | (Completion _, _) -> -1
-          | (_, Completion _) ->  1
-          | (_,_) -> assert false 
+          | (Completion , Completion ) -> compare x.id y.id
+          | (Completion , _) -> -1
+          | (_, Completion ) ->  1
+     (*     | (_,_) -> assert false *)
    end
 
 module Tests = Map.Make(Test)
@@ -277,8 +315,8 @@ let reorder_int_set s =
 (* Add a test to the tests in the queue *)
 let push (statement : raw_statement) process_name origin init =
   let int_set = match origin with 
-      | Initial _ -> IntegerSet.singleton bijection.next_id 
-      | Completion -> IntegerSet.singleton (-3);
+      | Initial _ -> IntegerSet.singleton (bijection.next_id + 1)
+      | Completion -> IntegerSet.singleton (bijection.next_id + 1);
       | Composed(run1,run2) ->  (IntegerSet.union run1.test.from run2.test.from)
   in
   let int_lst = IntegerSet.elements int_set in
@@ -302,7 +340,7 @@ let push (statement : raw_statement) process_name origin init =
   let solution =
   { 
        partial_runs = [init_test] ;
-       partial_runs_todo = Solutions.singleton {execution = init_test; conflicts = RunSet.empty; score = 0; conflicts_loc = LocationSet.empty;};
+       partial_runs_todo = Solutions.singleton init_test;
        possible_restricted_runs = [];
        possible_runs = Solutions.empty;
        possible_runs_todo = Solutions.empty;
@@ -406,33 +444,28 @@ let straight locP locQ =
 let straight pr locP locQ =
   if pr = P then straight locP locQ else straight locQ locP 
 
-let compatible partial_run = 
+ let compatible partial_run = 
   let (corresp,corresp_back) = 
     if partial_run.test.process_name = P 
     then (partial_run.corresp,partial_run.corresp_back)
     else (partial_run.corresp_back,partial_run.corresp)
   in
   let conflicts = ref RunSet.empty in
-  let score = ref 0 in
-  let conflicts_loc = ref LocationSet.empty in
+(*  let score = ref 0 in
+  let conflicts_loc = ref LocationSet.empty in *)
   (Dag.iter (fun locP locQ -> 
     try
       let p = (Dag.find locP bijection.indexP) in 
       Dag.iter (fun lq runset ->
         if lq <> locQ 
-        then begin conflicts := RunSet.union runset !conflicts; score := !score + (RunSet.cardinal runset) ; conflicts_loc :=LocationSet.add locP !conflicts_loc end) p  
+        then begin conflicts := RunSet.union runset !conflicts end) p  
     with Not_found -> ()) corresp.a);
    (Dag.iter (fun locP locQ-> 
     try
       let q = (Dag.find locQ bijection.indexQ) in 
       Dag.iter (fun lp runset ->
         if lp <> locP 
-        then begin conflicts := RunSet.union runset !conflicts; score := !score + (RunSet.cardinal runset) ; conflicts_loc :=LocationSet.add locQ !conflicts_loc end) q 
+        then begin conflicts := RunSet.union runset !conflicts end) q 
     with Not_found -> ()) corresp.a);
-    {
-      execution = partial_run;
-      conflicts = !conflicts;
-      score = !score;
-      conflicts_loc = ! conflicts_loc
-    }
-         
+  !conflicts;
+

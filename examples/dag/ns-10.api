@@ -113,3 +113,4 @@ let Q =
 
 
 query trace_equiv (P, Q).
+//query saturate P.

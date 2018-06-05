@@ -124,7 +124,7 @@ let get_recipes = function
   | Identical( r1, r2) -> [r1;r2]
   | Reach -> []
   | Unreachable -> []
-  | Tests(equal,diseq) -> List.fold_left (fun lst (r,r') -> r :: r' :: lst)(List.fold_left (fun lst (r,r') -> r :: r' :: lst) [] equal) diseq
+  | Tests(equal,diseq) -> EqualitiesSet.fold (fun (r,r') lst -> r :: r' :: lst) diseq (EqualitiesSet.fold (fun (r,r') lst -> r :: r' :: lst) equal [])
 
 let get_term atom = atom.term
 
@@ -156,8 +156,8 @@ match pred with
      Identical(Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)
   | Reach -> Reach
   | Unreachable -> Unreachable
-  | Tests(equal,diseq) -> Tests(List.map (fun (r,r') -> (Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)) equal,
-      List.map (fun (r,r') -> (Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)) diseq)
+  | Tests(equal,diseq) -> Tests(EqualitiesSet.map (fun (r,r') -> (Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)) equal,
+      EqualitiesSet.map (fun (r,r') -> (Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)) diseq)
 
 let apply_subst_statement st (sigma : substitution)=
   {
@@ -614,9 +614,9 @@ let normalize_new_statement f = (* This opti slow down the algo a bit much*)
       head = Identical(Rewriting.normalize r (!Parser_functions.rewrite_rules),
             Rewriting.normalize r' (!Parser_functions.rewrite_rules))}
   | Tests(equal,diseq) -> Some {f with 
-      head = Tests(List.map (fun (r,r') -> Rewriting.normalize r (!Parser_functions.rewrite_rules),
+      head = Tests(EqualitiesSet.map (fun (r,r') -> Rewriting.normalize r (!Parser_functions.rewrite_rules),
             Rewriting.normalize r' (!Parser_functions.rewrite_rules))equal,
-            List.map (fun (r,r') -> Rewriting.normalize r (!Parser_functions.rewrite_rules),
+            EqualitiesSet.map (fun (r,r') -> Rewriting.normalize r (!Parser_functions.rewrite_rules),
             Rewriting.normalize r' (!Parser_functions.rewrite_rules))diseq) } (* this case is not used *)
 
 

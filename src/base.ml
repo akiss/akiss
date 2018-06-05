@@ -4,13 +4,17 @@ open Term
 open Dag
 open Inputs
 open Process
-
+  
+module EqualitiesSet = Set.Make(struct
+    type t = term * term
+      let compare x y = compare x y
+  end)
 
 type predicate =
   | Knows of term * term
   | Reach
   | Identical of term * term
-  | Tests of ((term * term) list * (term * term) list)
+  | Tests of (EqualitiesSet.t * EqualitiesSet.t)
   | Unreachable
 
 type body_atom = {
@@ -85,8 +89,9 @@ let rec show_predicate p =
       "identical(" ^ (show_term r) ^ "," ^ (show_term r') ^ ")"
  | Reach -> "reach"
  | Unreachable -> "unreach"
- | Tests(equal,diseq) -> (List.fold_left ( fun str (r,r') -> (if str = "" then "" else str ^ ", ") ^ (show_term r) ^ "=" ^ (show_term r') ) "tests(" equal ) 
-    ^  ";" ^ (List.fold_left ( fun str (r,r') -> (if str = "" then "" else str ^ ", ") ^ (show_term r) ^ "=" ^ (show_term r') ) "" diseq)^ ")"
+ | Tests(equal,diseq) -> 
+    "tests(" ^ (EqualitiesSet.fold ( fun (r,r') str -> (if str = "" then "" else str ^ ", ") ^ (show_term r) ^ "=" ^ (show_term r') ) equal "" ) 
+    ^  ";" ^ (EqualitiesSet.fold ( fun (r,r') str -> (if str = "" then "" else str ^ ", ") ^ (show_term r) ^ "!=" ^ (show_term r') ) diseq "")^ ")"
 
 let show_body_atom a =
   let l = match a.loc with Some l -> string_of_int l.p | None -> "." in

@@ -50,19 +50,12 @@ let rec run_until_io process first frame =
   
 let init_run process_name (statement : raw_statement) processQ test : partial_run=
   let (qt,fqt) = run_until_io processQ LocationSet.empty Inputs.new_inputs in
-   {
+   { empty_run with 
      test = test ;
-     corresp = { a = Dag.empty } ;
-     corresp_back = { a = Dag.empty } ;
      remaining_actions = LocationSet.of_list(List.map (fun (x,y) -> x) (Dag.bindings statement.dag.rel)) ;
-     frame = Inputs.new_inputs; (* inputs maps to received terms and outputs maps to sent terms *)
-     choices = Inputs.new_choices;
-     dag = empty;
-     disequalities = [] ;
      qthreads = qt ;
      failed_qthreads = fqt;
-     last_exe = null_location ;
-     weird_assoc = 0;
+     dag = test.statement.dag ;
    } 
 
 (* Technical function called twice in try_run *)
@@ -79,22 +72,32 @@ let next_partial_run run action full_p proc l frame locs choices diseq =
         (lqt @ lst , flqt @ flst) end
     )
     ([],[]) run.qthreads in
+    let restrictions = match run.next_action with
+    | None -> LocationSet.filter (fun loc -> 
+      not (LocationSet.mem action (try Dag.find loc run.dag.rel with Not_found -> assert false))) locs
+    | Some _ -> LocationSet.empty in
+    let corresp = { a = Dag.add action l run.corresp.a } in 
   {
      test = run.test ;
-     corresp = { a = Dag.add action l run.corresp.a } ;
+     corresp = corresp ;
      corresp_back = { a = Dag.add l action run.corresp_back.a } ;
      remaining_actions = LocationSet.remove action run.remaining_actions ;
      frame = frame;
      choices = choices;
-     dag = merge run.dag (dag_with_one_action_at_end locs action);
+     dag = run.dag (*merge(dag_with_one_action_at_end locs action)*);
      disequalities = diseq @ run.disequalities;
      qthreads = qt ;
      failed_qthreads = fqt @ run.failed_qthreads ;
+     restrictions = restrictions;
+     (*performed_restrictions = run.performed_restrictions;*)
+     parent = Some run;
+     next_action = None;
      last_exe = action;
      weird_assoc = run.weird_assoc + (
       match l.parent,action.parent with 
       | Some l1,Some l2 -> if loc_p_to_q l2 run.corresp = l1 then 0 else 1 
       | None,None -> 0 | _ -> 1 );
+     score = run.score + (if Bijection.straight (run.test.process_name) action (loc_p_to_q action corresp) then 1 else -25);
   }
   
 
@@ -127,7 +130,7 @@ let try_run run action (choices,locs,diseq,process)  =
      then 
        begin 
          let new_frame = Inputs.add_to_frame l 
-            (apply_frame (Inputs.get action run.test.statement.recipes) run) run.frame in
+            (Rewriting.normalize (apply_frame (Inputs.get action run.test.statement.recipes) run)(! Parser_functions.rewrite_rules)) run.frame in
          let npr = next_partial_run run action process p l new_frame locs choices diseq in
          (*Printf.printf "Possible: %s\n"(show_partial_run npr) ;*)
         Some (npr,l) 
@@ -136,29 +139,39 @@ let try_run run action (choices,locs,diseq,process)  =
    | SeqP(Output(l,t),p) -> 
      if condition action l 
      then begin
-       let new_frame = Inputs.add_to_frame l (apply_subst_inputs t run.frame) run.frame in
+       let new_frame = Inputs.add_to_frame l (Rewriting.normalize (apply_subst_inputs t run.frame)(! Parser_functions.rewrite_rules)) run.frame in
        let npr = next_partial_run run action process p l new_frame locs choices diseq in
        (*Printf.printf "Possible: %s\n"(show_partial_run npr) ;*)
        Some (npr,l)
      end
      else None
    | _ -> assert false
+   
+let next_run_with_action current_loc partial_run=
+  if ! debug_execution then Printf.printf "___________________\nNext execution step on %s" (show_partial_run partial_run);
+  let (new_runs,locs) = List.fold_left (
+    fun (new_runs,locs) lp -> 
+      match try_run partial_run current_loc lp with
+      | None -> (new_runs,locs)
+      | Some (npr,l) -> (npr ::  new_runs, LocationSet.add l locs)
+    ) ([],LocationSet.empty) partial_run.qthreads in
+  (new_runs, current_loc)
 
 (* Given a partial_run select an action to execute and test this action on available threads of Q *)
 let next_run partial_run : (partial_run list * location)= 
-  if ! debug_execution then Printf.printf "Next execution step on %s" (show_partial_run partial_run);
   let first_actions = first_actions_among partial_run.test.statement.dag partial_run.remaining_actions in
   let current_loc = 
     try LocationSet.choose first_actions 
     with
     Not_found -> begin Printf.eprintf "No run on %s [%s] \n" (show_dag partial_run.test.statement.dag) (show_loc_set partial_run.remaining_actions); assert false end
   in
-  let (new_runs,locs) = List.fold_left (fun (new_runs,locs) lp -> 
+  next_run_with_action current_loc partial_run
+(*  let (new_runs,locs) = List.fold_left (fun (new_runs,locs) lp -> 
     match try_run partial_run current_loc lp with
     | None -> (new_runs,locs)
     | Some (npr,l) -> (npr ::  new_runs, LocationSet.add l locs)
     ) ([],LocationSet.empty) partial_run.qthreads in
-  (new_runs, current_loc)
+  (new_runs, current_loc)*)
 
 
 (* When two recipes are provided for the same term just choose one *)
@@ -201,6 +214,16 @@ let compatible constraints constraints_back locP locQ =
 let compatible_prun constraints constraints_back (prun : partial_run)=
   Dag.for_all (compatible constraints constraints_back) prun.corresp.a
   
+let rec get_all_new_roots locs run = 
+  if LocationSet.is_empty locs then []
+  else 
+  match run.parent with
+  | None -> assert false
+  | Some r -> 
+    if LocationSet.mem run.last_exe locs
+    then (run.last_exe,r) :: get_all_new_roots (LocationSet.remove run.last_exe locs) r
+    else get_all_new_roots locs r
+  
 let check_recipes partial_run (r,r')=
   let r = apply_frame r partial_run in
   let r' = apply_frame r' partial_run in
@@ -210,58 +233,112 @@ let check_recipes partial_run (r,r')=
     (show_term r)(show_term r')(Inputs.show_inputs partial_run.frame)(show_term r'')(show_term r''');*)
   Rewriting.equals_r r r' (! Parser_functions.rewrite_rules) 
 
-let next_solution solution =
+let rec next_solution solution =
   let pr = Solutions.min_elt solution.partial_runs_todo in
   solution.partial_runs_todo <- Solutions.remove pr solution.partial_runs_todo;
-  solution.partial_runs <- pr.execution :: solution.partial_runs;
-  let (new_runs,new_loc) = next_run pr.execution in 
-  if !debug_execution && new_runs = [] then Printf.printf "No possible run from this trace \n"  ;
-  List.iter (fun partial_run -> 
-       let scored_run = {
-        execution = partial_run; 
-        conflicts = pr.conflicts; 
-        score = pr.score + (if Bijection.straight (partial_run.test.process_name) new_loc (loc_p_to_q new_loc partial_run.corresp) then 1 else -25); 
-        conflicts_loc = pr.conflicts_loc} in 
-    if !debug_execution then Printf.printf "New p. run %s Score: %d\n" (show_partial_run partial_run) scored_run.score;
-    if LocationSet.is_empty partial_run.remaining_actions 
+  solution.partial_runs <- pr :: solution.partial_runs;
+  if LocationSet.is_empty pr.restrictions then begin
+    let current_loc =
+      match pr.next_action with  
+      | None -> begin
+        let first_actions = first_actions_among pr.test.statement.dag pr.remaining_actions in
+        try LocationSet.choose first_actions with Not_found -> assert false end
+      | Some loc -> loc in
+    let (new_runs,new_loc) = next_run_with_action current_loc pr in 
+    if !debug_execution && new_runs = [] then Printf.printf "No possible run from this trace \n"  ;
+    List.iter (fun partial_run -> 
+      if !debug_execution then Printf.printf "New p. run %s \n\n" (show_partial_run partial_run);
+      if LocationSet.is_empty partial_run.remaining_actions 
+      then begin
+        if 
+          match partial_run.test.statement.head with 
+          | Knows(_)
+          | Reach -> true
+          | Identical(t,t') -> check_recipes partial_run (t,t') 
+          | Tests(equal,diseq) -> 
+            (EqualitiesSet.for_all (check_recipes partial_run) equal) 
+            && (EqualitiesSet.for_all ( fun dis -> not (check_recipes partial_run dis)) diseq)
+        then 
+          begin if !debug_execution then Printf.printf "Solution succeeds the tests \n"  ;
+          solution.possible_runs_todo <- Solutions.add partial_run solution.possible_runs_todo end
+        else
+          begin if !debug_execution then Printf.printf "Solution fails the tests: \n %s \n" (show_run partial_run) ;
+          solution.failed_run <- partial_run :: solution.failed_run end
+      end
+      else begin
+        solution.partial_runs_todo <- Solutions.add partial_run solution.partial_runs_todo 
+      end
+    ) new_runs ;
+    None
+  end
+  else begin
+    if !debug_execution then Printf.printf "A restricted run is being tested from %s \n which test is \n %s \n" (show_partial_run pr)(show_test pr.test) ;
+    let roots = get_all_new_roots pr.restrictions pr in
+    let Some par = pr.parent in
+    let exception Fail in
+    try 
+    Some (
+    List.fold_left (fun prlst (action,prun) -> 
+      let new_solution =
+      { 
+       partial_runs = [] ;
+       partial_runs_todo = Solutions.singleton {prun with 
+        next_action = Some pr.last_exe; 
+        dag = merge prun.dag (if pr.last_exe = action then (dag_with_one_action_at_end pr.restrictions action) else (singleton pr.last_exe action));
+        restrictions = LocationSet.empty ; };
+       possible_restricted_runs = [];
+       possible_runs = Solutions.empty;
+       possible_runs_todo = Solutions.empty;
+       failed_partial_run = [];
+       failed_run = [];
+       partitions = [] ;
+       movable = 0 ;
+      } in
+      match find_possible_run new_solution with
+      | None -> raise Fail
+      | Some sol -> sol @ prlst
+    ) [] ((pr.last_exe, par) :: roots) )
+    with Fail -> None
+  end
+    
+and find_possible_run solution : (partial_run list) option  =
+  if Solutions.is_empty solution.possible_runs_todo 
+  then begin
+      if Solutions.is_empty solution.partial_runs_todo 
+      then None (*
+        if Solutions.is_empty solution.possible_runs 
+        then begin
+          if solution.possible_restricted_runs = [] then
+            None
+          else begin Printf.eprintf "Further investigation are required (%d partial dags not considered).\n" (List.length solution.possible_restricted_runs); 
+            None end 
+          end
+        else begin (* All possible run have been tested, we take the better one and add the tests of its conflicts *)
+          let pr = Solutions.min_elt solution.possible_runs in
+          Some [pr] end *)
+      else begin 
+        match next_solution solution with 
+        | None -> find_possible_run solution (* if the next solution is just a next step*)
+        | Some sol -> Some sol (* the next solution returned a list of restricted dag *) 
+      end
+  end
+  else begin
+    let pr =  Solutions.min_elt solution.possible_runs_todo in
+    solution.possible_runs_todo <- Solutions.remove pr solution.possible_runs_todo ;
+    if !debug_execution then Printf.printf "complete run: %s\n"(show_run pr) ;
+    Some [pr] (*
+    if subset pr.dag pr.test.statement.dag 
     then begin
-      if 
-        match partial_run.test.statement.head with 
-        | Knows(_)
-        | Reach -> true
-        | Identical(t,t') -> check_recipes partial_run (t,t') 
-        | Tests(equal,diseq) -> (List.for_all (check_recipes partial_run) equal) && (List.for_all ( fun dis -> not (check_recipes partial_run dis)) diseq)
-      then 
-        begin if !debug_execution then Printf.printf "Solution succeeds the tests \n"  ;
-        solution.possible_runs_todo <- Solutions.add scored_run solution.possible_runs_todo end
-      else
-        begin if !debug_execution then Printf.printf "Solution fails the tests: \n %s \n" (show_run partial_run) ;
-        solution.failed_run <- partial_run :: solution.failed_run end
-    end
+      (*let conflicts = Bijection.compatible pr in
+        solution.possible_runs <- Solutions.add conflicts solution.possible_runs;*)
+        Some [pr] (* conflicts *)
+      end
     else begin
-      solution.partial_runs_todo <- Solutions.add scored_run solution.partial_runs_todo 
-    end
-  ) new_runs 
-
-
-(*let rec transpose term corresp = 
-  match term with
-  | Var(_) -> term
-  | Fun({id=Frame(loc)} as f, []) -> Fun({f with id=Frame(loc_p_to_q loc corresp)}, [])
-  | Fun(f,args) -> Fun(f,List.map (fun t -> transpose t corresp) args)
-  
-let apply_var_set_pred predi subst corresp =
-  Printf.printf "corresp %s \n" (show_correspondance corresp);
-  match predi with
-  | Reach -> Reach
-  | Knows(_) -> Reach
-  | Identical(r,r') -> 
-    Identical(apply_var_set_subst (transpose r corresp) subst,apply_var_set_subst (transpose r' corresp) subst)
-  | Tests(equal,diseq) -> Tests(List.map (fun (r,r') -> 
-    (apply_var_set_subst (transpose r corresp) subst,apply_var_set_subst (transpose r' corresp) subst)) equal,
-    List.map (fun (r,r') -> 
-    (apply_var_set_subst (transpose r corresp) subst,apply_var_set_subst (transpose r' corresp) subst)) diseq)
-*)
+      if !debug_execution then Printf.printf "Partial dag\n";
+      solution.possible_restricted_runs <- pr :: solution.possible_restricted_runs;
+      find_possible_run solution
+      end *)
+  end
       
 let rec find_compatible_run solution =
   if Solutions.is_empty solution.possible_runs_todo 
@@ -276,28 +353,27 @@ let rec find_compatible_run solution =
             None end 
           end
         else begin (* All possible run have been tested, we take the better one and add the tests of its conflicts *)
-          try Some (Solutions.min_elt (Solutions.filter (fun sol -> 
-              compatible_prun sol.execution.test.constraints sol.execution.test.constraints_back sol.execution)
-            solution.possible_runs)) 
+          try Some [(Solutions.min_elt (Solutions.filter (fun sol -> 
+              compatible_prun sol.test.constraints sol.test.constraints_back sol)
+            solution.possible_runs)) ]
           with Not_found -> None end
     else begin next_solution solution; 
       find_compatible_run solution 
     end end
   else begin
-    let sc_pr =  Solutions.min_elt solution.possible_runs_todo in
-    solution.possible_runs_todo <- Solutions.remove sc_pr solution.possible_runs_todo ;
-    let pr = sc_pr.execution in
+    let pr =  Solutions.min_elt solution.possible_runs_todo in
+    solution.possible_runs_todo <- Solutions.remove pr solution.possible_runs_todo ;
     if !debug_execution then Printf.printf "complete run: %s\n"(show_run pr) ;
     if subset pr.dag pr.test.statement.dag 
     then begin
-      let conflicts = Bijection.compatible pr in
+      (* let conflicts = Bijection.compatible pr in *)
       if compatible_prun pr.test.constraints pr.test.constraints_back pr then
         begin
-        Some conflicts
+        Some [pr] (* conflicts *)
         end
       else begin 
-        if !debug_execution then Printf.printf "Solution in conflict \n";
-        solution.possible_runs <- Solutions.add conflicts solution.possible_runs;
+        if !debug_execution then Printf.printf "Solution does not fit correspondance \n";
+        solution.possible_runs <- Solutions.add pr solution.possible_runs;
         find_compatible_run solution
         end
       end
@@ -308,40 +384,5 @@ let rec find_compatible_run solution =
       end
   end
       
-let rec find_possible_run solution =
-  if Solutions.is_empty solution.possible_runs_todo 
-  then begin
-      if Solutions.is_empty solution.partial_runs_todo 
-      then 
-        if Solutions.is_empty solution.possible_runs 
-        then begin
-          if solution.possible_restricted_runs = [] then
-            None
-          else begin Printf.eprintf "Further investigation are required (%d partial dags not considered).\n" (List.length solution.possible_restricted_runs); 
-            None end 
-          end
-        else begin (* All possible run have been tested, we take the better one and add the tests of its conflicts *)
-          let sol = Solutions.min_elt solution.possible_runs in
-          Some sol end 
-      else begin next_solution solution; 
-        find_possible_run solution end
-  end
-  else begin
-    let sc_pr =  Solutions.min_elt solution.possible_runs_todo in
-    solution.possible_runs_todo <- Solutions.remove sc_pr solution.possible_runs_todo ;
-    let pr = sc_pr.execution in
-    if !debug_execution then Printf.printf "complete run: %s\n"(show_run pr) ;
-    if subset pr.dag pr.test.statement.dag 
-    then begin
-      let conflicts = Bijection.compatible pr in
-        solution.possible_runs <- Solutions.add conflicts solution.possible_runs;
-        Some conflicts
-      end
-    else begin
-      if !debug_execution then Printf.printf "Partial dag\n";
-      solution.possible_restricted_runs <- pr :: solution.possible_restricted_runs;
-      find_possible_run solution
-      end
-  end
-      
+
       
