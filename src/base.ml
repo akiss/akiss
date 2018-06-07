@@ -176,8 +176,14 @@ let new_base () =
   } in
   kb 
 
+let canonize_head head =
+  match head with
+  | Tests(eq,diseq) -> Tests(EqualitiesSet.of_list (EqualitiesSet.elements eq),EqualitiesSet.of_list (EqualitiesSet.elements diseq))
+  | _ -> head
+  
 let canonize_statement st = 
   { st with
+    head = canonize_head st.head;
     dag = canonize_dag st.dag;
     inputs = canonize_inputs st.inputs;
     recipes = canonize_inputs st.recipes;

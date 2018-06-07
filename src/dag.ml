@@ -5,7 +5,7 @@ module Location =
        struct
          type t = location
          let compare x y =
-           compare x.p y.p
+           compare (x.p:int) (y.p:int)
        end
 
 module LocationSet = Set.Make(Location)
@@ -23,7 +23,22 @@ type dag = {
 **)
 
 let show_loc_set ls =
-  LocationSet.fold (fun l str -> (if str = "" then "" else str ^ "," ) ^ (string_of_int l.p)) ls "";;
+  (*let l_save = ref null_location in
+  let first = ref true in
+  
+  LocationSet.iter (fun l ->
+    if !first 
+    then (l_save := l; first := false)
+    else (assert (Location.compare !l_save l <= 0); l_save := l)
+  ) ls;*)
+  
+  (*print_string "\n\nshow_loc\n";
+  LocationSet.iter (fun l -> Printf.printf "%d," l.p) ls;
+  print_string "\n";
+  *)
+  let r = LocationSet.fold (fun l str -> (if str = "" then "" else str ^ "," ) ^ (string_of_int l.p)) ls "" in
+  (* Printf.printf "Version with Fold : %s\nend of show_loc\n\n" r;*)
+  r;;
 
 let show_dag dag =
   if !Util.use_xml then 
@@ -47,7 +62,7 @@ let empty = {rel = Dag.empty}
 let is_empty dag = Dag.is_empty dag.rel
 
 let singleton l1 l2 =
-  { rel = Dag.singleton l1 (LocationSet.singleton l2)}
+  { rel = Dag.add l2 LocationSet.empty (Dag.singleton l1 (LocationSet.singleton l2))}
 
 let put_at_end dag loc =
   {rel = Dag.add loc (LocationSet.empty)(Dag.map (fun set -> LocationSet.add loc set) dag.rel)}
@@ -75,6 +90,9 @@ let merge dag1 dag2 =
    let map1 = one_side dag1 dag2 in
    let map2 = one_side dag2 dag1 in
    {rel= Dag.union (fun loc set1 set2 -> Some (LocationSet.union set1 set2)) map1 map2}
+   
+let merge dag1 dag2 =
+  merge dag1 (merge (merge dag1 dag2) dag2)
 
 let is_before dag l1 l2 =
   match l1, l2 with 

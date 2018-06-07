@@ -55,7 +55,7 @@ let  set_debug = function
   | "sat" -> about_saturation := true
   | "saturation" -> about_saturation := true ; debug_saturation := true
   | "maude" -> about_maude := true
-  | "exec" -> about_execution := true
+  | "bij" -> about_bijection := true
   | _ -> raise (Arg.Bad("Undefined semantics"))
 
 
@@ -64,8 +64,6 @@ let command_line_options_list = [
   ("-d",
    Arg.Symbol(["progress";"completion";"canon";"seed";"sat";"saturation";"maude";"exec"],set_debug),
    " Enable additional debug information");
-  (* ("--progress", Arg.Set(about_progress), *)
-  (*  "Enable progression output"); *)
    ("-comp", Arg.Set(about_completion), 
     "Enable debug output about completions"); 
    ("-canonization", Arg.Set(about_canonization),
@@ -76,7 +74,7 @@ let command_line_options_list = [
     "Enable verbose output about saturation"); 
    ("-saturation", Arg.Set(debug_saturation), 
     "Enable debug output about saturation"); 
-   ("-bij", Arg.Set(about_execution), 
+   ("-bij", Arg.Set(about_bijection), 
     "Show tests correspondance");
    ("-loc", Arg.Set(about_location), 
     "Show location information");
@@ -84,6 +82,10 @@ let command_line_options_list = [
     "Show tests executions debugging"); 
    ("-tests", Arg.Set(debug_tests), 
     "Show information about tests");
+   ("-merge", Arg.Set(debug_merge), 
+    "Show information about merging tests");
+   ("-progress", Arg.Set(about_progress),
+    "Print info in about progression of Akiss");
    ("-xml", Arg.Set(use_xml),
     "Print info in xml format");
   (*"--extra", Arg.Int (fun i -> extra_output := i),

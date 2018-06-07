@@ -44,11 +44,11 @@ type partial_run = {
   restrictions : LocationSet.t;
   (*performed_restrictions : LocationSet.t;*)
   parent : partial_run option;
-  next_action : location option;
   (* for scoring *)
   last_exe : location ; (* the action whose run lead to this pr *)
   weird_assoc : int ; (* when the parent of an action is not associated to the parent of the associated action *)
   score : int ;
+  added_dag : dag;
 }
 
 and origin = 
@@ -71,19 +71,20 @@ and test = {
 
 let show_run pr =
   (*(List.fold_left (fun str (t,t') -> str ^ (show_term t)  ^ " != " ^ (show_term t') ^ ", " )*)
-    (Format.sprintf "{ %s: \n frame= %s\n corresp= %s\n dag = %s\n"
+    (Format.sprintf "{ %s: \n frame= %s\n corresp= %s\n added_dag = %s\n"
     (show_which_process pr.test.process_name)
     (Inputs.show_inputs pr.frame)
     (show_correspondance pr.corresp)
-    (show_dag pr.dag))
+    (show_dag pr.added_dag))
    (* pr.disequalities) ^"\n" *)
-    
-    
+        
 let show_partial_run pr =
   (List.fold_left (fun str (choices,lset,diseq, p) -> str ^ "   " ^(show_loc_set lset) ^" : "^(Process.show_process_start 2 p)^"\n")
   ((List.fold_left (fun str (choices,lset,diseq, p) -> str ^ "   " ^ (show_loc_set lset) ^" : "^(Process.show_process_start 2 p)^"\n")
   ((show_run pr) ^ " remaining_actions= " ^ (show_loc_set pr.remaining_actions) ^ "\n qthreads= \n") 
-  pr.qthreads) ^ " fthreads=\n") pr.failed_qthreads) ^ (Format.sprintf "\n weird = %d ; score = %d ; restricted = %s }\n"  pr.weird_assoc pr.score (show_loc_set pr.restrictions))
+  pr.qthreads) ^ " fthreads=\n") pr.failed_qthreads) 
+  ^ (Format.sprintf "\n action=%d; weird = %d ; score = %d ; restricted = %s;  }\n" 
+  pr.last_exe.p pr.weird_assoc pr.score (show_loc_set pr.restrictions))
 
 let null_test = {
   process_name = P ;
@@ -112,10 +113,10 @@ let empty_run =
      restrictions = LocationSet.empty;
      (*performed_restrictions = LocationSet.empty;*)
      parent = None;
-     next_action = None;
      last_exe = null_location ;
      weird_assoc = 0;
      score = 0 ;
+     added_dag = empty;
    } 
   
 let rec show_origin o =
@@ -144,7 +145,7 @@ type completion = {
   st_c : raw_statement ; (* the current completion g u U_i f_i *)
   corresp_c : correspondance ; (* the correspondance of the union of f_i *)
   corresp_back_c : correspondance ;
-  missing_actions :  LocationSet.t; (* all the locations which are present on the initial statemetn but not on the runs *)
+  missing_actions :  LocationSet.t; (* all the locations which are present on the initial statement but not on the runs *)
   selected_action : location; (*Among all missing locations the one to complete first *)
   mutable most_general_completions : completion list;
 }
@@ -203,8 +204,26 @@ type solutions = {
   mutable partitions : partial_run list; (* Current solution under testing *)
   mutable movable : int; (*Number of tests which are merged require to consider changing the partition *) 
   (*mutable reverse : partial_run Dag.t; *)(* record partial_run from existing trace for backward search (diseq and identities) *)
+  due_to : solutions option; (* for debug output *)
 }
 
+let empty_solution = {
+    partial_runs = [] ;
+    partial_runs_todo = Solutions.empty;
+    possible_restricted_runs = [];
+    possible_runs = Solutions.empty;
+    possible_runs_todo = Solutions.empty;
+    failed_partial_run = [];
+    failed_run = [];
+    partitions = [] ;
+    movable = 0 ;
+    due_to = None;
+}
+
+let rec sol_level sol =
+  match sol.due_to with
+  | None -> 0
+  | Some sol -> 1 + sol_level sol
 
 module Test =
   struct
@@ -266,6 +285,7 @@ type bijection = {
   mutable todo_completion_Q : completion list; (* new partial completion which should be tested on all runs *)
   mutable locs : LocationSet.t; (* the locations already in the tests of the base, for optimization only *)
   htable : (int list , origin) Hashtbl.t;
+  htable_st : (hash_statement, test) Hashtbl.t;
 }
 
 let bijection = 
@@ -288,7 +308,8 @@ let bijection =
   todo_completion_P = [];
   todo_completion_Q = [];
   locs = LocationSet.empty;
-  htable = Hashtbl.create 1000 ;
+  htable = Hashtbl.create 5000 ;
+  htable_st = Hashtbl.create 5000 ;
 }
 
 let show_bijection () =
@@ -321,6 +342,9 @@ let push (statement : raw_statement) process_name origin init =
   in
   let int_lst = IntegerSet.elements int_set in
   statement.binder := New;
+  let statement = canonize_statement statement in
+  let hash_statement = raw_to_hash_statement statement in
+  if Hashtbl.mem bijection.htable_st hash_statement then () else begin
   if origin != Completion && Hashtbl.mem bijection.htable int_lst then ()  else begin
   Hashtbl.add bijection.htable int_lst origin;
   bijection.next_id <- bijection.next_id + 1 ;
@@ -338,20 +362,22 @@ let push (statement : raw_statement) process_name origin init =
   } in
   let init_test = init test in
   let solution =
-  { 
+  { empty_solution with
        partial_runs = [init_test] ;
        partial_runs_todo = Solutions.singleton init_test;
-       possible_restricted_runs = [];
+(*       possible_restricted_runs = [];
        possible_runs = Solutions.empty;
        possible_runs_todo = Solutions.empty;
        failed_partial_run = [];
        failed_run = [];
        partitions = [] ;
-       movable = 0 ;
+       movable = 0 ;*)
      } in
-  if !Util.debug_tests then Printf.printf "\nAdding new test: %s\n" (show_test test);
+  Hashtbl.add bijection.htable_st hash_statement test;
+  if !Util.debug_tests || (!about_progress && bijection.next_id mod 250 = 0) then Printf.printf "\nAdding new test: %s\n" (show_test test);
   (*if bijection.next_id mod 10000 = 0 then (*Hashtbl.iter (fun k v -> Printf.printf "%s" (show_raw_statement k)) bijection.htable;*)show_bijection ();*)
   bijection.tests <- Tests.add test solution bijection.tests 
+  end
   end
   
 let reorder_tests () = 
@@ -372,6 +398,7 @@ let pop () =
 
 (* add a partial completion to the todo list *)  
 let register_completion completion =
+  completion.st_c.binder := New ;
   let to_be_completed = if completion.from_base = P then bijection.partial_completions_P else bijection.partial_completions_Q in
   let loc = completion.selected_action in
   let new_list = Dag.add loc (completion:: (try Dag.find loc to_be_completed with Not_found -> [])) to_be_completed in

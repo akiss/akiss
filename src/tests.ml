@@ -13,11 +13,44 @@ let recipes_of_head head =
   | Identical(r,r') -> EqualitiesSet.singleton (r,r'),EqualitiesSet.empty
   | Knows(_)
   | Reach -> EqualitiesSet.empty,EqualitiesSet.empty
+  | Unreachable -> assert false
 
 
+let clean_unused_variables st = 
+  if st.nbvars = 0 then st
+  else
+  let fake_fun = Some zero in
+  let sigma_repl = Array.make st.nbvars fake_fun in
+  let term_to_recipe = Array.make st.nbvars None in
+  let sigma = (sigma_repl, Array.make 0 fake_fun) in
+  st.binder := Master;
+  let body = List.filter (fun k -> 
+    match k.recipe, k.term with
+    | Var(r),Var(t) ->
+      if sigma_repl.(t.n) = fake_fun 
+      then begin
+        sigma_repl.(t.n) <- None ;
+        if sigma_repl.(r.n) = fake_fun
+        then begin
+          sigma_repl.(r.n) <- None;
+          term_to_recipe.(t.n) <- Some k.recipe;
+          true end
+        else
+          assert false
+      end
+      else
+        if sigma_repl.(r.n) = fake_fun 
+        then begin sigma_repl.(r.n) <- term_to_recipe.(t.n); false end
+        else false
+    | _ -> assert false
+  ) st.body in
+  (*Printf.printf "Subst %s \n%!" (Rewriting.show_subst_array sigma_repl);*)
+  let sigma = Rewriting.pack sigma in
+  Horn.apply_subst_statement { st with body=body;} sigma
+  
 (* from two statements (ie tests) generate the merge of these tests, like equation rule *)
 let merge_tests (fa : raw_statement) (fb : raw_statement) =
-  if ! debug_execution then Printf.printf "Try to merge: %s\n and %s\n" (show_raw_statement fa)(show_raw_statement fb);
+  if ! debug_merge then Printf.printf "Try to merge: %s\n and %s\n" (show_raw_statement fa)(show_raw_statement fb);
   match Inputs.merge_choices fa.choices fb.choices with
     None -> []
   | Some merged_choice ->
@@ -38,16 +71,20 @@ let merge_tests (fa : raw_statement) (fb : raw_statement) =
     List.map
       (fun sigm ->
           let sigma = Rewriting.pack sigma in
-          if !debug_execution then Printf.printf "A merge has been found: %s\n%!" (show_substitution sigma);
+          if  !debug_merge then Printf.printf "A merge has been found: %s\n%!" (show_substitution sigma);
           let result =
              let body =
-               List.map (fun x ->
+               List.fold_left (fun bod x ->
+               let t = Rewriting.apply_subst_term x.term sigma in
+               match t with
+               | Var(_) -> 
                {
                loc =  x.loc ; 
                recipe = Rewriting.apply_subst_term x.recipe sigma ;
-               term = Rewriting.apply_subst_term x.term sigma ;
-               marked = false }
-                 )
+               term = t ;
+               marked = false } :: bod
+               | _ -> bod
+                 ) []
                  (fa.body @ fb.body) 
              in
           {
@@ -67,10 +104,10 @@ let merge_tests (fa : raw_statement) (fb : raw_statement) =
              (EqualitiesSet.union fa_head_diseq fb_head_diseq)); 
            body = body }
            in
-           (*if !debug_execution then Format.printf "The merged test: %s\n"
+           (*if true then Format.printf "The merged test: %s\n"
                (show_raw_statement result);*)
-           let result = Horn.simplify_statement result in
-           if !debug_execution then Format.printf "New merged test: %s\n%!"
+           let result = clean_unused_variables result in
+           if !debug_merge then Format.printf "New merged test: %s\n%!"
                (show_raw_statement result);
            result)
         sigmas
@@ -96,18 +133,18 @@ let actual_test process_name (st : raw_statement) =
   } in
   let run_init = init_run process_name st (proc process_name) test in
   let solution =
-  { 
+  { empty_solution with
        partial_runs = [run_init] ;
        partial_runs_todo = Solutions.singleton run_init;
-       possible_restricted_runs = [];
+       (*possible_restricted_runs = [];
        possible_runs = Solutions.empty;
        possible_runs_todo = Solutions.empty;
        failed_partial_run = [];
        failed_run = [];
        partitions = [] ;
-       movable = 0 ;
+       movable = 0 ;*)
      } in
-  match find_compatible_run solution with
+  match find_possible_run solution with
     None ->  false 
   | Some sol -> true
 
@@ -115,14 +152,17 @@ let actual_test process_name (st : raw_statement) =
 let map_dag dag corresp =
   {rel = Dag.fold (fun key lset ndag -> Dag.add (loc_p_to_q key corresp) (LocationSet.map (fun l -> loc_p_to_q l corresp) lset) ndag) dag.rel (Dag.empty)}
 
-let transpose_inputs (recipes : Inputs.inputs) (run : partial_run) : Inputs.inputs =
-  {i = Dag.fold (fun key recipe ninputs -> Dag.add (loc_p_to_q key run.corresp) (apply_frame recipe run) ninputs) recipes.i (Dag.empty)}
+let apply_frame_2 sigma recipe run =
+  Rewriting.apply_subst_term (apply_frame recipe run) sigma
+  
+let transpose_inputs sigma (recipes : Inputs.inputs) (run : partial_run) : Inputs.inputs =
+  {i = Dag.fold (fun key recipe ninputs -> Dag.add (loc_p_to_q key run.corresp) (apply_frame_2 sigma recipe run) ninputs) recipes.i (Dag.empty)}
 
 let rec transpose_recipe recipe (prun : partial_run) =
   match recipe with
     | Fun({ id=Frame(l)}, []) ->  Fun({ id=Frame(Bijection.loc_p_to_q l prun.corresp);has_variables=false }, []) 
     | Fun({ id=Input(l)}, []) -> assert false
-    | Fun(f, args) -> Fun(f, List.map (fun x -> apply_frame x prun) args)
+    | Fun(f, args) -> Fun(f, List.map (fun x -> transpose_recipe x prun) args)
     | Var(x) -> Var(x) 
   
 let transpose_recipes (recipes : Inputs.inputs) (run : partial_run) : Inputs.inputs =
@@ -135,11 +175,12 @@ let conj run =
   (*let binder = identity_sigma.binder in*)
   stP.binder := Master;
   let st = Horn.apply_subst_statement stP identity_sigma in
+  let r = 
   {
   binder = st.binder ;
   nbvars = st.nbvars ;
   dag = map_dag st.dag run.corresp;
-  inputs =  transpose_inputs st.recipes run  ;
+  inputs =  transpose_inputs identity_sigma st.recipes run  ;
   choices = run.choices ;
   head = (let eq, diseq = recipes_of_head st.head in Tests(
     EqualitiesSet.map (fun (s,t) -> (transpose_recipe s run,transpose_recipe t run)) eq,
@@ -147,12 +188,13 @@ let conj run =
   body = List.map (fun ba -> {
     loc = (match ba.loc with None -> None | Some l -> Some (loc_p_to_q l run.corresp));
     recipe = transpose_recipe ba.recipe run;
-    term = apply_frame ba.recipe run;
+    term = apply_frame_2 identity_sigma ba.recipe run;
     marked = false;
     }) st.body ;
   recipes = transpose_recipes st.recipes run ; 
-  }
-  
+  } in
+  stP.binder := New;
+  r
   
 let statement_to_tests process_name origin (statement : raw_statement) otherProcess =
   let statement = match origin with Initial _ -> same_term_same_recipe statement | _-> statement in
@@ -178,26 +220,26 @@ let completion_to_test comp =
   } in
   let run_init = init_run comp.from_base comp.st_c (proc (other comp.from_base )) test in
   let solution =
-  { 
+  { empty_solution with 
        partial_runs = [run_init] ;
        partial_runs_todo = Solutions.singleton run_init;
-       possible_restricted_runs = [];
+       (* possible_restricted_runs = [];
        possible_runs = Solutions.empty;
        possible_runs_todo = Solutions.empty;
        failed_partial_run = [];
        failed_run = [];
        partitions = [] ;
-       movable = 0 ;
+       movable = 0 ; *)
      } in
-  match find_compatible_run solution with
+  match find_possible_run solution with
     None -> if !about_completion then Printf.printf "The completion is not executable \n" 
-  | Some [sol] -> 
-    if !about_completion then Printf.printf "Execution of the completion  %s\n" (show_run sol);
-    statement_to_tests (other comp.from_base) Completion (conj sol)(proc (comp.from_base ))
+  | Some [pr] -> 
+    if !about_completion then Printf.printf "Execution of the completion  %s\n" (show_run pr);
+    statement_to_tests (other comp.from_base) Completion (conj pr)(proc (comp.from_base ))
   | Some _ -> assert false
   
 let add_to_completion (run : partial_run) (completion : completion) = 
-  if !about_completion then Printf.printf "Try for comp \n run %s \n with %s\n" (show_run run) (show_completion completion);
+  if !about_completion then Printf.printf "Try completing a completion between \n run %s \n whose test is %s \n and partial completion %s\n" (show_run run)(show_raw_statement run.test.statement) (show_completion completion);
   let exception NonBij in
   try
   let corr = { a = Dag.union (fun locP x y -> if x = y then Some x else raise NonBij) run.corresp.a completion.corresp_c.a } in
@@ -244,6 +286,7 @@ let negate_statement (st : raw_statement) =
   | Unreachable -> 
     {st with head = Tests(EqualitiesSet.empty,EqualitiesSet.empty)}
   | Identical(s,t) -> {st with head = Tests(EqualitiesSet.empty,EqualitiesSet.singleton (s,t))}
+  | _ -> assert false
 
   
 let statement_to_completion process_name (st : raw_statement) =
@@ -287,10 +330,10 @@ let rec statements_to_tests process_name (statement : statement) otherProcess =
 let add_merged_tests prun =
   (* let (prun,runset)=sol.execution,sol.conflicts in *)
   let runset = Bijection.compatible prun in 
-  if !debug_tests && not (RunSet.is_empty runset) 
+  if false && !debug_tests && not (RunSet.is_empty runset) 
   then Printf.printf "Conflicts with " ; 
   RunSet.iter (fun par ->
-    if !debug_tests 
+    if false && !debug_tests 
     then Printf.printf "[%d] " (par.test.id); 
     if prun.test.process_name = par.test.process_name 
     then
@@ -302,21 +345,23 @@ let add_merged_tests prun =
       || ((Inputs.contains par.test.statement.inputs prun.test.statement.inputs) 
         &&  (EqualitiesSet.subset (diseq_prun)(diseq_par)) 
         && (EqualitiesSet.subset (diseq_prun)(diseq_par)))
-      then (if !debug_tests then Printf.printf "s ,")  else
+      then (if false && !debug_tests then Printf.printf "s,")  else
       begin
         let merged_statements =   merge_tests prun.test.statement par.test.statement in (* only one without xor *)
+        if false && merged_statements = [] then (if !debug_tests then Printf.printf "i,")
+        else
         List.iter (fun raw_st -> 
-          if !debug_tests then Printf.printf "New test %s \n" (show_raw_statement raw_st);
+          if false && !debug_tests then Printf.printf "T,";
           statement_to_tests prun.test.process_name (Composed(prun,par)) raw_st (proc (other prun.test.process_name))
           ) merged_statements
       end
      else begin
-      if !debug_tests  
-      then Printf.printf "P/Q ," ; 
+      if false && !debug_tests  
+      then Printf.printf "P/Q," ; 
       (*raise Attack*)()
       end 
   ) runset;
-  if !debug_tests  then Printf.printf "\n"
+  if false && !debug_tests  then Printf.printf "\n"
   
 let rec register_solution solution (sol : partial_run list) =
   match sol with
@@ -365,7 +410,7 @@ and find_compatible_run_init constraints constraints_back run  =
       solution.partial_runs_todo <- Solutions.filter (fun x -> compatible_prun constraints constraints_back x) (solution.partial_runs_todo);
       run.test.constraints <- constraints ;
       run.test.constraints_back <- constraints_back ;
-      find_compatible_run solution
+      find_possible_run solution
   with
   | Some [sol] -> 
       Bijection.remove_run run; 
@@ -422,11 +467,11 @@ let base_to_tests process_name base process other_process =
 let equivalence p q =
   Printf.printf (if !use_xml then "<?xml-stylesheet type='text/css' href='style.css' ?><all>" else "Saturating P\n");
   let (locP,satP) = Horn.saturate p in
-  if  !Util.about_saturation then
+  if  !about_saturation then
     Printf.printf (if !use_xml then "%s" else "Saturation of P:\n %s\n") (Base.show_kb satP);
   if not !use_xml then Printf.printf "Saturating Q:\n%!";
    let (locQ,satQ) = Horn.saturate q in
-  if  !Util.about_saturation then
+  if  !about_saturation then
     Printf.printf (if !use_xml then "%s" else "Saturation of Q:\n %s\n") (Base.show_kb satQ);
   let processP = (CallP({p = locP;io=Call;name="main";parent=None},
     p,Array.make 0 zero,Array.make 0 null_chan)) in
@@ -436,7 +481,7 @@ let equivalence p q =
   bijection.q <- processQ ;
   bijection.satP <- satP ;
   bijection.satQ <- satQ ;
-  Printf.printf "Building tests\n%!";
+  if !about_progress then Printf.printf "Building tests\n%!";
   base_to_tests P satP processP processQ ;
   base_to_tests Q satQ processQ processP ; 
   if !about_completion then
@@ -446,9 +491,9 @@ let equivalence p q =
     Printf.printf "Completions of Q\n";
     show_all_completions bijection.partial_completions_Q end ;
   Bijection.reorder_tests () ;
-  Printf.printf "Testing %d tests\n%!" (Tests.cardinal bijection.tests);
   try
     while not (Tests.is_empty bijection.tests) do
+      if !about_progress then Printf.printf "Testing %d tests\n%!" (Tests.cardinal bijection.tests);
       while not (Tests.is_empty bijection.tests) do
         let (test, solution) = pop () in
         (* We check that the two tests to merge have not been replaced by a different mapping *)
@@ -469,23 +514,24 @@ let equivalence p q =
           (*if test.id = 335 then debug_execution := true ;*)
           match find_possible_run solution with 
           | None ->  Printf.printf "Failure to pass %s\n" (show_test test);
-              List.iter (fun (pr : partial_run) -> Printf.printf "%s\n" (show_correspondance pr.corresp)) solution.partial_runs;
+              (*List.iter (fun (pr : partial_run) -> Printf.printf "%s\n" (show_correspondance pr.corresp)) solution.partial_runs;*)
             raise Attack;
           | Some sol -> register_solution solution sol; if !debug_tests && !use_xml then Printf.printf "</opentest>"
         end
       done ;
-    if !about_completion then 
+    if !about_progress then 
       Printf.printf "\n\n __Actualization of completions of P (%d runs)__\n" (List.length bijection.runs_for_completions_Q);
     compute_new_completions P ; 
-    if !about_completion then 
+    if !about_progress then 
       Printf.printf "\n\n __Actualization of completions of Q (%d runs)__\n" (List.length bijection.runs_for_completions_P);
     compute_new_completions Q ; 
+    Printf.printf "\n\n+++++ Starting a new cycle +++++\n\n";
     done ;
-    if !about_execution then Bijection.show_bijection();
+    if !about_bijection then Bijection.show_bijection();
     Printf.printf "P and Q are trace equivalent. \n" ;
     if ! use_xml then Printf.printf "</all>"
   with
   | Attack -> begin 
-  if !about_execution then Bijection.show_bijection();
+  if !about_bijection then Bijection.show_bijection();
   Printf.printf "P and Q are not trace equivalent. \n" 
   end

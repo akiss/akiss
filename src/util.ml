@@ -6,8 +6,8 @@ let bench_cur = ref 0.
 let bench_start () = bench_cur := Sys.time ()
 let bench_stop () = bench := !bench +. Sys.time () -. !bench_cur
 
-let debug_output = ref false
-let verbose_output = ref false
+ let debug_output = ref false
+(*let verbose_output = ref false*)
 let about_seed = ref false
 let debug_seed = ref false
 let about_saturation = ref false
@@ -16,10 +16,10 @@ let about_tests = ref false
 let debug_tests = ref false
 let about_completion = ref false
 let debug_completion = ref false
-let about_execution = ref false
+let about_bijection = ref false
 let debug_execution = ref false
 let about_theory = ref false
-let debug_theory = false
+let debug_merge = ref false
 let about_traces = ref false
 let about_maude = ref false
 let about_canonization = ref false
@@ -39,11 +39,11 @@ let debugOutput a =
   else
     Format.ifprintf Format.std_formatter a*)
 
-let normalOutput a =
+(* let normalOutput a =
   if !verbose_output || !debug_output then
     Format.ifprintf Format.std_formatter a
   else
-    Format.printf a
+    Format.printf a *)
 
 (* TODO use the standard library:
  *  - List.rev is already tailrec

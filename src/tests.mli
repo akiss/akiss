@@ -5,7 +5,10 @@ val merge_tests :
 exception Attack
 val actual_test : Bijection.which_process -> Base.raw_statement -> bool
 val map_dag : Dag.dag -> Bijection.correspondance -> Dag.dag
+val apply_frame_2 :
+  Types.substitution -> Types.term -> Bijection.partial_run -> Types.term
 val transpose_inputs :
+  Types.substitution ->
   Inputs.inputs -> Bijection.partial_run -> Inputs.inputs
 val transpose_recipe : Types.term -> Bijection.partial_run -> Types.term
 val transpose_recipes :

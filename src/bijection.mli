@@ -56,10 +56,10 @@ type partial_run = {
     list;
   restrictions : Dag.LocationSet.t;
   parent : partial_run option;
-  next_action : Types.location option;
   last_exe : Types.location;
   weird_assoc : int;
   score : int;
+  added_dag : Dag.dag;
 }
 and origin =
     Initial of Base.statement
@@ -179,7 +179,10 @@ type solutions = {
   mutable failed_run : partial_run list;
   mutable partitions : partial_run list;
   mutable movable : int;
+  due_to : solutions option;
 }
+val empty_solution : solutions
+val sol_level : solutions -> int
 module Test : sig type t = test val compare : test -> test -> int end
 module Tests :
   sig
@@ -236,6 +239,7 @@ type bijection = {
   mutable todo_completion_Q : completion list;
   mutable locs : Dag.LocationSet.t;
   htable : (int list, origin) Hashtbl.t;
+  htable_st : (Base.hash_statement, test) Hashtbl.t;
 }
 val bijection : bijection
 val show_bijection : unit -> unit

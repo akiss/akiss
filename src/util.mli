@@ -4,7 +4,6 @@ val bench_cur : float ref
 val bench_start : unit -> unit
 val bench_stop : unit -> unit
 val debug_output : bool ref
-val verbose_output : bool ref
 val about_seed : bool ref
 val debug_seed : bool ref
 val about_saturation : bool ref
@@ -13,17 +12,16 @@ val about_tests : bool ref
 val debug_tests : bool ref
 val about_completion : bool ref
 val debug_completion : bool ref
-val about_execution : bool ref
+val about_bijection : bool ref
 val debug_execution : bool ref
 val about_theory : bool ref
-val debug_theory : bool
+val debug_merge : bool ref
 val about_traces : bool ref
 val about_maude : bool ref
 val about_canonization : bool ref
 val about_progress : bool ref
 val about_location : bool ref
 val use_xml : bool ref
-val normalOutput : ('a, Format.formatter, unit) format -> 'a
 val trmap : ('a -> 'b) -> 'a list -> 'b list
 val union : 'a list list -> 'a list
 val unique : 'a list -> 'a list

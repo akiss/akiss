@@ -38,10 +38,10 @@ val compatible_prun :
   Bijection.correspondance -> Bijection.partial_run -> bool
 val get_all_new_roots :
   Dag.LocationSet.t ->
-  Bijection.partial_run -> (Types.location * Bijection.partial_run) list
+  Dag.LocationSet.t ->
+  Bijection.partial_run ->
+  (Dag.LocationSet.t * Dag.LocationSet.t * Bijection.partial_run) list
 val check_recipes : Bijection.partial_run -> Types.term * Types.term -> bool
 val next_solution : Bijection.solutions -> Bijection.partial_run list option
 val find_possible_run :
   Bijection.solutions -> Bijection.partial_run list option
-val find_compatible_run :
-  Bijection.solutions -> Bijection.Solutions.elt list option

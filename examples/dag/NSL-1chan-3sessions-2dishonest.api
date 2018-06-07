@@ -1,0 +1,81 @@
+(*
+  Needham-Schroeder-Lowe asymmetric protocol
+    A -> B: {A,nA,r1}_pkB
+    B -> A: {B,nA,nB,r2}_pkA
+    A -> B: {nB,r3}_pkB
+*)
+
+
+fun aa/0,bb/0,cc/0.
+
+fun s1/0,s2/0.
+
+chan ca1,ca2,ca3,ca4,ca5,ca6,ca7,ca8.
+chan cb1,cb2,cb3,cb4,cb5,cb6,cb7,cb8.
+
+chan cd,c.
+
+fun kc/0.
+
+fun pk/1.
+fun aenc/3,adec/2.
+adec(aenc(x,r,pk(k)),k) -> x.
+
+// Alice
+let A(ca,a,b,ka,pkb) =
+  new na;
+  new r1;
+  new r3;
+  out(ca,aenc((a,na),r1,pkb));
+  in(ca,xenc);
+  let (=b,=na,x3) = adec(xenc,ka) in
+  out(ca, aenc(x3,r3,pkb)).
+
+// Bob (+property)
+let B1(cb,b,a,kb,pka) =
+  new r2;
+  in(cb,z);
+  let (=a,z2) = adec(z,kb) in
+  out(cb,aenc((b,z2,s1),r2,pka));
+  in(cb,x).
+
+let B2(cb,b,a,kb,pka) =
+  new r2;
+  in(cb,z);
+  let (=a,z2) = adec(z,kb) in
+  out(cb,aenc((b,z2,s2),r2,pka));
+  in(cb,x).
+
+
+// Bob
+let B(cb,b,a,kb,pka) =
+  new nb;
+  new r2;
+  in(cb,z);
+  let (=a,z2) = adec(z,kb) in
+  out(cb,aenc((b,z2,nb),r2,pka));
+  in(cb,x).
+
+let P =
+  new ka; new kb;
+  out(c,pk(ka));
+  out(c,pk(kb));
+  (
+    A(c,aa,bb,ka,pk(kb)) | B1(c,bb,aa,kb,pk(ka)) |
+    A(c,aa,cc,ka,pk(kc)) |
+    B(c,bb,cc,kb,pk(kc)) 
+  ).
+
+
+let Q =
+  new ka; new kb;
+  out(c,pk(ka));
+  out(c,pk(kb));
+  (
+    A(c,aa,bb,ka,pk(kb)) | B2(c,bb,aa,kb,pk(ka)) |
+    A(c,aa,cc,ka,pk(kc)) |
+    B(c,bb,cc,kb,pk(kc)) 
+  )..
+
+
+query trace_equiv(P,Q).

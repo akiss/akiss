@@ -1223,7 +1223,7 @@ let saturate procId  =
     (CallP({p = ind;io=Call;name="main";parent=None},procId,Array.make 0 zero,Array.make 0 null_chan))
     null_raw_statement;
   while not (Queue.is_empty(kb.s_todo)) || not (Queue.is_empty(kb.ns_todo)) do
-    if !about_progress then 
+    if false && !about_progress then 
       begin 
       Printf.printf "%d statements to process / %d in total \n"
         ((Queue.length kb.s_todo)+(Queue.length kb.ns_todo)) kb.next_id
