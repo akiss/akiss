@@ -1,10 +1,11 @@
 
 exception Bug
 
-let bench = ref 0.
+(* let bench = ref 0.
 let bench_cur = ref 0.
 let bench_start () = bench_cur := Sys.time ()
-let bench_stop () = bench := !bench +. Sys.time () -. !bench_cur
+let bench_stop () = bench := !bench +. Sys.time () -. !bench_cur *)
+let last_time = ref 0.
 
  let debug_output = ref false
 (*let verbose_output = ref false*)

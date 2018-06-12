@@ -138,9 +138,9 @@ let apply_subst_term_list tl sigma =
 let show_subst sigma =
     "{ " ^
       (String.concat ", "
-	 (trmap
-	    (fun ((x, t): varId * term) -> (string_of_int x.n) ^ " |-> " ^ (show_term t))
-	    sigma)) ^
+  (trmap
+    (fun ((x, t): varId * term) -> (string_of_int x.n) ^ " |-> " ^ (show_term t))
+    sigma)) ^
       " }"
 
 let rec show_subst_list sl =

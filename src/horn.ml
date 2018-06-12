@@ -385,21 +385,21 @@ let simplify_statement st =
   let (useless,body) =
     List.partition
       (fun a ->
-         let recipe_var = unbox_var a.recipe in
-         not (List.mem recipe_var hvars) &&
-         let t = a.term in
-         let l = a.loc in
-         try
-         let is_better =  List.find 
-           (fun a' ->
+        let recipe_var = unbox_var a.recipe in
+        not (List.mem recipe_var hvars) &&
+        let t = a.term in
+        let l = a.loc in
+        try
+          let is_better =  List.find 
+            (fun a' ->
               let recipe_var' = unbox_var a'.recipe in
               (( recipe_var.n < recipe_var'.n && l = a'.loc)
-                || Dag.should_be_before (st.dag) (a'.loc) l)
-                && Rewriting.equals_ac t (a'.term) ) st.body in
-           if !about_canonization then
-               Printf.printf "Atom %s removed due to %s\n" (show_body_atom a) (show_body_atom is_better);
-           sigma_repl.(recipe_var.n) <- Some is_better.recipe ;
-           true       
+                  || Dag.should_be_before (st.dag) (a'.loc) l)
+                  && Rewriting.equals_ac t (a'.term) ) st.body in
+          if !about_canonization then
+              Printf.printf "Atom %s removed due to %s\n" (show_body_atom a) (show_body_atom is_better);
+          sigma_repl.(recipe_var.n) <- Some is_better.recipe ;
+          true       
          with Not_found -> false
          )
        st.body
@@ -434,6 +434,7 @@ exception Bad_case
 
 let  first kb f =
    let rec first_node st f =
+      (* Printf.printf "T%d " st.id; *)
      try f st.st with 
      Bad_case -> first_list st.children f  
    and first_list sts f =
@@ -459,7 +460,7 @@ let inst_w_t my_st kb_st =
     | (Knows( _, myt), Knows(  _, tkb)) ->
           begin 
             (* debugOutput "Matching %s against %s\n%!" (show_term t1) (show_term t2); *)
-            if not (Dag.subset kb_st.dag my_st.dag) then raise Bad_World else
+            if not (Dag.subset kb_st.dag my_st.dag) then begin (*Printf.printf "@";*) raise Bad_World end else
             match Inputs.csm kb_st.inputs my_st.inputs with
             | sigma :: q -> begin
               try
@@ -468,9 +469,9 @@ let inst_w_t my_st kb_st =
                 if hard <> [] then raise Bad_case; (*warning: not possible to find recipes *)
                 sigma
               with
-              | Rewriting.Not_matchable -> raise Bad_case 
+              | Rewriting.Not_matchable -> (*Printf.printf "-";*) raise Bad_case 
               end
-            | [] -> raise Bad_World
+            | [] -> (*Printf.printf "&";*) raise Bad_World
           end
     | _ -> invalid_arg("inst_w_t "^(show_raw_statement my_st) ^(show_raw_statement kb_st))
 
@@ -492,20 +493,21 @@ let rec print_trace chan = function
   * instead of the new useless deduction statement.
   * See Definition 14 and Lemma 2 in the paper. *)
 let consequence st kb rules = 
-  (*Printf.printf "Conseq of %s \non %s" (show_raw_statement st) (show_kb kb);*)
+  if !about_canonization then Printf.printf "Conseq of %s" (show_raw_statement st) ;
   (*st.binder := Rule;*)
   let apply_subst_list_atom atom sigma  = 
    Knows(apply_subst atom.recipe sigma, apply_subst atom.term sigma) in
   assert (is_solved st) ;
   let rec aux st kb =
+    (*Printf.printf "___%s\n" (show_raw_statement st);*)
+    (*st.binder := New;*)
     match st.head with
 (*      | Knows(  _ , Fun({ id=FreshName(_)} as name, [])) ->
           `Public_name, Fun(name, [])*)
       | Knows( _, t) ->
           begin try
             (* Base case: Axiom rule of conseq *)
-            `Axiom, (List.find (
-			fun a -> t = a.term ) st.body).recipe
+            `Axiom, (List.find (fun a -> t = a.term ) st.body).recipe
           with
             | Not_found ->
                 (* Inductive case: Res rule
@@ -522,12 +524,13 @@ let consequence st kb rules =
                 first kb
                   (fun x ->
                      let sigma = inst_w_t st x in
+                    (*Printf.printf "\nst: %s\n sigma = %s\n" (show_raw_statement x)(show_subst sigma); *)
                      let subresults =
                        List.map
                          (fun y ->
                             let trace,r =
                               aux
-                                {x with head=(apply_subst_list_atom y sigma) }
+                                {st with head=(apply_subst_list_atom y sigma) }
                                 kb
                             in
                               trace, (unbox_var (y.recipe), r))

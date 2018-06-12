@@ -86,7 +86,7 @@ and occurs_list x l sigma =
     | h::q -> occurs x h sigma || occurs_list x q sigma
 
 let rec unify hard pairlst sigma =
-let s1,s2 = sigma in
+  (*let s1,s2 = sigma in*)
   (*Printf.printf "Subst%s,%s \n%!" (show_subst_array s1) (show_subst_array s2);*)
   let rec combine l1 l2 l =
     match (l1,l2) with

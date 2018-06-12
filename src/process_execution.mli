@@ -29,7 +29,6 @@ val next_run_with_action :
   Bijection.partial_run -> Bijection.partial_run list * Dag.Dag.key
 val next_run :
   Bijection.partial_run -> Bijection.partial_run list * Types.location
-val same_term_same_recipe : Base.raw_statement -> Base.raw_statement
 val compatible :
   Bijection.correspondance ->
   Bijection.correspondance -> Dag.Dag.key -> Dag.Dag.key -> bool

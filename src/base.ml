@@ -79,6 +79,18 @@ type base =
    htable : (hash_statement, statement) Hashtbl.t;
 }
 
+
+let rec check_binder_term binder term =
+  match term with
+  | Var(x) -> x.status == binder
+  | Fun(_,lst) -> List.for_all (check_binder_term binder) lst
+  
+let check_binder_st st =
+  let binder = st.binder in
+  Dag.for_all (fun _ t -> check_binder_term binder t) st.inputs.i
+  && Dag.for_all (fun _ t -> check_binder_term binder t) st.recipes.i
+  && List.for_all (fun x -> check_binder_term binder x.term && check_binder_term binder x.recipe) st.body
+
 (** {3 Printing} *)
 
 let rec show_predicate p = 
@@ -104,12 +116,15 @@ let show_body_atom a =
 let rec show_atom_list lst = Format.sprintf "%s" (String.concat ", " (trmap show_body_atom lst))
 
 let show_raw_statement st =
+  let string = 
   if !use_xml then
   Format.sprintf
     "<raw_st><nbvars>%d</nbvars>\n<statement> %s &lt;== %s </statement>%s %s %s\n<recipes>%s</recipes></raw_st>\n" st.nbvars (show_predicate st.head)(show_atom_list st.body)(show_inputs st.inputs)(show_dag st.dag)(show_choices st.choices)(show_inputs st.recipes)
   else
   Format.sprintf
-    "(%d%s) %s <== %s \n       %s %s %s\n       %s\n" st.nbvars (show_binder !(st.binder)) (show_predicate st.head)(show_atom_list st.body)(show_inputs st.inputs)(show_dag st.dag)(show_choices st.choices)(show_inputs st.recipes)
+    "(%d%s) %s <== %s \n       %s %s %s\n       %s\n" st.nbvars (show_binder !(st.binder)) (show_predicate st.head)(show_atom_list st.body)(show_inputs st.inputs)(show_dag st.dag)(show_choices st.choices)(show_inputs st.recipes) in 
+  assert (check_binder_st st);
+  string
 
 let rec show_statement prefix st =
   if !use_xml then

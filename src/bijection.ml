@@ -3,6 +3,15 @@ open Dag
 open Base
 open Util
 
+let recipes_of_head head = 
+  match head with
+  | Tests(equal,diseq) -> equal , diseq
+  | Identical(r,r') -> EqualitiesSet.singleton (r,r'),EqualitiesSet.empty
+  | Knows(_)
+  | Reach -> EqualitiesSet.empty,EqualitiesSet.empty
+  | Unreachable -> assert false
+
+
 type which_process = P | Q
 
 let show_which_process p =
@@ -20,7 +29,8 @@ let show_correspondance c =
   else
   (Dag.fold (fun lp lq str -> str ^(Format.sprintf " %d => %d ;" lp.p lq.p)) c.a "{|")^"|}"
 
-
+let canonize_correspondance corr =
+  { a = List.fold_left (fun c' (l,l') -> Dag.add l l' c') Dag.empty (Dag.bindings corr.a)}
 
 
 module IntegerSet = Set.Make(struct type t = int let compare = compare end)  
@@ -29,7 +39,6 @@ let show_int_set s =
   (IntegerSet.fold (fun e str -> (if str = "" then "((" else (str^",")) ^(string_of_int e)) s "" ) ^"))"
 
 type partial_run = {
-  (*process :  which_process ; *)
   test : test; (* The test from which the prun come from *)
   corresp : correspondance ; (* a mapping from the actions of P to the actions of Q *)
   corresp_back : correspondance ; (* the reverse mapping from the actions of Q to the actions of P *)
@@ -39,7 +48,7 @@ type partial_run = {
   dag : dag; (* The run dag: may be more constrained than the Initial one *)
   disequalities : (term * term) list; (*All the disequalities that have been encountred during the trace *)
   qthreads : (Inputs.choices * LocationSet.t * (term * term) list * Process.process) list ; (* The available action of Q, the constraints *)
-  failed_qthreads : (Inputs.choices * LocationSet.t * (term * term) list * Process.process) list ; (* The action that might be availble for a specific substitution *)
+  failed_qthreads : (Inputs.choices * LocationSet.t * (term * term) list * Process.process) list ; (* The action that might be availble for a specific substitution, used for debugging *)
   (*mutable children : partial_run list ; (* once processed, the list of possible continuation of the execution *)*)
   restrictions : LocationSet.t;
   (*performed_restrictions : LocationSet.t;*)
@@ -139,25 +148,6 @@ and show_test t =
   else "Test[%d]: %s %s {%d,%d} %s\n%s\n") t.id (show_origin t.origin) (show_int_set t.from) t.new_actions t.nb_actions (show_which_process t.process_name) (show_raw_statement t.statement)
 
 
-type completion = {
-  from_base : which_process; (* the saturated base from which the completion come from *)
-  initial_statement : raw_statement ; (* the unreach or identity from which the completion is issued: g *) 
-  st_c : raw_statement ; (* the current completion g u U_i f_i *)
-  corresp_c : correspondance ; (* the correspondance of the union of f_i *)
-  corresp_back_c : correspondance ;
-  missing_actions :  LocationSet.t; (* all the locations which are present on the initial statement but not on the runs *)
-  selected_action : location; (*Among all missing locations the one to complete first *)
-  mutable most_general_completions : completion list;
-}
-
-let show_completion completion = 
-  Format.sprintf "compl. from %s: %s -corresp: %s \n -missing: %s (%d)\n" (show_which_process completion.from_base)(show_raw_statement completion.st_c) (show_correspondance completion.corresp_c) (show_loc_set completion.missing_actions)(completion.selected_action.p)
- 
-let show_all_completions daglst = 
-   Dag.iter (fun loc listcomp -> 
-    Printf.printf "loc %d\n" (loc.p);
-    List.iter ( fun c -> Printf.printf "%s\n" (show_completion c)) listcomp) ( daglst)  ;
-
 module PartialRun =
        struct
          type t = partial_run
@@ -168,15 +158,34 @@ module PartialRun =
             else z
        end
 
-
 module RunSet = Set.Make(PartialRun)
+  
+type completion = {
+  st_c : raw_statement ; (* the current completion g u U_i f_i *)
+  corresp_c : correspondance ; (* the correspondance of the union of f_i *)
+  corresp_back_c : correspondance ;
+  core_corresp : (location * location) list ;
+  missing_actions :  LocationSet.t; (* all the locations which are present on the initial statement but not on the runs *)
+  selected_action : location; (*Among all missing locations the one to complete first *)
+  from_runs : RunSet.t ; 
+  root : complement_root;
+}
 
-(*type possible_runs = {
-  execution : partial_run;
-  conflicts : RunSet.t ;
-  score : int;
-  conflicts_loc : LocationSet.t
-}*)
+and complement_root = {
+  from_base : which_process; (* the saturated base from which the completion come from *)
+  initial_statement : raw_statement ; (* the unreach or identity from which the completion is issued: g *) 
+  mutable directory : (completion list) Dag.t ; (* For each selected missing action, the list of completions so far, to keep only the most general ones  *)
+}
+
+let show_completion completion = 
+  Format.sprintf "compl. from %s: %s -corresp: %s \n -missing: %s (%d)\n" (show_which_process completion.root.from_base)(show_raw_statement completion.st_c) (show_correspondance completion.corresp_c) (show_loc_set completion.missing_actions)(completion.selected_action.p)
+ 
+let show_all_completions daglst = 
+   Dag.iter (fun loc listcomp -> 
+    Printf.printf "loc %d\n" (loc.p);
+    List.iter ( fun c -> Printf.printf "%s\n" (show_completion c)) listcomp) ( daglst)  ;
+
+
 
 module PossibleRuns =
   struct
@@ -198,9 +207,9 @@ type solutions = {
   mutable partial_runs_priority_todo : partial_run list; (* Partial execution compatible with the bijection *)*)
   mutable possible_runs_todo : Solutions.t; (* Queue here before processing *)
   mutable possible_runs : Solutions.t; (* Run which are not compatible for the current bijection, to test if no other option *)
-  mutable possible_restricted_runs : partial_run list; 
-  mutable failed_partial_run : partial_run list; (* not used *)
-  mutable failed_run : partial_run list; (* execution but on of the identity fails *)
+  (*mutable possible_restricted_runs : partial_run list; (*not _used *)*)
+  (*mutable failed_partial_run : partial_run list; (* not used *)*)
+  (*mutable failed_run : partial_run list; (* execution but on of the identity fails not used *)*)
   mutable partitions : partial_run list; (* Current solution under testing *)
   mutable movable : int; (*Number of tests which are merged require to consider changing the partition *) 
   (*mutable reverse : partial_run Dag.t; *)(* record partial_run from existing trace for backward search (diseq and identities) *)
@@ -210,11 +219,11 @@ type solutions = {
 let empty_solution = {
     partial_runs = [] ;
     partial_runs_todo = Solutions.empty;
-    possible_restricted_runs = [];
+    (*possible_restricted_runs = [];*)
     possible_runs = Solutions.empty;
     possible_runs_todo = Solutions.empty;
-    failed_partial_run = [];
-    failed_run = [];
+    (*failed_partial_run = [];*)
+    (*failed_run = [];*)
     partitions = [] ;
     movable = 0 ;
     due_to = None;
@@ -399,13 +408,33 @@ let pop () =
 (* add a partial completion to the todo list *)  
 let register_completion completion =
   completion.st_c.binder := New ;
-  let to_be_completed = if completion.from_base = P then bijection.partial_completions_P else bijection.partial_completions_Q in
-  let loc = completion.selected_action in
-  let new_list = Dag.add loc (completion:: (try Dag.find loc to_be_completed with Not_found -> [])) to_be_completed in
-  if !about_completion then Printf.printf "New completion: %s\n" (show_completion completion);
-  if completion.from_base = P  then bijection.partial_completions_P <- new_list else bijection.partial_completions_Q <- new_list
-
- 
+  let is_opti = (completion.st_c = completion.root.initial_statement) in
+  let eq, diseq = recipes_of_head completion.st_c.head in
+  let is_consistent = EqualitiesSet.is_empty (EqualitiesSet.inter eq diseq) in
+  if is_consistent || is_opti then begin
+    let to_be_completed = if completion.root.from_base = P then bijection.partial_completions_P else bijection.partial_completions_Q in
+    let loc = completion.selected_action in
+    let new_list = Dag.add loc (completion:: (try Dag.find loc to_be_completed with Not_found -> [])) to_be_completed in
+    completion.root.directory <- Dag.add loc (completion:: (
+      try Dag.find loc completion.root.directory with Not_found -> [])) completion.root.directory; 
+    if !about_completion then Printf.printf "New completion: %s\n" (show_completion completion);
+    if completion.root.from_base = P  then bijection.partial_completions_P <- new_list else bijection.partial_completions_Q <- new_list;
+    if is_consistent && not (LocationSet.is_empty completion.missing_actions) then
+    begin
+        if !about_completion then Printf.printf "Adding partial completion %s\n" (show_raw_statement completion.st_c);
+        if completion.root.from_base = P then 
+          bijection.todo_completion_P <- completion :: bijection.todo_completion_P
+        else
+          bijection.todo_completion_Q <- completion :: bijection.todo_completion_Q;
+        false
+    end
+    else
+      is_consistent
+  end
+  else begin
+    if !about_completion then Printf.printf "Inconsistant completion\n";
+    false
+  end
 
 exception LocPtoQ of int
 
@@ -462,7 +491,7 @@ let mapping_exists process loc1 loc2 =
 let straight locP locQ = 
   try
   let p = (Dag.find locP bijection.indexP) in 
-  try ignore (Dag.find locQ p); true
+  try not (RunSet.is_empty (Dag.find locQ p))
   with Not_found -> false
   with Not_found -> 
     try ignore (Dag.find locQ bijection.indexQ); false

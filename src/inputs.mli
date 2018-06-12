@@ -17,6 +17,10 @@ val csu :
   Types.term option array * Types.term option array ->
   inputs ->
   inputs -> (Types.term option array * Types.term option array) list
+val csu_recipes :
+  Types.term option array * Types.term option array ->
+  inputs ->
+  inputs -> (Types.term option array * Types.term option array) list
 val csm : inputs -> inputs -> (Types.varId * Types.term) list list
 val merge : Types.substitution -> inputs -> inputs -> inputs
 val merge_recipes : Types.substitution -> inputs -> inputs -> inputs

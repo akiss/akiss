@@ -184,35 +184,7 @@ let next_run partial_run : (partial_run list * location)=
   (new_runs, current_loc)*)
 
 
-(* When two recipes are provided for the same term just choose one *)
-let same_term_same_recipe st =
-  let sigma_repl = Array.make st.nbvars None in
-  let sigma = (sigma_repl, Array.make 0 None) in
-  st.binder := Master;
-  (*Printf.printf "simplification of %s\n" (show_raw_statement st);*)
-  let (useless,body) =
-    List.partition
-      (fun a ->
-         let recipe_var = Term.unbox_var a.recipe in
-         let t = a.term in
-         try
-         let is_better =  List.find 
-           (fun a' -> let recipe_var' = Term.unbox_var a'.recipe in
-              recipe_var.n < recipe_var'.n &&
-              t = a'.term ) st.body in
-           let x = Term.unbox_var(is_better.recipe) in
-           sigma_repl.(x.n) <- Some a.recipe ;
-           true       
-         with Not_found -> false
-         )
-       st.body
-  in
-  if !about_canonization then
-    List.iter (fun a -> Format.printf "Removed %s\n" (show_body_atom a)) useless ;
-  if useless = [] then st 
-  else 
-    let sigma = Rewriting.pack sigma in
-    Horn.apply_subst_statement { st with body = body;} sigma
+
  
 
 let compatible constraints constraints_back locP locQ = 
@@ -273,8 +245,8 @@ let rec next_solution solution =
           begin if !debug_execution then Printf.printf "Solution succeeds the tests \n"  ;
           solution.possible_runs_todo <- Solutions.add partial_run solution.possible_runs_todo end
         else
-          begin if !debug_execution then Printf.printf "Solution fails the tests: \n %s \n" (show_run partial_run) ;
-          solution.failed_run <- partial_run :: solution.failed_run end
+          begin if !debug_execution then Printf.printf "Solution fails the tests: \n %s \n" (show_run partial_run) (*;
+          solution.failed_run <- partial_run :: solution.failed_run *) end
       end
       else begin
         solution.partial_runs_todo <- Solutions.add partial_run solution.partial_runs_todo 
@@ -289,9 +261,9 @@ let rec next_solution solution =
     if is_empty_correspondance pr.test.constraints then
     begin
     let lvl = sol_level solution in
-    if !debug_execution || lvl = 20
+    if !debug_execution || lvl = 15
     then Printf.printf "A restricted run is being tested from %s \n which test is \n %s \n" (show_partial_run pr)(show_test pr.test) ;
-    let Some par = pr.parent in
+    let par = match pr.parent with Some par -> par | _ -> assert false in
     let roots = get_all_new_roots pr.restrictions LocationSet.empty par in
     let exception Fail in
     try 

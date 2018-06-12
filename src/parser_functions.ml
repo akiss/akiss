@@ -441,6 +441,7 @@ let rec parse_plain_process procId env (nbloc,nbnonces) = function
       let (nbl,nbn,pr1)=parse_plain_process procId env (nbloc +1,nbnonces) p1 in
       let (nbl,nbn,pr2)=parse_plain_process procId env (nbl,nbn) p2 in
       (nbl,nbn, TestIfB (l, t1',t2',pr1,pr2))
+  | _ -> failwith("Syntax not implemented yet")
 
 let parse_extended_process procId env = function
   | EPlain proc -> 

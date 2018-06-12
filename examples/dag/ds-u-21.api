@@ -1,0 +1,111 @@
+/*
+  Denning Sacco symmetric key
+  A -> S : A, B
+  S -> A : {B, Kab, {Kab,A}Kbs }Kas
+  A -> B : {Kab, A }Kbs
+
+
+ Secrecy of the key Kab (from the point of view of A)
+ encoded as a combination of key usability and “which key-concealing”
+ A -> : {m1}Kab vs {m2}K with K fresh and m1/m2 public constants
+
+
+ Scenario:
+ one honest session between a, b, and s
+ one instance of A played by a with c (dishonest)
+ one intance of B played by b with c (dishonest)
+ two additional instances of S played with a/c and c/b
+ one honest session between b, a, and s
+*/
+
+/*
+free a.
+free b.
+free c.
+free kcs.
+
+free m1.
+free m2.
+
+free c1.
+free c2.
+free c3.
+free c4.
+free c5.
+free c6.
+free c7.
+free c8.
+free c9.
+free c10.*/
+
+fun senc/2,sdec/2,a1/0,b1/0,c0/0,kcs/0,m1/0,m2/0.
+chan c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16,c17,c18,c19,c20,c21,c100.
+
+sdec(senc(x,y),y) -> x.
+
+let A1(ca,a,b,kas) =
+ out(ca, (a,b));
+ in(ca,xenc);
+ let (x1,x2,x3) = sdec(xenc,kas) in
+ if x1 =b then
+ out(ca, x3);
+ out(ca,senc(m1,x2)).
+
+let A2(ca,a,b,kas) =
+ out(ca, (a,b));
+ in(ca,xenc);
+ let (x1,x2,x3) = sdec(xenc,kas) in
+ if x1 =b then
+ out(ca, x3);
+ new k;
+ out(ca,senc(m2,k)).
+
+let A(ca,a,b,kas) =
+ out(ca, (a,b));
+ in(ca,xenc);
+ let (x1,x2,x3) = sdec(xenc,kas) in
+ if x1 =b then
+ out(ca, x3).
+
+let S(cs,a,b,kas,kbs) =
+ in(cs, y);
+ let (y1,y2) = y in
+ if (y1,y2) = (a,b) then
+ new kab;
+ out(cs, senc((b,kab,senc((kab,a),kbs)),kas)).
+
+
+let B(cb,b,a,kbs) =
+ in(cb,z);
+ let (z1,z2) = sdec(z,kbs) in
+ if z2 = a then 0.
+
+let P =
+ new kas; new kbs;
+ ( A1(c100,a1,b1,kas) | S(c2,a1,b1,kas,kbs) | B(c3,b1,a1,kbs)
+  | A(c4,a1,c0,kas) | S(c5,a1,c0,kas,kcs)
+  | S(c6,c0,b1,kcs,kbs) |  B(c7,b1,c0,kbs)
+  | A(c8,b1,a1,kbs) | S(c9,b1,a1,kbs,kas) | B(c10,a1,b1,kas)
+  | A(c11,b1,c0,kcs) | S(c12,b1,c0,kbs,kcs)
+  | S(c13,c0,a1,kcs,kas) | B(c14,a1,c0,kas)
+  | A(c15,b1,a1,kbs) | S(c16,b1,a1,kbs,kas) | B(c17,a1,b1,kas)
+  | A(c18,b1,c0,kcs) | S(c19,b1,c0,kbs,kcs)
+  | S(c20,c0,a1,kcs,kas) | B(c21,a1,c0,kas)
+).
+
+
+let Q =
+ new kas; new kbs;
+ ( A2(c100,a1,b1,kas) | S(c2,a1,b1,kas,kbs) | B(c3,b1,a1,kbs)
+ | A(c4,a1,c0,kas) | S(c5,a1,c0,kas,kcs)
+ | S(c6,c0,b1,kcs,kbs) |  B(c7,b1,c0,kbs)
+ | A(c8,b1,a1,kbs) | S(c9,b1,a1,kbs,kas) | B(c10,a1,b1,kas)
+ | A(c11,b1,c0,kcs) | S(c12,b1,c0,kbs,kcs)
+ | S(c13,c0,a1,kcs,kas) | B(c14,a1,c0,kas)
+  | A(c15,b1,a1,kbs) | S(c16,b1,a1,kbs,kas) | B(c17,a1,b1,kas)
+  | A(c18,b1,c0,kcs) | S(c19,b1,c0,kbs,kcs)
+  | S(c20,c0,a1,kcs,kas) | B(c21,a1,c0,kas)
+)..
+
+
+query trace_equiv (P,Q).

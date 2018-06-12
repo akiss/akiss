@@ -87,8 +87,8 @@ type statement_role =
 
 let show_binder = function 
   | Master -> "M"
-  | Slave -> "s"
-  | New -> "x"
+  | Slave -> "$"
+  | New -> "*"
   | Rule -> "r"
 
 type varId = {

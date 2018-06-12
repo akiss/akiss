@@ -1,9 +1,12 @@
+val recipes_of_head :
+  Base.predicate -> Base.EqualitiesSet.t * Base.EqualitiesSet.t
 type which_process = P | Q
 val show_which_process : which_process -> string
 type correspondance = { a : Types.location Dag.Dag.t; }
 val empty_correspondance : correspondance
 val is_empty_correspondance : correspondance -> bool
 val show_correspondance : correspondance -> string
+val canonize_correspondance : correspondance -> correspondance
 module IntegerSet :
   sig
     type elt = int
@@ -30,10 +33,18 @@ module IntegerSet :
     val cardinal : t -> int
     val elements : t -> elt list
     val min_elt : t -> elt
+    val min_elt_opt : t -> elt option
     val max_elt : t -> elt
+    val max_elt_opt : t -> elt option
     val choose : t -> elt
+    val choose_opt : t -> elt option
     val split : elt -> t -> t * bool * t
     val find : elt -> t -> elt
+    val find_opt : elt -> t -> elt option
+    val find_first : (elt -> bool) -> t -> elt
+    val find_first_opt : (elt -> bool) -> t -> elt option
+    val find_last : (elt -> bool) -> t -> elt
+    val find_last_opt : (elt -> bool) -> t -> elt option
     val of_list : elt list -> t
   end
 val show_int_set : IntegerSet.t -> string
@@ -82,18 +93,6 @@ val null_test : test
 val empty_run : partial_run
 val show_origin : origin -> string
 val show_test : test -> string
-type completion = {
-  from_base : which_process;
-  initial_statement : Base.raw_statement;
-  st_c : Base.raw_statement;
-  corresp_c : correspondance;
-  corresp_back_c : correspondance;
-  missing_actions : Dag.LocationSet.t;
-  selected_action : Types.location;
-  mutable most_general_completions : completion list;
-}
-val show_completion : completion -> string
-val show_all_completions : completion list Dag.Dag.t -> unit
 module PartialRun :
   sig
     type t = partial_run
@@ -125,12 +124,37 @@ module RunSet :
     val cardinal : t -> int
     val elements : t -> elt list
     val min_elt : t -> elt
+    val min_elt_opt : t -> elt option
     val max_elt : t -> elt
+    val max_elt_opt : t -> elt option
     val choose : t -> elt
+    val choose_opt : t -> elt option
     val split : elt -> t -> t * bool * t
     val find : elt -> t -> elt
+    val find_opt : elt -> t -> elt option
+    val find_first : (elt -> bool) -> t -> elt
+    val find_first_opt : (elt -> bool) -> t -> elt option
+    val find_last : (elt -> bool) -> t -> elt
+    val find_last_opt : (elt -> bool) -> t -> elt option
     val of_list : elt list -> t
   end
+type completion = {
+  st_c : Base.raw_statement;
+  corresp_c : correspondance;
+  corresp_back_c : correspondance;
+  core_corresp : (Types.location * Types.location) list;
+  missing_actions : Dag.LocationSet.t;
+  selected_action : Types.location;
+  from_runs : RunSet.t;
+  root : complement_root;
+}
+and complement_root = {
+  from_base : which_process;
+  initial_statement : Base.raw_statement;
+  mutable directory : completion list Dag.Dag.t;
+}
+val show_completion : completion -> string
+val show_all_completions : completion list Dag.Dag.t -> unit
 module PossibleRuns :
   sig
     type t = partial_run
@@ -162,10 +186,18 @@ module Solutions :
     val cardinal : t -> int
     val elements : t -> elt list
     val min_elt : t -> elt
+    val min_elt_opt : t -> elt option
     val max_elt : t -> elt
+    val max_elt_opt : t -> elt option
     val choose : t -> elt
+    val choose_opt : t -> elt option
     val split : elt -> t -> t * bool * t
     val find : elt -> t -> elt
+    val find_opt : elt -> t -> elt option
+    val find_first : (elt -> bool) -> t -> elt
+    val find_first_opt : (elt -> bool) -> t -> elt option
+    val find_last : (elt -> bool) -> t -> elt
+    val find_last_opt : (elt -> bool) -> t -> elt option
     val of_list : elt list -> t
   end
 val show_solution_set : Solutions.t -> unit
@@ -174,9 +206,6 @@ type solutions = {
   mutable partial_runs_todo : Solutions.t;
   mutable possible_runs_todo : Solutions.t;
   mutable possible_runs : Solutions.t;
-  mutable possible_restricted_runs : partial_run list;
-  mutable failed_partial_run : partial_run list;
-  mutable failed_run : partial_run list;
   mutable partitions : partial_run list;
   mutable movable : int;
   due_to : solutions option;
@@ -192,6 +221,7 @@ module Tests :
     val is_empty : 'a t -> bool
     val mem : key -> 'a t -> bool
     val add : key -> 'a -> 'a t -> 'a t
+    val update : key -> ('a option -> 'a option) -> 'a t -> 'a t
     val singleton : key -> 'a -> 'a t
     val remove : key -> 'a t -> 'a t
     val merge :
@@ -208,10 +238,18 @@ module Tests :
     val cardinal : 'a t -> int
     val bindings : 'a t -> (key * 'a) list
     val min_binding : 'a t -> key * 'a
+    val min_binding_opt : 'a t -> (key * 'a) option
     val max_binding : 'a t -> key * 'a
+    val max_binding_opt : 'a t -> (key * 'a) option
     val choose : 'a t -> key * 'a
+    val choose_opt : 'a t -> (key * 'a) option
     val split : key -> 'a t -> 'a t * 'a option * 'a t
     val find : key -> 'a t -> 'a
+    val find_opt : key -> 'a t -> 'a option
+    val find_first : (key -> bool) -> 'a t -> key * 'a
+    val find_first_opt : (key -> bool) -> 'a t -> (key * 'a) option
+    val find_last : (key -> bool) -> 'a t -> key * 'a
+    val find_last_opt : (key -> bool) -> 'a t -> (key * 'a) option
     val map : ('a -> 'b) -> 'a t -> 'b t
     val mapi : (key -> 'a -> 'b) -> 'a t -> 'b t
   end
@@ -251,7 +289,7 @@ val push :
   which_process -> origin -> (test -> Solutions.elt) -> unit
 val reorder_tests : unit -> unit
 val pop : unit -> Tests.key * solutions
-val register_completion : completion -> unit
+val register_completion : completion -> bool
 exception LocPtoQ of int
 val loc_p_to_q : Dag.Dag.key -> correspondance -> Types.location
 val add_run : solutions -> RunSet.elt -> unit

@@ -1,6 +1,6 @@
-val recipes_of_head :
-  Base.predicate -> Base.EqualitiesSet.t * Base.EqualitiesSet.t
+val same_term_same_recipe : Base.raw_statement -> Base.raw_statement
 val merge_tests :
+  Bijection.which_process ->
   Base.raw_statement -> Base.raw_statement -> Base.raw_statement list
 exception Attack
 val actual_test : Bijection.which_process -> Base.raw_statement -> bool
@@ -23,7 +23,8 @@ val negate_statement : Base.raw_statement -> Base.raw_statement
 val statement_to_completion :
   Bijection.which_process -> Base.raw_statement -> Bijection.completion
 val statements_to_tests :
-  Bijection.which_process -> Base.statement -> Process.process -> unit
+  Bijection.which_process ->
+  Base.statement -> Process.process -> Base.EqualitiesSet.t -> unit
 val add_merged_tests : Bijection.partial_run -> unit
 val register_solution :
   Bijection.solutions -> Bijection.Solutions.elt list -> unit

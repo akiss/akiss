@@ -1,8 +1,5 @@
 exception Bug
-val bench : float ref
-val bench_cur : float ref
-val bench_start : unit -> unit
-val bench_stop : unit -> unit
+val last_time : float ref
 val debug_output : bool ref
 val about_seed : bool ref
 val debug_seed : bool ref

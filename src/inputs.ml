@@ -79,6 +79,16 @@ let csu sigma inputs1 inputs2 =
   else [] (* Call Maude *)
   with
   | Rewriting.Not_unifiable -> []
+  
+let csu_recipes sigma recipe1 recipe2 =
+  let to_list = Dag.merge (fun loc i1 i2 -> 
+    match (i1,i2) with
+    | (Some i1, Some i2) -> Some(i1,i2)
+    | _ -> None) recipe1.i recipe2.i in
+  let hard = Dag.fold (fun _ pl hard -> try Rewriting.unify hard [pl] sigma with Rewriting.Not_unifiable -> hard) to_list [] in
+  if hard = [] 
+  then [sigma]
+  else [] (* Call Maude *)
 
 let csm inputs1 inputs2 = 
   let to_list = Dag.merge (fun loc i1 i2 -> 
