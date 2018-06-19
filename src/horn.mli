@@ -14,16 +14,12 @@ val is_reach_st : Base.raw_statement -> bool
 val is_solved : Base.raw_statement -> bool
 val vars_of_atom : Base.predicate -> Types.varId list
 val get_head_recipe : Base.predicate -> Types.term
-val get_recipes : Base.predicate -> Types.term list
 val get_term : Base.body_atom -> Types.term
 val get_head_term : Base.predicate -> Types.term
 val size : Base.raw_statement -> int
 val get_id : Base.statement -> int
 val get_head : Base.raw_statement -> Base.predicate
 val get_body : Base.raw_statement -> Base.body_atom list
-val apply_subst_pred : Base.predicate -> Types.substitution -> Base.predicate
-val apply_subst_statement :
-  Base.raw_statement -> Types.substitution -> Base.raw_statement
 val rule_rename : 'a -> 'a
 val rule_remove : 'a -> 'a
 val rule_shift : Base.raw_statement -> Base.raw_statement

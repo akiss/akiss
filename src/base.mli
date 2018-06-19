@@ -24,17 +24,29 @@ module EqualitiesSet :
     val cardinal : t -> int
     val elements : t -> elt list
     val min_elt : t -> elt
+    val min_elt_opt : t -> elt option
     val max_elt : t -> elt
+    val max_elt_opt : t -> elt option
     val choose : t -> elt
+    val choose_opt : t -> elt option
     val split : elt -> t -> t * bool * t
     val find : elt -> t -> elt
+    val find_opt : elt -> t -> elt option
+    val find_first : (elt -> bool) -> t -> elt
+    val find_first_opt : (elt -> bool) -> t -> elt option
+    val find_last : (elt -> bool) -> t -> elt
+    val find_last_opt : (elt -> bool) -> t -> elt option
     val of_list : elt list -> t
   end
+type test_head = {
+  mutable equalities : EqualitiesSet.t;
+  mutable disequalities : EqualitiesSet.t;
+}
 type predicate =
     Knows of Types.term * Types.term
   | Reach
   | Identical of Types.term * Types.term
-  | Tests of (EqualitiesSet.t * EqualitiesSet.t)
+  | Tests of test_head
   | Unreachable
 type body_atom = {
   loc : Types.location option;
@@ -61,6 +73,14 @@ type hash_statement = {
   hhead : predicate;
   hbody : body_atom list;
 }
+type hash_test = {
+  htbinder : Types.statement_role ref;
+  htnbvars : int;
+  htdag : Dag.dag;
+  htinputs : Inputs.inputs;
+  htchoices : Inputs.choices;
+  htbody : body_atom list;
+}
 val null_raw_statement : raw_statement
 type statement = {
   id : int;
@@ -83,16 +103,26 @@ type base = {
   mutable ns_todo : statement Queue.t;
   htable : (hash_statement, statement) Hashtbl.t;
 }
+val check_binder_term : Types.statement_role ref -> Types.term -> bool
+val check_binder_st : raw_statement -> bool
+val show_test_head : test_head -> string
 val show_predicate : predicate -> string
 val show_body_atom : body_atom -> string
 val show_atom_list : body_atom list -> string
 val show_raw_statement : raw_statement -> string
+val show_hash_test : hash_test -> string
 val show_statement : string -> statement -> string
 val show_statement_list : string -> statement list -> string
 val show_statements_id : statement list -> string
 val count_statements : statement -> int
 val show_kb : base -> string
+val get_test_head : predicate -> test_head
+val apply_subst_test_head : test_head -> Types.substitution -> test_head
+val apply_subst_pred : predicate -> Types.substitution -> predicate
+val apply_subst_statement :
+  raw_statement -> Types.substitution -> raw_statement
 val new_statement : unit -> statement
 val new_base : unit -> base
 val canonize_statement : raw_statement -> raw_statement
 val raw_to_hash_statement : raw_statement -> hash_statement
+val raw_to_hash_test : raw_statement -> hash_test

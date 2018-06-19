@@ -9,12 +9,17 @@ module EqualitiesSet = Set.Make(struct
     type t = term * term
       let compare x y = compare x y
   end)
+  
+type test_head = {
+  mutable equalities : EqualitiesSet.t;
+  mutable disequalities : EqualitiesSet.t ;
+}
 
 type predicate =
   | Knows of term * term
   | Reach
   | Identical of term * term
-  | Tests of (EqualitiesSet.t * EqualitiesSet.t)
+  | Tests of test_head
   | Unreachable
 
 type body_atom = {
@@ -46,6 +51,15 @@ type hash_statement = {
   hchoices : choices ;
   hhead : predicate ;
   hbody : body_atom list ;
+}
+
+type hash_test = {
+  htbinder : statement_role ref;
+  htnbvars : int ;
+  htdag : dag ;
+  htinputs :  inputs ;
+  htchoices : choices ;
+  htbody : body_atom list ;
 }
 
 let null_raw_statement = { binder = ref New ; nbvars = 0; dag = empty; inputs= new_inputs; choices= new_choices; head = Reach;body=[];recipes=new_inputs}
@@ -92,8 +106,11 @@ let check_binder_st st =
   && List.for_all (fun x -> check_binder_term binder x.term && check_binder_term binder x.recipe) st.body
 
 (** {3 Printing} *)
+let show_test_head h =
+  (EqualitiesSet.fold ( fun (r,r') str -> (if str = "" then "" else str ^ ", ") ^ (show_term r) ^ "=" ^ (show_term r') ) h.equalities "" ) 
+    ^  ";" ^ (EqualitiesSet.fold ( fun (r,r') str -> (if str = "" then "" else str ^ ", ") ^ (show_term r) ^ "!=" ^ (show_term r') ) h.disequalities "")
 
-let rec show_predicate p = 
+let show_predicate p = 
  match p with
  | Knows(r,t) -> if !use_xml then "<pred>K(<rec>"^ (show_term r) ^ "</rec>,<term>" ^ (show_term t) ^ "</term>)</pred>" else
       "knows(" ^ (show_term r) ^ "," ^ (show_term t) ^ ")"
@@ -101,9 +118,8 @@ let rec show_predicate p =
       "identical(" ^ (show_term r) ^ "," ^ (show_term r') ^ ")"
  | Reach -> "reach"
  | Unreachable -> "unreach"
- | Tests(equal,diseq) -> 
-    "tests(" ^ (EqualitiesSet.fold ( fun (r,r') str -> (if str = "" then "" else str ^ ", ") ^ (show_term r) ^ "=" ^ (show_term r') ) equal "" ) 
-    ^  ";" ^ (EqualitiesSet.fold ( fun (r,r') str -> (if str = "" then "" else str ^ ", ") ^ (show_term r) ^ "!=" ^ (show_term r') ) diseq "")^ ")"
+ | Tests(h) -> 
+    "tests(" ^ (show_test_head h) ^ ")"
 
 let show_body_atom a =
   let l = match a.loc with Some l -> string_of_int l.p | None -> "." in
@@ -124,6 +140,12 @@ let show_raw_statement st =
   Format.sprintf
     "(%d%s) %s <== %s \n       %s %s %s\n       %s\n" st.nbvars (show_binder !(st.binder)) (show_predicate st.head)(show_atom_list st.body)(show_inputs st.inputs)(show_dag st.dag)(show_choices st.choices)(show_inputs st.recipes) in 
   assert (check_binder_st st);
+  string
+
+let show_hash_test st =
+  let string = 
+  Format.sprintf
+    "(%d%s) T <== %s \n       %s %s %s\n" st.htnbvars (show_binder !(st.htbinder)) (show_atom_list st.htbody)(show_inputs st.htinputs)(show_dag st.htdag)(show_choices st.htchoices) in 
   string
 
 let rec show_statement prefix st =
@@ -169,6 +191,42 @@ let show_kb kb =
   ^ "\nTodo not solved: " ^ (show_statements_id kb.ns_todo)*)
   ^ "\n"
 
+  
+(** Getters **)
+
+let get_test_head head = 
+  match head with
+  | Tests(eq) -> eq
+  | _ -> assert false
+
+(** Substitutions **)
+
+let apply_subst_test_head head sigma = 
+  {equalities=EqualitiesSet.map (fun (r,r') -> (Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)) head.equalities;
+     disequalities=EqualitiesSet.map (fun (r,r') -> (Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)) head.disequalities}
+     
+let apply_subst_pred pred sigma  = 
+match pred with
+  | Knows(r,t) -> 
+     Knows(Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term t sigma)
+  | Identical(r,r') -> 
+     Identical(Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)
+  | Reach -> Reach
+  | Unreachable -> Unreachable
+  | Tests(head) -> Tests(apply_subst_test_head head sigma)
+
+let apply_subst_statement st (sigma : substitution)=
+  {
+      binder = sigma.binder;
+      nbvars = sigma.nbvars;
+      dag = st.dag;
+      choices = st.choices;
+      inputs = Inputs.map (fun t -> Rewriting.apply_subst_term t sigma) st.inputs;
+      recipes = Inputs.map (fun t -> Rewriting.apply_subst_term t sigma) st.recipes;
+      head = apply_subst_pred st.head sigma ;
+      body = trmap (fun x -> {x with recipe= Rewriting.apply_subst_term x.recipe sigma; term=Rewriting.apply_subst_term x.term sigma}) st.body 
+  }
+  
 (** constructor **)
 let new_statement () = {
   id = -1 ; vip = false ; st = null_raw_statement; children = []; process = None;
@@ -191,14 +249,14 @@ let new_base () =
   } in
   kb 
 
-let canonize_head head =
+(*let canonize_head head =
   match head with
-  | Tests(eq,diseq) -> Tests(EqualitiesSet.of_list (EqualitiesSet.elements eq),EqualitiesSet.of_list (EqualitiesSet.elements diseq))
-  | _ -> head
+  | Tests(eq) -> eq.equalities <- (EqualitiesSet.of_list (EqualitiesSet.elements eq.equalities));eq.disequalitiesEqualitiesSet.of_list (EqualitiesSet.elements diseq))
+  | _ -> head *)
   
 let canonize_statement st = 
   { st with
-    head = canonize_head st.head;
+    head = st.head; (*either the head is not a test or the head is a test and hash_test does not consider it *)
     dag = canonize_dag st.dag;
     inputs = canonize_inputs st.inputs;
     recipes = canonize_inputs st.recipes;
@@ -206,3 +264,5 @@ let canonize_statement st =
   }
 
 let raw_to_hash_statement st = { hbinder = st.binder ; hnbvars = st.nbvars; hdag = st.dag; hinputs= st.inputs; hchoices= st.choices; hhead = st.head;hbody=st.body}
+
+let raw_to_hash_test st = { htbinder = st.binder ; htnbvars = st.nbvars; htdag = st.dag; htinputs= st.inputs; htchoices= st.choices; htbody=st.body}

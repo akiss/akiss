@@ -5,14 +5,21 @@ open Util
 
 let recipes_of_head head = 
   match head with
-  | Tests(equal,diseq) -> equal , diseq
+  | Tests({equalities=equal; disequalities=diseq}) -> equal , diseq
   | Identical(r,r') -> EqualitiesSet.singleton (r,r'),EqualitiesSet.empty
   | Knows(_)
   | Reach -> EqualitiesSet.empty,EqualitiesSet.empty
   | Unreachable -> assert false
+  
+let head_predicate_to_test pred =
+  match pred with
+  | Identical(s,t) -> Tests({equalities = EqualitiesSet.singleton (s,t); disequalities = EqualitiesSet.empty})
+  | Reach -> Tests({equalities = EqualitiesSet.empty ; disequalities = EqualitiesSet.empty})
+  | _ -> assert false
 
 
 type which_process = P | Q
+
 
 let show_which_process p =
 match p with P -> "P" | Q -> "Q"
@@ -38,14 +45,31 @@ module IntegerSet = Set.Make(struct type t = int let compare = compare end)
 let show_int_set s =
   (IntegerSet.fold (fun e str -> (if str = "" then "((" else (str^",")) ^(string_of_int e)) s "" ) ^"))"
 
-type partial_run = {
+module rec Run : sig 
+  type completion = {
+    st_c : raw_statement ; (* the current completion g u U_i f_i *)
+    corresp_c : correspondance ; (* the correspondance of the union of f_i *)
+    corresp_back_c : correspondance ;
+    core_corresp : (location * location) list ;
+    missing_actions :  LocationSet.t; (* all the locations which are present on the initial statement but not on the runs *)
+    selected_action : location; (*Among all missing locations the one to complete first *)
+    root : complement_root;
+    mutable further_completions : (substitution * completion) list;
+    mutable generated_test : (substitution * test) option;
+  }
+  and complement_root = {
+    from_base : which_process; (* the saturated base from which the completion come from *)
+    initial_statement : raw_statement ; (* the unreach or identity from which the completion is issued: g *) 
+    mutable directory : (completion list) Dag.t ; (* For each selected missing action, the list of completions so far, to keep only the most general ones  *)
+  }  
+  and  partial_run = {
   test : test; (* The test from which the prun come from *)
+  sol : solution;
   corresp : correspondance ; (* a mapping from the actions of P to the actions of Q *)
   corresp_back : correspondance ; (* the reverse mapping from the actions of Q to the actions of P *)
   remaining_actions : LocationSet.t; 
   frame : Inputs.inputs ; (* the frame for outputs *)
   choices : Inputs.choices ; (* the choices on Q that have been made in this trace *)
-  dag : dag; (* The run dag: may be more constrained than the Initial one *)
   disequalities : (term * term) list; (*All the disequalities that have been encountred during the trace *)
   qthreads : (Inputs.choices * LocationSet.t * (term * term) list * Process.process) list ; (* The available action of Q, the constraints *)
   failed_qthreads : (Inputs.choices * LocationSet.t * (term * term) list * Process.process) list ; (* The action that might be availble for a specific substitution, used for debugging *)
@@ -57,13 +81,14 @@ type partial_run = {
   last_exe : location ; (* the action whose run lead to this pr *)
   weird_assoc : int ; (* when the parent of an action is not associated to the parent of the associated action *)
   score : int ;
-  added_dag : dag;
+  mutable consequences : (statement_role * substitution * test) list;
+  mutable completions : (substitution * completion) list;
 }
-
 and origin = 
   | Initial of statement 
   | Composed of partial_run * partial_run 
-  | Completion
+  | Completion 
+  | Temporary
   
 and test = {
   process_name : which_process; (* Is it a test of P or of Q?*)
@@ -75,16 +100,113 @@ and test = {
   mutable new_actions : int; (* compared to the base actions, used to order the tests *)
   mutable constraints : correspondance; (* Try to pass the test prioritary satisfying the constraints *)
   mutable constraints_back : correspondance; (* Inverse mapping *)
+  mutable solutions_todo : solution list;
+  mutable solutions_done : solution list;
 }
+(* records which are the partial executions of a test *) 
+and solution = {
+  init_run : partial_run;
+  mutable partial_runs : partial_run list;
+  mutable partial_runs_todo : Solutions.t; (*partial_run list;*)
+  mutable possible_runs_todo : Solutions.t; (* Queue here before processing *)
+  mutable possible_runs : Solutions.t; (* Run which are not compatible for the current bijection, to test if no other option *)
+  mutable movable : int; (*Number of tests which are merged require to consider changing the partition *) 
+  mutable restricted_dag : dag;
+  mutable selected_run : partial_run option;
+  sol_test : test;
+}
+type t = partial_run
+val show_run : partial_run -> string
+val show_partial_run : partial_run -> string
+val show_origin : origin -> string
+val show_test : test -> string
+val show_completion : completion -> string
+val show_all_completions : completion list Dag.t -> unit
+val compare : t -> t -> int 
+end
+= 
+struct
+  type completion = {
+    st_c : raw_statement ; (* the current completion g u U_i f_i *)
+    corresp_c : correspondance ; (* the correspondance of the union of f_i *)
+    corresp_back_c : correspondance ;
+    core_corresp : (location * location) list ;
+    missing_actions :  LocationSet.t; (* all the locations which are present on the initial statement but not on the runs *)
+    selected_action : location; (*Among all missing locations the one to complete first *)
+    root : complement_root;
+    mutable further_completions : (substitution * completion) list;
+    mutable generated_test : (substitution * test) option;
+  }
+  and complement_root = {
+    from_base : which_process; (* the saturated base from which the completion come from *)
+    initial_statement : raw_statement ; (* the unreach or identity from which the completion is issued: g *) 
+    mutable directory : (completion list) Dag.t ; (* For each selected missing action, the list of completions so far, to keep only the most general ones  *)
+  }  
+  and partial_run = {
+  test : test; (* The test from which the prun come from *)
+  sol : solution;
+  corresp : correspondance ; (* a mapping from the actions of P to the actions of Q *)
+  corresp_back : correspondance ; (* the reverse mapping from the actions of Q to the actions of P *)
+  remaining_actions : LocationSet.t; 
+  frame : Inputs.inputs ; (* the frame for outputs *)
+  choices : Inputs.choices ; (* the choices on Q that have been made in this trace *)
+  disequalities : (term * term) list; (*All the disequalities that have been encountred during the trace *)
+  qthreads : (Inputs.choices * LocationSet.t * (term * term) list * Process.process) list ; (* The available action of Q, the constraints *)
+  failed_qthreads : (Inputs.choices * LocationSet.t * (term * term) list * Process.process) list ; (* The action that might be availble for a specific substitution, used for debugging *)
+  (*mutable children : partial_run list ; (* once processed, the list of possible continuation of the execution *)*)
+  restrictions : LocationSet.t;
+  (*performed_restrictions : LocationSet.t;*)
+  parent : partial_run option;
+  (* for scoring *)
+  last_exe : location ; (* the action whose run lead to this pr *)
+  weird_assoc : int ; (* when the parent of an action is not associated to the parent of the associated action *)
+  score : int ;
+  mutable consequences : (statement_role * substitution * test) list;
+  mutable completions : (substitution * completion) list;
+}
+  
 
-
-let show_run pr =
+and origin = 
+  | Initial of statement 
+  | Composed of partial_run * partial_run 
+  | Completion 
+  | Temporary
+  
+and test = {
+  process_name : which_process; (* Is it a test of P or of Q?*)
+  statement : raw_statement ; (* the solved statement seen as the test to check *)
+  origin : origin;
+  id : int;
+  from : IntegerSet.t;
+  nb_actions : int; (* used to order the tests *)
+  mutable new_actions : int; (* compared to the base actions, used to order the tests *)
+  mutable constraints : correspondance; (* Try to pass the test prioritary satisfying the constraints *)
+  mutable constraints_back : correspondance; (* Inverse mapping *)
+  mutable solutions_todo : solution list;
+  mutable solutions_done : solution list;
+}
+(* records which are the partial executions of a test *) 
+and solution = {
+  init_run : partial_run;
+  mutable partial_runs : partial_run list;
+  mutable partial_runs_todo : Solutions.t; (*partial_run list;*)
+  mutable possible_runs_todo : Solutions.t; (* Queue here before processing *)
+  mutable possible_runs : Solutions.t; (* Run which are not compatible for the current bijection, to test if no other option *)
+  mutable movable : int; (*Number of tests which are merged require to consider changing the partition *) 
+  mutable restricted_dag : dag;
+  mutable selected_run : partial_run option;
+  sol_test : test;
+}
+type t = partial_run
+let compare (x : t) (y : t)= 
+      compare (LocationSet.cardinal x.restrictions,x.weird_assoc,-x.score,x)
+              (LocationSet.cardinal y.restrictions,y.weird_assoc,-y.score,y)
+let show_run pr  =
   (*(List.fold_left (fun str (t,t') -> str ^ (show_term t)  ^ " != " ^ (show_term t') ^ ", " )*)
-    (Format.sprintf "{ %s: \n frame= %s\n corresp= %s\n added_dag = %s\n"
+    (Format.sprintf "{ %s: \n frame= %s\n corresp= %s\n"
     (show_which_process pr.test.process_name)
     (Inputs.show_inputs pr.frame)
-    (show_correspondance pr.corresp)
-    (show_dag pr.added_dag))
+    (show_correspondance pr.corresp))
    (* pr.disequalities) ^"\n" *)
         
 let show_partial_run pr =
@@ -95,63 +217,47 @@ let show_partial_run pr =
   ^ (Format.sprintf "\n action=%d; weird = %d ; score = %d ; restricted = %s;  }\n" 
   pr.last_exe.p pr.weird_assoc pr.score (show_loc_set pr.restrictions))
 
-let null_test = {
-  process_name = P ;
-  statement = null_raw_statement;
-  origin = Completion;
-  id = -100;
-  from = IntegerSet.empty;
-  nb_actions = -100;
-  new_actions= -100;
-  constraints = empty_correspondance;
-  constraints_back= empty_correspondance;
-}
-
-let empty_run =
-   {
-     test = null_test ;
-     corresp = empty_correspondance ;
-     corresp_back = empty_correspondance ;
-     remaining_actions = LocationSet.empty ;
-     frame = Inputs.new_inputs; (* inputs maps to received terms and outputs maps to sent terms *)
-     choices = Inputs.new_choices;
-     dag = empty;
-     disequalities = [] ;
-     qthreads = [] ;
-     failed_qthreads = [];
-     restrictions = LocationSet.empty;
-     (*performed_restrictions = LocationSet.empty;*)
-     parent = None;
-     last_exe = null_location ;
-     weird_assoc = 0;
-     score = 0 ;
-     added_dag = empty;
-   } 
   
 let rec show_origin o =
   if !use_xml then 
   match o with 
   | Initial(st) -> Format.sprintf "<initial>%d</initial>" (st.id)
   | Composed(run1,run2) -> Format.sprintf "<composed><idtest>%d</idtest>:%s | <idtest>%d</idtest>:%s</composed>"  run1.test.id (show_origin run1.test.origin)  run2.test.id (show_origin run2.test.origin) 
- (* | Refined(run,st) -> Format.sprintf "{ %d:%s < #%d}"  run.test.id (show_origin run.test.origin)  st.id *)
   | Completion -> "comp"
+  | Temporary -> "T"
   else    
   match o with 
   | Initial(st) -> Format.sprintf "%d" (st.id)
   | Composed(run1,run2) -> Format.sprintf "[ %d:%s | %d:%s]"  run1.test.id (show_origin run1.test.origin)  run2.test.id (show_origin run2.test.origin) 
-  (*| Refined(run,st) -> Format.sprintf "{ %d:%s < #%d}"  run.test.id (show_origin run.test.origin)  st.id *)
   | Completion -> "comp"
+  | Temporary -> "T"
   
 and show_test t =
   Format.sprintf 
   (if !use_xml then "<test><idtest>%d</idtest><origin>%s</origin><infos>%s %d,%d</infos><prname>%s</prname>%s</test>"
   else "Test[%d]: %s %s {%d,%d} %s\n%s\n") t.id (show_origin t.origin) (show_int_set t.from) t.new_actions t.nb_actions (show_which_process t.process_name) (show_raw_statement t.statement)
 
+  
+let show_completion completion = 
+  Format.sprintf "compl. from %s: %s -corresp: %s \n -missing: %s (%d)\n" (show_which_process completion.root.from_base)(show_raw_statement completion.st_c) (show_correspondance completion.corresp_c) (show_loc_set completion.missing_actions)(completion.selected_action.p)
+ 
+let show_all_completions daglst = 
+   Dag.iter (fun loc listcomp -> 
+    Printf.printf "loc %d\n" (loc.p);
+    List.iter ( fun c -> Printf.printf "%s\n" (show_completion c)) listcomp) ( daglst)  
+
+let show_solution_set sol =
+  Solutions.iter (fun prun -> Printf.printf "possible run: %s"  (show_run prun)) sol
+
+end
+
+and Solutions : Set.S with type elt = Run.t 
+  = Set.Make(Run) 
 
 module PartialRun =
        struct
-         type t = partial_run
-         let compare x y =
+         type t = Run.partial_run
+         let compare (x : Run.partial_run) (y : Run.partial_run) =
             let z = compare x.test.id y.test.id in
             if z = 0 then
               compare x y
@@ -159,85 +265,13 @@ module PartialRun =
        end
 
 module RunSet = Set.Make(PartialRun)
-  
-type completion = {
-  st_c : raw_statement ; (* the current completion g u U_i f_i *)
-  corresp_c : correspondance ; (* the correspondance of the union of f_i *)
-  corresp_back_c : correspondance ;
-  core_corresp : (location * location) list ;
-  missing_actions :  LocationSet.t; (* all the locations which are present on the initial statement but not on the runs *)
-  selected_action : location; (*Among all missing locations the one to complete first *)
-  from_runs : RunSet.t ; 
-  root : complement_root;
-}
-
-and complement_root = {
-  from_base : which_process; (* the saturated base from which the completion come from *)
-  initial_statement : raw_statement ; (* the unreach or identity from which the completion is issued: g *) 
-  mutable directory : (completion list) Dag.t ; (* For each selected missing action, the list of completions so far, to keep only the most general ones  *)
-}
-
-let show_completion completion = 
-  Format.sprintf "compl. from %s: %s -corresp: %s \n -missing: %s (%d)\n" (show_which_process completion.root.from_base)(show_raw_statement completion.st_c) (show_correspondance completion.corresp_c) (show_loc_set completion.missing_actions)(completion.selected_action.p)
- 
-let show_all_completions daglst = 
-   Dag.iter (fun loc listcomp -> 
-    Printf.printf "loc %d\n" (loc.p);
-    List.iter ( fun c -> Printf.printf "%s\n" (show_completion c)) listcomp) ( daglst)  ;
 
 
-
-module PossibleRuns =
-  struct
-    type t = partial_run
-    let compare x y = 
-      compare (LocationSet.cardinal x.restrictions,x.weird_assoc,-x.score,x)
-              (LocationSet.cardinal y.restrictions,y.weird_assoc,-y.score,y)
-  end
-  
-module Solutions = Set.Make(PossibleRuns) 
-
-let show_solution_set sol =
-  Solutions.iter (fun prun -> Printf.printf "possible run: %s"  (show_run prun)) sol
-
-(* records which are the partial executions of a test *) 
-type solutions = {
-  mutable partial_runs : partial_run list;
-  mutable partial_runs_todo : Solutions.t; (*partial_run list;
-  mutable partial_runs_priority_todo : partial_run list; (* Partial execution compatible with the bijection *)*)
-  mutable possible_runs_todo : Solutions.t; (* Queue here before processing *)
-  mutable possible_runs : Solutions.t; (* Run which are not compatible for the current bijection, to test if no other option *)
-  (*mutable possible_restricted_runs : partial_run list; (*not _used *)*)
-  (*mutable failed_partial_run : partial_run list; (* not used *)*)
-  (*mutable failed_run : partial_run list; (* execution but on of the identity fails not used *)*)
-  mutable partitions : partial_run list; (* Current solution under testing *)
-  mutable movable : int; (*Number of tests which are merged require to consider changing the partition *) 
-  (*mutable reverse : partial_run Dag.t; *)(* record partial_run from existing trace for backward search (diseq and identities) *)
-  due_to : solutions option; (* for debug output *)
-}
-
-let empty_solution = {
-    partial_runs = [] ;
-    partial_runs_todo = Solutions.empty;
-    (*possible_restricted_runs = [];*)
-    possible_runs = Solutions.empty;
-    possible_runs_todo = Solutions.empty;
-    (*failed_partial_run = [];*)
-    (*failed_run = [];*)
-    partitions = [] ;
-    movable = 0 ;
-    due_to = None;
-}
-
-let rec sol_level sol =
-  match sol.due_to with
-  | None -> 0
-  | Some sol -> 1 + sol_level sol
 
 module Test =
   struct
-    type t = test
-      let compare x y =
+    type t = Run.test
+      let compare (x : Run.test) (y : Run.test)=
            
         match (x.origin , y.origin) with
           | (Initial st1, Initial st2) ->
@@ -262,7 +296,67 @@ module Test =
      (*     | (_,_) -> assert false *)
    end
 
-module Tests = Map.Make(Test)
+module Tests = Set.Make(Test)
+  
+open Run 
+
+exception Attack of test * solution
+
+
+let null_test = {
+  process_name = P ;
+  statement = null_raw_statement;
+  origin = Temporary;
+  id = -100;
+  from = IntegerSet.empty;
+  nb_actions = 0;
+  new_actions= 0;
+  constraints = empty_correspondance;
+  constraints_back= empty_correspondance;
+  solutions_todo = [];
+  solutions_done = [];
+}
+
+let rec null_sol = {
+  init_run = empty_run;
+  partial_runs = [];
+  partial_runs_todo = Solutions.empty;
+  possible_runs_todo = Solutions.empty;
+  possible_runs = Solutions.empty;
+  movable = 0; (*Number of tests which are merged require to consider changing the partition *) 
+  restricted_dag = empty;
+  selected_run = None;
+  sol_test = null_test;
+}
+
+and empty_run =
+   {
+     test = null_test ;
+     sol = null_sol ;
+     corresp = empty_correspondance ;
+     corresp_back = empty_correspondance ;
+     remaining_actions = LocationSet.empty ;
+     frame = Inputs.new_inputs; (* inputs maps to received terms and outputs maps to sent terms *)
+     choices = Inputs.new_choices;
+     disequalities = [] ;
+     qthreads = [] ;
+     failed_qthreads = [];
+     restrictions = LocationSet.empty;
+     (*performed_restrictions = LocationSet.empty;*)
+     parent = None;
+     last_exe = null_location ;
+     weird_assoc = 0;
+     score = 0 ;
+     consequences = [];
+     completions = [];
+   } 
+
+
+
+
+
+
+
 
 
 
@@ -284,8 +378,8 @@ type bijection = {
   mutable indexP : index ;
   mutable indexQ : index ;
   mutable next_id : int; (* the index for tests id *)
-  mutable tests : solutions Tests.t; (* The remaining tests to test on the other process *)
-  mutable registered_tests : solutions Tests.t; (* The tests that are set in *)
+  mutable tests : Tests.t; (* The remaining tests to test on the other process *)
+  mutable registered_tests : Tests.t; (* The tests that are set in *)
   mutable runs_for_completions_P : partial_run list; (* the pending runs of P, for completion treatement in Q *)
   mutable runs_for_completions_Q : partial_run list; (* of Q *)
   mutable partial_completions_P : (completion list) Dag.t; (* The partial completions from base P *)
@@ -293,8 +387,8 @@ type bijection = {
   mutable todo_completion_P : completion list; (* new partial completion from base P which should be tested on all runs *)
   mutable todo_completion_Q : completion list; (* new partial completion which should be tested on all runs *)
   mutable locs : LocationSet.t; (* the locations already in the tests of the base, for optimization only *)
-  htable : (int list , origin) Hashtbl.t;
-  htable_st : (hash_statement, test) Hashtbl.t;
+  (*htable : (int list , origin) Hashtbl.t;*)
+  htable_st : (hash_test, test) Hashtbl.t;
 }
 
 let bijection = 
@@ -317,7 +411,7 @@ let bijection =
   todo_completion_P = [];
   todo_completion_Q = [];
   locs = LocationSet.empty;
-  htable = Hashtbl.create 5000 ;
+  (*htable = Hashtbl.create 5000 ;*)
   htable_st = Hashtbl.create 5000 ;
 }
 
@@ -328,6 +422,11 @@ let show_bijection () =
       Printf.printf " %d (%d),"  kq.p (RunSet.cardinal recordlist)
       (*RunSet.iter (fun pr -> Printf.printf "         %s   %s\n"  (show_correspondance pr.corresp)(show_origin pr.test.origin)) recordlist *)) ind2 )  bijection.indexP ;
   Printf.printf "\n"
+  
+open Run 
+
+let show_hashtbl () =
+  Hashtbl.iter (fun h s -> Printf.printf "%s  \n\n" (show_test s)) bijection.htable_st
 
 let proc name =
   match name with
@@ -341,6 +440,7 @@ let other name =
   
 let reorder_int_set s =
   IntegerSet.fold (fun e set -> IntegerSet.add e s) s IntegerSet.empty
+  
 
 (* Add a test to the tests in the queue *)
 let push (statement : raw_statement) process_name origin init =
@@ -348,64 +448,53 @@ let push (statement : raw_statement) process_name origin init =
       | Initial _ -> IntegerSet.singleton (bijection.next_id + 1)
       | Completion -> IntegerSet.singleton (bijection.next_id + 1);
       | Composed(run1,run2) ->  (IntegerSet.union run1.test.from run2.test.from)
+      | Temporary -> assert false
   in
-  let int_lst = IntegerSet.elements int_set in
-  statement.binder := New;
-  let statement = canonize_statement statement in
-  let hash_statement = raw_to_hash_statement statement in
-  if Hashtbl.mem bijection.htable_st hash_statement then () else begin
-  if origin != Completion && Hashtbl.mem bijection.htable int_lst then ()  else begin
-  Hashtbl.add bijection.htable int_lst origin;
+  (*let int_lst = IntegerSet.elements int_set in*)
+  (*if origin != Completion && Hashtbl.mem bijection.htable int_lst then ()  else begin
+  Hashtbl.add bijection.htable int_lst origin;*)
   bijection.next_id <- bijection.next_id + 1 ;
+  if bijection.next_id = 2000 then show_hashtbl ();
   let nb = Dag.cardinal statement.dag.rel in
-  let test = {
+  let test = { null_test with
     nb_actions = nb;
-    new_actions = 0;
+    (* new_actions = 0; *)
     process_name = process_name;
     statement = statement;
     origin = origin;
     id = bijection.next_id;
     from = int_set;
-    constraints = empty_correspondance;
+    (*constraints = empty_correspondance;
     constraints_back = empty_correspondance;
+    consequences = [];*)
   } in
-  let init_test = init test in
-  let solution =
-  { empty_solution with
-       partial_runs = [init_test] ;
-       partial_runs_todo = Solutions.singleton init_test;
-(*       possible_restricted_runs = [];
-       possible_runs = Solutions.empty;
-       possible_runs_todo = Solutions.empty;
-       failed_partial_run = [];
-       failed_run = [];
-       partitions = [] ;
-       movable = 0 ;*)
-     } in
-  Hashtbl.add bijection.htable_st hash_statement test;
-  if !Util.debug_tests || (!about_progress && bijection.next_id mod 250 = 0) then Printf.printf "\nAdding new test: %s\n" (show_test test);
+  let solution = init test in
+  test.solutions_todo <- [solution];
+  (*Hashtbl.add bijection.htable_st hash_statement test;*)
+  if !Util.debug_tests || (!about_progress && bijection.next_id mod 250 = 0) then Printf.printf "\nAdding new test: %s\n%!" (show_test test);
   (*if bijection.next_id mod 10000 = 0 then (*Hashtbl.iter (fun k v -> Printf.printf "%s" (show_raw_statement k)) bijection.htable;*)show_bijection ();*)
-  bijection.tests <- Tests.add test solution bijection.tests 
-  end
-  end
+  bijection.tests <- Tests.add test bijection.tests;
+  test
+
   
 let reorder_tests () = 
-  bijection.tests <- Tests.fold (fun test sol map -> 
+  bijection.tests <- Tests.fold (fun test map -> 
     test.new_actions <-  
       Dag.fold (fun l _ nb -> 
         if LocationSet.mem l bijection.locs 
         then nb 
         else begin bijection.locs<-LocationSet.add l bijection.locs; nb + 1 end)
       test.statement.dag.rel 0;
-    Tests.add test sol map) bijection.tests Tests.empty
+    Tests.add test map) bijection.tests Tests.empty
 
 (* Pop the queue of the test to check *)
 let pop () = 
-  let (test, sol) = Tests.min_binding bijection.tests in
+  let test = Tests.min_elt bijection.tests in
   bijection.tests <- Tests.remove test bijection.tests ; 
-  (test,sol)
+  test
 
-(* add a partial completion to the todo list *)  
+(* add a partial completion to the todo list *) 
+(* return true if a test should be extracted from completion, false otherwise *)
 let register_completion completion =
   completion.st_c.binder := New ;
   let is_opti = (completion.st_c = completion.root.initial_statement) in
@@ -443,8 +532,8 @@ let loc_p_to_q p corr =
   with Not_found -> raise (LocPtoQ p.p)
 
 (* Register a solution to a test *)
-let add_run solution partial_run =
-    bijection.registered_tests <- Tests.add partial_run.test solution bijection.registered_tests;
+let add_run partial_run =
+    bijection.registered_tests <- Tests.add partial_run.test bijection.registered_tests;
     if partial_run.test.process_name = P 
     then 
       bijection.runs_for_completions_P <- partial_run :: bijection.runs_for_completions_P

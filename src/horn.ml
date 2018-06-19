@@ -119,12 +119,13 @@ let get_head_recipe = function
   | _ -> assert(false)
 
 
-let get_recipes = function
+(*let get_recipes = function
   | Knows( r, _) -> [r]
   | Identical( r1, r2) -> [r1;r2]
   | Reach -> []
   | Unreachable -> []
-  | Tests(equal,diseq) -> EqualitiesSet.fold (fun (r,r') lst -> r :: r' :: lst) diseq (EqualitiesSet.fold (fun (r,r') lst -> r :: r' :: lst) equal [])
+  | Tests(_) -> assert false (*EqualitiesSet.fold (fun (r,r') lst -> r :: r' :: lst) diseq (EqualitiesSet.fold (fun (r,r') lst -> r :: r' :: lst) equal [])*)
+*)
 
 let get_term atom = atom.term
 
@@ -147,29 +148,6 @@ let get_body st = st.body
 (*let csu_atom a1 a2 =
   Rewriting.csu (term_from_atom a1) (term_from_atom a2)*)
 
-
-let apply_subst_pred pred sigma  = 
-match pred with
-  | Knows(r,t) -> 
-     Knows(Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term t sigma)
-  | Identical(r,r') -> 
-     Identical(Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)
-  | Reach -> Reach
-  | Unreachable -> Unreachable
-  | Tests(equal,diseq) -> Tests(EqualitiesSet.map (fun (r,r') -> (Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)) equal,
-      EqualitiesSet.map (fun (r,r') -> (Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)) diseq)
-
-let apply_subst_statement st (sigma : substitution)=
-  {
-      binder = sigma.binder;
-      nbvars = sigma.nbvars;
-      dag = st.dag;
-      choices = st.choices;
-      inputs = Inputs.map (fun t -> Rewriting.apply_subst_term t sigma) st.inputs;
-      recipes = Inputs.map (fun t -> Rewriting.apply_subst_term t sigma) st.recipes;
-      head = apply_subst_pred st.head sigma ;
-      body = trmap (fun x -> {x with recipe= Rewriting.apply_subst_term x.recipe sigma; term=Rewriting.apply_subst_term x.term sigma}) st.body 
-  }
 
 
 
@@ -377,7 +355,7 @@ let rule_shift st =
   * remove derivations for which the recipe does not occur elsewhere in the
   * statement as long as one derivation remains. *)
 let simplify_statement st =
-  let hvars = vars_of_term_list (get_recipes st.head) in
+  let hvars = vars_of_atom st.head (*vars_of_term_list (get_recipes st.head)*) in
   (*Printf.printf "simplification of %s\n" (show_raw_statement st);*)
   let sigma_repl = Array.make st.nbvars None in
   let sigma = (sigma_repl, Array.make 0 None) in
@@ -616,11 +594,11 @@ let normalize_new_statement f = (* This opti slow down the algo a bit much*)
   | Identical(r,r') -> Some {f with 
       head = Identical(Rewriting.normalize r (!Parser_functions.rewrite_rules),
             Rewriting.normalize r' (!Parser_functions.rewrite_rules))}
-  | Tests(equal,diseq) -> Some {f with 
+  | Tests(_) -> assert false (*Some {f with 
       head = Tests(EqualitiesSet.map (fun (r,r') -> Rewriting.normalize r (!Parser_functions.rewrite_rules),
             Rewriting.normalize r' (!Parser_functions.rewrite_rules))equal,
             EqualitiesSet.map (fun (r,r') -> Rewriting.normalize r (!Parser_functions.rewrite_rules),
-            Rewriting.normalize r' (!Parser_functions.rewrite_rules))diseq) } (* this case is not used *)
+            Rewriting.normalize r' (!Parser_functions.rewrite_rules))diseq) }*) (* this case is not used *)
 
 
 
@@ -1103,7 +1081,7 @@ and add_statement kb solved_parent unsolved_parent test_parent process st =
             match process with 
            | None -> ()
            | Some process -> trace_statements kb [] solved_parent unsolved_parent st process st.st end
-         | Tests(_,_) -> assert false
+         | Tests(_) -> assert false
         (* begin
            kb.reachable_solved <- st :: kb.reachable_solved;
            match process with 
