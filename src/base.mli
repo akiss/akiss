@@ -39,6 +39,7 @@ module EqualitiesSet :
     val of_list : elt list -> t
   end
 type test_head = {
+  head_binder : Types.statement_role ref;
   mutable equalities : EqualitiesSet.t;
   mutable disequalities : EqualitiesSet.t;
 }
@@ -104,6 +105,7 @@ type base = {
   htable : (hash_statement, statement) Hashtbl.t;
 }
 val check_binder_term : Types.statement_role ref -> Types.term -> bool
+val check_binder_head : Types.statement_role ref -> predicate -> bool
 val check_binder_st : raw_statement -> bool
 val show_test_head : test_head -> string
 val show_predicate : predicate -> string

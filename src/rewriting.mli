@@ -70,6 +70,7 @@ val show_configuration :
 val show_configurations :
   (Types.term * Types.substitution * position list) list -> string
 val identity_subst : int -> Types.substitution
+val merging_subst : int -> Types.statement_role ref -> Types.substitution
 val prepend : 'a -> 'a list list -> 'a list list
 val init_pos : Types.term -> int list list
 val at_position : Types.term -> int list -> Types.term

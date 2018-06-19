@@ -89,7 +89,7 @@ let show_binder = function
   | Master -> "M"
   | Slave -> "$"
   | New -> "*"
-  | Rule -> "r"
+  | Rule -> "§"
 
 type varId = {
    n : int ; (* ref ?*)

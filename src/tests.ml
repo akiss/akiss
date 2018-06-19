@@ -13,11 +13,13 @@ let negate_statement (st : raw_statement) =
   | Unreachable -> 
     {st with 
       head = Tests({
+        head_binder = st.binder;
         equalities = EqualitiesSet.empty ; 
         disequalities = EqualitiesSet.empty})}
   | Identical(s,t) -> 
     {st with 
       head = Tests({
+        head_binder = st.binder;
         equalities = EqualitiesSet.empty ; 
         disequalities = EqualitiesSet.singleton (s,t)})}
   | _ -> Printf.printf "negation of %s " (show_raw_statement st); assert false
@@ -165,14 +167,14 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
             choices = merged_choice ;
             inputs = Inputs.merge sigma fa.inputs fb.inputs;
             recipes = Inputs.merge_recipes sigma fa.recipes fb.recipes;
-            head = Tests({equalities= EqualitiesSet.map 
-             (fun (r,rp) -> 
+            head = Tests({
+              head_binder = sigma.binder ;
+              equalities= EqualitiesSet.map (fun (r,rp) -> 
                Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term rp sigma)
-             (EqualitiesSet.union fa_head_equal fb_head_equal);
-             disequalities = EqualitiesSet.map 
-             (fun (r,rp) -> 
+                (EqualitiesSet.union fa_head_equal fb_head_equal);
+              disequalities = EqualitiesSet.map (fun (r,rp) -> 
                Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term rp sigma)
-             (EqualitiesSet.union fa_head_diseq fb_head_diseq)});
+                (EqualitiesSet.union fa_head_diseq fb_head_diseq)});
             body = body }
            in
            sigma.binder := Master;
@@ -196,7 +198,8 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
            let (sigm,result) = same_term_same_recipe result in
            if !debug_merge then Format.printf "New clean merged test: %s\n%!"
                (show_raw_statement result);
-           let rho = Rewriting.compose sigma (Rewriting.compose tau sigm) in
+           let rho = Rewriting.compose sigma (Rewriting.compose_master tau sigm) in
+           if !debug_merge then Format.printf "Final substitution: %s\n" (show_substitution rho);
            (rho,result) :: lst
            with
             Horn.Not_a_consequence -> lst
@@ -261,6 +264,7 @@ let conj run =
   inputs =  transpose_inputs identity_sigma st.recipes run  ;
   choices = run.choices ;
   head = (let eq, diseq = recipes_of_head st.head in Tests({
+    head_binder = identity_sigma.binder ;
     equalities = EqualitiesSet.map (fun (s,t) -> (transpose_recipe identity_sigma s run,transpose_recipe identity_sigma t run)) eq;
     disequalities = EqualitiesSet.map (fun (s,t) -> (transpose_recipe  identity_sigma s run,transpose_recipe identity_sigma t run)) diseq}));
   body = List.map (fun ba -> {
@@ -308,7 +312,8 @@ and complete_set_of_identities head process_name old_test =
     Tests(h) ->
       if !debug_merge then Printf.printf "upgraded with %s test\n %s\n" (show_test_head head)(show_raw_statement old_test.statement);
       h.equalities <- EqualitiesSet.union (new_eq)(old_eq);
-      h.disequalities <- EqualitiesSet.union (new_diseq)(old_diseq) 
+      h.disequalities <- EqualitiesSet.union (new_diseq)(old_diseq) ;
+      if !debug_merge then Printf.printf "to get %s\n"(show_raw_statement old_test.statement)
     | _ -> assert false );
     try 
       List.iter 
@@ -328,7 +333,10 @@ and complete_set_of_identities head process_name old_test =
               find_set_of_runs old_test
           end ;
           List.iter (fun (status,sigma,derived_test) -> 
-              complete_set_of_identities (apply_subst_test_head head sigma) process_name derived_test) 
+              head.head_binder := status;
+              let tau = apply_subst_test_head head sigma in
+              head.head_binder := New;              
+              complete_set_of_identities tau process_name derived_test) 
             pr.consequences;
           List.iter (fun (sigma,compl) -> add_identities_to_completions (apply_subst_test_head head sigma) process_name compl) pr.completions
         ) old_test.solutions_done
@@ -341,13 +349,20 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
   let nb = Dag.cardinal statement.dag.rel in
   if nb != 0 && actual_test process_name statement
   then begin
-    statement.binder := New;
     let statement = canonize_statement statement in
+    statement.binder := New;
     let hash_statement = raw_to_hash_test statement in
     try 
       let test = Hashtbl.find bijection.htable_st hash_statement in
-      if !debug_merge then Printf.printf "Updating an existing test which is \n%s\n" (show_test test);
-      complete_set_of_identities (get_test_head statement.head) process_name test ;
+      let sigma = Rewriting.merging_subst test.statement.nbvars test.statement.binder in
+      let head_t = get_test_head statement.head in
+      statement.binder := Master;
+      if !debug_merge then 
+        Printf.printf "Updating an existing test which is \n%s\nwith %s \n subst %s \n"
+          (show_test test)(show_raw_statement statement)(show_substitution sigma);
+      let head' = apply_subst_test_head head_t sigma in
+      statement.binder := New ;
+      complete_set_of_identities head' process_name test ;
       Some test
     with 
     Not_found -> 
@@ -387,7 +402,7 @@ and add_merged_tests prun =
           { par.test.statement with dag = par.sol.restricted_dag } in (* only one without xor *)
         if false && merged_statements = [] then (if !debug_tests then Printf.printf "i,")
         else
-        List.iter (fun (sigma,raw_st) -> 
+        List.iter (fun ((sigma : substitution),raw_st) -> 
           if false && !debug_tests then Printf.printf "T,";
           let Some new_test = statement_to_tests prun.test.process_name (Composed(prun,par)) raw_st (proc (other prun.test.process_name)) in
           prun.consequences <- (Master,sigma,new_test) :: prun.consequences;
@@ -429,7 +444,8 @@ let completion_to_test comp =
       if !about_completion then Printf.printf "The completion is not executable \n" 
   | Some pr -> 
     if !about_completion then Printf.printf "Execution of the completion  %s\n" (show_run pr);
-    let sigma, conjrun = conj pr in begin
+    let sigma, conjrun = conj pr in 
+    begin
     match statement_to_tests (other comp.root.from_base) (Completion) conjrun (proc (comp.root.from_base )) with
     | Some test ->
       comp.generated_test <- Some (sigma, test) 
@@ -503,7 +519,7 @@ let rec compute_new_completions process_name  =
 Opti: when children are identical with same world merge them with the reach parent to reduce number of tests *)  
 let rec statements_to_tests process_name (statement : statement) otherProcess equalities =
   let _,raw_statement' = same_term_same_recipe statement.st in
-  let raw_statement = { raw_statement' with head= head_predicate_to_test raw_statement'.head } in
+  let raw_statement = { raw_statement' with head= head_predicate_to_test raw_statement'.binder raw_statement'.head } in
    match statement.st.head with
   | Identical _ -> 
     statement_to_tests process_name (Initial(statement)) raw_statement otherProcess;
@@ -525,7 +541,11 @@ let rec statements_to_tests process_name (statement : statement) otherProcess eq
         (new_eq,st :: children) end)
     (equalities, []) statement.children in
     statement_to_tests process_name (Initial(statement)) 
-      {raw_statement with head = Tests({equalities= new_eq; disequalities = EqualitiesSet.empty})} otherProcess;
+      {raw_statement with head = Tests({
+        head_binder = raw_statement.binder;
+        equalities= new_eq; 
+        disequalities = EqualitiesSet.empty})} 
+      otherProcess;
     List.iter (fun st -> statements_to_tests process_name st otherProcess new_eq) children
    
     

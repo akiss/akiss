@@ -11,6 +11,7 @@ module EqualitiesSet = Set.Make(struct
   end)
   
 type test_head = {
+  head_binder : statement_role ref;
   mutable equalities : EqualitiesSet.t;
   mutable disequalities : EqualitiesSet.t ;
 }
@@ -99,11 +100,19 @@ let rec check_binder_term binder term =
   | Var(x) -> x.status == binder
   | Fun(_,lst) -> List.for_all (check_binder_term binder) lst
   
+let check_binder_head binder head = 
+  match head with
+  | Tests({equalities= e;disequalities = d;head_binder = b}) -> b == binder && EqualitiesSet.for_all (fun (s,t) -> check_binder_term binder s && check_binder_term binder t) e && EqualitiesSet.for_all (fun (s,t) -> check_binder_term binder s && check_binder_term binder t) d
+  | Identical(s,t)
+  | Knows(s,t) -> check_binder_term binder s && check_binder_term binder t
+  | _ -> true
+  
 let check_binder_st st =
   let binder = st.binder in
   Dag.for_all (fun _ t -> check_binder_term binder t) st.inputs.i
   && Dag.for_all (fun _ t -> check_binder_term binder t) st.recipes.i
   && List.for_all (fun x -> check_binder_term binder x.term && check_binder_term binder x.recipe) st.body
+  && check_binder_head binder st.head
 
 (** {3 Printing} *)
 let show_test_head h =
@@ -139,8 +148,8 @@ let show_raw_statement st =
   else
   Format.sprintf
     "(%d%s) %s <== %s \n       %s %s %s\n       %s\n" st.nbvars (show_binder !(st.binder)) (show_predicate st.head)(show_atom_list st.body)(show_inputs st.inputs)(show_dag st.dag)(show_choices st.choices)(show_inputs st.recipes) in 
-  assert (check_binder_st st);
-  string
+  string ^ if not (check_binder_st st) then (st.binder := Rule;  " BINDER ERROR " ) else ""
+  
 
 let show_hash_test st =
   let string = 
@@ -201,9 +210,12 @@ let get_test_head head =
 
 (** Substitutions **)
 
-let apply_subst_test_head head sigma = 
-  {equalities=EqualitiesSet.map (fun (r,r') -> (Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)) head.equalities;
-     disequalities=EqualitiesSet.map (fun (r,r') -> (Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)) head.disequalities}
+let apply_subst_test_head head (sigma : substitution) = 
+  {
+    head_binder = sigma.binder;
+    equalities=EqualitiesSet.map (fun (r,r') -> (Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)) head.equalities;
+    disequalities=EqualitiesSet.map (fun (r,r') -> (Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)) head.disequalities
+  }
      
 let apply_subst_pred pred sigma  = 
 match pred with

@@ -1167,7 +1167,7 @@ let extra_equation kb solved1 solved2 =
       (fun st -> add_statement kb solved1 kb.not_solved 
           (if solved1.test_parent == kb.rid_solved then solved2.test_parent else solved1.test_parent )  
         None st )
-       (equation sigma merged_choice merged_dag solved1.st solved2.st)) sigmas;
+       (equation sigma merged_choice merged_dag solved1.st solved2.st)) sigmas; (*TODO :  duplicate sigma to handle several unifiers *)
     true end
 
 

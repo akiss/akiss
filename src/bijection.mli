@@ -1,6 +1,7 @@
 val recipes_of_head :
   Base.predicate -> Base.EqualitiesSet.t * Base.EqualitiesSet.t
-val head_predicate_to_test : Base.predicate -> Base.predicate
+val head_predicate_to_test :
+  Types.statement_role ref -> Base.predicate -> Base.predicate
 type which_process = P | Q
 val show_which_process : which_process -> string
 type correspondance = { a : Types.location Dag.Dag.t; }

@@ -11,10 +11,16 @@ let recipes_of_head head =
   | Reach -> EqualitiesSet.empty,EqualitiesSet.empty
   | Unreachable -> assert false
   
-let head_predicate_to_test pred =
+let head_predicate_to_test binder pred =
   match pred with
-  | Identical(s,t) -> Tests({equalities = EqualitiesSet.singleton (s,t); disequalities = EqualitiesSet.empty})
-  | Reach -> Tests({equalities = EqualitiesSet.empty ; disequalities = EqualitiesSet.empty})
+  | Identical(s,t) -> Tests({
+    head_binder = binder;
+    equalities = EqualitiesSet.singleton (s,t); 
+    disequalities = EqualitiesSet.empty})
+  | Reach -> Tests({
+    head_binder = binder ;
+    equalities = EqualitiesSet.empty ; 
+    disequalities = EqualitiesSet.empty})
   | _ -> assert false
 
 
@@ -426,7 +432,7 @@ let show_bijection () =
 open Run 
 
 let show_hashtbl () =
-  Hashtbl.iter (fun h s -> Printf.printf "%s  \n\n" (show_test s)) bijection.htable_st
+  Hashtbl.iter (fun h s -> Printf.printf "-- %s  \n\n" (show_test s)) bijection.htable_st
 
 let proc name =
   match name with
@@ -454,7 +460,7 @@ let push (statement : raw_statement) process_name origin init =
   (*if origin != Completion && Hashtbl.mem bijection.htable int_lst then ()  else begin
   Hashtbl.add bijection.htable int_lst origin;*)
   bijection.next_id <- bijection.next_id + 1 ;
-  if bijection.next_id = 2000 then show_hashtbl ();
+  (*if bijection.next_id = 2000 then show_hashtbl ();*)
   let nb = Dag.cardinal statement.dag.rel in
   let test = { null_test with
     nb_actions = nb;

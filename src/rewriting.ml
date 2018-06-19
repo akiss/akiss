@@ -424,6 +424,16 @@ let identity_subst nbv =
     master = Array.mapi (fun i _ -> Var({status=binder; n=i})) master ; 
     slave = Array.make 0 (Var({status=binder; n=0}))
   }
+  
+(* In test.ml to merge test heads *)
+let merging_subst nbv binder =
+  let master = Array.make nbv (Var({status=binder; n=0})) in
+  { binder = binder ;
+    nbvars = nbv ;
+    master = Array.mapi (fun i _ -> Var({status=binder; n=i})) master ; 
+    slave = Array.make 0 (Var({status=binder; n=0}))
+  }
+
 (*type mask =
   | VarMask
   | FunMask of mask list
