@@ -80,7 +80,9 @@ let command_line_options_list = [
     "Show location information");
    ("-execution", Arg.Set(debug_execution), 
     "Show tests executions debugging"); 
-   ("-tests", Arg.Set(debug_tests), 
+   ("-tests", Arg.Set(about_tests), 
+    "Show information about tests");
+   ("-tests-info", Arg.Set(debug_tests), 
     "Show information about tests");
    ("-merge", Arg.Set(debug_merge), 
     "Show information about merging tests");

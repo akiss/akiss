@@ -129,6 +129,7 @@ let dag_with_one_action_at_end locs action =
   let set_a = LocationSet.singleton action in 
   { rel = LocationSet.fold (fun l dag -> Dag.add l set_a dag) locs (Dag.singleton action LocationSet.empty)}
   
+  
 let first_actions_among dag locs =
   let first = LocationSet.filter (fun k -> Dag.for_all (fun k' locset -> 
   not (LocationSet.mem k' locs) || not (LocationSet.mem k locset)) dag.rel) locs in
@@ -147,6 +148,16 @@ let pick_last_or_null dag locs =
   try 
     LocationSet.choose last
   with Not_found -> null_location
+  
+(* For finding recipes in test.ml, merge_tests*)
+let expurge_dag_after dag loc =
+  {rel= Dag.filter (fun l lset -> not (LocationSet.mem l (Dag.find loc dag.rel))) dag.rel}
+  
+let preceding_dag dag loc =
+  {rel= Dag.filter (fun l lset ->  (LocationSet.mem loc (Dag.find l dag.rel))) dag.rel}
+  
+let dag_with_actions_at_end locs lset = 
+  { rel = LocationSet.fold (fun l dag -> Dag.add l lset dag) locs (Dag.empty)}
 
 (* let () =
    let ch : Parser_functions.chanId= {name="c";id=0}  in

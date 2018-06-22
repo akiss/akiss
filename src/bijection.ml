@@ -233,8 +233,8 @@ let rec show_origin o =
   | Temporary -> "T"
   else    
   match o with 
-  | Initial(st) -> Format.sprintf "%d" (st.id)
-  | Composed(run1,run2) -> Format.sprintf "[ %d:%s | %d:%s]"  run1.test.id (show_origin run1.test.origin)  run2.test.id (show_origin run2.test.origin) 
+  | Initial(st) -> Format.sprintf "#%d" (st.id)
+  | Composed(run1,run2) -> Format.sprintf "[ %d | %d ]"  run1.test.id  run2.test.id  
   | Completion -> "comp"
   | Temporary -> "T"
   
@@ -385,7 +385,7 @@ type bijection = {
   mutable indexQ : index ;
   mutable next_id : int; (* the index for tests id *)
   mutable tests : Tests.t; (* The remaining tests to test on the other process *)
-  mutable registered_tests : Tests.t; (* The tests that are set in *)
+  (*mutable registered_tests : Tests.t; (* The tests that are set in *)*)
   mutable runs_for_completions_P : partial_run list; (* the pending runs of P, for completion treatement in Q *)
   mutable runs_for_completions_Q : partial_run list; (* of Q *)
   mutable partial_completions_P : (completion list) Dag.t; (* The partial completions from base P *)
@@ -409,7 +409,7 @@ let bijection =
   indexQ = Dag.empty ;
   next_id = 0 ;
   tests = Tests.empty;
-  registered_tests = Tests.empty;
+  (*registered_tests = Tests.empty;*)
   runs_for_completions_P = [];
   runs_for_completions_Q = [];
   partial_completions_P = Dag.empty;
@@ -422,11 +422,12 @@ let bijection =
 }
 
 let show_bijection () =
-  Printf.printf "Bijection of %d tests:\n" (Tests.cardinal bijection.registered_tests);
+  Printf.printf "Bijection of %d tests:\n" (Hashtbl.length bijection.htable_st);
   Dag.iter (fun kp ind2 -> Printf.printf "\n- %d =>" kp.p;
     Dag.iter (fun kq recordlist ->
-      Printf.printf " %d (%d),"  kq.p (RunSet.cardinal recordlist)
-      (*RunSet.iter (fun pr -> Printf.printf "         %s   %s\n"  (show_correspondance pr.corresp)(show_origin pr.test.origin)) recordlist *)) ind2 )  bijection.indexP ;
+      let nb = RunSet.cardinal recordlist in
+      Printf.printf " %d (%d%s),"  kq.p nb
+      (if nb < 6 then RunSet.fold (fun pr str -> str ^ " [" ^ (string_of_int  pr.test.id) ^ "]") recordlist ":" else "")) ind2 )  bijection.indexP ;
   Printf.printf "\n"
   
 open Run 
@@ -539,7 +540,7 @@ let loc_p_to_q p corr =
 
 (* Register a solution to a test *)
 let add_run partial_run =
-    bijection.registered_tests <- Tests.add partial_run.test bijection.registered_tests;
+    (*bijection.registered_tests <- Tests.add partial_run.test bijection.registered_tests;*)
     if partial_run.test.process_name = P 
     then 
       bijection.runs_for_completions_P <- partial_run :: bijection.runs_for_completions_P
@@ -557,7 +558,7 @@ let add_run partial_run =
     (if partial_run.test.process_name = P then partial_run.corresp.a else partial_run.corresp_back.a) 
   
 let remove_run partial_run = 
-  bijection.registered_tests <- Tests.remove partial_run.test bijection.registered_tests;
+  (*bijection.registered_tests <- Tests.remove partial_run.test bijection.registered_tests;*)
   if partial_run.test.process_name = P 
   then 
     bijection.runs_for_completions_P <- List.filter (fun pr -> pr != partial_run) bijection.runs_for_completions_P

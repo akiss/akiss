@@ -278,7 +278,6 @@ type bijection = {
   mutable indexQ : index;
   mutable next_id : int;
   mutable tests : Tests.t;
-  mutable registered_tests : Tests.t;
   mutable runs_for_completions_P : Run.partial_run list;
   mutable runs_for_completions_Q : Run.partial_run list;
   mutable partial_completions_P : Run.completion list Dag.Dag.t;

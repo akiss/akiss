@@ -1,4 +1,5 @@
 val show_subst_array : Types.term option array -> string
+val copy_subst : 'a array * 'b array -> 'a array * 'b array
 exception Not_unifiable
 exception Not_matchable
 val recompose_term : Types.term list -> Types.term

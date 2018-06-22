@@ -29,10 +29,18 @@ module LocationSet :
     val cardinal : t -> int
     val elements : t -> elt list
     val min_elt : t -> elt
+    val min_elt_opt : t -> elt option
     val max_elt : t -> elt
+    val max_elt_opt : t -> elt option
     val choose : t -> elt
+    val choose_opt : t -> elt option
     val split : elt -> t -> t * bool * t
     val find : elt -> t -> elt
+    val find_opt : elt -> t -> elt option
+    val find_first : (elt -> bool) -> t -> elt
+    val find_first_opt : (elt -> bool) -> t -> elt option
+    val find_last : (elt -> bool) -> t -> elt
+    val find_last_opt : (elt -> bool) -> t -> elt option
     val of_list : elt list -> t
   end
 module Dag :
@@ -43,6 +51,7 @@ module Dag :
     val is_empty : 'a t -> bool
     val mem : key -> 'a t -> bool
     val add : key -> 'a -> 'a t -> 'a t
+    val update : key -> ('a option -> 'a option) -> 'a t -> 'a t
     val singleton : key -> 'a -> 'a t
     val remove : key -> 'a t -> 'a t
     val merge :
@@ -59,10 +68,18 @@ module Dag :
     val cardinal : 'a t -> int
     val bindings : 'a t -> (key * 'a) list
     val min_binding : 'a t -> key * 'a
+    val min_binding_opt : 'a t -> (key * 'a) option
     val max_binding : 'a t -> key * 'a
+    val max_binding_opt : 'a t -> (key * 'a) option
     val choose : 'a t -> key * 'a
+    val choose_opt : 'a t -> (key * 'a) option
     val split : key -> 'a t -> 'a t * 'a option * 'a t
     val find : key -> 'a t -> 'a
+    val find_opt : key -> 'a t -> 'a option
+    val find_first : (key -> bool) -> 'a t -> key * 'a
+    val find_first_opt : (key -> bool) -> 'a t -> (key * 'a) option
+    val find_last : (key -> bool) -> 'a t -> key * 'a
+    val find_last_opt : (key -> bool) -> 'a t -> (key * 'a) option
     val map : ('a -> 'b) -> 'a t -> 'b t
     val mapi : (key -> 'a -> 'b) -> 'a t -> 'b t
   end
@@ -72,7 +89,7 @@ val show_dag : dag -> string
 val canonize_dag : dag -> dag
 val empty : dag
 val is_empty : dag -> bool
-val singleton : Dag.key -> LocationSet.elt -> dag
+val singleton : Dag.key -> Dag.key -> dag
 val put_at_end : dag -> Dag.key -> dag
 exception E
 val subset : dag -> dag -> bool
@@ -87,3 +104,6 @@ val first_actions_among : dag -> LocationSet.t -> LocationSet.t
 val last_actions_among : dag -> LocationSet.t -> LocationSet.t
 val locations_of_dag : dag -> LocationSet.t
 val pick_last_or_null : dag -> LocationSet.t -> LocationSet.elt
+val expurge_dag_after : dag -> Dag.key -> dag
+val preceding_dag : dag -> LocationSet.elt -> dag
+val dag_with_actions_at_end : LocationSet.t -> LocationSet.t -> dag

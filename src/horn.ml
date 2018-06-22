@@ -1061,7 +1061,10 @@ and add_statement kb solved_parent unsolved_parent test_parent process st =
        slave_parent = solved_parent;
        test_parent = test_parent;
        } in 
-     if !debug_saturation then Printf.printf "Addition of %s \n solved: %s \n test%s \n %!" (show_statement "" st)(show_statement ">" solved_parent)(show_statement ">" test_parent);
+     (if !debug_saturation 
+     then Printf.printf "Addition of %s \n solved: %s \n test%s \n %!" 
+      (show_statement "" st)(show_statement ">" solved_parent)(show_statement ">" test_parent)
+     else if !about_progress && kb.next_id mod 500 = 0 then Printf.printf "Addition of %s \n%!" (show_statement "" st));
      Hashtbl.add kb.htable hash_st st;
      if is_solved_st 
      then 
@@ -1225,16 +1228,6 @@ let saturate procId  =
 
 (** {2 Recipe stuff} *)
 
-(*let namify_subst t = 
-  let vars = vars_of_term t in
-  let names = List.map (fun _ -> Fun(fresh_string "!n!", [])) vars in
-  let sigma = List.combine vars names in
-  sigma
-
-let namify t = 
-  let sigma = namify_subst t in
-  apply_subst t sigma*)
-
 (** Using success/failure continuations for backtracking.
   * The success continuation is called on each solution of type 'a,
   * and it is passed a continuation for enumerating more solutions
@@ -1337,115 +1330,3 @@ let recipize tl kb =
   )
 
 *)
-(** Optimizations **)
-(* Avoid tests on traces with different input output scenarios and alpha rename  tests to avoid identical ones *)
-(*
-let rec is_smaller_world small_world big_world =
-  match (small_world, big_world) with
-  | (Fun("empty", []),Fun("empty", []) ) -> false
-  | (Fun("empty", []), _) -> true
-  | (Fun("world", [h; t]), Fun("world", [hp; tp])) ->
-      if (R.equals h hp []) then
-      is_smaller_world t tp else false
-  | (Fun("world", [_; _]), Fun("empty", [])) -> false
-  | (Var(x), Var(y)) -> x = y
-  | _ -> assert false
-
-let is_smaller_reach_test t1 t2 =
-	match (t1,t2) with
-	| (Fun("check_run",[w1]),Fun("check_run",[w2]))->  is_smaller_world w1 w2 
-	| _ -> false
-
-let rec list_find x lst =
-	match lst with
-	| h::q -> if x = h then List.length q else list_find x q
-	| [] -> -1
-
-let rec alpha_rename_namified_term term subst =
-	match term with
-	| Fun(n,[]) when startswith n "!n!" ->
-		let i = list_find n subst in 
-		if i = -1 
-			then (Fun("!n!"^string_of_int (List.length subst),[]), n::subst) 
-			else (Fun("!n!"^string_of_int (i),[]),subst)
-	| Fun(f,x) -> let (y,s) = List.fold_left (fun  (l,sub) t -> 
-		let (rterm,subst) = alpha_rename_namified_term t sub in  (rterm::l,subst)) ([],subst) x in
-		(Fun(f,List.rev y),s)
-	| Var(x) ->
-		let i = list_find x subst in 
-		if i = -1 
-			then (Var("X"^string_of_int (List.length subst)), x::subst) 
-			else (Var("X"^string_of_int (i)),subst)
-
-
-let alpha_rename_namified_term term =
-	let (t,_)=alpha_rename_namified_term term [] in t
-
-(*let rec satisfiable lst rules =
-	match lst with
-	| [] -> true
-	| Predicate("ineq",[w;s;t]) :: q -> 
-		if R.equals s t rules then 
-			begin extraOutput about_else "The predicate %s is not satisfiable.\n%!" (show_atom (Predicate("ineq",[w;s;t]))); false end
-		else satisfiable q rules
-	| _ -> assert false*)
-
-(** Extract all successful reachability tests from a knowledge base. *)
-let checks_reach kb rules =
-	let solved = Base.only_solved kb in
-	List.fold_left
-    (fun checks x -> 
-       match (get_head x) with
-         | Predicate("reach", [w]) -> 
-		(*extraOutput about_else "========> %s\n" (show_statement x);*)
-		let sigma = namify_subst w in
-		(*extraOutput about_else "========< %s\n" (show_subst sigma);*)
-		let new_check = alpha_rename_namified_term(
-			Fun ("check_run", [revworld (recipize (apply_subst w sigma) kb )])) in 
-		begin             
-			if !debug_output then Format.printf "TESTER: %s \n%!" (show_term new_check); 
-			new_check  :: checks end 
-         | _ -> checks)
-    [] solved
-
-(** Extract all successful identity tests from a knowledge base. *)
-let checks_ridentical kb rules =
-  Base.fold_solved
-    (fun x checks -> 
-       match (get_head x) with
-         | Predicate("ridentical", [w; r; rp]) ->
-             let sigma = namify_subst w in
-             let new_w = revworld (recipize (apply_subst w sigma) kb ) in
-            let omega =
-               List.map
-                 (function
-                    | Predicate("knows", [_; Var(vX); Var(vx)]) ->
-                        (vX, apply_subst (Var(vx)) sigma)
-                    | _ -> invalid_arg("checks_ridentical"))
-                 (get_body x)
-             in
-             let resulting_test = alpha_rename_namified_term(Fun("check_identity", [new_w;
-                                                      apply_subst r omega;
-                                                      apply_subst rp omega])) in
-             begin if !debug_output then Format.printf  "TESTER: %s\n" (show_term resulting_test) ; 
-             resulting_test :: checks end 
-         | _ -> checks)
-    kb []
-    
-(** Extract all successful tests from a (saturated) knowledge base. *)
-let checks kb rules =
-  List.append (checks_reach kb rules) (checks_ridentical kb rules)
-
-let show_tests tests =
-  String.concat "\n" (trmap show_term tests)
-
-let show_rew_rules rules =
-  String.concat "\n" (trmap
-    (
-      fun x ->
-	match x with
-	| (l, r) -> (show_term l)^" -> "^(show_term r);
-    )
-    rules)
-
-	*)
