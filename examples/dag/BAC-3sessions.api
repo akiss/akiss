@@ -3,8 +3,9 @@
 
 chan c.
 
+free get_challenge,Error_6300.
 
-fun mac/2,senc/2,sdec/2,get_challenge/0,Error_6300/0.
+fun mac/2,senc/2,sdec/2.
 
 sdec(senc(x,y),y) -> x.
 
@@ -55,7 +56,7 @@ let system2 =
     (passport(k_e,k_m) | reader(k_e,k_m)) |
     (passport(k_e,k_m) | reader(k_e,k_m))
   )|
-  (new k_e; new k_m; (passport(k_e,k_m) | reader(k_e,k_m)))..
+  (new k_e; new k_m; (passport(k_e,k_m) | reader(k_e,k_m))).
 
 //query saturate system1.
 query trace_equiv(system2,system1).

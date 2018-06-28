@@ -37,8 +37,8 @@ free c.
 free c.
 free c.
 free c.*/
-
-fun senc/2,sdec/2,a1/0,b1/0,c0/0,kcs/0,m1/0,m2/0.
+free a1,b1,c0,kcs,m1,m2.
+fun senc/2,sdec/2.
 chan c.
 
 sdec(senc(x,y),y) -> x.
@@ -125,7 +125,7 @@ let Q =
   | A(c,b1,c0,kcs) | S(c,b1,c0,kbs,kcs)
   | S(c,c0,a1,kcs,kas) | B(c,a1,c0,kas)
 
-)..
+).
 
 
 query trace_equiv (P,Q).

@@ -1,0 +1,24 @@
+fun a/0,b/0.
+chan c,d,e,f,g.
+
+
+let P = new n ;
+  ( out(c,n) |
+  in(c,x);
+  if x=n then
+    0 
+  else out(c,x)).
+
+
+let Q = new p; new n ;
+  ( out(c,n) |
+  in(c,y);
+  if y = p
+  then
+    0
+  else 
+    out(c,y)).
+
+let N = 0..
+
+query trace_equiv (P,Q).

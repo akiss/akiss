@@ -1,15 +1,17 @@
-
+fun a/0.
 chan c,d,e,f,g.
 
 
-let P(k)  = new n ;(
-  out(c,n) 
-  ; out(c,n)).
+let P  = new n ;
+  in(c,x);
+  if x=a 
+  then out(c,a) 
+  else out(c,n).
 
 
-let Q = new p; new m;(
-  out(c,m) 
-  |out(c,m)).
+let Q = new m;
+  in(c,x);
+  out(c,m).
 
 let N = 0..
 

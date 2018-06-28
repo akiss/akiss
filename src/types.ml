@@ -26,12 +26,12 @@ type argId = {name : string; th : int }
 type relative_location = int * (string option) (* option for input *)
 type relative_nonce = int * string (* name of the nonce *)
 type relative_temp_term =
-  | F of funId * relative_temp_term list
-  | T of int * relative_temp_term list
-  | P of int * int * relative_temp_term
-  | N of relative_nonce
-  | V of relative_location
-  | A of argId
+  | F of funId * relative_temp_term list (*function*)
+  | T of int * relative_temp_term list (*tuple*)
+  | P of int * int * relative_temp_term (*pattern*)
+  | N of relative_nonce (*nonce*)
+  | V of relative_location (*input variable*)
+  | A of argId (* argument of the function*)
   | C of chanId
 
 type bounded_process =

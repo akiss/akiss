@@ -29,10 +29,10 @@ type declaration =
     Setting of setting * int
   | FuncDecl of functions list
   | ReducList of (temp_term * temp_term) list
-  | FreeName of ident
+  | FreeName of ident list
   | ChanNames of ident list
   | Query of query * int
-  | ProcessList of extended2_process list
+  | ProcessDecl of extended2_process
 type env_elt =
     Var of Types.relative_location
   | XVar of Types.varId
@@ -51,6 +51,7 @@ module Env :
     val is_empty : 'a t -> bool
     val mem : key -> 'a t -> bool
     val add : key -> 'a -> 'a t -> 'a t
+    val update : key -> ('a option -> 'a option) -> 'a t -> 'a t
     val singleton : key -> 'a -> 'a t
     val remove : key -> 'a t -> 'a t
     val merge :
@@ -67,14 +68,23 @@ module Env :
     val cardinal : 'a t -> int
     val bindings : 'a t -> (key * 'a) list
     val min_binding : 'a t -> key * 'a
+    val min_binding_opt : 'a t -> (key * 'a) option
     val max_binding : 'a t -> key * 'a
+    val max_binding_opt : 'a t -> (key * 'a) option
     val choose : 'a t -> key * 'a
+    val choose_opt : 'a t -> (key * 'a) option
     val split : key -> 'a t -> 'a t * 'a option * 'a t
     val find : key -> 'a t -> 'a
+    val find_opt : key -> 'a t -> 'a option
+    val find_first : (key -> bool) -> 'a t -> key * 'a
+    val find_first_opt : (key -> bool) -> 'a t -> (key * 'a) option
+    val find_last : (key -> bool) -> 'a t -> key * 'a
+    val find_last_opt : (key -> bool) -> 'a t -> (key * 'a) option
     val map : ('a -> 'b) -> 'a t -> 'b t
     val mapi : (key -> 'a -> 'b) -> 'a t -> 'b t
   end
 val environment : env_elt Env.t ref
+val processes_list : extended2_process list ref
 type symb_chan = Const of Types.chanId | Sym of Types.argId
 val display_env_elt_type : env_elt -> string
 val show_temp_term : temp_term -> string
@@ -92,6 +102,7 @@ val parse_rewrite_rule :
   env_elt Env.t -> temp_term * temp_term -> Types.rewrite_rule
 val functions_list : Types.funId list ref
 val parse_functions : env_elt Env.t -> functions -> env_elt Env.t
+val parse_free_name : env_elt Env.t -> Env.key * int -> env_elt Env.t
 val parse_channel_name : env_elt Env.t -> Env.key * int -> env_elt Env.t
 val parse_chan :
   Types.procId -> env_elt Env.t -> Env.key * int -> Types.relative_temp_term

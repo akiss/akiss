@@ -50,10 +50,10 @@ type declaration =
   | Setting of setting * int
   | FuncDecl of functions list
   | ReducList of ( temp_term * temp_term ) list
-  | FreeName of ident
+  | FreeName of ident list
   | ChanNames of ident list
   | Query of query * int
-  | ProcessList of extended2_process list
+  | ProcessDecl of extended2_process
 (** parsed process *)
 
 
@@ -81,6 +81,8 @@ end
 module Env = Map.Make(StringComp)
 
 let environment = ref (Env.empty:env_elt Env.t)
+
+let processes_list : extended2_process list ref = ref [] 
 
 type symb_chan =
   | Const of chanId
@@ -195,13 +197,14 @@ let parse_functions env = function
 
 (******** Parse free names *******)
 
-(*let parse_free_name env (s,line) =
+let parse_free_name env (s,line) =
   if Env.mem s env
   then error_message line (Printf.sprintf "The identifier %s is already defined." s);
 
-  let n = Term.Symbol.new_constructor 0 s in
-  Env.add s (PublicName n) env
-*)
+  let n = {name = s; arity = 0} in
+  functions_list := n :: !functions_list;
+  Env.add s (Func n) env
+
 
 (******** Parse channel names *******)
 
@@ -344,6 +347,7 @@ and parse_pattern_list procId env prev_env term  i n = function
 
 (******** Process **********)
 
+
 let rec parse_plain_process procId env (nbloc,nbnonces) = function
   | Call((s,line),temp_term_list) ->
       begin try
@@ -365,14 +369,15 @@ let rec parse_plain_process procId env (nbloc,nbnonces) = function
         Not_found -> error_message line (Printf.sprintf "The identifier %s is not declared" s)
       end 
   | Nil -> (nbloc,nbnonces,NilB)
-(*  | Choice(p1,p2) ->
-      begin match parse_plain_process env p1, parse_plain_process env p2 with
-        | Process.Choice l_1, Process.Choice l_2 -> Process.Choice (l_1@l_2)
-        | Process.Choice l_1, proc2 -> Process.Choice (proc2::l_1)
-        | proc1, Process.Choice l_2 -> Process.Choice (proc1::l_2)
-        | proc1, proc2 -> Process.Choice [proc1;proc2]
-      end 
-  | Seq(_,_)-> error_message 0 "Sequence is not yet implemented."*)
+(*  | Bang(n,proc,line) ->
+    if n < 1
+    then error_message line "The integer should be at least 1.";
+
+    begin match parse_plain_process env proc with
+      | Process.Par l -> Process.Par (List.map (fun (p,i) -> (p,i*n)) l)
+      | proc -> Process.Par [(proc,n)]
+    end*)
+(*| Seq(_,_)-> error_message 0 "Sequence is not yet implemented."*)
   | Par(p1,p2) ->
       let (nbl,nbn,pr1)=parse_plain_process procId env (nbloc,nbnonces) p1 in
       let (nbl,nbn,pr2)=parse_plain_process procId env (nbl,nbn) p2 in
@@ -393,14 +398,6 @@ let rec parse_plain_process procId env (nbloc,nbnonces) = function
         | pr1, ChoiceB (l_2,lp2) -> assert false
         | pr1, pr2 -> let l=(nbl,Some ("?")) in (nbl+1,nbn,ChoiceB(l,[pr1;pr2]))
       end
-(*  | Bang(n,proc,line) ->
-      if n < 1
-      then error_message line "The integer should be at least 1.";
-
-      begin match parse_plain_process env proc with
-        | Process.Par l -> Process.Par (List.map (fun (p,i) -> (p,i*n)) l)
-        | proc -> Process.Par [(proc,n)]
-      end*)
   | New((s,line),proc) ->
       if Env.mem s env
       then warning_message line (Printf.sprintf "The identifier %s is already defined." s);
@@ -465,21 +462,23 @@ let parse_process_declaration_list env lst =
     match prlst with
     | [] -> env
     | ExtendedProcess((s,line),args,_)::q -> 
-       let env = get_names q in
-       if Env.mem s env
-       then error_message line (Printf.sprintf "The identifier %s is already defined." s);
-       let n = List.length args in
-       Env.add s (Proc ({name=s; arity= n; types=Array.make n Unknown ; process= NilB; nbloc=0; nbnonces=0})) env in
+      let env = get_names q in
+      if Env.mem s env
+        then error_message line (Printf.sprintf "The identifier %s is already defined." s);
+      let n = List.length args in
+      Env.add s (Proc ({name=s; arity= n; types=Array.make n Unknown ; process= NilB; nbloc=0; nbnonces=0})) env
+  in
   let env = get_names lst in
   List.iter (function ExtendedProcess((s,line),args,p)-> 
     let Proc(procId) = Env.find s env in
-    let(nbloc,nbnonce,process) = parse_list_argument procId p env 0 args in
+    let (nbloc,nbnonce,process) = parse_list_argument procId p env 0 args in
     match  Env.find s env with
-    | Proc(prId) -> begin
-    prId.process <- process ;
-    prId.nbloc <- nbloc;
-    prId.nbnonces <- nbnonce
-    end
+    | Proc(prId) -> 
+      begin
+      prId.process <- process ;
+      prId.nbloc <- nbloc;
+      prId.nbnonces <- nbnonce
+      end
     | _ -> assert false
   ) lst; 
   (*Printf.printf "%s\n" (show_environment env);*)

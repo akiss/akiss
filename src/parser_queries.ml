@@ -34,10 +34,15 @@ let parse_one_declaration = function
   | ReducList lst -> rewrite_rules := List.map 
       ( fun r -> parse_rewrite_rule !environment r) lst @ !rewrite_rules
   | ChanNames identlst -> List.iter (fun ident -> environment := parse_channel_name !environment ident) identlst
-(*  | FreeName ident -> environment := parse_free_name !environment ident *)
-  | ProcessList (ExtendedProcess(_,_,_)::q as prlst) -> 
-      environment := parse_process_declaration_list !environment prlst
+  | FreeName flst -> List.iter (fun f -> environment := parse_free_name !environment f) flst 
+  | ProcessDecl( p ) -> processes_list := p :: !processes_list
+      (*environment := parse_process_declaration_list !environment prlst*)
   | Query (query,line) -> 
+      (match !processes_list with
+      [] -> ()
+      | _ -> 
+        environment := parse_process_declaration_list !environment (List.rev !processes_list);
+        processes_list:=[]);
       if !about_seed then begin Printf.printf "Rewrite rules (%d):\n" (List.length !rewrite_rules);
          List.iter (fun r -> Printf.printf "- %s\n" (show_rewrite_rule r)) !rewrite_rules end;
       parse_query !environment line query 

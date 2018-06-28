@@ -43,12 +43,12 @@ main:
       { FuncDecl $2 }
   | rewrite_rule_list
       { ReducList $1}
-  | free_name_declaration
+  | free_name_declaration_list
       { FreeName $1 }
   | CHANS chan_name_declaration_list
       { ChanNames $2 }
-  | extended_process_declaration_list
-      { ProcessList $1 }
+  | extended_process_declaration
+      { ProcessDecl $1 }
   | query_declaration
       { Query ($1,(Parsing.symbol_start_pos ()).Lexing.pos_lnum) }
   | EOF
@@ -102,8 +102,8 @@ chan_name_declaration:
       { $1 }
 
 
-free_name_declaration:
-  | FREE ident DOT
+free_name_declaration_list:
+  | FREE var_list DOT
       { $2 }
 
 /****** Query ******/
@@ -117,11 +117,6 @@ query_declaration:
       { Obs_Eq($4,$6) }
 
 /****** Extended process declaration *******/
-extended_process_declaration_list:
-  | extended_process_declaration DOT
-      { [$1] }
-  | extended_process_declaration extended_process_declaration_list
-      { $1 :: $2 }
 
 extended_process_declaration:
   | LET ident EQ extended_process DOT
