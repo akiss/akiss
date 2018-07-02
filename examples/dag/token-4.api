@@ -53,6 +53,6 @@ let P =
   P0(d1,d2,d3) | P0(d4,d5,d6) | P0(d7,d8,d9) | P0(d10,d11,d12).
 
 let Q =
-  Q0(d1,d2,d3) | Q0(d4,d5,d6) | Q0(d7,d8,d9) | Q0(d10,d11,d12)..
+  Q0(d1,d2,d3) | Q0(d4,d5,d6) | Q0(d7,d8,d9) | Q0(d10,d11,d12).
 
 query trace_equiv (P,Q).

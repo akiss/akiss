@@ -119,7 +119,7 @@ let Q =
  | A(c28,b1,c0,kcs) | S(c29,b1,c0,kbs,kcs)
 
 
-)..
+).
 
 
 query trace_equiv (P,Q).

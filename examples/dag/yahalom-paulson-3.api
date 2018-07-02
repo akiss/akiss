@@ -113,6 +113,6 @@ let P =
 let Q =
   new kas; new kbs; (
     A(ca1,aa,bb,kas) | S(cs1,aa,bb,kas,kbs) | BQ(cb1,bb,aa,kbs) 
-  )..
+  ).
 
 query trace_equiv (P,Q).

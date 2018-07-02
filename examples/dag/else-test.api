@@ -19,6 +19,6 @@ let Q = new p; new n ;
   else 
     out(c,y)).
 
-let N = 0..
+let N = 0.
 
 query trace_equiv (P,Q).

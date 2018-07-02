@@ -92,7 +92,7 @@ let P =
 let Q =
  new kas; new kbs;
  ( A2(c,a1,b1,kas) | S(c,a1,b1,kas,kbs) | B(c,b1,a1,kbs)
- | A(c,b1,a1,kbs) | S(c,b1,a1,kbs,kas) | B(c,a1,b1,kas))..
+ | A(c,b1,a1,kbs) | S(c,b1,a1,kbs,kas) | B(c,a1,b1,kas)).
 
 
 query trace_equiv (P,Q).

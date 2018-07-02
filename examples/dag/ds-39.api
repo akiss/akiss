@@ -125,7 +125,6 @@ let Q =
   | A(c11,b1,c0,kcs) | S(c12,b1,c0,kbs,kcs)
   | S(c13,c0,a1,kcs,kas) | B(c14,a1,c0,kas)
 
-)..
-
+).
 
 query trace_equiv (P,Q).

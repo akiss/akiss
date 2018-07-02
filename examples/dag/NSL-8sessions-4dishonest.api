@@ -85,7 +85,7 @@ let Q =
     B(ca6,aa,cc,ka,pk(kc)) |
     A(ca7,aa,bb,ka,pk(kb)) | B(cb7,bb,aa,kb,pk(ka)) |
     A(ca8,bb,aa,kb,pk(ka)) | B(cb8,aa,bb,ka,pk(kb))
-  )..
+  ).
 
 
 query trace_equiv(P,Q).

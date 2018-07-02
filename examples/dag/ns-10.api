@@ -109,7 +109,7 @@ let Q =
    A(c1,aa,bb,kas) | S(c2,aa,bb,kas,kbs) | B2(c3,bb,aa,kbs) |
    A(c4,aa,cc,kas) | S(c5,aa,cc,kas,kcs) | S(c6,cc,bb,kcs,kbs) | B(c7,bb,cc,kbs) |
    A(c8,bb,aa,kbs) | S(c9,bb,aa,kbs,kas) | B(c10,aa,bb,kas)
- )..
+ ).
 
 
 query trace_equiv (P, Q).
