@@ -46,7 +46,9 @@ let rec run_until_io process first frame =
     then let (lst1,lst2) = run_until_io p first frame in
       (List.map (fun (c,ls,diseq,p) -> (c,ls, (t,t')::diseq,p)) lst1, lst2)  
     else ([],[(Inputs.new_choices,first,[],process)])
-  | CallP(l,p,terms,chans) -> run_until_io (expand_call l p terms chans) first frame
+  | CallP(l,n,p,terms,chans) ->
+    List.fold_left (fun (lst1,lst2) (x,y) -> (x @ lst1 , y @ lst2)) ([],[]) 
+      (List.init n (fun i -> run_until_io (expand_call l (i+1) p terms chans) first frame ))
   | SeqP(OutputA(_,_),_) -> assert false
   
 let init_sol process_name (statement : raw_statement) processQ test : solution =

@@ -90,9 +90,9 @@ type symb_chan =
 
 let display_env_elt_type = function
   | ArgVar(arg) -> (string_of_int (arg.th+1)) ^"-th argument of a process" 
-  | Var _ -> "a variable"
+  | Var (i,_) -> "a variable n°" ^ (string_of_int i)
   | XVar _ -> "a reduction variable"
-  | Name _ -> "a name"
+  | Name (i,_) -> " name n°" ^ (string_of_int i)  
 (*  | PublicName _ -> "a public name"*)
   | Func _ -> "a function" 
   | Chan _ -> "a channel"
@@ -347,6 +347,7 @@ and parse_pattern_list procId env prev_env term  i n = function
 
 (******** Process **********)
 
+ (* *)
 
 let rec parse_plain_process procId env (nbloc,nbnonces) = function
   | Call((s,line),temp_term_list) ->
@@ -354,7 +355,8 @@ let rec parse_plain_process procId env (nbloc,nbnonces) = function
         match Env.find s env with
           | Proc(procId') ->
               if procId'.arity <> List.length temp_term_list
-              then error_message line (Printf.sprintf "The process %s is given %d arguments but is expecting %d arguments" s (List.length temp_term_list) procId'.arity);
+              then error_message line 
+                (Printf.sprintf "The process %s is given %d arguments but is expecting %d arguments" s (List.length temp_term_list) procId'.arity);
               List.iteri (fun i t -> 
                 let typ = type_of_arg procId env t in
                 (*Printf.printf "type of %s of %s: %s\n" (show_temp_term t)(show_procId procId') (show_typ typ);*)
@@ -363,20 +365,33 @@ let rec parse_plain_process procId env (nbloc,nbnonces) = function
                 if procId'.types.(i) <> typ then error_message line (Printf.sprintf "The process %s is given %d-th argument of type %s but is expecting argument of type %s." s (i+1) (show_typ procId'.types.(i)) (show_typ typ))
               ) temp_term_list ;
               let temp_term_list' = List.map (parse_temp_term_or_chan procId env) temp_term_list in
-              (nbloc + 1,nbnonces,CallB((nbloc,Some s),procId',temp_term_list')) 
+              (nbloc + 1,nbnonces,CallB((nbloc,Some s),1,procId',temp_term_list')) 
           | env_elt -> error_message line (Printf.sprintf "The identifier %s is declared as %s but a process is expected." s (display_env_elt_type env_elt))
       with
         Not_found -> error_message line (Printf.sprintf "The identifier %s is not declared" s)
       end 
   | Nil -> (nbloc,nbnonces,NilB)
-(*  | Bang(n,proc,line) ->
+  | Bang(n,proc,line) ->
     if n < 1
-    then error_message line "The integer should be at least 1.";
-
-    begin match parse_plain_process env proc with
-      | Process.Par l -> Process.Par (List.map (fun (p,i) -> (p,i*n)) l)
-      | proc -> Process.Par [(proc,n)]
-    end*)
+      then error_message line "The integer should be at least 1.";
+    begin 
+      let i = ref (-1) in
+      let names,args,types = Env.fold (fun name x (names,args,types) -> 
+        let f ty name  arg = incr i; (Env.add name (ArgVar {name=name;th=(!i)}) names, arg :: args , ty :: types) in
+        match x with
+          | ArgVar(arg) -> (f procId.types.(arg.th) name (A(arg)))
+          | Var (v) -> (f TermType name (V(v)))
+          | Name(n)->  (f TermType name (N(n))) 
+          | _ -> (names,args,types)) env (!environment,[],[])
+      in
+      let procId = { name="bang";arity=(!i + 1);types=(Array.of_list (List.rev types)); process = NilB; nbloc= 0; nbnonces= 0; } in
+      Printf.printf "bang %d \n" n;
+      let (nbloc',nbnonce',proc')= parse_plain_process procId names (0,0) proc in
+      procId.nbloc<-nbloc';
+      procId.nbnonces<-nbnonce';
+      procId.process<-proc';
+      (nbloc + 1,nbnonces,CallB((nbloc,Some "bang"),n,procId,List.rev args)) 
+    end
 (*| Seq(_,_)-> error_message 0 "Sequence is not yet implemented."*)
   | Par(p1,p2) ->
       let (nbl,nbn,pr1)=parse_plain_process procId env (nbloc,nbnonces) p1 in
@@ -457,32 +472,25 @@ let rec parse_list_argument procId proc env index = function
           end
         with Not_found -> parse_list_argument procId proc (Env.add var_s (ArgVar {name=var_s;th=index}) env) (index + 1) q
 
-let parse_process_declaration_list env lst =
-  let rec get_names prlst = 
-    match prlst with
-    | [] -> env
-    | ExtendedProcess((s,line),args,_)::q -> 
-      let env = get_names q in
-      if Env.mem s env
-        then error_message line (Printf.sprintf "The identifier %s is already defined." s);
-      let n = List.length args in
-      Env.add s (Proc ({name=s; arity= n; types=Array.make n Unknown ; process= NilB; nbloc=0; nbnonces=0})) env
-  in
-  let env = get_names lst in
-  List.iter (function ExtendedProcess((s,line),args,p)-> 
-    let Proc(procId) = Env.find s env in
-    let (nbloc,nbnonce,process) = parse_list_argument procId p env 0 args in
-    match  Env.find s env with
-    | Proc(prId) -> 
-      begin
+let get_process_name (ExtendedProcess((s,line),args,_)) = 
+  if Env.mem s !environment
+  then error_message line (Printf.sprintf "The identifier %s is already defined." s);
+  let n = List.length args in
+  environment := Env.add s (Proc ({name=s; arity= n; types=Array.make n Unknown ; process= NilB; nbloc=0; nbnonces=0})) !environment
+
+
+let parse_process_declaration_list lst =
+  List.iter (function ExtendedProcess((s,line),args,p) -> 
+    match Env.find s !environment with
+   | Proc(prId) -> 
+      let (nbloc,nbnonce,process) = parse_list_argument prId p !environment 0 args in
       prId.process <- process ;
       prId.nbloc <- nbloc;
       prId.nbnonces <- nbnonce
-      end
     | _ -> assert false
-  ) lst; 
-  (*Printf.printf "%s\n" (show_environment env);*)
-  env 
+  ) lst 
+  (*;Printf.printf "%s\n" (show_environment env)*)
+
 
 let reset_parser () =
   environment := (Env.empty:env_elt Env.t);

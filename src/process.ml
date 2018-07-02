@@ -7,6 +7,15 @@ open Util
 
 (** {2 Processes} *)
 
+module BangLocation =
+       struct
+         type t = location * int
+         let compare (x,i) (y,j) =
+           compare (x.p,i) (y.p,j)
+       end
+
+
+module BangDag = Map.Make(BangLocation)
 
 
 
@@ -23,24 +32,25 @@ type process =
   | ParallelP of process list
   | SeqP of action * process
   | ChoiceP of location * ((int * process) list)
-  | CallP of location * procId * term array * chanId array
+  | CallP of location * int * procId * term array * chanId array
   
 type process_infos = {
    first_location : int ;
    first_nonce : int;
+   process : process;
 }
 
 type processes_infos = {
    mutable next_location : int ;
    mutable next_nonce : int;
-   mutable processes : process_infos Dag.t;
+   mutable processes : process_infos BangDag.t;
    mutable location_list : location list;
 }
 
 let processes_infos = {
      next_location = 0 ;
      next_nonce = 0 ;
-     processes = Dag.empty ;
+     processes = BangDag.empty ;
      location_list = [];
 }
 
@@ -58,7 +68,7 @@ let rec show_process pr =
   | ParallelP(lp) ->( List.fold_left (fun str p -> str ^ "|" ^ (show_process p)) "(" lp ) ^ ")"
   | SeqP(a,p) -> (show_action a) ^ ";" ^ (show_process p)
   | ChoiceP(l,lp)->( List.fold_left (fun str (i,p) -> str ^ "+" ^ (show_process p)) "(" lp ) ^ ")"
-  | CallP(l,procId,args,chans) -> procId.name
+  | CallP(l,i,procId,args,chans) -> procId.name ^ (if i = 1 then "" else (string_of_int i))
 
 let rec show_process_start i pr = 
   if i = 0 then "..." else
@@ -67,7 +77,7 @@ let rec show_process_start i pr =
   | ParallelP(lp) ->( List.fold_left (fun str p -> str ^ "|" ^ (show_process_start i p)) "(" lp ) ^ ")"
   | ChoiceP(l,lp)->( List.fold_left (fun str (i,p) -> str ^ "+" ^ (show_process_start i p)) "(" lp ) ^ ")"
   | SeqP(a,p) -> (show_action a) ^ ";" ^ (show_process_start (i - 1) p)
-  | CallP(l,procId,args,chans) -> procId.name
+  | CallP(l,i,procId,args,chans) -> procId.name ^ (if i = 1 then "" else (string_of_int i))
 
 let rec count_type_nb typ pr i =
   if i = -1 then -1 
@@ -146,7 +156,7 @@ let rec convert_pr infos process parent =
   | ChoiceB((rel_loc,Some s),lb) -> 
      locations.(rel_loc) <- new_location pr (location+rel_loc) Choice s parent;
      ChoiceP(locations.(rel_loc),List.mapi (fun i p -> (i, convert_pr infos p parent)) lb)
-  | CallB((rel_loc,Some s),p,arguments) -> 
+  | CallB((rel_loc,Some s),i,p,arguments) -> 
      let ar = Array.make (1+(count_type_nb TermType p (p.arity - 1))) zero in
      let channels = Array.make (1+(count_type_nb ChanType p (p.arity - 1))) null_chan in
      let nbt = ref 0 in 
@@ -158,26 +168,31 @@ let rec convert_pr infos process parent =
        then begin channels.(!nbc) <- convert_chan pr chans x; incr nbc end
      ) arguments;
      locations.(rel_loc) <- new_location pr (location+rel_loc) Call s parent;
-     CallP(locations.(rel_loc),p,ar,channels)
+     CallP(locations.(rel_loc),i,p,ar,channels)
   | _ -> assert false
  
-let expand_call loc (procId : procId) args chans=
-  if !about_seed then Format.printf "Expansion of %s (%d;%d)\nwhich is %s \n%!"
+let expand_call loc copy (procId : procId) args chans=
+  if  !about_seed then Format.printf "Expansion of %s (%d;%d)\nwhich is %s \n%!"
      (show_procId procId)(Array.length args)(Array.length chans) (show_bounded_process procId.process);
   let indexes =
-  try Dag.find loc processes_infos.processes
+  try (BangDag.find (loc,copy) processes_infos.processes)
   with Not_found -> begin 
+    if !about_location 
+    then Format.printf "Locations of %d: %s n°%d\n%!" loc.p (procId.name) copy ;
+    let process = convert_pr (procId, processes_infos.next_location, processes_infos.next_nonce, 
+    (Array.make procId.nbloc null_location),
+    (Array.make procId.nbnonces null_nonce), args, chans) procId.process loc.parent in
     let ind = {
       first_location = processes_infos.next_location ;
       first_nonce = processes_infos.next_nonce ;
+      process = process ; 
     } in
-    if !about_location 
-    then Format.printf "Locations of %d : %s \n%!" loc.p (procId.name) ;
     processes_infos.next_nonce <- processes_infos.next_nonce + procId.nbnonces ;
     processes_infos.next_location <- processes_infos.next_location + procId.nbloc ;
-    processes_infos.processes <- Dag.add loc ind processes_infos.processes ;
+    processes_infos.processes <- BangDag.add (loc,copy) ind processes_infos.processes ;
     ind end in
-  convert_pr (procId, indexes.first_location, indexes.first_nonce, 
+    indexes.process
+(*  convert_pr (procId, indexes.first_location, indexes.first_nonce, 
     (Array.make procId.nbloc null_location),
-    (Array.make procId.nbnonces null_nonce), args, chans) procId.process loc.parent
+    (Array.make procId.nbnonces null_nonce), args, chans) procId.process loc.parent *)
  

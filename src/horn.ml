@@ -1034,9 +1034,12 @@ let rec trace_statements kb ineqs solved_parent unsolved_parent test_parent proc
       List.iter (fun subst -> trace_statements kb ineqs solved_parent unsolved_parent test_parent pr (apply_subst_statement st subst)) unifiers
     | SeqP(TestInequal(s, t), pr) ->
        trace_statements kb ((s,t)::ineqs) solved_parent unsolved_parent test_parent pr st
-    | CallP(loc, procId, args, chans) -> 
+    | CallP(loc, j, procId, args, chans) -> 
       let args = Array.map (concretize st.inputs) args in
-      trace_statements kb ineqs solved_parent unsolved_parent test_parent (expand_call loc procId args chans) st
+      for i = 1 to j do
+      (*Format.printf "Adding %d-th copy of %s \n%!" i procId.name;*)
+      trace_statements kb ineqs solved_parent unsolved_parent test_parent (expand_call loc i procId args chans) st
+      done
    (* | _ -> invalid_arg ("todo")*)
 
 
@@ -1204,7 +1207,7 @@ let saturate procId  =
   let ind = processes_infos.next_location in
   processes_infos.next_location <- processes_infos.next_location + 1 ;
   trace_statements kb [] kb.solved_deduction kb.not_solved kb.rid_solved
-    (CallP({p = ind;io=Call;name="main";parent=None},procId,Array.make 0 zero,Array.make 0 null_chan))
+    (CallP({p = ind;io=Call;name="main";parent=None},1,procId,Array.make 0 zero,Array.make 0 null_chan))
     null_raw_statement;
   while not (Queue.is_empty(kb.s_todo)) || not (Queue.is_empty(kb.ns_todo)) do
     if false && !about_progress then 

@@ -42,7 +42,7 @@ type bounded_process =
   | TestIfB of relative_location * relative_temp_term * relative_temp_term * bounded_process * bounded_process
   | ParB of bounded_process list
   | ChoiceB of relative_location * (bounded_process list)
-  | CallB of relative_location * procId * relative_temp_term list 
+  | CallB of relative_location * int * procId * relative_temp_term list 
 (*  | LetB of relative_pattern * relative_temp_term * bounded_process * bounded_process*)
 and procId = { 
    name : string ; 
@@ -66,7 +66,7 @@ let rec show_bounded_process p =
   | TestIfB(l,s,t,p1,p2) -> Printf.sprintf "if %s = %s then %s else %s" (show_relative_term s)(show_relative_term t)(show_bounded_process p1)(show_bounded_process p2)
   | ParB(lst) -> (List.fold_left (fun s t -> s ^ " || " ^ show_bounded_process t) "(" lst) ^ ")"
   | ChoiceB(l,lst) -> (List.fold_left (fun s t -> s ^ " ++ " ^ show_bounded_process t) "(" lst) ^ ")"
-  | CallB(l,p,args) -> (List.fold_left (fun s t -> s ^ "," ^ show_relative_term t) (p.name ^ "(") args) ^ ")"
+  | CallB(l,i,p,args) -> (List.fold_left (fun s t -> s ^ "," ^ show_relative_term t) (p.name ^ (string_of_int i) ^ "(") args) ^ ")"
 and show_relative_term t = 
   match t with 
   | F (f,args) -> if args = [] then f.name else (List.fold_left (fun s t -> (if s = "" then (f.name ^ "(") else s ^ ",") ^ show_relative_term t) "" args) ^ ")"

@@ -1,3 +1,48 @@
+module BangLocation :
+  sig
+    type t = Types.location * int
+    val compare : Types.location * 'a -> Types.location * 'a -> int
+  end
+module BangDag :
+  sig
+    type key = BangLocation.t
+    type 'a t = 'a Map.Make(BangLocation).t
+    val empty : 'a t
+    val is_empty : 'a t -> bool
+    val mem : key -> 'a t -> bool
+    val add : key -> 'a -> 'a t -> 'a t
+    val update : key -> ('a option -> 'a option) -> 'a t -> 'a t
+    val singleton : key -> 'a -> 'a t
+    val remove : key -> 'a t -> 'a t
+    val merge :
+      (key -> 'a option -> 'b option -> 'c option) -> 'a t -> 'b t -> 'c t
+    val union : (key -> 'a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
+    val compare : ('a -> 'a -> int) -> 'a t -> 'a t -> int
+    val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
+    val iter : (key -> 'a -> unit) -> 'a t -> unit
+    val fold : (key -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
+    val for_all : (key -> 'a -> bool) -> 'a t -> bool
+    val exists : (key -> 'a -> bool) -> 'a t -> bool
+    val filter : (key -> 'a -> bool) -> 'a t -> 'a t
+    val partition : (key -> 'a -> bool) -> 'a t -> 'a t * 'a t
+    val cardinal : 'a t -> int
+    val bindings : 'a t -> (key * 'a) list
+    val min_binding : 'a t -> key * 'a
+    val min_binding_opt : 'a t -> (key * 'a) option
+    val max_binding : 'a t -> key * 'a
+    val max_binding_opt : 'a t -> (key * 'a) option
+    val choose : 'a t -> key * 'a
+    val choose_opt : 'a t -> (key * 'a) option
+    val split : key -> 'a t -> 'a t * 'a option * 'a t
+    val find : key -> 'a t -> 'a
+    val find_opt : key -> 'a t -> 'a option
+    val find_first : (key -> bool) -> 'a t -> key * 'a
+    val find_first_opt : (key -> bool) -> 'a t -> (key * 'a) option
+    val find_last : (key -> bool) -> 'a t -> key * 'a
+    val find_last_opt : (key -> bool) -> 'a t -> (key * 'a) option
+    val map : ('a -> 'b) -> 'a t -> 'b t
+    val mapi : (key -> 'a -> 'b) -> 'a t -> 'b t
+  end
 type action =
     Input of Types.location
   | Output of Types.location * Types.term
@@ -9,13 +54,17 @@ type process =
   | ParallelP of process list
   | SeqP of action * process
   | ChoiceP of Types.location * (int * process) list
-  | CallP of Types.location * Types.procId * Types.term array *
+  | CallP of Types.location * int * Types.procId * Types.term array *
       Types.chanId array
-type process_infos = { first_location : int; first_nonce : int; }
+type process_infos = {
+  first_location : int;
+  first_nonce : int;
+  process : process;
+}
 type processes_infos = {
   mutable next_location : int;
   mutable next_nonce : int;
-  mutable processes : process_infos Dag.Dag.t;
+  mutable processes : process_infos BangDag.t;
   mutable location_list : Types.location list;
 }
 val processes_infos : processes_infos
@@ -39,5 +88,5 @@ val convert_pr :
   Types.term array * Types.chanId array ->
   Types.bounded_process -> Types.location option -> process
 val expand_call :
-  Dag.Dag.key ->
-  Types.procId -> Types.term array -> Types.chanId array -> process
+  Types.location ->
+  int -> Types.procId -> Types.term array -> Types.chanId array -> process

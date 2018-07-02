@@ -605,9 +605,9 @@ let equivalence p q =
   if  !about_saturation then
     Printf.printf (if !use_xml then "%s" else "Saturation of Q:\n %s\n") (show_kb satQ);
   let processP = (CallP({p = locP;io=Call;name="main";parent=None},
-    p,Array.make 0 zero,Array.make 0 null_chan)) in
+    1,p,Array.make 0 zero,Array.make 0 null_chan)) in
   let processQ = (CallP({p = locQ;io=Call;name="main";parent=None}, 
-    q,Array.make 0 zero,Array.make 0 null_chan)) in 
+    1,q,Array.make 0 zero,Array.make 0 null_chan)) in 
   bijection.p <- processP ;
   bijection.q <- processQ ;
   bijection.satP <- satP ;

@@ -25,7 +25,7 @@ type bounded_process =
       bounded_process * bounded_process
   | ParB of bounded_process list
   | ChoiceB of relative_location * bounded_process list
-  | CallB of relative_location * procId * relative_temp_term list
+  | CallB of relative_location * int * procId * relative_temp_term list
 and procId = {
   name : string;
   arity : int;

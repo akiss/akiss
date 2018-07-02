@@ -92,6 +92,6 @@ let Q =
     A(ca4,bb,aa,kbs) | S(cs4,bb,aa,kbs,kas) | B(cb4,aa,bb,kas) |      // B -> S -> A
     A(ca5,bb,cc,kbs) | S(cs5,bb,cc,kbs,kcs) |                       // B -> S -> C
     S(cs6,cc,aa,kcs,kas) | B(cb5,aa,cc,kas)                         // C -> S -> A
-  )..
+  ).
 
 query trace_equiv(P,Q).
