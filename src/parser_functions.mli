@@ -18,6 +18,7 @@ type plain_process =
   | Let of pattern * temp_term * plain_process * plain_process
   | IfThenElse of temp_term * temp_term * plain_process * plain_process
   | Seq of plain_process * plain_process
+  | Phase of int * plain_process
 type extended_process = EPlain of plain_process
 type query =
     Saturate of ident
@@ -31,6 +32,7 @@ type declaration =
   | ReducList of (temp_term * temp_term) list
   | FreeName of ident list
   | ChanNames of ident list
+  | PrivateChanNames of ident list
   | Query of query * int
   | ProcessDecl of extended2_process
 type env_elt =
@@ -39,6 +41,7 @@ type env_elt =
   | Name of Types.relative_nonce
   | Func of Types.funId
   | Chan of Types.chanId
+  | PrivChan of Types.chanId
   | Proc of Types.procId
   | ArgVar of Types.argId
   | PatVar of Types.relative_temp_term
@@ -104,6 +107,8 @@ val functions_list : Types.funId list ref
 val parse_functions : env_elt Env.t -> functions -> env_elt Env.t
 val parse_free_name : env_elt Env.t -> Env.key * int -> env_elt Env.t
 val parse_channel_name : env_elt Env.t -> Env.key * int -> env_elt Env.t
+val parse_private_channel_name :
+  env_elt Env.t -> Env.key * int -> env_elt Env.t
 val parse_chan :
   Types.procId -> env_elt Env.t -> Env.key * int -> Types.relative_temp_term
 val tuple_arity : int list ref

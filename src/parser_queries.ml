@@ -34,6 +34,7 @@ let parse_one_declaration = function
   | ReducList lst -> rewrite_rules := List.map 
       ( fun r -> parse_rewrite_rule !environment r) lst @ !rewrite_rules
   | ChanNames identlst -> List.iter (fun ident -> environment := parse_channel_name !environment ident) identlst
+  | PrivateChanNames identlst -> List.iter (fun ident -> environment := parse_private_channel_name !environment ident) identlst
   | FreeName flst -> List.iter (fun f -> environment := parse_free_name !environment f) flst 
   | ProcessDecl( p ) -> 
     get_process_name p ;

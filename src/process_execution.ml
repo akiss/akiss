@@ -48,7 +48,9 @@ let rec run_until_io process first frame =
     else ([],[(Inputs.new_choices,first,[],process)])
   | CallP(l,n,p,terms,chans) ->
     List.fold_left (fun (lst1,lst2) (x,y) -> (x @ lst1 , y @ lst2)) ([],[]) 
-      (List.init n (fun i -> run_until_io (expand_call l (i+1) p terms chans) first frame ))
+      (List.init n (fun i -> 
+        let pr = expand_call l (i+1) p terms chans in
+        run_until_io pr first frame ))
   | SeqP(OutputA(_,_),_) -> assert false
   
 let init_sol process_name (statement : raw_statement) processQ test : solution =
@@ -100,6 +102,7 @@ let next_partial_run run action full_p proc l frame locs choices diseq =
       remaining_actions = LocationSet.remove action run.remaining_actions ;
       frame = frame;
       choices = choices;
+      phase = l.phase;
       disequalities = diseq @ run.disequalities;
       qthreads = qt ;
       failed_qthreads = fqt @ run.failed_qthreads ;
@@ -138,7 +141,7 @@ let try_run run action (choices,locs,diseq,process)  =
   (*Printf.printf "constraints %s \n" (show_correspondance run.test.constraints );*)
   let condition = if is_empty_correspondance run.test.constraints 
     then 
-      fun action l -> action.io = l.io 
+      fun action l -> action.io = l.io && action.phase >= l.phase
     else 
       fun action l -> try loc_p_to_q action run.test.constraints = l with LocPtoQ i -> (Printf.eprintf "try run error\n"; raise (LocPtoQ i)) in
    (*Printf.printf "Testing %s against %s\n" action.chan.name (show_process_start 1 process);*)

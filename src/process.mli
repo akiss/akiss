@@ -43,6 +43,46 @@ module BangDag :
     val map : ('a -> 'b) -> 'a t -> 'b t
     val mapi : (key -> 'a -> 'b) -> 'a t -> 'b t
   end
+module BangSet :
+  sig
+    type elt = BangLocation.t
+    type t = Set.Make(BangLocation).t
+    val empty : t
+    val is_empty : t -> bool
+    val mem : elt -> t -> bool
+    val add : elt -> t -> t
+    val singleton : elt -> t
+    val remove : elt -> t -> t
+    val union : t -> t -> t
+    val inter : t -> t -> t
+    val diff : t -> t -> t
+    val compare : t -> t -> int
+    val equal : t -> t -> bool
+    val subset : t -> t -> bool
+    val iter : (elt -> unit) -> t -> unit
+    val map : (elt -> elt) -> t -> t
+    val fold : (elt -> 'a -> 'a) -> t -> 'a -> 'a
+    val for_all : (elt -> bool) -> t -> bool
+    val exists : (elt -> bool) -> t -> bool
+    val filter : (elt -> bool) -> t -> t
+    val partition : (elt -> bool) -> t -> t * t
+    val cardinal : t -> int
+    val elements : t -> elt list
+    val min_elt : t -> elt
+    val min_elt_opt : t -> elt option
+    val max_elt : t -> elt
+    val max_elt_opt : t -> elt option
+    val choose : t -> elt
+    val choose_opt : t -> elt option
+    val split : elt -> t -> t * bool * t
+    val find : elt -> t -> elt
+    val find_opt : elt -> t -> elt option
+    val find_first : (elt -> bool) -> t -> elt
+    val find_first_opt : (elt -> bool) -> t -> elt option
+    val find_last : (elt -> bool) -> t -> elt
+    val find_last_opt : (elt -> bool) -> t -> elt option
+    val of_list : elt list -> t
+  end
 type action =
     Input of Types.location
   | Output of Types.location * Types.term
@@ -56,11 +96,7 @@ type process =
   | ChoiceP of Types.location * (int * process) list
   | CallP of Types.location * int * Types.procId * Types.term array *
       Types.chanId array
-type process_infos = {
-  first_location : int;
-  first_nonce : int;
-  process : process;
-}
+type process_infos = { first_location : int; first_nonce : int; }
 type processes_infos = {
   mutable next_location : int;
   mutable next_nonce : int;
@@ -82,11 +118,11 @@ val convert_chan :
   Types.chanId array -> Types.relative_temp_term -> Types.chanId
 val new_location :
   Types.procId ->
-  int -> Types.io -> string -> Types.location option -> Types.location
+  int -> Types.io -> string -> Types.location option -> int -> Types.location
 val convert_pr :
   Types.procId * int * int * Types.location array * Types.nonceId array *
   Types.term array * Types.chanId array ->
-  Types.bounded_process -> Types.location option -> process
+  Types.bounded_process -> Types.location option -> int -> process
 val expand_call :
   Types.location ->
   int -> Types.procId -> Types.term array -> Types.chanId array -> process

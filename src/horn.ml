@@ -661,7 +661,7 @@ let update kb vip f =
   * where t is not a variable.
   * This corresponds to the "Resolution" rule in the paper.
   * Return the list of newly generated clauses. *)
-exception Impossible
+
 (*
 let resolution_plus master =
    let atom = List.find (fun x -> not (is_var (get_term x.pred))) master.body in
@@ -772,7 +772,7 @@ let resolution sigma choices dag master slave =
      | (Some l) -> let new_dag = Dag.merge dag (Dag.final slave.dag l) in
        (*Printf.printf "new dag %s\n" (Dag.show_dag new_dag);*)
        if Dag.is_cyclic new_dag 
-       then begin (*Printf.printf "cyclic dag \n";*) raise Impossible end;
+       then begin (*Printf.printf "cyclic dag \n";*) raise Dag.Impossible end;
        new_dag
      | _ -> dag in
    let sigmas =
@@ -806,14 +806,15 @@ let resolution sigma choices dag master slave =
            inputs = Inputs.merge sigma master.inputs slave.inputs;
            recipes = Inputs.merge(*_recipes*) sigma master.recipes slave.recipes;
            head = (apply_subst_pred master.head sigma) ;
-           body = body }
+           body = body ;
+           involved_copies = BangSet.union master.involved_copies slave.involved_copies ; }
            in 
            if !debug_saturation then Format.printf "RESO: %s\n\n"
                (show_raw_statement result);
            result)
         sigmas 
     end
-    with Impossible -> []
+    with Dag.Impossible -> []
 
 (** [equation fa fb] takes two solved clauses and, when they are solved clauses
   * concluding "knows", attempts to combine them: if the terms and worlds can be
@@ -903,7 +904,8 @@ let equation sigma choices dag fa fb =
            inputs = Inputs.merge sigma fa.inputs fb.inputs;
            recipes = Inputs.merge(*_recipes*) sigma fa.recipes fb.recipes;
            head = Identical(Rewriting.apply_subst_term r sigma,Rewriting.apply_subst_term rp sigma);
-           body = body }
+           body = body ;
+           involved_copies = BangSet.union fa.involved_copies fb.involved_copies ; }
            in
            if !debug_saturation then Format.printf "RESO: %s\n\n"
                (show_raw_statement result);
@@ -917,7 +919,8 @@ let equation sigma choices dag fa fb =
 
 (** Core statements without variant computations *)
 
-
+let add_pending_statement st =
+ ()
 
 let rec concretize inputs term =
    match term with
@@ -959,21 +962,16 @@ let rec trace_statements kb ineqs solved_parent unsolved_parent test_parent proc
       st.binder := Master;
       let st = apply_subst_statement st identity_sigma in
       let next_head = Knows(Fun({id= Frame(loc); has_variables = false},[]), term) in
-      let st = {
+      let st = { st with
         binder = binder; 
-        nbvars = st.nbvars; 
-        dag = st.dag;
-        choices = st.choices;
-        inputs = st.inputs;
-        recipes = st.recipes;
         head = next_head;
-        body = st.body} in
+        } in
       let v = Rewriting.variants st.nbvars term (! Parser_functions.rewrite_rules) in
       List.iter (fun (_,sigma) -> 
         if !about_seed then Format.printf "- variant %s\n" (show_substitution sigma);
         add_statement kb solved_parent unsolved_parent test_parent (Some pr)
           (apply_subst_statement st sigma)) v 
-     | SeqP(Output(loc, t), pr) -> (* the reach part of the output *)
+     | SeqP(Output({io = Output({visibility = Public})} as loc, t), pr) -> (* the reach part of the output *)
       let next_dag = Dag.put_at_end st.dag loc in
       let identity_sigma = Rewriting.identity_subst st.nbvars in
       (*let term = Rewriting.normalize (concretize st.inputs t) (! Parser_functions.rewrite_rules)in*)
@@ -981,15 +979,11 @@ let rec trace_statements kb ineqs solved_parent unsolved_parent test_parent proc
       st.binder := Master;
       let st = apply_subst_statement st identity_sigma in
       (*let next_head = Knows(Fun({id= Frame(loc); has_variables = false},[]), term) in*)
-      let st = {
+      let st = { st with
         binder = binder; 
-        nbvars = st.nbvars; 
-        dag = next_dag;
-        choices = st.choices;
-        inputs = st.inputs;
-        recipes = st.recipes;
+        dag = next_dag ;
         head = Reach;
-        body = st.body} in
+        } in
       (* let v = Rewriting.variants st.nbvars term (! Parser_functions.rewrite_rules) in *)
       begin 
       (*List.iter (fun (_,sigma) -> 
@@ -998,7 +992,7 @@ let rec trace_statements kb ineqs solved_parent unsolved_parent test_parent proc
           (apply_subst_statement st sigma)) v ;*)
       add_statement kb solved_parent unsolved_parent test_parent (Some (SeqP(OutputA(loc, t), pr))) st ;
       add_ineqs_statements ineqs identity_sigma st end
-    | SeqP(Input(loc), pr) ->
+    | SeqP(Input({io = Input({visibility = Public})} as loc), pr) ->
       let next_dag = Dag.put_at_end st.dag loc in
       let identity_sigma = Rewriting.identity_subst st.nbvars in
       let binder = identity_sigma.binder in
@@ -1022,10 +1016,17 @@ let rec trace_statements kb ineqs solved_parent unsolved_parent test_parent proc
         inputs = next_inputs;
         recipes = next_recipes;
         head = Reach ;
-        body = next_body} in
+        body = next_body;
+        involved_copies = st.involved_copies} in
       begin
       add_statement kb solved_parent unsolved_parent test_parent (Some pr) st ;
       add_ineqs_statements ineqs identity_sigma st end
+    | SeqP(Input({io = Input({visibility = Hidden})} as loc), pr) -> ()
+    | SeqP(Output({io = Output({visibility = Hidden})} as loc, t), pr) -> 
+      ()
+    | SeqP(Input(loc), pr)
+    | SeqP(Output(loc,_), pr) ->
+      assert false
     | SeqP(Test(s, t), pr) ->
       st.binder := Master;
       let sterm = concretize st.inputs s in
@@ -1038,7 +1039,8 @@ let rec trace_statements kb ineqs solved_parent unsolved_parent test_parent proc
       let args = Array.map (concretize st.inputs) args in
       for i = 1 to j do
       (*Format.printf "Adding %d-th copy of %s \n%!" i procId.name;*)
-      trace_statements kb ineqs solved_parent unsolved_parent test_parent (expand_call loc i procId args chans) st
+      let pr = expand_call loc i procId args chans in
+      trace_statements kb ineqs solved_parent unsolved_parent test_parent pr {st with involved_copies = BangSet.add (loc,i) st.involved_copies}
       done
    (* | _ -> invalid_arg ("todo")*)
 
@@ -1124,6 +1126,7 @@ let theory_statements kb fname arity =
        recipes = Inputs.new_inputs; 
        head=Knows(Fun({id=fname;has_variables=true},rv),term_head);
        body=List.map (function (r,t) -> {loc=None;recipe = r; term = t; marked=false}) variables;
+       involved_copies = BangSet.empty;
      } in
    let v = Rewriting.variants (2*arity) term_head (! Parser_functions.rewrite_rules) in
       List.iter (fun (_,sigma) -> 
@@ -1207,7 +1210,7 @@ let saturate procId  =
   let ind = processes_infos.next_location in
   processes_infos.next_location <- processes_infos.next_location + 1 ;
   trace_statements kb [] kb.solved_deduction kb.not_solved kb.rid_solved
-    (CallP({p = ind;io=Call;name="main";parent=None},1,procId,Array.make 0 zero,Array.make 0 null_chan))
+    (CallP({p = ind;io=Call;name="main";phase=0;parent=None},1,procId,Array.make 0 zero,Array.make 0 null_chan))
     null_raw_statement;
   while not (Queue.is_empty(kb.s_todo)) || not (Queue.is_empty(kb.ns_todo)) do
     if false && !about_progress then 

@@ -3,7 +3,7 @@ HAS_NPROC := $(shell if ocamlfind query nproc-nonproc >/dev/null 2>&1; then echo
 ML =  types.ml lexer.ml parser_functions.ml grammar.ml \
 	util.ml dag.ml term.ml  \
 	 rewriting.ml inputs.ml \
-	 base.ml  process.ml  horn.ml \
+	  process.ml base.ml  horn.ml \
 	 bijection.ml process_execution.ml tests.ml\
 	 parser_queries.ml theory.ml
 MLI = $(wildcard $(ML:.ml=.mli)) grammar.mli
@@ -58,39 +58,17 @@ doc: $(ML)
 
 # Basic tests, with and without xor
 TESTS = \
-  ../examples/running-example/running-example-both-traces.api \
-  ../examples/xor/misc/xor3.api \
-  ../examples/xor/misc/statxor.api ../examples/xor/misc/nstatxor.api \
-  ../examples/xor/misc/xorsym.api \
-  ../examples/xor/misc/rigid.api 
+  ../examples/dag/test.api \
+  ../examples/dag/ds-39.api \
+  ../examples/dag/NSL-1chan-8sessions-4dishonest.api
 
-# Basic tests + RFID tests without Toy-v1 + NSLxor tests,
-# without duplicates
 VALIDATION = $(TESTS) \
-		 ../examples/xor/rfid/KCL.api \
-		 ../examples/xor/rfid/KCL-running.api \
-		 ../examples/xor/rfid/KCL-fixed.api \
-		 ../examples/xor/rfid/LAK.api \
-		 ../examples/xor/rfid/LD.api \
-		 ../examples/xor/rfid/OTYT.api \
-		 ../examples/xor/rfid/YPL.api \
-		 ../examples/xor/NSLxor/nslhelp.api \
-		 ../examples/xor/NSLxor/nsl.api \
-		 ../examples/xor/NSLxor/NSL-xor-1a.api \
-		 ../examples/xor/guessing/toy-protocol.api \
-		 ../examples/xor/guessing/toy-protocol-passive.api \
-		 ../examples/xor/guessing/secret-public-key-protocol.api \
-		 ../examples/xor/guessing/secret-public-key-protocol-passive.api \
-		 ../examples/xor/guessing/nonce-protocol.api \
-		 ../examples/xor/guessing/nonce-protocol-passive.api \
-		 ../examples/xor/guessing/gong-pwA-passive.api \
-		 ../examples/xor/guessing/gong-pwB-passive.api \
-		 ../examples/xor/guessing/direct-auth-protocol.api \
-		 ../examples/xor/guessing/direct-auth-protocol-passive.api 
+		 ../examples/dag/BAC-2sessions.api  \
+		 ../examples/dag/BAC-3sessions.api 
 
-RUN = OCAMLRUNPARAM=b ./akiss -verbose
+RUN = OCAMLRUNPARAM=b ./akiss -progress -bij
 
-.PHONY: test actest dhtest validate
+.PHONY: test validate
 
 test:
 	./runtests.sh test$(NAME) "$(TESTS)"

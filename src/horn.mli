@@ -42,7 +42,6 @@ val normalize_new_statement : Base.raw_statement -> Base.raw_statement option
 val remove_marking : Base.raw_statement -> Base.raw_statement
 val update :
   Base.base -> bool -> Base.raw_statement -> Base.raw_statement option
-exception Impossible
 val resolution :
   Types.term option array * Types.term option array ->
   Inputs.choices ->
@@ -53,6 +52,7 @@ val equation :
   Inputs.choices ->
   Dag.dag ->
   Base.raw_statement -> Base.raw_statement -> Base.raw_statement list
+val add_pending_statement : 'a -> unit
 val concretize : Inputs.inputs -> Types.term -> Types.term
 val trace_statements :
   Base.base ->

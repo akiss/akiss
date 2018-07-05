@@ -27,7 +27,7 @@ for i in $* ; do
   cd $i.test
   echo -n "Running test $i... "
   date > log
-  OCAMLRUNPARAM=b time ../akiss $AKISSOPTS -verbose -debug >> log 2> time < ../$i
+  OCAMLRUNPARAM=b time ../akiss $AKISSOPTS -bij -progress >> log 2> time < ../$i
   ret=$?
   echo Exit $ret >> log
   date >> log

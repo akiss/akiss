@@ -1,5 +1,6 @@
 val show_array : string -> ('a -> string) -> 'a array -> string
-type chanId = { name : string; }
+type visi_type = Public | Hidden
+type chanId = { name : string; visibility : visi_type; }
 val null_chan : chanId
 type funId = { name : string; arity : int; }
 type typ = TermType | ChanType | Unknown
@@ -26,6 +27,7 @@ type bounded_process =
   | ParB of bounded_process list
   | ChoiceB of relative_location * bounded_process list
   | CallB of relative_location * int * procId * relative_temp_term list
+  | PhaseB of int * bounded_process
 and procId = {
   name : string;
   arity : int;
@@ -42,17 +44,12 @@ val show_binder : statement_role -> string
 type varId = { n : int; status : statement_role ref; }
 type nonceId = { name : string; n : int; }
 val null_nonce : nonceId
-type io =
-    Input of chanId
-  | Output of chanId
-  | Phase
-  | Choice
-  | Call
-  | Virtual of varId
+type io = Input of chanId | Output of chanId | Choice | Call
 type location = {
   p : int;
   io : io;
   name : string;
+  phase : int;
   parent : location option;
 }
 val null_location : location

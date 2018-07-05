@@ -34,6 +34,7 @@ type plain_process =
   | Let of pattern * temp_term * plain_process * plain_process
   | IfThenElse of temp_term * temp_term * plain_process * plain_process
   | Seq of plain_process * plain_process
+  | Phase of int * plain_process
 
 type extended_process =
   | EPlain of plain_process
@@ -52,6 +53,7 @@ type declaration =
   | ReducList of ( temp_term * temp_term ) list
   | FreeName of ident list
   | ChanNames of ident list
+  | PrivateChanNames of ident list
   | Query of query * int
   | ProcessDecl of extended2_process
 (** parsed process *)
@@ -68,6 +70,7 @@ type env_elt =
 (*  | PublicName of Term.symbol *)
   | Func of funId 
   | Chan of chanId
+  | PrivChan of chanId
   | Proc of procId
   | ArgVar of argId
   | PatVar of relative_temp_term
@@ -96,6 +99,7 @@ let display_env_elt_type = function
 (*  | PublicName _ -> "a public name"*)
   | Func _ -> "a function" 
   | Chan _ -> "a channel"
+  | PrivChan _ -> "a private channel"
   | Proc p -> "the process " ^ (show_procId p) 
   | PatVar _ -> "a variable of a pattern"
 
@@ -212,8 +216,15 @@ let parse_channel_name env (s,line) =
   if Env.mem s env
   then error_message line (Printf.sprintf "The identifier %s is already defined." s);
 
-  let ch = {name = s} in
+  let ch = {name = s; visibility = Public} in
   Env.add s (Chan ch) env
+
+let parse_private_channel_name env (s,line) =
+  if Env.mem s env
+  then error_message line (Printf.sprintf "The identifier %s is already defined." s);
+
+  let ch = {name = s; visibility = Hidden} in
+  Env.add s (PrivChan ch) env
 
 
 (******** Parse chan ********)
@@ -392,7 +403,7 @@ let rec parse_plain_process procId env (nbloc,nbnonces) = function
       procId.process<-proc';
       (nbloc + 1,nbnonces,CallB((nbloc,Some "bang"),n,procId,List.rev args)) 
     end
-(*| Seq(_,_)-> error_message 0 "Sequence is not yet implemented."*)
+  | Seq(_,_)-> error_message 0 "Sequence is not yet implemented."
   | Par(p1,p2) ->
       let (nbl,nbn,pr1)=parse_plain_process procId env (nbloc,nbnonces) p1 in
       let (nbl,nbn,pr2)=parse_plain_process procId env (nbl,nbn) p2 in
@@ -453,7 +464,10 @@ let rec parse_plain_process procId env (nbloc,nbnonces) = function
       let (nbl,nbn,pr1)=parse_plain_process procId env (nbloc +1,nbnonces) p1 in
       let (nbl,nbn,pr2)=parse_plain_process procId env (nbl,nbn) p2 in
       (nbl,nbn, TestIfB (l, t1',t2',pr1,pr2))
-  | _ -> failwith("Syntax not implemented yet")
+  | Phase(i,p) -> 
+      let (nbl,nbn,pr) = parse_plain_process procId env (nbloc,nbnonces) p in
+      (nbl,nbn,PhaseB(i,pr))
+  (*| _ -> failwith("Syntax not implemented yet")*)
 
 let parse_extended_process procId env = function
   | EPlain proc -> 

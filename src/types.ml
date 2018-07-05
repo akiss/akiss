@@ -1,12 +1,14 @@
 let show_array sep f arr =
   Array.fold_left (fun str e -> if str = "" then f e else str ^ sep ^ (f e)) "" arr
- 
+
+type visi_type = Public | Hidden
 type chanId = {
     name : string;
+    visibility : visi_type ;
     (*id : int;*)
 }
 
-let null_chan = { name = "null chan" }
+let null_chan = { name = "null chan" ; visibility = Public}
 
 type funId = {
    name : string ;
@@ -43,6 +45,7 @@ type bounded_process =
   | ParB of bounded_process list
   | ChoiceB of relative_location * (bounded_process list)
   | CallB of relative_location * int * procId * relative_temp_term list 
+  | PhaseB of int * bounded_process
 (*  | LetB of relative_pattern * relative_temp_term * bounded_process * bounded_process*)
 and procId = { 
    name : string ; 
@@ -106,19 +109,18 @@ let null_nonce = {name = "null" ; n= -1}
 type io =
    | Input of chanId
    | Output of chanId
-   | Phase
    | Choice
    | Call
-   | Virtual of varId
 
 type location = {
  p : int;
  io : io;
  name : string;
+ phase : int ;
  parent : location option; (*the previous i/o of the syntax tree *)
 }
 
-let rec null_location = { p = -1; io = Phase; name = "null_loc"; parent = None}
+let rec null_location = { p = -1; io = Call; name = "null_loc"; phase = 0 ; parent = None}
 
 type funName = 
   | Regular of funId (* f,g,h *)

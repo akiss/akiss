@@ -76,6 +76,7 @@ module rec Run : sig
   remaining_actions : LocationSet.t; 
   frame : Inputs.inputs ; (* the frame for outputs *)
   choices : Inputs.choices ; (* the choices on Q that have been made in this trace *)
+  phase : int; 
   disequalities : (term * term) list; (*All the disequalities that have been encountred during the trace *)
   qthreads : (Inputs.choices * LocationSet.t * (term * term) list * Process.process) list ; (* The available action of Q, the constraints *)
   failed_qthreads : (Inputs.choices * LocationSet.t * (term * term) list * Process.process) list ; (* The action that might be availble for a specific substitution, used for debugging *)
@@ -156,7 +157,8 @@ struct
   remaining_actions : LocationSet.t; 
   frame : Inputs.inputs ; (* the frame for outputs *)
   choices : Inputs.choices ; (* the choices on Q that have been made in this trace *)
-  disequalities : (term * term) list; (*All the disequalities that have been encountred during the trace *)
+  phase : int ; (* the current phase *)
+  disequalities : (term * term) list; (*All the disequalities that have been encountred during the trace, not used *)
   qthreads : (Inputs.choices * LocationSet.t * (term * term) list * Process.process) list ; (* The available action of Q, the constraints *)
   failed_qthreads : (Inputs.choices * LocationSet.t * (term * term) list * Process.process) list ; (* The action that might be availble for a specific substitution, used for debugging *)
   (*mutable children : partial_run list ; (* once processed, the list of possible continuation of the execution *)*)
@@ -344,6 +346,7 @@ and empty_run =
      remaining_actions = LocationSet.empty ;
      frame = Inputs.new_inputs; (* inputs maps to received terms and outputs maps to sent terms *)
      choices = Inputs.new_choices;
+     phase = 0 ;
      disequalities = [] ;
      qthreads = [] ;
      failed_qthreads = [];

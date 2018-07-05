@@ -202,7 +202,8 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
               disequalities = EqualitiesSet.map (fun (r,rp) -> 
                Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term rp sigma)
                 (EqualitiesSet.union fa_head_diseq fb_head_diseq)});
-            body = body }
+            body = body;
+            involved_copies = BangSet.union fa.involved_copies fb.involved_copies}
         in
         sigma.binder := Master;
         let tau = (Array.make sigma.nbvars None) in
@@ -319,6 +320,7 @@ let conj run =
     marked = false;
     }) st.body ;
   recipes = transpose_recipes identity_sigma st.recipes run ; 
+  involved_copies = BangSet.empty ; (* TODO *)
   } in
   stP.binder := New;
   (identity_sigma,r)
@@ -604,9 +606,9 @@ let equivalence p q =
    let (locQ,satQ) = Horn.saturate q in
   if  !about_saturation then
     Printf.printf (if !use_xml then "%s" else "Saturation of Q:\n %s\n") (show_kb satQ);
-  let processP = (CallP({p = locP;io=Call;name="main";parent=None},
+  let processP = (CallP({p = locP;io=Call;name="main";phase=0;parent=None},
     1,p,Array.make 0 zero,Array.make 0 null_chan)) in
-  let processQ = (CallP({p = locQ;io=Call;name="main";parent=None}, 
+  let processQ = (CallP({p = locQ;io=Call;name="main";phase=0;parent=None}, 
     1,q,Array.make 0 zero,Array.make 0 null_chan)) in 
   bijection.p <- processP ;
   bijection.q <- processQ ;

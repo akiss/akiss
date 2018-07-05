@@ -119,8 +119,13 @@ let should_be_before dag l1 l2 =
 let is_cyclic dag =
   Dag.exists (fun l ls -> LocationSet.exists (fun l' -> l=l') ls) dag.rel
 
+exception Impossible
+
+(* create the dag where the last location of dag are before l, check that phases of dag are before l too  *)  
 let final dag l=
-  let final = Dag.filter (fun k set -> LocationSet.is_empty set) dag.rel in
+  let final = Dag.filter (fun k set -> 
+    if LocationSet.is_empty set then 
+      if k.phase > l.phase then raise Impossible else true else false) dag.rel in
   {rel = Dag.map (fun _ -> LocationSet.singleton l) final}
 
 (* For execution *)

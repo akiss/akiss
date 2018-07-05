@@ -13,6 +13,6 @@ let Q = new m;
   in(c,x);
   out(c,m).
 
-let N = 0..
+let N = 0.
 
 query trace_equiv (P,Q).

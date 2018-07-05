@@ -76,6 +76,7 @@ module rec Run :
       remaining_actions : Dag.LocationSet.t;
       frame : Inputs.inputs;
       choices : Inputs.choices;
+      phase : int;
       disequalities : (Types.term * Types.term) list;
       qthreads :
         (Inputs.choices * Dag.LocationSet.t *

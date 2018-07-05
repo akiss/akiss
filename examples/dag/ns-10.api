@@ -93,7 +93,7 @@ let B2(cb,b,a,kbs) =
  in(cb,zchall);
  let (zrep,znb) = sdec(zchall,z3) in
  new k;
- if (zrep,znb) = (rep,nb) then out(cb,senc(m2,k))..
+ if (zrep,znb) = (rep,nb) then out(cb,senc(m2,k)).
 
 
 let P =

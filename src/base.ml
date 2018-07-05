@@ -41,6 +41,7 @@ type raw_statement = {
   head : predicate ;
   body : body_atom list ;
   recipes : inputs ;
+  involved_copies : BangSet.t ;
 }
 
 (*for hash table *)
@@ -63,7 +64,16 @@ type hash_test = {
   htbody : body_atom list ;
 }
 
-let null_raw_statement = { binder = ref New ; nbvars = 0; dag = empty; inputs= new_inputs; choices= new_choices; head = Reach;body=[];recipes=new_inputs}
+let null_raw_statement = { 
+  binder = ref New ;
+  nbvars = 0; 
+  dag = empty; 
+  inputs= new_inputs; 
+  choices= new_choices; 
+  head = Reach;
+  body=[];
+  recipes=new_inputs;
+  involved_copies=BangSet.empty}
 
 type statement = {
   id : int ;
@@ -80,6 +90,12 @@ let rec null_statement = {
   id = -2 ; vip = false ; st = null_raw_statement ; children = [] ; process = None; 
   master_parent = null_statement; slave_parent = null_statement; test_parent = null_statement}
 
+module ChanMap = Map.Make(struct
+    type io = In | Out
+    type t = chanId * io * int
+      let compare x y = compare x y
+  end)
+
 type base = 
 { 
    mutable next_id : int ;
@@ -91,6 +107,7 @@ type base =
    not_solved : statement ;
    mutable s_todo : statement Queue.t ; 
    mutable ns_todo : statement Queue.t ; 
+   mutable priv_chan_pending : statement ChanMap.t ;
    htable : (hash_statement, statement) Hashtbl.t;
 }
 
@@ -236,7 +253,8 @@ let apply_subst_statement st (sigma : substitution)=
       inputs = Inputs.map (fun t -> Rewriting.apply_subst_term t sigma) st.inputs;
       recipes = Inputs.map (fun t -> Rewriting.apply_subst_term t sigma) st.recipes;
       head = apply_subst_pred st.head sigma ;
-      body = trmap (fun x -> {x with recipe= Rewriting.apply_subst_term x.recipe sigma; term=Rewriting.apply_subst_term x.term sigma}) st.body 
+      body = trmap (fun x -> {x with recipe= Rewriting.apply_subst_term x.recipe sigma; term=Rewriting.apply_subst_term x.term sigma}) st.body ;
+      involved_copies = st.involved_copies ;
   }
   
 (** constructor **)
@@ -255,6 +273,7 @@ let new_base () =
      reachable_solved = [];*)
      unreachable_solved = [] ;
      not_solved = new_statement () ;
+     priv_chan_pending = ChanMap.empty;
      s_todo = Queue.create () ;
      ns_todo = Queue.create() ;
      htable = Hashtbl.create 10000 ;
