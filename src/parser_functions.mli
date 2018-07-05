@@ -116,7 +116,8 @@ val parse_temp_term :
   Types.procId -> env_elt Env.t -> temp_term -> Types.relative_temp_term
 val parse_temp_term_or_chan :
   Types.procId -> env_elt Env.t -> temp_term -> Types.relative_temp_term
-val type_of_arg : Types.procId -> env_elt Env.t -> temp_term -> Types.typ
+val type_of_arg :
+  Types.procId -> env_elt Env.t -> temp_term -> int * Types.typ ref
 val parse_pattern :
   Types.procId ->
   env_elt Env.t ->

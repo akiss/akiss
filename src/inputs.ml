@@ -35,6 +35,7 @@ let canonize_choices choices =
 (* when considering a new input *)
 let add_input loc var inputs =
   { i = Dag.add loc (Var(var)) inputs.i }(*(Dag.map (fun t -> new_term binder t) inputs)}*)
+
 let add_choice loc i choices =
   { c = Dag.add loc i choices.c}
 
@@ -54,6 +55,18 @@ let merge_choices c1 c2 =
     | (Some i , None)  
     | (None , Some i) -> Some(i) 
     | (None,None) -> None) c1.c c2.c 
+  }
+  with Incompatible_choices -> None
+
+let merge_choices_add_link c1 c2 l1 l2=
+  try Some
+  { c = Dag.add l1 l2.p ( Dag.add l2 l1.p (
+  Dag.merge (fun loc i1 i2 -> 
+    match (i1,i2) with
+    | (Some i1, Some i2) -> if i1 = i2 && loc <> l1 && loc <> l2 then Some(i1) else raise Incompatible_choices
+    | (Some i , None)  
+    | (None , Some i) -> if loc <> l1 && loc <>l2 then Some(i) else raise Incompatible_choices
+    | (None,None) -> None) c1.c c2.c ))
   }
   with Incompatible_choices -> None
 

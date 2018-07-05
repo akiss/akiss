@@ -81,7 +81,7 @@ let rec show_process_start i pr =
 let rec count_type_nb typ pr i =
   if i = -1 then -1 
   else
-  if pr.types.(i) = typ then 1 + count_type_nb typ pr (i - 1)
+  if !(pr.types.(i)) = typ then 1 + count_type_nb typ pr (i - 1)
   else count_type_nb typ pr (i - 1)
   
 let rec convert_term pr locations nonces arguments term =
@@ -97,7 +97,7 @@ let rec convert_term pr locations nonces arguments term =
       [convert_term pr locations nonces arguments args])
   | N((rel_n,_)) -> Fun({id=Nonce(nonces.(rel_n));has_variables=false},[])
   | V((rel_loc,_)) -> Fun({id=Input(locations.(rel_loc));has_variables=true},[])
-  | A(th) -> arguments.(count_type_nb pr.types.(th.th) pr th.th)
+  | A(th) -> arguments.(count_type_nb !(pr.types.(th.th)) pr th.th)
   | C(_) -> assert false
   
 let convert_chan pr chans chan =
@@ -105,7 +105,7 @@ let convert_chan pr chans chan =
   | C(c) -> c
   | A(th) ->
      (*Printf.printf "A({th= %d}) type: %s |- %d\n" th.th (show_typ  pr.types.(th.th))(count_type_nb pr.types.(th.th) pr th.th);*)
-      chans.(count_type_nb pr.types.(th.th) pr th.th)
+      chans.(count_type_nb !(pr.types.(th.th)) pr th.th)
   | _ -> assert(false)
   
 let new_location (pr : procId) p ( io : io ) str parent phase =
@@ -163,14 +163,16 @@ let rec convert_pr infos process parent phase=
      locations.(rel_loc) <- new_location pr (location+rel_loc) Choice s parent phase;
      ChoiceP(locations.(rel_loc),List.mapi (fun i p -> (i, convert_pr infos p parent phase)) lb)
   | CallB((rel_loc,Some s),i,p,arguments) -> 
+    (*Printf.printf "call of %s (args length = %d)\n with " (show_procId p) (Array.length args); List.iter (fun t -> Printf.printf "%s," (show_relative_term t))arguments; Printf.printf "\n";*)
      let ar = Array.make (1+(count_type_nb TermType p (p.arity - 1))) zero in
      let channels = Array.make (1+(count_type_nb ChanType p (p.arity - 1))) null_chan in
      let nbt = ref 0 in 
      let nbc = ref 0 in
      List.iteri (fun i x -> 
-       if p.types.(i) = TermType 
+       (* Printf.printf " - %d" i;*)
+       if !(p.types.(i)) = TermType 
        then begin ar.(!nbt) <- convert_term pr locations nonces args x; incr nbt end
-       else if p.types.(i) = ChanType 
+       else if !(p.types.(i)) = ChanType 
        then begin channels.(!nbc) <- convert_chan pr chans x; incr nbc end
      ) arguments;
      locations.(rel_loc) <- new_location pr (location+rel_loc) Call s parent phase;
@@ -204,4 +206,25 @@ let expand_call loc copy (procId : procId) args chans=
 (*  convert_pr (procId, indexes.first_location, indexes.first_nonce, 
     (Array.make procId.nbloc null_location),
     (Array.make procId.nbnonces null_nonce), args, chans) procId.process loc.parent *)
+
+let rec repl_hidden_loc loc term t =
+   match term with
+   | Fun({id=Input(l)},[]) -> if l = loc then term else t
+   | Fun(f,args) -> Fun(f,List.map (repl_hidden_loc loc term) args)
+   | _ -> t
+  
+let  apply_subst_action loc term a =
+  match a with
+  | Input(l) -> a
+  | Output(l,t) -> Output(l,repl_hidden_loc loc term t)
+  | OutputA(l,t) -> assert false
+  | Test(s,t) -> Test(repl_hidden_loc loc term s,repl_hidden_loc loc term t)
+  | TestInequal(s,t) -> TestInequal(repl_hidden_loc loc term s,repl_hidden_loc loc term t)
  
+let rec apply_subst_process loc term pr =
+  match pr with
+  | EmptyP -> pr
+  | ParallelP(lp) -> ParallelP(List.map (apply_subst_process loc term) lp)
+  | SeqP(a,p) -> SeqP(apply_subst_action loc term a,apply_subst_process loc term p)
+  | ChoiceP(l,lp)->ChoiceP(l,List.map (fun (i,p) -> (i,apply_subst_process loc term p)) lp)
+  | CallP(l,i,procId,args,chans) -> CallP(l,i,procId,args,chans)

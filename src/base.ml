@@ -90,9 +90,11 @@ let rec null_statement = {
   id = -2 ; vip = false ; st = null_raw_statement ; children = [] ; process = None; 
   master_parent = null_statement; slave_parent = null_statement; test_parent = null_statement}
 
+type i_o = In | Out
+type chankey = { c : chanId ; io : i_o ; ph : int}
+
 module ChanMap = Map.Make(struct
-    type io = In | Out
-    type t = chanId * io * int
+    type t = chankey
       let compare x y = compare x y
   end)
 
@@ -107,7 +109,7 @@ type base =
    not_solved : statement ;
    mutable s_todo : statement Queue.t ; 
    mutable ns_todo : statement Queue.t ; 
-   mutable priv_chan_pending : statement ChanMap.t ;
+   mutable hidden_chans : ((location * (term option) * ((term*term)list) * raw_statement * process) list) ChanMap.t ;
    htable : (hash_statement, statement) Hashtbl.t;
 }
 
@@ -273,7 +275,7 @@ let new_base () =
      reachable_solved = [];*)
      unreachable_solved = [] ;
      not_solved = new_statement () ;
-     priv_chan_pending = ChanMap.empty;
+     hidden_chans = ChanMap.empty;
      s_todo = Queue.create () ;
      ns_todo = Queue.create() ;
      htable = Hashtbl.create 10000 ;

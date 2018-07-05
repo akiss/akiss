@@ -4,7 +4,7 @@ type chanId = { name : string; visibility : visi_type; }
 val null_chan : chanId
 type funId = { name : string; arity : int; }
 type typ = TermType | ChanType | Unknown
-val show_typ : typ -> string
+val show_typ : typ ref -> string
 type argId = { name : string; th : int; }
 type relative_location = int * string option
 type relative_nonce = int * string
@@ -31,7 +31,7 @@ type bounded_process =
 and procId = {
   name : string;
   arity : int;
-  types : typ array;
+  types : typ ref array;
   mutable process : bounded_process;
   mutable nbloc : int;
   mutable nbnonces : int;
@@ -39,6 +39,7 @@ and procId = {
 val show_procId : procId -> string
 val show_bounded_process : bounded_process -> string
 val show_relative_term : relative_temp_term -> string
+val show_relative_term_list : relative_temp_term list -> string
 type statement_role = Master | Slave | New | Rule
 val show_binder : statement_role -> string
 type varId = { n : int; status : statement_role ref; }

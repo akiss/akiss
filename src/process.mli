@@ -126,3 +126,7 @@ val convert_pr :
 val expand_call :
   Types.location ->
   int -> Types.procId -> Types.term array -> Types.chanId array -> process
+val repl_hidden_loc :
+  Types.location -> Types.term -> Types.term -> Types.term
+val apply_subst_action : Types.location -> Types.term -> action -> action
+val apply_subst_process : Types.location -> Types.term -> process -> process

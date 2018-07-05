@@ -919,9 +919,6 @@ let equation sigma choices dag fa fb =
 
 (** Core statements without variant computations *)
 
-let add_pending_statement st =
- ()
-
 let rec concretize inputs term =
    match term with
    | Fun({id=Input(l)},[]) -> Inputs.get l inputs
@@ -929,8 +926,51 @@ let rec concretize inputs term =
    | _ -> term  
 
 
-   
-let rec trace_statements kb ineqs solved_parent unsolved_parent test_parent process st =
+ 
+let rec hidden_chan_statement kb  (loc_input , None ,ineq_input,st_input,pr_input) (loc_output, Some term_output,ineq_output,st_output,pr_output) solved_parent unsolved_parent test_parent  =
+  match Inputs.merge_choices_add_link st_output.choices st_input.choices loc_output loc_input with
+    None -> ()
+  | Some choices ->
+  let dag = Dag.merge st_output.dag st_input.dag in
+  if Dag.is_cyclic dag then () 
+  else (
+  let sigma = ((Array.make st_input.nbvars None),(Array.make st_output.nbvars None)) in
+  st_input.binder:= Slave;
+  st_output.binder:= Master;
+  let sigmas = Inputs.csu sigma st_output.inputs st_input.inputs in
+  if sigmas = [] then ()
+  else (
+  List.iter (fun sigma -> 
+    let sigma = Rewriting.pack sigma in
+    let st =
+      let body =
+        List.map (fun x -> {
+        loc =  x.loc ; 
+        recipe = Rewriting.apply_subst_term x.recipe sigma ;
+        term = Rewriting.apply_subst_term x.term sigma ;
+        marked = false }
+          )
+          (st_output.body @ st_input.body) 
+        in
+      {
+      binder = sigma.binder ;
+      nbvars = sigma.nbvars ;
+      dag = dag ;
+      choices = choices ;
+      inputs = Inputs.merge sigma st_output.inputs st_input.inputs;
+      recipes = Inputs.merge sigma st_output.recipes st_input.recipes;
+      head = Reach;
+      body = body ;
+      involved_copies = BangSet.union st_output.involved_copies st_input.involved_copies ; }
+    in
+    let ineqs = List.map (fun (s,t) -> (Rewriting.apply_subst_term s sigma,Rewriting.apply_subst_term t sigma)) (ineq_output @  ineq_input) in
+    let process_output = Process.apply_subst_process loc_input term_output pr_output in
+    trace_statements kb ineqs solved_parent unsolved_parent test_parent process_output st ;
+    let process_input = Process.apply_subst_process loc_input term_output pr_input in
+    trace_statements kb ineqs solved_parent unsolved_parent test_parent process_input st 
+  ) sigmas ))
+ 
+and trace_statements kb ineqs solved_parent unsolved_parent test_parent process st =
   let rec add_ineqs_statements ineqs idsigma st =
   match ineqs with
   | [] -> ()
@@ -1022,8 +1062,15 @@ let rec trace_statements kb ineqs solved_parent unsolved_parent test_parent proc
       add_statement kb solved_parent unsolved_parent test_parent (Some pr) st ;
       add_ineqs_statements ineqs identity_sigma st end
     | SeqP(Input({io = Input({visibility = Hidden})} as loc), pr) -> ()
-    | SeqP(Output({io = Output({visibility = Hidden})} as loc, t), pr) -> 
-      ()
+    | SeqP(Output({io = Output({visibility = Hidden} as chan)} as loc, t), pr) -> (try
+      List.iter (fun stin -> 
+        hidden_chan_statement kb stin (loc,Some t,ineqs,st,pr) solved_parent unsolved_parent test_parent) 
+          (ChanMap.find { c= chan; io = In; ph =loc.phase} kb.hidden_chans) with Not_found -> ());
+      kb.hidden_chans <- ChanMap.add { c = chan; io = Out; ph = loc.phase} 
+        ((loc,Some t,ineqs,st,pr):: ( try 
+          ChanMap.find { c= chan; io = In; ph =loc.phase} kb.hidden_chans 
+          with Not_found -> []))
+        kb.hidden_chans 
     | SeqP(Input(loc), pr)
     | SeqP(Output(loc,_), pr) ->
       assert false

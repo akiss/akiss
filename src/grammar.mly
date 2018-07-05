@@ -10,7 +10,7 @@ open Parser_functions
 %token SET SEMANTICS CLASSIC EAVESDROP PRIVATE
 %token FUN REDUC
 %token FREE CHANS
-%token NEW IF THEN ELSE IN OUT LET
+%token NEW IF THEN ELSE IN OUT LET PHASE
 %token PHASE
 %token QUERY TRACEEQ OBSEQ SAT
 
@@ -47,6 +47,8 @@ main:
       { FreeName $1 }
   | CHANS chan_name_declaration_list
       { ChanNames $2 }
+  | PRIVATE CHANS chan_name_declaration_list
+      { PrivateChanNames $3 }
   | extended_process_declaration
       { ProcessDecl $1 }
   | query_declaration
@@ -167,6 +169,8 @@ plain_process:
       { Let($2,$4,$6,Nil) }
   | LET pattern EQ term IN plain_process ELSE plain_process
       { Let($2,$4,$6,$8) }
+  | PHASE INT SEMI plain_process
+      { Phase($2,$4) }
 
 /***** Pattern ******/
 

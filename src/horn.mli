@@ -52,8 +52,14 @@ val equation :
   Inputs.choices ->
   Dag.dag ->
   Base.raw_statement -> Base.raw_statement -> Base.raw_statement list
-val add_pending_statement : 'a -> unit
 val concretize : Inputs.inputs -> Types.term -> Types.term
+val hidden_chan_statement :
+  Base.base ->
+  Dag.Dag.key * Types.term option * (Types.term * Types.term) list *
+  Base.raw_statement * Process.process ->
+  Dag.Dag.key * Types.term option * (Types.term * Types.term) list *
+  Base.raw_statement * Process.process ->
+  Base.statement -> Base.statement -> Base.statement -> unit
 val trace_statements :
   Base.base ->
   (Types.term * Types.term) list ->

@@ -95,9 +95,11 @@ type statement = {
   test_parent : statement;
 }
 val null_statement : statement
+type i_o = In | Out
+type chankey = { c : Types.chanId; io : i_o; ph : int; }
 module ChanMap :
   sig
-    type key
+    type key = chankey
     type +'a t
     val empty : 'a t
     val is_empty : 'a t -> bool
@@ -143,7 +145,10 @@ type base = {
   not_solved : statement;
   mutable s_todo : statement Queue.t;
   mutable ns_todo : statement Queue.t;
-  mutable priv_chan_pending : statement ChanMap.t;
+  mutable hidden_chans :
+    (Types.location * Types.term option * (Types.term * Types.term) list *
+     raw_statement * Process.process)
+    list ChanMap.t;
   htable : (hash_statement, statement) Hashtbl.t;
 }
 val check_binder_term : Types.statement_role ref -> Types.term -> bool

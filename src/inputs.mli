@@ -11,6 +11,8 @@ val add_input : Dag.Dag.key -> Types.varId -> inputs -> inputs
 val add_choice : Dag.Dag.key -> int -> choices -> choices
 val add_to_frame : Dag.Dag.key -> Types.term -> inputs -> inputs
 val merge_choices : choices -> choices -> choices option
+val merge_choices_add_link :
+  choices -> choices -> Dag.Dag.key -> Dag.Dag.key -> choices option
 val get : Dag.Dag.key -> inputs -> Types.term
 val map : (Types.term -> Types.term) -> inputs -> inputs
 val csu :

@@ -19,7 +19,8 @@ type typ =
   | ChanType 
   | Unknown
 
-let show_typ = function
+let show_typ t = 
+  match !t with
   | TermType -> "term"
   | ChanType -> "chan"
   | Unknown -> "?"
@@ -50,7 +51,7 @@ type bounded_process =
 and procId = { 
    name : string ; 
    arity : int; 
-   types : typ array;
+   types : (typ ref) array;
    mutable process : bounded_process; 
    mutable nbloc : int; 
    mutable nbnonces : int
@@ -70,16 +71,23 @@ let rec show_bounded_process p =
   | ParB(lst) -> (List.fold_left (fun s t -> s ^ " || " ^ show_bounded_process t) "(" lst) ^ ")"
   | ChoiceB(l,lst) -> (List.fold_left (fun s t -> s ^ " ++ " ^ show_bounded_process t) "(" lst) ^ ")"
   | CallB(l,i,p,args) -> (List.fold_left (fun s t -> s ^ "," ^ show_relative_term t) (p.name ^ (string_of_int i) ^ "(") args) ^ ")"
+  | PhaseB(i,p) -> "phase " ^ (string_of_int i) ^"." ^  show_bounded_process p
 and show_relative_term t = 
   match t with 
   | F (f,args) -> if args = [] then f.name else (List.fold_left (fun s t -> (if s = "" then (f.name ^ "(") else s ^ ",") ^ show_relative_term t) "" args) ^ ")"
   | T (n,args) -> (List.fold_left (fun s t -> s ^ "," ^ show_relative_term t)  "(" args) ^ ")"
   | P (i,n,t) -> Printf.sprintf "Proj_%d(%s)" i (show_relative_term t)
   | N(i,s) -> s
-  | V(i,Some str) -> str ^ (string_of_int i)
+  | V(i,Some str) -> str ^ "_" ^ (string_of_int i)
   | V(i,None) -> string_of_int i
-  | A(a) -> a.name ^ (string_of_int a.th) 
+  | A(a) -> a.name ^  ":" ^ (string_of_int a.th) 
   | C(c) -> c.name
+
+let rec show_relative_term_list  = function
+  | [] -> ""
+  | [t] -> show_relative_term t
+  | t :: q -> show_relative_term t ^ "," ^ (show_relative_term_list q)
+  
 
 
 type statement_role =
