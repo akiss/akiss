@@ -1061,14 +1061,22 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
       begin
       add_statement kb solved_parent unsolved_parent test_parent (Some pr) st ;
       add_ineqs_statements ineqs identity_sigma st end
-    | SeqP(Input({io = Input({visibility = Hidden})} as loc), pr) -> ()
+    | SeqP(Input({io = Input({visibility = Hidden} as chan)} as loc), pr) -> (try
+      List.iter (fun stout -> 
+        hidden_chan_statement kb (loc,None,ineqs,st,pr) stout solved_parent unsolved_parent test_parent) 
+          (ChanMap.find { c= chan; io = Out; ph =loc.phase} kb.hidden_chans) with Not_found -> ());
+      kb.hidden_chans <- ChanMap.add { c = chan; io = In; ph = loc.phase} 
+        ((loc,None,ineqs,st,pr):: ( try 
+          ChanMap.find { c= chan; io = In; ph =loc.phase} kb.hidden_chans 
+          with Not_found -> []))
+        kb.hidden_chans 
     | SeqP(Output({io = Output({visibility = Hidden} as chan)} as loc, t), pr) -> (try
       List.iter (fun stin -> 
         hidden_chan_statement kb stin (loc,Some t,ineqs,st,pr) solved_parent unsolved_parent test_parent) 
           (ChanMap.find { c= chan; io = In; ph =loc.phase} kb.hidden_chans) with Not_found -> ());
       kb.hidden_chans <- ChanMap.add { c = chan; io = Out; ph = loc.phase} 
         ((loc,Some t,ineqs,st,pr):: ( try 
-          ChanMap.find { c= chan; io = In; ph =loc.phase} kb.hidden_chans 
+          ChanMap.find { c= chan; io = Out; ph =loc.phase} kb.hidden_chans 
           with Not_found -> []))
         kb.hidden_chans 
     | SeqP(Input(loc), pr)

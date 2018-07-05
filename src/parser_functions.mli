@@ -41,7 +41,6 @@ type env_elt =
   | Name of Types.relative_nonce
   | Func of Types.funId
   | Chan of Types.chanId
-  | PrivChan of Types.chanId
   | Proc of Types.procId
   | ArgVar of Types.argId
   | PatVar of Types.relative_temp_term
@@ -117,7 +116,7 @@ val parse_temp_term :
 val parse_temp_term_or_chan :
   Types.procId -> env_elt Env.t -> temp_term -> Types.relative_temp_term
 val type_of_arg :
-  Types.procId -> env_elt Env.t -> temp_term -> int * Types.typ ref
+  Types.procId -> env_elt Env.t -> temp_term -> int * Types.typ
 val parse_pattern :
   Types.procId ->
   env_elt Env.t ->

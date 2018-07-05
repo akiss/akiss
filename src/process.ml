@@ -208,7 +208,7 @@ let expand_call loc copy (procId : procId) args chans=
     (Array.make procId.nbnonces null_nonce), args, chans) procId.process loc.parent *)
 
 let rec repl_hidden_loc loc term t =
-   match term with
+   match t with
    | Fun({id=Input(l)},[]) -> if l = loc then term else t
    | Fun(f,args) -> Fun(f,List.map (repl_hidden_loc loc term) args)
    | _ -> t

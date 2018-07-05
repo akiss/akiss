@@ -70,7 +70,6 @@ type env_elt =
 (*  | PublicName of Term.symbol *)
   | Func of funId 
   | Chan of chanId
-  | PrivChan of chanId
   | Proc of procId
   | ArgVar of argId
   | PatVar of relative_temp_term
@@ -99,7 +98,6 @@ let display_env_elt_type = function
 (*  | PublicName _ -> "a public name"*)
   | Func _ -> "a function" 
   | Chan _ -> "a channel"
-  | PrivChan _ -> "a private channel"
   | Proc p -> "the process " ^ (show_procId p) 
   | PatVar _ -> "a variable of a pattern"
 
@@ -224,7 +222,7 @@ let parse_private_channel_name env (s,line) =
   then error_message line (Printf.sprintf "The identifier %s is already defined." s);
 
   let ch = {name = s; visibility = Hidden} in
-  Env.add s (PrivChan ch) env
+  Env.add s (Chan ch) env
 
 
 (******** Parse chan ********)
@@ -309,13 +307,13 @@ let type_of_arg (pr : procId) env a =
   match a with
   | Id (s,line) -> begin
      try match Env.find s env with
-     | Chan(c) -> (-1, ref ChanType)
-     | ArgVar(id) -> (*Printf.printf ">> %s = %d\n%s\n"(id.name) (id.th)(show_environment env);*) (id.th,  pr.types.(id.th)) 
-     | _ -> (-1, ref TermType)
+     | Chan(c) -> (-1, ChanType)
+     | ArgVar(id) -> (*Printf.printf ">> %s = %d\n%s\n"(id.name) (id.th)(show_environment env);*) (id.th,  !(pr.types.(id.th))) 
+     | _ -> (-1, TermType)
       with
         | Not_found -> error_message line (Printf.sprintf "The identifier %s is not declared" s)
      end
-  | _ -> (-1, ref TermType)
+  | _ -> (-1, TermType)
      
 (*let parse_temp_chan env a = 
   match a with
@@ -370,10 +368,10 @@ let rec parse_plain_process procId env (nbloc,nbnonces) = function
                 (Printf.sprintf "The process %s is given %d arguments but is expecting %d arguments" s (List.length temp_term_list) procId'.arity);
               List.iteri (fun i t -> 
                 let th, typ = type_of_arg procId env t in
+                if typ = Unknown then procId.types.(th) <- procId'.types.(i)   else
                 (*Printf.printf "type of %s of %s: %s\n" (show_temp_term t)(show_procId procId') (show_typ typ);*)
-                if !(procId'.types.(i)) = Unknown then procId'.types.(i) <- typ else
-                if !typ = Unknown then procId.types.(th) <- procId'.types.(i)   else
-                if !(procId'.types.(i)) <> !typ then error_message line (Printf.sprintf "The process %s is given %d-th argument of type %s but is expecting argument of type %s." s (i+1) (show_typ procId'.types.(i)) (show_typ typ))
+                if !(procId'.types.(i)) = Unknown then procId'.types.(i) := typ else
+                if !(procId'.types.(i)) <> typ then error_message line (Printf.sprintf "The process %s is given %d-th argument of type %s but is expecting argument of type %s." s (i+1) (show_typ procId'.types.(i)) (show_typ (ref typ)))
               ) temp_term_list ;
               let temp_term_list' = List.map (parse_temp_term_or_chan procId env) temp_term_list in
               (nbloc + 1,nbnonces,CallB((nbloc,Some s),1,procId',temp_term_list')) 

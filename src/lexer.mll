@@ -29,6 +29,7 @@
         "in", IN;
         "out", OUT;
         "let", LET;
+        "phase", PHASE;
 
         (* Query *)
         "query", QUERY;
