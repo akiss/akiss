@@ -88,6 +88,8 @@ let command_line_options_list = [
     "Show information about merging tests");
    ("-progress", Arg.Set(about_progress),
     "Print info in about progression of Akiss");
+   ("-bench", Arg.Set(about_bench),
+    "Bench compatible output");
    ("-xml", Arg.Set(use_xml),
     "Print info in xml format");
   (*"--extra", Arg.Int (fun i -> extra_output := i),

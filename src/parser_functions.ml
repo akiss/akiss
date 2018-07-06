@@ -233,7 +233,7 @@ let parse_chan procId env = function
           | Chan(c) -> C(c)
           | ArgVar(id) -> begin match !(procId.types.(id.th)) with
               | ChanType ->  (*Printf.printf "<< %s<%d<< %d\n" s line id.th;*) A(id) 
-              | TermType -> error_message line (Printf.sprintf "Excepting a channel but %s : term provided." s)
+              | TermType -> error_message line (Printf.sprintf "Expecting a channel but %s : term provided." s)
               | Unknown -> (*Printf.printf "%s the %d-th argument is a chan\n" s (id.th+1);*) procId.types.(id.th) := ChanType; A(id) end
           | env_elt -> error_message line (Printf.sprintf "The identifiant %s is declared as %s but a channel name or a function argument is expected." s (display_env_elt_type env_elt))
       with
@@ -291,10 +291,10 @@ let rec parse_temp_term_or_chan procId env = function
 (*          | PublicName(n) -> Term.apply_function n []*)
           | Chan(c) -> C(c)
           | Func(f) when f.arity = 0 -> F(f,[])
-          | ArgVar(id) -> begin match !(procId.types.(id.th)) with
+          | ArgVar(id) -> A(id) (* begin match !(procId.types.(id.th)) with
               | TermType ->  (*Printf.printf "<< %s<%d<< %d\n" s line id.th;*) A(id) 
               | ChanType -> error_message line (Printf.sprintf "Excepting a term but %s : chan provided." s)
-              | Unknown -> A(id)  end
+              | Unknown -> A(id)  end *)
           | PatVar(t) -> t
           | env_elt -> error_message line (Printf.sprintf "The identifiant %s is declared as %s but a name, a variable, a channel or constant is expected." s (display_env_elt_type env_elt))
       with
@@ -363,13 +363,14 @@ let rec parse_plain_process procId env (nbloc,nbnonces) = function
       begin try
         match Env.find s env with
           | Proc(procId') ->
+              (*Printf.printf "call of %s\n%!"(show_procId procId') ;*)
               if procId'.arity <> List.length temp_term_list
               then error_message line 
                 (Printf.sprintf "The process %s is given %d arguments but is expecting %d arguments" s (List.length temp_term_list) procId'.arity);
               List.iteri (fun i t -> 
                 let th, typ = type_of_arg procId env t in
-                if typ = Unknown then procId.types.(th) <- procId'.types.(i)   else
                 (*Printf.printf "type of %s of %s: %s\n" (show_temp_term t)(show_procId procId') (show_typ typ);*)
+                if typ = Unknown then procId.types.(th) <- procId'.types.(i)   else
                 if !(procId'.types.(i)) = Unknown then procId'.types.(i) := typ else
                 if !(procId'.types.(i)) <> typ then error_message line (Printf.sprintf "The process %s is given %d-th argument of type %s but is expecting argument of type %s." s (i+1) (show_typ procId'.types.(i)) (show_typ (ref typ)))
               ) temp_term_list ;
@@ -470,6 +471,7 @@ let rec parse_plain_process procId env (nbloc,nbnonces) = function
 
 let parse_extended_process procId env = function
   | EPlain proc -> 
+      (*Printf.printf "parsing %s\n" (show_procId procId);*)
       parse_plain_process procId env (0,0) proc  
 
 (****** Process declaration ********)

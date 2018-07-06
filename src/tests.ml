@@ -598,11 +598,13 @@ let base_to_tests process_name base process other_process =
   statements_to_tests process_name base.rid_solved other_process EqualitiesSet.empty
 
 let equivalence p q =
-  Printf.printf (if !use_xml then "<?xml-stylesheet type='text/css' href='style.css' ?><all>" else "Saturating P\n\n%!");
+  let time = if !about_bench then Sys.time () else 0. in
+  if !use_xml then Printf.printf "<?xml-stylesheet type='text/css' href='style.css' ?><all>" ;
+  if !about_progress then Printf.printf "Saturating P\n\n%!";
   let (locP,satP) = Horn.saturate p in
   if  !about_saturation then
     Printf.printf (if !use_xml then "%s" else "Saturation of P:\n %s\n") (show_kb satP);
-  if not !use_xml then Printf.printf "Saturating Q\n\n%!";
+  if !about_progress && not !use_xml then Printf.printf "Saturating Q\n\n%!";
    let (locQ,satQ) = Horn.saturate q in
   if  !about_saturation then
     Printf.printf (if !use_xml then "%s" else "Saturation of Q:\n %s\n") (show_kb satQ);
@@ -627,7 +629,7 @@ let equivalence p q =
   let nb_open = ref 0 in
   try
     while not (Tests.is_empty bijection.tests) do
-      Printf.printf "\n\n+++++ New iteration of the big loop +++++\n";
+      if !about_progress then Printf.printf "\n\n+++++ New iteration of the big loop +++++\n";
       if !about_progress then Printf.printf "Testing %d tests\n%!" (Tests.cardinal bijection.tests);
       while not (Tests.is_empty bijection.tests) do
         let test = pop () in
@@ -650,7 +652,8 @@ let equivalence p q =
     done ;
     if !about_tests then show_hashtbl ();
     if !about_bijection then Bijection.show_bijection();
-    Printf.printf "\nP and Q are trace equivalent. \n" ;
+    if !about_bench then  Printf.printf "Time: %F equivalence \n" (Sys.time() -. time)
+    else  Printf.printf "\nP and Q are trace equivalent. \n" ;
     if ! use_xml then Printf.printf "</all>"
   with
   | Attack(test,sol) -> begin 

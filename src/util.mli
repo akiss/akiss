@@ -19,6 +19,7 @@ val about_canonization : bool ref
 val about_progress : bool ref
 val about_location : bool ref
 val use_xml : bool ref
+val about_bench : bool ref
 val trmap : ('a -> 'b) -> 'a list -> 'b list
 val union : 'a list list -> 'a list
 val unique : 'a list -> 'a list
