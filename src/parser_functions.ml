@@ -507,11 +507,7 @@ let parse_process_declaration_list lst =
   (*;Printf.printf "%s\n" (show_environment env)*)
 
 
-let reset_parser () =
-  environment := (Env.empty:env_elt Env.t);
-  rewrite_rules := [];
-  functions_list := [];
-  tuple_arity := []
+  
     
     
 (****** Parse setting *******)

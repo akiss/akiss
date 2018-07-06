@@ -143,4 +143,3 @@ val parse_list_argument :
   int -> (Env.key * int) list -> int * int * Types.bounded_process
 val get_process_name : extended2_process -> unit
 val parse_process_declaration_list : extended2_process list -> unit
-val reset_parser : unit -> unit

@@ -652,13 +652,14 @@ let equivalence p q =
     done ;
     if !about_tests then show_hashtbl ();
     if !about_bijection then Bijection.show_bijection();
-    if !about_bench then  Printf.printf "Time: %F equivalence \n" (Sys.time() -. time)
+    if !about_bench then  Printf.printf " time: %F equivalence (%d tests)\n"  (Sys.time() -. time) bijection.next_id
     else  Printf.printf "\nP and Q are trace equivalent. \n" ;
     if ! use_xml then Printf.printf "</all>"
   with
   | Attack(test,sol) -> begin 
     if !about_tests then show_hashtbl ();
     if !about_bijection then Bijection.show_bijection();
-    Printf.printf "\nAn attack has been found for the test %s \n with specific order %s \n\nP and Q are not trace equivalent. \n" 
+    if !about_bench then  Printf.printf " time: %F attack found (test n°%d)  \n" (Sys.time() -. time) test.id
+    else Printf.printf "\nAn attack has been found for the test %s \n with specific order %s \n\nP and Q are not trace equivalent. \n" 
     (show_test test)(show_dag sol.restricted_dag)
     end
