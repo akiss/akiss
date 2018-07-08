@@ -1,0 +1,71 @@
+(* Denning Sacco Symmetric Key
+
+  1.  A	->	S:  	A, B
+  2.  S	->	A:  	{B, Kab, {Kab, A}Kbs}Kas
+  3.  A	->	B:  	{Kab,A}Kbs
+  Strong secrecy of Kab
+  6.  B      ->     : {m}Kab versus {m}K with K fresh
+*)
+
+free a, b, c, d.
+
+free s1, s2.
+free kcs.
+
+
+chan ca, cb, cs.
+
+free ok.
+
+fun senc/2.
+fun sdec/2.
+sdec(senc(x,y),y) -> x.
+
+let processA(ch,ida,kas,idb) =
+  out(ch,(ida,idb));
+  in(ch,xa);
+  let (=idb,xab,xmb) = sdec(xa,kas) in
+  out(ch,xmb).
+
+let processB(ch,idb,kbs,ida) =
+  in(ch,yb);
+  let (yab,=ida)= sdec(yb,kbs) in
+  0.
+
+let processS(ch,ida,kas,idb,kbs) =
+	in(ch,zs);
+	if zs = (ida,idb) then
+	new kab;
+	out(ch,senc((idb,kab,senc((kab,ida),kbs)),kas)).
+
+let processSProp(ch,ida,kas,idb,kbs,s) =
+	in(ch,zs);
+	if zs = (ida,idb) then
+	out(ch,senc((idb,s,senc((s,ida),kbs)),kas)).
+
+// Main
+
+
+let Scenario(s) =
+  new kas; new kbs; new kds; 
+  (
+    processA(ca,a,kas,b) | processB(cb,b,kbs,a) | processSProp(cs,a,kas,b,kbs,s) |
+
+    !^6 processA(ca,a,kas,b) | !^6 processB(cb,b,kbs,a) | !^6 processS(cs,a,kas,b,kbs) |
+
+    !^6 processA(cb,b,kbs,a) | !^6 processB(ca,a,kas,b) | !^6 processS(cs,b,kbs,a,kas) |
+
+    !^6 processA(ca,a,kas,c) | !^6 processS(cs,a,kas,c,kcs) |
+    !^6 processA(cb,b,kbs,c) | !^6 processS(cs,b,kbs,c,kcs) |
+
+    !^6 processB(cb,b,kbs,c) | !^6 processS(cs,c,kcs,b,kbs) |
+    !^6 processB(ca,a,kbs,c) | !^6 processS(cs,c,kcs,a,kas)
+  ).
+
+
+
+let Preal = Scenario(s1).
+
+let Pideal = Scenario(s2).
+
+query trace_equiv(Preal,Pideal).
