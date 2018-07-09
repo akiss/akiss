@@ -1,0 +1,54 @@
+(* Wide Mouthed Frog protocol (without timestamps)
+# A -> S: A, {B,Kab}Kas
+# S -> B: {A,Kab}Kbs
+*)
+
+free a,b,c.
+
+free s1,s2, kcs.
+
+
+chan ca,cb,cs.
+
+fun senc/2.
+fun sdec/2.
+sdec(senc(x,y),y) -> x.
+
+
+let A(ch,ida,idb,kas,s) =
+  out(ch, (ida, senc((idb,s),kas))).
+
+
+let S(ch,ida,idb,kas,kbs) =
+  in(ch, x);
+  let (=ida,xenc) = x in
+  let (=idb,xk) = sdec(xenc,kas) in
+  out(ch, senc((ida,xk),kbs)).
+
+let B(ch,idb,ida,kbs) =
+  in(ch,y);
+  let (ya,yk) = sdec(y,kbs) in 0.
+
+
+let Scenario(s) =
+  new kas; new kbs;
+ (
+   A(ca,a,b,kas,s) | B(cb,b,a,kbs) | S(cs,a,b,kas,kbs) |
+
+   (  new kab; A(ca,a,b,kas,kab) ) | (  B(cb,b,a,kbs) ) | (  S(cs,a,b,kas,kbs) ) |
+   (  new kab; A(ca,b,a,kbs,kab) ) | (  B(cb,a,b,kas) ) | (  S(cs,b,a,kbs,kas) ) |
+
+   (  new kab; A(ca,a,c,kas,kab) ) | (  S(cs,a,c,kas,kcs) ) |
+   (  new kab; A(cb,b,c,kbs,kab) ) | (  S(cs,b,c,kbs,kcs) ) |
+
+   (  B(cb,b,c,kbs) ) | (  S(cs,c,b,kcs,kbs) ) |
+   (  B(ca,a,c,kas) ) | (  S(cs,c,a,kcs,kas) )
+
+).
+
+
+let P = Scenario(s1).
+
+let Q = Scenario(s2).
+
+query trace_equiv(P,Q).
