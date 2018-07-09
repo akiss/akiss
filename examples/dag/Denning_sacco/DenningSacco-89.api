@@ -47,7 +47,7 @@ let processSProp(ch,ida,kas,idb,kbs,s) =
 
 
 let Scenario(s) =
-  new kas; new kbs; new kds; 
+  new kas; new kbs; 
   (
     processA(ca,a,kas,b) | processB(cb,b,kbs,a) | processSProp(cs,a,kas,b,kbs,s) |
 
