@@ -36,7 +36,7 @@ let Scenario(s) =
    A(ca,a,b,kas,s) | B(cb,b,a,kbs) | S(cs,a,b,kas,kbs) |
 
    (  new kab; A(ca,a,b,kas,kab) ) | (  B(cb,b,a,kbs) ) | (  S(cs,a,b,kas,kbs) ) |
-   (  new kab; A(ca,b,a,kbs,kab) ) | (  B(cb,a,b,kas) ) | (  S(cs,b,a,kbs,kas) ) |
+   (  new kab; A(cb,b,a,kbs,kab) ) | (  B(ca,a,b,kas) ) | (  S(cs,b,a,kbs,kas) ) |
 
    (  new kab; A(ca,a,c,kas,kab) ) | (  S(cs,a,c,kas,kcs) ) |
    (  new kab; A(cb,b,c,kbs,kab) ) | (  S(cs,b,c,kbs,kcs) ) |
