@@ -370,7 +370,8 @@ let rec parse_plain_process procId env (nbloc,nbnonces) = function
               List.iteri (fun i t -> 
                 let th, typ = type_of_arg procId env t in
                 (*Printf.printf "type of %s of %s: %s\n" (show_temp_term t)(show_procId procId') (show_typ typ);*)
-                if typ = Unknown then procId.types.(th) <- procId'.types.(i)   else
+                if typ = Unknown && !(procId'.types.(i)) = Unknown then procId.types.(th) <- procId'.types.(i)   else
+                if typ = Unknown then procId.types.(th) := !(procId'.types.(i))  else
                 if !(procId'.types.(i)) = Unknown then procId'.types.(i) := typ else
                 if !(procId'.types.(i)) <> typ then error_message line (Printf.sprintf "The process %s is given %d-th argument of type %s but is expecting argument of type %s." s (i+1) (show_typ procId'.types.(i)) (show_typ (ref typ)))
               ) temp_term_list ;
@@ -504,7 +505,7 @@ let parse_process_declaration_list lst =
       prId.nbnonces <- nbnonce
     | _ -> assert false
   ) lst 
-  (*;Printf.printf "%s\n" (show_environment env)*)
+  (*;Printf.printf "%s\n" (show_environment !environment)*)
 
 
   

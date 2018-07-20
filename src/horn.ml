@@ -376,8 +376,8 @@ let simplify_statement st =
                   && Rewriting.equals_ac t (a'.term) ) st.body in
           if !about_canonization then
               Printf.printf "Atom %s removed due to %s\n" (show_body_atom a) (show_body_atom is_better);
-          sigma_repl.(recipe_var.n) <- Some is_better.recipe ;
-          true       
+          try sigma_repl.(recipe_var.n) <- Some is_better.recipe; true
+          with Invalid_argument _ -> Printf.eprintf "Error when simplify_statement %s \n" (show_raw_statement st);exit 6 
          with Not_found -> false
          )
        st.body
@@ -934,9 +934,10 @@ let rec hidden_chan_statement kb  (loc_input , None ,ineq_input,st_input,pr_inpu
   let dag = Dag.merge st_output.dag st_input.dag in
   if Dag.is_cyclic dag then () 
   else (
-  let sigma = ((Array.make st_input.nbvars None),(Array.make st_output.nbvars None)) in
+  let sigma = ((Array.make st_output.nbvars None),(Array.make st_input.nbvars None)) in
   st_input.binder:= Slave;
   st_output.binder:= Master;
+  if !about_seed then Printf.printf "Computing hiden_chan_statement\n -input %s \n -output %s\n" (show_raw_statement st_input)(show_raw_statement st_output);
   let sigmas = Inputs.csu sigma st_output.inputs st_input.inputs in
   if sigmas = [] then ()
   else (
@@ -964,8 +965,8 @@ let rec hidden_chan_statement kb  (loc_input , None ,ineq_input,st_input,pr_inpu
       involved_copies = BangSet.union st_output.involved_copies st_input.involved_copies ; }
     in
     let ineqs = List.map (fun (s,t) -> (Rewriting.apply_subst_term s sigma,Rewriting.apply_subst_term t sigma)) (ineq_output @  ineq_input) in
-    let process_output = Process.apply_subst_process loc_input term_output pr_output in
-    trace_statements kb ineqs solved_parent unsolved_parent test_parent process_output st ;
+    (*let process_output = Process.apply_subst_process loc_input term_output pr_output in*)
+    trace_statements kb ineqs solved_parent unsolved_parent test_parent pr_output st ;
     let process_input = Process.apply_subst_process loc_input term_output pr_input in
     trace_statements kb ineqs solved_parent unsolved_parent test_parent process_input st 
   ) sigmas ))
@@ -1070,7 +1071,8 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
           ChanMap.find { c= chan; io = In; ph =loc.phase} kb.hidden_chans 
           with Not_found -> []))
         kb.hidden_chans 
-    | SeqP(Output({io = Output({visibility = Hidden} as chan)} as loc, t), pr) -> (try
+    | SeqP(Output({io = Output({visibility = Hidden} as chan)} as loc, t), pr) -> 
+      (try
       List.iter (fun stin -> 
         hidden_chan_statement kb stin (loc,Some t,ineqs,st,pr) solved_parent unsolved_parent test_parent) 
           (ChanMap.find { c= chan; io = In; ph =loc.phase} kb.hidden_chans) with Not_found -> ());

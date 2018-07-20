@@ -97,6 +97,7 @@ type statement = {
 val null_statement : statement
 type i_o = In | Out
 type chankey = { c : Types.chanId; io : i_o; ph : int; }
+val switch_io : i_o -> i_o
 module ChanMap :
   sig
     type key = chankey

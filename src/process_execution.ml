@@ -13,48 +13,104 @@ let rec apply_subst_inputs term frame =
     | Fun(f, args) -> Fun(f, List.map (fun x -> apply_subst_inputs x frame) args)
     | Var(x) -> Var(x)
 
+let dispatch tuple = List.fold_left (fun (lst1,lst2,lst3) (x,y,z) -> (List.rev_append x lst1 ,List.rev_append y lst2,List.rev_append z lst3)) ([],[],[]) tuple
 
-(* return a tuple : the updated threads, the threads which have failed due to a test *)
-let rec run_until_io process first frame =
-  (*Printf.printf "run until io %s \n" (show_process_start 3 process);*)
+(* return a tuple : 
+  - the (chan,threads) waiting for a silent action, 
+  - the updated threads, 
+  - the threads which have failed due to a test *)
+let rec run_until_io process made_choices first frame =
+  (*Printf.printf "run until io %s \n%!" (show_process_start 3 process);*)
   match process with
-  | EmptyP -> ([],[])
-  | ParallelP(proclst) -> List.fold_left (fun (lst1,lst2) (x,y) -> (x @ lst1 , y @ lst2)) ([],[]) (List.map (fun p -> run_until_io p first frame ) proclst)
+  | EmptyP -> ([],[],[])
+  | ParallelP(proclst) -> dispatch (List.map (fun p -> run_until_io p made_choices first frame ) proclst)
   | ChoiceP(l,proclst) -> 
-    List.fold_left (fun (lst1,lst2) (x,y) -> (x @ lst1 , y @ lst2)) ([],[])
-    (List.map (fun (i,p) -> 
-      let (lst1,lst2) = run_until_io p first frame in
-      (List.map (fun (c,ls,diseq,p) -> (Inputs.add_choice l i c, ls,diseq, p)) lst1, lst2)
-      ) proclst)
-  | SeqP(Input(l),p) 
-  | SeqP(Output(l,_),p) -> ([(Inputs.new_choices,first,[],process)],[])
+    dispatch
+    (List.map (fun (i,p) -> run_until_io p (Inputs.add_choice l i made_choices) first frame) proclst)
+  | SeqP(Input(l) as entry,p) 
+  | SeqP(Output(l,_) as entry,p) -> 
+    (match l.io with
+    | Output(chanId)
+    | Input(chanId) -> 
+      (match chanId.visibility with
+      | Public -> ([],[{ made_choices = made_choices; before_locs = first; thread = process}],[])
+      | Hidden -> let term,io = 
+        (match entry with
+        | Input(l) -> None,In
+        | Output(l,t) -> Some t, Out) in
+          ([(l,term, {c = chanId; io = io; ph = l.phase},{ made_choices = made_choices; before_locs = first; thread = p})],[],[])
+        )
+    | _ -> assert false)
   | SeqP(Test(t,t'),p) -> 
     let t = apply_subst_inputs t frame in
     let t' = apply_subst_inputs t' frame in
-    (**) 
     if Rewriting.equals_r t t' (! Parser_functions.rewrite_rules) 
-    then run_until_io p first frame 
+    then run_until_io p made_choices first frame 
     else begin 
     (*let t'' = Rewriting.normalize t (! Parser_functions.rewrite_rules) in
     let t''' = Rewriting.normalize t' (! Parser_functions.rewrite_rules) in
     Printf.printf "Test fail %s = %s \n" (show_term t'')(show_term t''');*)
-      ([],[(Inputs.new_choices,first,[],process)]) end
+      ([],[],[{ made_choices = made_choices; before_locs = first; (*disequalities = [] ;*) thread = process}]) end
   | SeqP(TestInequal(t,t'),p) ->
     let t = apply_subst_inputs t frame in
     let t' = apply_subst_inputs t' frame in
     if not (Rewriting.equals_r t t' (! Parser_functions.rewrite_rules)) 
-    then let (lst1,lst2) = run_until_io p first frame in
-      (List.map (fun (c,ls,diseq,p) -> (c,ls, (t,t')::diseq,p)) lst1, lst2)  
-    else ([],[(Inputs.new_choices,first,[],process)])
+    then (*let (lst1,lst2) =*) run_until_io p made_choices first frame (*in
+      (List.map (fun ext_thread -> {ext_thread with disequalities = (t,t')::ext_thread.disequalities}) lst1, lst2)  *)
+    else ([],[],[{ made_choices = made_choices; before_locs = first; (*disequalities = [] ;*) thread = process}])
   | CallP(l,n,p,terms,chans) ->
-    List.fold_left (fun (lst1,lst2) (x,y) -> (x @ lst1 , y @ lst2)) ([],[]) 
-      (List.init n (fun i -> 
+      dispatch (List.init n (fun i -> 
         let pr = expand_call l (i+1) p terms chans in
-        run_until_io pr first frame ))
+        run_until_io pr made_choices first frame ))
   | SeqP(OutputA(_,_),_) -> assert false
   
+let reduc_and_run loc_input loc_output term_output thread_input thread_output frame =
+  let process_input = Process.apply_subst_process loc_input term_output thread_input.thread in
+  match Inputs.merge_choices_add_link thread_input.made_choices thread_output.made_choices loc_input loc_output with
+  | Some made_choices ->
+    let first = LocationSet.union thread_input.before_locs thread_output.before_locs  in
+    dispatch [ run_until_io process_input made_choices first frame; run_until_io thread_output.thread made_choices first frame ]
+  | None -> [],[],[]
+  
+let merge_pending_lst init lst =
+  List.fold_left (fun all_p (l,t,c,p)-> ChanMap.add c ((l,t,p)::(try ChanMap.find c all_p with Not_found -> [])) all_p) init lst
+
+let rec test_reduc_for_one (loc,term,chan_kind,ext_thread) conj_chan end_older_canals all_pending_set frame =
+  match end_older_canals with
+  | (l,t,extt)::q ->
+    let pending,final,failure = 
+      match term,t with
+      | None, Some t -> reduc_and_run loc l t ext_thread extt  frame
+      | Some t, None -> reduc_and_run l loc t extt ext_thread  frame
+      | _ -> assert false in
+      let new_pending_set = merge_pending_lst all_pending_set pending in
+      let deeper_call = test_all_internal_communications new_pending_set pending  frame in
+      let recursive_call = test_reduc_for_one (loc,term,chan_kind,ext_thread) conj_chan q all_pending_set frame in
+      dispatch [(pending,final,failure);deeper_call;recursive_call]
+  | [] -> ([],[],[])
+
+and test_all_internal_communications all_pending_set end_new_lst frame = 
+  match end_new_lst with
+  | (loc,term,chan_kind,ext_thread) :: q -> 
+    let res2 = test_all_internal_communications all_pending_set q frame in
+    let conj_chan = { chan_kind with io = Base.switch_io chan_kind.io} in (
+    match ChanMap.find_opt conj_chan all_pending_set with
+    | Some old_chan_lst -> 
+      let old_chan_lst = List.filter (fun (l,t,p) -> not (List.exists (fun (lo,te,_,th) -> lo == l && te == t && th=p) end_new_lst)) old_chan_lst in
+      let res= test_reduc_for_one (loc,term,chan_kind,ext_thread) conj_chan old_chan_lst all_pending_set frame in
+      dispatch [res;res2] 
+    | None -> res2)
+  | [] ->  ([],[],[]) 
+
+let run_silent_actions process old_pending first frame =
+  (*Printf.printf "run silent actions of %s \n%!" (show_process_start 3 process);*)
+  let pending,final,failure = run_until_io process (Inputs.new_choices) first frame in
+  let res = test_all_internal_communications (merge_pending_lst old_pending pending) pending frame in
+  dispatch [(pending,final,failure);res]
+  
+  
 let init_sol process_name (statement : raw_statement) processQ test : solution =
-  let (qt,fqt) = run_until_io processQ LocationSet.empty Inputs.new_inputs in
+  let (pt,qt,fqt) = run_silent_actions processQ ChanMap.empty LocationSet.empty Inputs.new_inputs in
   let rec sol = { null_sol with 
     init_run = run;
     partial_runs = [run];
@@ -67,6 +123,7 @@ let init_sol process_name (statement : raw_statement) processQ test : solution =
      test = test ;
      sol = sol ; 
      remaining_actions = LocationSet.of_list(List.map (fun (x,y) -> x) (Dag.bindings statement.dag.rel)) ;
+     pending_qthreads = merge_pending_lst ChanMap.empty pt;
      qthreads = qt ;
      failed_qthreads = fqt;
    } in
@@ -75,18 +132,18 @@ let init_sol process_name (statement : raw_statement) processQ test : solution =
 
 (* Technical function called twice in try_run *)
 (* Produce a new partial_run object from already computed elements except the remaining threads *)
-let next_partial_run run action full_p proc l frame locs choices diseq =
+let next_partial_run run action full_p proc l frame locs choices =
   (*Printf.printf "next_partial_run %s \n dag = %s\n" (show_process_start 3 full_p)(show_dag run.sol.restricted_dag);*)
-  let (qt,fqt) = List.fold_left 
-    (fun (lst,flst) (chs,ls,diseq,p) -> 
-      if p != full_p 
-      then ((chs,ls,diseq,p) :: lst,flst)
+  let (pt,qt,fqt) = List.fold_left 
+    (fun (plst,lst,flst) ext_thread -> 
+      if ext_thread.thread != full_p 
+      then (plst,ext_thread :: lst,flst)
       else begin
-        (*Printf.printf "start run until io %s \n" (show_process_start 3 proc);*)
-        let (lqt,flqt)= (run_until_io proc (LocationSet.add action ls) frame) in 
-        (lqt @ lst , flqt @ flst) end
+        (*Printf.printf "start run_silent_actions %s \n" (show_process_start 3 proc);*)
+        let (plqt,lqt,flqt)= (run_silent_actions proc run.pending_qthreads (LocationSet.add action ext_thread.before_locs) frame) in 
+        dispatch [(plst,lst,flst);(plqt,lqt,flqt)] end
     )
-    ([],[]) run.qthreads in
+    ([],[],[]) run.qthreads in
     let restrictions = (*match run.next_action with
     | None ->*) LocationSet.filter (fun loc -> 
       not (LocationSet.mem action (try Dag.find loc run.sol.restricted_dag.rel with Not_found -> assert false))) locs
@@ -103,7 +160,8 @@ let next_partial_run run action full_p proc l frame locs choices diseq =
       frame = frame;
       choices = choices;
       phase = l.phase;
-      disequalities = diseq @ run.disequalities;
+      (*disequalities =  run.disequalities;*)
+      pending_qthreads = merge_pending_lst run.pending_qthreads pt;
       qthreads = qt ;
       failed_qthreads = fqt @ run.failed_qthreads ;
       restrictions = restrictions;
@@ -137,7 +195,7 @@ let rec apply_frame recipe (prun : partial_run) =
       LocPtoQ i -> (Printf.eprintf "apply_frame error %s \n" (show_term recipe); raise (LocPtoQ i))
 
 (* Given a partial_run run, try to execute action on one of the available threads of Q *)        
-let try_run run action  (choices,locs,diseq,process)  =
+let try_run run action ext_thread =
   (*Printf.printf "constraints %s \n" (show_correspondance run.test.constraints );*)
   let condition = if is_empty_correspondance run.test.constraints 
     then 
@@ -145,17 +203,17 @@ let try_run run action  (choices,locs,diseq,process)  =
     else 
       fun action l -> try loc_p_to_q action run.test.constraints = l with LocPtoQ i -> (Printf.eprintf "try run error\n"; raise (LocPtoQ i)) in
    (*Printf.printf "Testing %s against %s\n" action.chan.name (show_process_start 1 process);*)
-  match Inputs.merge_choices run.choices choices with
+  match Inputs.merge_choices run.choices ext_thread.made_choices with
   | None -> None
   | Some choices -> 
-   match process with
+   match ext_thread.thread with
    | SeqP(Input(l),p) -> 
      if condition action l (* make sure channel still work *)
      then 
        begin 
          let new_frame = Inputs.add_to_frame l 
             (Rewriting.normalize (apply_frame (Inputs.get action run.test.statement.recipes) run)(! Parser_functions.rewrite_rules)) run.frame in
-         let npr = next_partial_run run action process p l new_frame locs choices diseq in
+         let npr = next_partial_run run action ext_thread.thread p l new_frame ext_thread.before_locs choices in
          (*Printf.printf "Possible: %s\n"(show_partial_run npr) ;*)
         Some (npr,l) 
        end
@@ -164,7 +222,7 @@ let try_run run action  (choices,locs,diseq,process)  =
      if condition action l 
      then begin
        let new_frame = Inputs.add_to_frame l (Rewriting.normalize (apply_subst_inputs t run.frame)(! Parser_functions.rewrite_rules)) run.frame in
-       let npr = next_partial_run run action process p l new_frame locs choices diseq in
+       let npr = next_partial_run run action ext_thread.thread p l new_frame ext_thread.before_locs choices in
        (*Printf.printf "Possible: %s\n"(show_partial_run npr) ;*)
        Some (npr,l)
      end

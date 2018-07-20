@@ -50,6 +50,11 @@ module IntegerSet :
     val of_list : elt list -> t
   end
 val show_int_set : IntegerSet.t -> string
+type extra_thread = {
+  before_locs : Dag.LocationSet.t;
+  made_choices : Inputs.choices;
+  thread : Process.process;
+}
 module rec Run :
   sig
     type completion = {
@@ -77,15 +82,11 @@ module rec Run :
       frame : Inputs.inputs;
       choices : Inputs.choices;
       phase : int;
-      disequalities : (Types.term * Types.term) list;
-      qthreads :
-        (Inputs.choices * Dag.LocationSet.t *
-         (Types.term * Types.term) list * Process.process)
-        list;
-      failed_qthreads :
-        (Inputs.choices * Dag.LocationSet.t *
-         (Types.term * Types.term) list * Process.process)
-        list;
+      qthreads : extra_thread list;
+      failed_qthreads : extra_thread list;
+      pending_qthreads :
+        (Types.location * Types.term option * extra_thread) list
+        Base.ChanMap.t;
       restrictions : Dag.LocationSet.t;
       parent : partial_run option;
       last_exe : Types.location;

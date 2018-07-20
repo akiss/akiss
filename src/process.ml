@@ -56,7 +56,8 @@ let processes_infos = {
 let show_action a =
   match a with
   | Input(l) -> Printf.sprintf "in(%d)" l.p
-  | Output(l,t) | OutputA(l,t) -> Printf.sprintf "out(%d: %s)" l.p  (show_term t)
+  | Output(l,t)  -> Printf.sprintf "out(%d: %s)" l.p  (show_term t)
+  | OutputA(l,t) -> Printf.sprintf "out'(%d: %s)" l.p  (show_term t)
   | Test(s,t) -> "[" ^ (show_term s) ^ "=" ^ (show_term t) ^ "]"
   | TestInequal(s,t) -> "[" ^ (show_term s) ^ "!=" ^ (show_term t) ^ "]"
 
@@ -72,7 +73,7 @@ let rec show_process pr =
 let rec show_process_start i pr = 
   if i = 0 then "..." else
   match pr with
-  | EmptyP -> ""
+  | EmptyP -> "0"
   | ParallelP(lp) ->( List.fold_left (fun str p -> str ^ "|" ^ (show_process_start i p)) "(" lp ) ^ ")"
   | ChoiceP(l,lp)->( List.fold_left (fun str (i,p) -> str ^ "+" ^ (show_process_start i p)) "(" lp ) ^ ")"
   | SeqP(a,p) -> (show_action a) ^ ";" ^ (show_process_start (i - 1) p)
@@ -133,20 +134,23 @@ let new_location (pr : procId) p ( io : io ) str parent phase =
 let rec convert_pr infos process parent phase=
   let (pr, location, nonce, locations, nonces, args, chans) = infos in
   (*Printf.printf "Converting: %s \n%!" (show_bounded_process process);*)
+  try
   match process with
   | NilB -> EmptyP
   | NameB ((rel_n,str),p) -> 
      nonces.(rel_n) <- {name = str; n=nonce+rel_n}; 
      convert_pr infos p parent phase
   | InputB (ch,(rel_loc,Some str),p) -> 
-    let new_loc = new_location pr (location+rel_loc) (Input(convert_chan pr chans ch))  str parent phase in
+    let chan = convert_chan pr chans ch in
+    let new_loc = new_location pr (location+rel_loc) (Input(chan))  str parent phase in
      locations.(rel_loc) <- new_loc;
-     SeqP(Input(locations.(rel_loc)),convert_pr infos p (Some new_loc) phase)
+     SeqP(Input(locations.(rel_loc)),convert_pr infos p (if chan.visibility = Public then Some new_loc else parent) phase)
   | OutputB(ch,(rel_loc,Some str),term,p) -> 
-    let new_loc = new_location pr (location+rel_loc) (Output(convert_chan pr chans ch))  str parent phase in
+    let chan = convert_chan pr chans ch in
+    let new_loc = new_location pr (location+rel_loc) (Output(chan))  str parent phase in
      locations.(rel_loc) <- new_loc;
      SeqP(Output(locations.(rel_loc),convert_term pr locations nonces args term),
-       convert_pr infos p (Some new_loc) phase)
+       convert_pr infos p (if chan.visibility = Public then Some new_loc else parent) phase)
   | TestIfB((rel_loc,Some str),s,t,p1,p2) -> 
      let s = convert_term pr locations nonces args s in 
      let t = convert_term pr locations nonces args t in 
@@ -179,6 +183,7 @@ let rec convert_pr infos process parent phase=
      CallP(locations.(rel_loc),i,p,ar,channels)
   | PhaseB(i,p) -> convert_pr infos p parent i
   | _ -> assert false
+  with Invalid_argument(_) -> Printf.eprintf "Error when converting %s \n" (show_bounded_process process);exit 6
  
 let expand_call loc copy (procId : procId) args chans=
   if  !about_seed then Format.printf "Expansion of %s (%d;%d)\nwhich is %s \n%!"

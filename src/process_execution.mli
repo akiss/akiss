@@ -1,10 +1,51 @@
 val apply_subst_inputs : Types.term -> Inputs.inputs -> Types.term
+val dispatch :
+  ('a list * 'b list * 'c list) list -> 'a list * 'b list * 'c list
 val run_until_io :
   Process.process ->
-  'a ->
+  Inputs.choices ->
+  Dag.LocationSet.t ->
   Inputs.inputs ->
-  (Inputs.choices * 'a * (Types.term * Types.term) list * Process.process)
-  list * (Inputs.choices * 'a * 'b list * Process.process) list
+  (Types.location * Types.term option * Base.chankey * Bijection.extra_thread)
+  list * Bijection.extra_thread list * Bijection.extra_thread list
+val reduc_and_run :
+  Dag.Dag.key ->
+  Dag.Dag.key ->
+  Types.term ->
+  Bijection.extra_thread ->
+  Bijection.extra_thread ->
+  Inputs.inputs ->
+  (Types.location * Types.term option * Base.chankey * Bijection.extra_thread)
+  list * Bijection.extra_thread list * Bijection.extra_thread list
+val merge_pending_lst :
+  ('a * 'b * 'c) list Base.ChanMap.t ->
+  ('a * 'b * Base.ChanMap.key * 'c) list ->
+  ('a * 'b * 'c) list Base.ChanMap.t
+val test_reduc_for_one :
+  Dag.Dag.key * Types.term option * Base.chankey * Bijection.extra_thread ->
+  Base.chankey ->
+  (Dag.Dag.key * Types.term option * Bijection.extra_thread) list ->
+  (Dag.Dag.key * Types.term option * Bijection.extra_thread) list
+  Base.ChanMap.t ->
+  Inputs.inputs ->
+  (Types.location * Types.term option * Base.chankey * Bijection.extra_thread)
+  list * Bijection.extra_thread list * Bijection.extra_thread list
+val test_all_internal_communications :
+  (Dag.Dag.key * Types.term option * Bijection.extra_thread) list
+  Base.ChanMap.t ->
+  (Dag.Dag.key * Types.term option * Base.chankey * Bijection.extra_thread)
+  list ->
+  Inputs.inputs ->
+  (Types.location * Types.term option * Base.chankey * Bijection.extra_thread)
+  list * Bijection.extra_thread list * Bijection.extra_thread list
+val run_silent_actions :
+  Process.process ->
+  (Dag.Dag.key * Types.term option * Bijection.extra_thread) list
+  Base.ChanMap.t ->
+  Dag.LocationSet.t ->
+  Inputs.inputs ->
+  (Types.location * Types.term option * Base.chankey * Bijection.extra_thread)
+  list * Bijection.extra_thread list * Bijection.extra_thread list
 val init_sol :
   'a ->
   Base.raw_statement ->
@@ -16,15 +57,13 @@ val next_partial_run :
   Process.process ->
   Dag.Dag.key ->
   Inputs.inputs ->
-  Dag.LocationSet.t ->
-  Inputs.choices ->
-  (Types.term * Types.term) list -> Bijection.Run.partial_run
+  Dag.LocationSet.t -> Inputs.choices -> Bijection.Run.partial_run
 val apply_frame : Types.term -> Bijection.Run.partial_run -> Types.term
 val try_run :
   Bijection.Run.partial_run ->
   Dag.Dag.key ->
-  Inputs.choices * Dag.LocationSet.t * (Types.term * Types.term) list *
-  Process.process -> (Bijection.Run.partial_run * Types.location) option
+  Bijection.extra_thread ->
+  (Bijection.Run.partial_run * Types.location) option
 val next_run_with_action :
   Dag.Dag.key ->
   Bijection.Run.partial_run -> Bijection.Run.partial_run list * Dag.Dag.key

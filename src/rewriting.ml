@@ -208,10 +208,14 @@ let pack sigma =
   }
 
 let rec apply_subst_term term sigma =
+  try
    match term with
   | Fun(f,args) -> Fun(f, List.map (fun t -> apply_subst_term t sigma) args )
   | Var(x) -> let the_sigma = if !(x.status) = Master then sigma.master else sigma.slave in
      the_sigma.(x.n)
+  with
+  | Invalid_argument a -> Printf.eprintf "Error when subst of %s with %s \n" (show_term term)(show_substitution sigma);
+    raise (Invalid_argument a)
 
 let rec compose_master sigma tau =
   Array.iteri (fun i term -> sigma.master.(i)<- apply_subst_term term tau)sigma.master ;

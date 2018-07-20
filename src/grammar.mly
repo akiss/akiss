@@ -90,6 +90,8 @@ rewrite_rule_list:
 rewrite_rule:
   | term RIGHTARROW term
       { ($1,$3) }
+  | REDUC term RIGHTARROW term
+      { ($2,$4) }
 
 /****** Function symbol declaration *******/
 

@@ -51,6 +51,13 @@ module IntegerSet = Set.Make(struct type t = int let compare = compare end)
 let show_int_set s =
   (IntegerSet.fold (fun e str -> (if str = "" then "((" else (str^",")) ^(string_of_int e)) s "" ) ^"))"
 
+type extra_thread = {
+  before_locs : LocationSet.t;
+  made_choices : Inputs.choices;
+  (*disequalities : (term * term) list;*)
+  thread : Process.process;
+  }
+  
 module rec Run : sig 
   type completion = {
     st_c : raw_statement ; (* the current completion g u U_i f_i *)
@@ -77,9 +84,10 @@ module rec Run : sig
   frame : Inputs.inputs ; (* the frame for outputs *)
   choices : Inputs.choices ; (* the choices on Q that have been made in this trace *)
   phase : int; 
-  disequalities : (term * term) list; (*All the disequalities that have been encountred during the trace *)
-  qthreads : (Inputs.choices * LocationSet.t * (term * term) list * Process.process) list ; (* The available action of Q, the constraints *)
-  failed_qthreads : (Inputs.choices * LocationSet.t * (term * term) list * Process.process) list ; (* The action that might be availble for a specific substitution, used for debugging *)
+  (*disequalities : (term * term) list;*) (*All the disequalities that have been encountred during the trace *)
+  qthreads : extra_thread list ; (* The available action of Q, the constraints *)
+  failed_qthreads : extra_thread list ; (* The action that might be availble for a specific substitution, used for debugging *)
+  pending_qthreads : ((location * term option * extra_thread) list) Base.ChanMap.t ; (* The threads which is locked by a hidden chan *)
   (*mutable children : partial_run list ; (* once processed, the list of possible continuation of the execution *)*)
   restrictions : LocationSet.t;
   (*performed_restrictions : LocationSet.t;*)
@@ -158,9 +166,10 @@ struct
   frame : Inputs.inputs ; (* the frame for outputs *)
   choices : Inputs.choices ; (* the choices on Q that have been made in this trace *)
   phase : int ; (* the current phase *)
-  disequalities : (term * term) list; (*All the disequalities that have been encountred during the trace, not used *)
-  qthreads : (Inputs.choices * LocationSet.t * (term * term) list * Process.process) list ; (* The available action of Q, the constraints *)
-  failed_qthreads : (Inputs.choices * LocationSet.t * (term * term) list * Process.process) list ; (* The action that might be availble for a specific substitution, used for debugging *)
+  (*disequalities : (term * term) list;*) (*All the disequalities that have been encountred during the trace, not used *)
+  qthreads : extra_thread list ; (* The available action of Q, the constraints *)
+  failed_qthreads : extra_thread list ; (* The action that might be availble for a specific substitution, used for debugging *)
+  pending_qthreads : ((location * term option * extra_thread) list) Base.ChanMap.t ; (* The threads which is locked by a hidden chan *)
   (*mutable children : partial_run list ; (* once processed, the list of possible continuation of the execution *)*)
   restrictions : LocationSet.t;
   (*performed_restrictions : LocationSet.t;*)
@@ -218,8 +227,8 @@ let show_run pr  =
    (* pr.disequalities) ^"\n" *)
         
 let show_partial_run pr =
-  (List.fold_left (fun str (choices,lset,diseq, p) -> str ^ "   " ^(show_loc_set lset) ^" : "^(Process.show_process_start 2 p)^"\n")
-  ((List.fold_left (fun str (choices,lset,diseq, p) -> str ^ "   " ^ (show_loc_set lset) ^" : "^(Process.show_process_start 2 p)^"\n")
+  (List.fold_left (fun str ext_thread -> str ^ "   " ^(show_loc_set ext_thread.before_locs) ^" : "^(Process.show_process_start 2 ext_thread.thread)^"\n")
+  ((List.fold_left (fun str ext_thread -> str ^ "   " ^ (show_loc_set ext_thread.before_locs) ^" : "^(Process.show_process_start 2 ext_thread.thread)^"\n")
   ((show_run pr) ^ " remaining_actions= " ^ (show_loc_set pr.remaining_actions) ^ "\n qthreads= \n") 
   pr.qthreads) ^ " fthreads=\n") pr.failed_qthreads) 
   ^ (Format.sprintf "\n action=%d; weird = %d ; score = %d ; restricted = %s;  }\n" 
@@ -347,9 +356,10 @@ and empty_run =
      frame = Inputs.new_inputs; (* inputs maps to received terms and outputs maps to sent terms *)
      choices = Inputs.new_choices;
      phase = 0 ;
-     disequalities = [] ;
+    (* disequalities = [] ;*)
      qthreads = [] ;
      failed_qthreads = [];
+     pending_qthreads = Base.ChanMap.empty ;
      restrictions = LocationSet.empty;
      (*performed_restrictions = LocationSet.empty;*)
      parent = None;
