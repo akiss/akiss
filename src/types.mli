@@ -51,9 +51,11 @@ type location = {
   io : io;
   name : string;
   phase : int;
+  observable : visi_type;
   parent : location option;
 }
 val null_location : location
+val root_location : int -> location
 type funName =
     Regular of funId
   | Nonce of nonceId

@@ -47,6 +47,7 @@ let canonize_correspondance corr =
 
 
 module IntegerSet = Set.Make(struct type t = int let compare = compare end)  
+module IntegerMap = Map.Make(struct type t = int let compare = compare end)  
 
 let show_int_set s =
   (IntegerSet.fold (fun e str -> (if str = "" then "((" else (str^",")) ^(string_of_int e)) s "" ) ^"))"
@@ -96,8 +97,9 @@ module rec Run : sig
   last_exe : location ; (* the action whose run lead to this pr *)
   weird_assoc : int ; (* when the parent of an action is not associated to the parent of the associated action *)
   score : int ;
-  mutable consequences : (statement_role * substitution * test) list;
-  mutable completions : (substitution * completion) list;
+  (* for complete runs *)
+  mutable consequences : (statement_role * substitution * test) list; (* the merged tests from this run, empty if this run is not part of the solution  *)
+  mutable completions : (substitution * completion) list; (* the completion from this run, empty if this run is not part of the solution  *)
 }
 and origin = 
   | Initial of statement 
@@ -389,6 +391,8 @@ type record = {
   
 type index = ((RunSet.t) Dag.t) Dag.t
 
+type choices_index = ((RunSet.t) IntegerMap.t) Dag.t
+
 type bijection = {
   mutable p : Process.process ; (* The process P *)
   mutable q : Process.process ;
@@ -396,6 +400,8 @@ type bijection = {
   mutable satQ : Base.base ;
   mutable indexP : index ;
   mutable indexQ : index ;
+  mutable choices_indexP : choices_index;
+  mutable choices_indexQ : choices_index ;
   mutable next_id : int; (* the index for tests id *)
   mutable tests : Tests.t; (* The remaining tests to test on the other process *)
   (*mutable registered_tests : Tests.t; (* The tests that are set in *)*)
@@ -420,6 +426,8 @@ let bijection =
   satQ = nb ;
   indexP = Dag.empty ;
   indexQ = Dag.empty ;
+  choices_indexP = Dag.empty ;
+  choices_indexQ = Dag.empty ;
   next_id = 0 ;
   tests = Tests.empty;
   (*registered_tests = Tests.empty;*)
@@ -568,7 +576,15 @@ let add_run partial_run =
     let reclstQ = try Dag.find lp recintQ with Not_found -> RunSet.empty in
     bijection.indexQ <- Dag.add lq (Dag.add lp (RunSet.add partial_run reclstQ) recintQ) bijection.indexQ;
     ) 
-    (if partial_run.test.process_name = P then partial_run.corresp.a else partial_run.corresp_back.a) 
+    (if partial_run.test.process_name = P then partial_run.corresp.a else partial_run.corresp_back.a) ;
+    Dag.iter (fun loc i ->
+      let choices_ind = if partial_run.test.process_name = P then bijection.choices_indexQ else bijection.choices_indexP in
+      let recQ = try Dag.find loc choices_ind with Not_found -> IntegerMap.empty in
+      let recQi = try IntegerMap.find i recQ with Not_found -> RunSet.empty in
+      let ch = Dag.add loc (IntegerMap.add i (RunSet.add partial_run recQi) recQ) choices_ind in
+      if partial_run.test.process_name = P then bijection.choices_indexQ <- ch else bijection.choices_indexP <- ch
+    )
+    partial_run.choices.c
   
 let remove_run partial_run = 
   (*bijection.registered_tests <- Tests.remove partial_run.test bijection.registered_tests;*)
@@ -586,7 +602,15 @@ let remove_run partial_run =
     let reclstQ = try Dag.find lp recintQ with Not_found -> RunSet.empty in
     bijection.indexQ <- Dag.add lq (Dag.add lp (RunSet.remove partial_run reclstQ) recintQ) bijection.indexQ;
     ) 
-    (if partial_run.test.process_name = P then partial_run.corresp.a else partial_run.corresp_back.a) 
+    (if partial_run.test.process_name = P then partial_run.corresp.a else partial_run.corresp_back.a) ;
+    Dag.iter (fun loc i ->
+      let choices_ind = if partial_run.test.process_name = P then  bijection.choices_indexQ else  bijection.choices_indexP in
+      let recQ = try Dag.find loc choices_ind with Not_found -> IntegerMap.empty in
+      let recQi = try IntegerMap.find i recQ with Not_found -> RunSet.empty in
+      let ch = Dag.add loc (IntegerMap.add i (RunSet.remove partial_run recQi) recQ) choices_ind in
+      if partial_run.test.process_name = P then bijection.choices_indexQ <- ch else bijection.choices_indexP <- ch
+    )
+    partial_run.choices.c
 
 let mappings_of process loc = 
   try Dag.find loc
@@ -609,11 +633,17 @@ let straight locP locQ =
 let straight pr locP locQ =
   if pr = P then straight locP locQ else straight locQ locP 
 
+
  let compatible partial_run = 
   let (corresp,corresp_back) = 
     if partial_run.test.process_name = P 
     then (partial_run.corresp,partial_run.corresp_back)
     else (partial_run.corresp_back,partial_run.corresp)
+  in
+  let choices_index = 
+    if partial_run.test.process_name = P 
+    then bijection.choices_indexQ
+    else bijection.choices_indexP
   in
   let conflicts = ref RunSet.empty in
 (*  let score = ref 0 in
@@ -632,5 +662,12 @@ let straight pr locP locQ =
         if lp <> locP 
         then begin conflicts := RunSet.union runset !conflicts end) q 
     with Not_found -> ()) corresp.a);
+  (Dag.iter (fun loc i -> 
+    try
+      let set_i = (Dag.find loc choices_index) in 
+      IntegerMap.iter (fun j runset ->
+        if i <> j 
+        then begin conflicts := RunSet.union runset !conflicts end) set_i 
+    with Not_found -> ()) partial_run.choices.c);
   !conflicts;
 

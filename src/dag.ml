@@ -139,6 +139,9 @@ let first_actions_among dag locs =
   let first = LocationSet.filter (fun k -> Dag.for_all (fun k' locset -> 
   not (LocationSet.mem k' locs) || not (LocationSet.mem k locset)) dag.rel) locs in
   first
+  
+let only_observable dag =
+  {rel = Dag.fold (fun l lset dag -> if l.observable = Public then Dag.add l (LocationSet.filter (fun l -> l.observable = Public) lset) dag else dag) dag.rel Dag.empty}
 
 (* For execution and completions *)  
 let last_actions_among dag locs =

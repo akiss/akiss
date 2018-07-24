@@ -306,7 +306,7 @@ let conj run =
   {
   binder = st.binder ;
   nbvars = st.nbvars ;
-  dag = map_dag st.dag run.corresp;
+  dag = map_dag (only_observable run.sol.restricted_dag) run.corresp;
   inputs =  transpose_inputs identity_sigma st.recipes run  ;
   choices = run.choices ;
   head = (let eq, diseq = recipes_of_head st.head in Tests({
@@ -392,10 +392,22 @@ and complete_set_of_identities head process_name old_test =
 
 and statement_to_tests process_name origin (statement : raw_statement) otherProcess =
   (* let statement = match origin with Initial _ -> same_term_same_recipe statement | _-> statement in *)
+  let exception CyclicDag in
   let nb = Dag.cardinal statement.dag.rel in
+  try
   if nb != 0 && actual_test process_name statement
   then begin
-    let statement = canonize_statement statement in
+    let dag = if Process.processes_infos.max_phase = 0 then statement.dag 
+      else (Printf.printf "a cycle on %s\n"(show_dag statement.dag) ;
+        let loc_phase = Array.make (Process.processes_infos.max_phase+2) LocationSet.empty in
+        Dag.iter (fun loc _ -> loc_phase.(loc.phase) <- LocationSet.add loc loc_phase.(loc.phase)) statement.dag.rel ;
+        for i = Process.processes_infos.max_phase - 1 downto 1 do
+          loc_phase.(i) <- LocationSet.union loc_phase.(i) loc_phase.(i+1)
+        done ;
+        let dag = {rel = Dag.mapi (fun loc lset -> LocationSet.union loc_phase.(loc.phase + 1) lset) statement.dag.rel} in
+        if is_cyclic dag then (Printf.printf "cycle on %s\n"(show_dag dag) ;raise CyclicDag) else dag )
+    in
+    let statement = canonize_statement { statement with dag = dag } in
     statement.binder := New;
     let hash_statement = raw_to_hash_test statement in
     try 
@@ -419,6 +431,7 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
       Some new_test
   end
   else None
+  with CyclicDag -> None
   
 
 (* Create new tests from prun which is in conflict with all tests in runset *)
@@ -460,14 +473,14 @@ and add_merged_tests prun =
 
 and find_set_of_runs test =
   match test.solutions_todo with
-  | [] -> if ! debug_tests then Printf.printf "Success of test %d\n" test.id 
+  | [] -> if ! debug_tests then Printf.printf "Success of test %d\n\n" test.id 
   | sol :: queue -> 
     test.solutions_todo <- queue;
     match find_possible_run sol with
     | None -> raise (Bijection.Attack(test,sol))
     | Some pr -> 
       test.solutions_done <- sol :: test.solutions_done; 
-      if ! debug_tests then Printf.printf "Execution of test %d: %s \n\n" test.id (show_correspondance pr.corresp);
+      if ! debug_tests then Printf.printf "Execution of test %d: %s \n" test.id (show_correspondance pr.corresp);
       add_merged_tests pr;
       Bijection.add_run pr;
       find_set_of_runs test
@@ -491,9 +504,13 @@ let completion_to_test comp =
     | Some test ->
       comp.generated_test <- Some (sigma, test) 
     | None -> () end
+    
+let nb_comp = ref 0
 
 let add_to_completion (run : partial_run) (completion : completion) = 
-  if !about_completion then Printf.printf "Try completing a completion between \n run %s \n whose test is %s \n and partial completion %s\n" (show_run run)(show_raw_statement run.test.statement) (show_completion completion);
+  if !about_completion then 
+    Printf.printf "Try completing a completion between \n run %s \n whose test is %s \n and partial completion %s\n" 
+    (show_run run)(show_raw_statement run.test.statement) (show_completion completion);
   let exception NonBij in
   try
   let corr = { a = Dag.union (fun locP x y -> if x = y then Some x else raise NonBij) run.corresp.a completion.corresp_c.a } in
@@ -515,6 +532,9 @@ let add_to_completion (run : partial_run) (completion : completion) =
         further_completions = [];
         generated_test = None;
       } in
+    if !about_progress then (
+      incr nb_comp ;
+      if !nb_comp mod 10000 = 0 then Printf.printf "Adding partial comp %d %s\n%!" !nb_comp (show_completion new_comp));
     completion.further_completions <- (sigma,new_comp) :: completion.further_completions;
     run.completions <- (tau,new_comp) :: run.completions;
     if register_completion new_comp 
@@ -608,10 +628,8 @@ let equivalence p q =
    let (locQ,satQ) = Horn.saturate q in
   if  !about_saturation then
     Printf.printf (if !use_xml then "%s" else "Saturation of Q:\n %s\n") (show_kb satQ);
-  let processP = (CallP({p = locP;io=Call;name="main";phase=0;parent=None},
-    1,p,Array.make 0 zero,Array.make 0 null_chan)) in
-  let processQ = (CallP({p = locQ;io=Call;name="main";phase=0;parent=None}, 
-    1,q,Array.make 0 zero,Array.make 0 null_chan)) in 
+  let processP = (CallP(root_location locP,1,p,Array.make 0 zero,Array.make 0 null_chan)) in
+  let processQ = (CallP(root_location locQ,1,q,Array.make 0 zero,Array.make 0 null_chan)) in 
   bijection.p <- processP ;
   bijection.q <- processQ ;
   bijection.satP <- satP ;
@@ -629,7 +647,7 @@ let equivalence p q =
   let nb_open = ref 0 in
   try
     while not (Tests.is_empty bijection.tests) do
-      if !about_progress then Printf.printf "\n\n+++++ New iteration of the big loop +++++\n";
+      if !about_progress then Printf.printf "\n\n+++++ New iteration of the big loop +++++\n%!";
       if !about_progress then Printf.printf "Testing %d tests\n%!" (Tests.cardinal bijection.tests);
       while not (Tests.is_empty bijection.tests) do
         let test = pop () in
@@ -644,10 +662,10 @@ let equivalence p q =
       done ;
     if !about_progress && !about_bijection then Bijection.show_bijection();
     if !about_progress then 
-      Printf.printf "\n\n __Actualization of completions of P (%d runs)__\n" (List.length bijection.runs_for_completions_Q);
+      Printf.printf "\n\n __Actualization of completions of P (%d runs)__\n%!" (List.length bijection.runs_for_completions_Q);
     compute_new_completions P ; 
     if !about_progress then 
-      Printf.printf "\n\n __Actualization of completions of Q (%d runs)__\n" (List.length bijection.runs_for_completions_P);
+      Printf.printf "\n\n __Actualization of completions of Q (%d runs)__\n%!" (List.length bijection.runs_for_completions_P);
     compute_new_completions Q ; 
     done ;
     if !about_tests then show_hashtbl ();

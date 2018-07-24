@@ -79,8 +79,7 @@ val compatible_prun :
 val get_all_new_roots :
   Dag.LocationSet.t ->
   Dag.LocationSet.t ->
-  Bijection.Run.partial_run ->
-  (Dag.LocationSet.t * Dag.LocationSet.t * Bijection.Run.partial_run) list
+  Dag.dag -> (Dag.LocationSet.t * Dag.LocationSet.t) list
 val check_recipes :
   Bijection.Run.partial_run -> Types.term * Types.term -> bool
 val check_identities : Bijection.Run.partial_run -> Base.test_head -> bool

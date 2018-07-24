@@ -46,6 +46,15 @@ let add_to_frame loc term outputs =
 (**
   Choice stuff
 **)
+let subset_choices c1 c2 =
+  (*let exception E in *)
+  try ignore (Dag.merge (fun loc i1 i2 -> 
+    match (i1,i2) with
+    | (Some i1, Some i2) -> if i1 <> i2 then raise E else None
+    | (Some i1, None) -> raise E
+    | (None,  _) -> None) c1.c c2.c); true
+  with E -> false
+
 let merge_choices c1 c2 =
   try Some
   { c =

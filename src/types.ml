@@ -125,10 +125,12 @@ type location = {
  io : io;
  name : string;
  phase : int ;
+ observable : visi_type ;
  parent : location option; (*the previous i/o of the syntax tree *)
 }
 
-let rec null_location = { p = -1; io = Call; name = "null_loc"; phase = 0 ; parent = None}
+let rec null_location = { p = -1; io = Call; name = "null_loc"; phase = 0 ; observable = Hidden; parent = None}
+let root_location i = { p = i; io = Call; name = "root"; phase = 0 ; observable = Hidden; parent = None}
 
 type funName = 
   | Regular of funId (* f,g,h *)

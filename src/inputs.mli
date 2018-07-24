@@ -10,6 +10,7 @@ val canonize_choices : choices -> choices
 val add_input : Dag.Dag.key -> Types.varId -> inputs -> inputs
 val add_choice : Dag.Dag.key -> int -> choices -> choices
 val add_to_frame : Dag.Dag.key -> Types.term -> inputs -> inputs
+val subset_choices : choices -> choices -> bool
 val merge_choices : choices -> choices -> choices option
 val merge_choices_add_link :
   choices -> choices -> Dag.Dag.key -> Dag.Dag.key -> choices option

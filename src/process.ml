@@ -44,6 +44,7 @@ type processes_infos = {
    mutable next_nonce : int;
    mutable processes : process_infos BangDag.t;
    mutable location_list : location list;
+   mutable max_phase : int;
 }
 
 let processes_infos = {
@@ -51,6 +52,7 @@ let processes_infos = {
      next_nonce = 0 ;
      processes = BangDag.empty ;
      location_list = [];
+     max_phase = 0;
 }
 
 let show_action a =
@@ -116,16 +118,17 @@ let new_location (pr : procId) p ( io : io ) str parent phase =
     let par = match parent with Some p -> p.p | None -> 0 in
     begin if !about_location then 
       match io with 
-      | Input(chan) -> Printf.printf "%d : in(%s)  > %d \n" p str par
-      | Output(chan) -> Printf.printf "%d : out(%s) > %d\n" p str par
-      | Call -> Printf.printf " %d : %s      > %d \n" p str par
-      | Choice-> Printf.printf " %d: %s       > %d \n" p str par
+      | Input(chan) -> Printf.printf "%d : in(%s)  > %d[ph:%d] \n" p str par phase
+      | Output(chan) -> Printf.printf "%d : out(%s) > %d[ph:%d]\n" p str par phase
+      | Call -> Printf.printf " %d : %s      > %d[ph:%d] \n" p str par phase
+      | Choice-> Printf.printf " %d: %s       > %d[ph:%d] \n" p str par phase
       end ;
     let l = {
       p=p; 
       io=io; 
       name=str; 
       phase=phase; 
+      observable = (match io with Input(chan) | Output(chan) -> chan.visibility | _ -> Hidden);
       parent=parent
     } in
     processes_infos.location_list <- l :: processes_infos.location_list;
@@ -181,7 +184,7 @@ let rec convert_pr infos process parent phase=
      ) arguments;
      locations.(rel_loc) <- new_location pr (location+rel_loc) Call s parent phase;
      CallP(locations.(rel_loc),i,p,ar,channels)
-  | PhaseB(i,p) -> convert_pr infos p parent i
+  | PhaseB(i,p) -> processes_infos.max_phase <- max processes_infos.max_phase i ; convert_pr infos p parent i
   | _ -> assert false
   with Invalid_argument(_) -> Printf.eprintf "Error when converting %s \n" (show_bounded_process process);exit 6
  
@@ -217,6 +220,9 @@ let rec repl_hidden_loc loc term t =
    | Fun({id=Input(l)},[]) -> if l = loc then term else t
    | Fun(f,args) -> Fun(f,List.map (repl_hidden_loc loc term) args)
    | _ -> t
+   
+let repl_hidden_loc loc term t =
+  Rewriting.normalize (repl_hidden_loc loc term t) (! Parser_functions.rewrite_rules)
   
 let  apply_subst_action loc term a =
   match a with
@@ -226,10 +232,11 @@ let  apply_subst_action loc term a =
   | Test(s,t) -> Test(repl_hidden_loc loc term s,repl_hidden_loc loc term t)
   | TestInequal(s,t) -> TestInequal(repl_hidden_loc loc term s,repl_hidden_loc loc term t)
  
-let rec apply_subst_process loc term pr =
+let rec apply_subst_process loc term pr = try
   match pr with
   | EmptyP -> pr
   | ParallelP(lp) -> ParallelP(List.map (apply_subst_process loc term) lp)
   | SeqP(a,p) -> SeqP(apply_subst_action loc term a,apply_subst_process loc term p)
   | ChoiceP(l,lp)->ChoiceP(l,List.map (fun (i,p) -> (i,apply_subst_process loc term p)) lp)
   | CallP(l,i,procId,args,chans) -> CallP(l,i,procId,args,chans)
+  with Invalid_argument a -> Format.printf "Process substitution error\n" ; raise (Invalid_argument a)

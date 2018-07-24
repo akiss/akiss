@@ -102,6 +102,7 @@ type processes_infos = {
   mutable next_nonce : int;
   mutable processes : process_infos BangDag.t;
   mutable location_list : Types.location list;
+  mutable max_phase : int;
 }
 val processes_infos : processes_infos
 val show_action : action -> string

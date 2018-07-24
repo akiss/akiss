@@ -115,14 +115,14 @@ let init_sol process_name (statement : raw_statement) processQ test : solution =
     init_run = run;
     partial_runs = [run];
     partial_runs_todo = Solutions.empty (*singleton run*);
-    restricted_dag = test.statement.dag ;
+    restricted_dag = only_observable test.statement.dag ;
     sol_test = test;
   }
   and run =
    { empty_run with 
      test = test ;
      sol = sol ; 
-     remaining_actions = LocationSet.of_list(List.map (fun (x,y) -> x) (Dag.bindings statement.dag.rel)) ;
+     remaining_actions = Dag.fold (fun l _ remain -> if l.observable = Public then LocationSet.add l remain else remain ) statement.dag.rel LocationSet.empty ;
      pending_qthreads = merge_pending_lst ChanMap.empty pt;
      qthreads = qt ;
      failed_qthreads = fqt;
@@ -199,7 +199,7 @@ let try_run run action ext_thread =
   (*Printf.printf "constraints %s \n" (show_correspondance run.test.constraints );*)
   let condition = if is_empty_correspondance run.test.constraints 
     then 
-      fun (action : location) (l : location) -> action.io = l.io && action.phase >= l.phase
+      fun (action : location) (l : location) -> action.io = l.io && run.phase <= l.phase
     else 
       fun action l -> try loc_p_to_q action run.test.constraints = l with LocPtoQ i -> (Printf.eprintf "try run error\n"; raise (LocPtoQ i)) in
    (*Printf.printf "Testing %s against %s\n" action.chan.name (show_process_start 1 process);*)
@@ -270,7 +270,7 @@ let compatible constraints constraints_back locP locQ =
 let compatible_prun constraints constraints_back (prun : partial_run)=
   Dag.for_all (compatible constraints constraints_back) prun.corresp.a
   
-let rec get_all_new_roots before after run = 
+(*let rec get_all_new_roots before after run = 
   if LocationSet.is_empty before then []
   else 
   match run.parent with
@@ -280,8 +280,17 @@ let rec get_all_new_roots before after run =
     then 
       let before = LocationSet.remove run.last_exe before in
       let after = LocationSet.add run.last_exe after in
-    (before,after,r) :: get_all_new_roots before after r
-    else get_all_new_roots before after r
+    (before,after) :: get_all_new_roots before after r
+    else get_all_new_roots before after r*)
+    
+let rec get_all_new_roots before after dag =
+  if LocationSet.is_empty before then []
+  else 
+  let locset = last_actions_among dag before in
+  LocationSet.fold (fun loc result -> 
+    let before = LocationSet.remove loc before in
+    let after = LocationSet.add loc after in
+    List.concat [[(before,after)];(get_all_new_roots before after dag); result]) locset [] 
   
 let check_recipes partial_run (r,r')=
   let r = apply_frame r partial_run in
@@ -333,11 +342,11 @@ let rec next_solution solution =
     if !debug_execution 
     then Printf.printf "A restricted run is being tested from %s \n which test is \n %s \n" (show_partial_run pr)(show_test pr.test) ;
     let par = match pr.parent with Some par -> par | _ -> assert false in
-    let roots = get_all_new_roots pr.restrictions LocationSet.empty par in
+    let roots = get_all_new_roots pr.restrictions LocationSet.empty par.sol.restricted_dag in
     let new_dag = dag_with_one_action_at_end pr.restrictions pr.last_exe in
     let restr_dag = canonize_dag (merge pr.sol.restricted_dag new_dag) in
     pr.sol.restricted_dag <- restr_dag;  
-    List.iter (fun (before,after,prun) -> 
+    List.iter (fun (before,after) -> 
       if !debug_execution 
       then Printf.printf "\n**** Starting the restriction for %s  < %d < %s ****\n%s\n" 
         (show_loc_set before) pr.last_exe.p (show_loc_set after)(show_dag pr.sol.restricted_dag);
@@ -347,10 +356,10 @@ let rec next_solution solution =
       then
       let new_solution =
       { null_sol with 
-        init_run = prun.sol.init_run;
-        partial_runs_todo = Solutions.singleton prun.sol.init_run;
+        init_run = pr.sol.init_run;
+        partial_runs_todo = Solutions.singleton pr.sol.init_run;
         restricted_dag = restr_dag; 
-        sol_test = prun.sol.sol_test;
+        sol_test = pr.sol.sol_test;
       } in
       pr.test.solutions_todo <- new_solution :: pr.test.solutions_todo
     )  roots 

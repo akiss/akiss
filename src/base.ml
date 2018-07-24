@@ -247,7 +247,8 @@ match pred with
   | Unreachable -> Unreachable
   | Tests(head) -> Tests(apply_subst_test_head head sigma)
 
-let apply_subst_statement st (sigma : substitution)=
+let apply_subst_statement st (sigma : substitution) = 
+  try
   {
       binder = sigma.binder;
       nbvars = sigma.nbvars;
@@ -259,6 +260,9 @@ let apply_subst_statement st (sigma : substitution)=
       body = trmap (fun x -> {x with recipe= Rewriting.apply_subst_term x.recipe sigma; term=Rewriting.apply_subst_term x.term sigma}) st.body ;
       involved_copies = st.involved_copies ;
   }
+  with Invalid_argument a -> 
+    Printf.eprintf "Error with substitution on %s \n" (show_raw_statement st); 
+    raise (Invalid_argument a)
   
 (** constructor **)
 let new_statement () = {
