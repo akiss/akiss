@@ -415,11 +415,11 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
       let sigma = Rewriting.merging_subst test.statement.nbvars test.statement.binder in
       let head_t = get_test_head statement.head in
       statement.binder := Master;
-      if !debug_merge then 
-        Printf.printf "Updating an existing test which is \n%s\nwith %s \n subst %s \n"
-          (show_test test)(show_raw_statement statement)(show_substitution sigma);
       let head' = apply_subst_test_head head_t sigma in
+      if !debug_tests then 
       statement.binder := New ;
+      (*Printf.printf "Updating an existing test which is \n%s\nwith %s \n subst %s \n"
+          (show_test test)(show_raw_statement statement)(show_substitution sigma);*)
       complete_set_of_identities head' process_name test ;
       Some test
     with 
@@ -501,25 +501,26 @@ let completion_to_test comp =
     let sigma, conjrun = conj pr in 
     begin
     match statement_to_tests (other comp.root.from_base) (Completion) conjrun (proc (comp.root.from_base )) with
-    | Some test ->
+    | Some test -> if !about_completion then Printf.printf "Get test from the completion\n";
       comp.generated_test <- Some (sigma, test) 
-    | None -> () end
+    | None -> if !about_completion then Printf.printf "No test from the completion\n"; () end
     
 let nb_comp = ref 0
 
 let add_to_completion (run : partial_run) (completion : completion) = 
-  if !about_completion then 
+  (*if !about_completion then 
     Printf.printf "Try completing a completion between \n run %s \n whose test is %s \n and partial completion %s\n" 
-    (show_run run)(show_raw_statement run.test.statement) (show_completion completion);
+    (show_run run)(show_raw_statement run.test.statement) (show_completion completion);*)
   let exception NonBij in
   try
   let corr = { a = Dag.union (fun locP x y -> if x = y then Some x else raise NonBij) run.corresp.a completion.corresp_c.a } in
   let corr_back = { a = Dag.union (fun locQ x y -> if x = y then Some x else raise NonBij) run.corresp_back.a completion.corresp_back_c.a } in
   let missing = LocationSet.filter (fun loc -> try ignore (Dag.find loc corr_back.a); false with Not_found -> true) completion.missing_actions in
   let tau, conjrun = conj run in
-  if !about_completion then Printf.printf "Conj = %s " (show_raw_statement conjrun);
+  (*if !about_completion then Printf.printf "Conj = %s \n" (show_raw_statement conjrun);*)
   if !debug_merge then Printf.printf "Merge run %d with comp %s\n" run.test.id (show_raw_statement completion.root.initial_statement);
   let sts = merge_tests completion.root.from_base conjrun completion.st_c in
+  (*if !about_completion && sts = [] then  Printf.printf "merge is not possible\n\n";*)
   List.iter (fun (sigma,st) -> 
     let new_comp = {
         st_c = canonize_statement st;
@@ -535,6 +536,7 @@ let add_to_completion (run : partial_run) (completion : completion) =
     if !about_progress then (
       incr nb_comp ;
       if !nb_comp mod 10000 = 0 then Printf.printf "Adding partial comp %d %s\n%!" !nb_comp (show_completion new_comp));
+    if !about_completion then Printf.printf "Registering a new completion from old\n %s \n and %s \n" (show_completion completion)(show_run run);
     completion.further_completions <- (sigma,new_comp) :: completion.further_completions;
     run.completions <- (tau,new_comp) :: run.completions;
     if register_completion new_comp 
@@ -551,7 +553,7 @@ let rec compute_new_completions process_name  =
   match if process_name = P then bijection.runs_for_completions_Q else bijection.runs_for_completions_P with
   (* First match all run with all completions *)
   | run :: lst -> 
-    if !about_completion then Printf.printf "\nChecking if run can complete a completion %s\n" (show_run run);
+    if !about_completion then Printf.printf "\nChecking if the following run can complete a completion %s\n%s\n" (show_raw_statement run.test.statement)(show_run run);
     if process_name = P then bijection.runs_for_completions_Q <- lst else bijection.runs_for_completions_P <- lst ;
     List.iter (fun (_,l) ->
     List.iter (fun completion -> add_to_completion run completion) 
@@ -560,7 +562,7 @@ let rec compute_new_completions process_name  =
     compute_new_completions process_name
   (* Then for all new partial completion just created match them with all runs *)  
   | [] -> 
-    if !about_completion then (Printf.printf "\nCompleting new completions\n "; show_bijection());
+    if !about_completion then (Printf.printf "\nCompleting new completions\n\n"; show_bijection());
     while (if process_name = P then bijection.todo_completion_P else bijection.todo_completion_Q) != [] do
       let todo_completion = if process_name = P then bijection.todo_completion_P else bijection.todo_completion_Q in
       match todo_completion with

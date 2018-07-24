@@ -73,7 +73,16 @@ let rec explode_term t sigma =
           end 
    | Fun(f,l)-> if is_constant (Fun(f,l)) then ([],[f],[Fun(f,l)]) else ([],[f],[])
 
-
+let rec is x t sigma = 
+    match t with 
+    | Fun(f, args) -> false
+    | Var(y) when x = y -> true
+    | Var(y) -> let sub = find_sub y sigma in begin
+        match sub.(y.n) with
+          | None -> false 
+          | Some t -> is x t sigma
+        end
+   
 let rec occurs x t sigma = 
     match t with 
     | Fun(f, args) -> occurs_list x args sigma
@@ -99,20 +108,24 @@ let rec unify hard pairlst sigma =
   match pairlst with
     | [] -> hard
     | (Var(x), Var(y))::q when x = y -> unify hard q sigma
-    | (Var(x), t)::q ->
+    | (Var(x), t)::q -> (*Printf.printf "With term %s\n" (show_term t);*)
           let sub = find_sub x sigma in begin
           match sub.(x.n) with
           | None -> 
                if occurs x t sigma
-               then raise Not_unifiable
-               else sub.(x.n)<- Some t; unify hard q sigma
+               then ( 
+                if not (is x t sigma) 
+                then raise Not_unifiable
+               )
+               else sub.(x.n)<- Some t; 
+               unify hard q sigma
           | Some t' -> unify hard ((t',t)::q) sigma
           end
     | (t, (Var(y) as s))::q -> unify hard ((s,t)::q) sigma
     | ((Fun({id = Plus}, _) as sa), (Fun({id=Plus}, _) as ta))::q -> may_unify_plus hard sa ta q sigma
     | (Fun({id = f}, sa), Fun({id = g}, ta))::q when f = g ->
 	unify hard (combine sa ta q) sigma
-    | _ -> raise Not_unifiable
+    | _ ->  raise Not_unifiable
 and may_unify_plus hard sa ta pairlst sigma =
 	let (xs,ts,cs)= explode_term sa sigma in 
 	let (ys,us,ds)= explode_term ta sigma in 
@@ -162,7 +175,7 @@ let csu pairlst sigma =
   if hard = [] then [sigma]
   else [] (*Call Maude on hard with sigma *)
   with 
-  | Not_unifiable -> []
+  | Not_unifiable ->  (*Printf.printf "no unif\n";*)[]
 
 (* From a susbt obtained from unification generates a substitution which can be applied to term *)
 let get_option = function None -> assert false | Some t -> t

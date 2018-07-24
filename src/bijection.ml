@@ -258,7 +258,7 @@ and show_test t =
 
   
 let show_completion completion = 
-  Format.sprintf "compl. from %s: %s -corresp: %s \n -missing: %s (%d)\n" (show_which_process completion.root.from_base)(show_raw_statement completion.st_c) (show_correspondance completion.corresp_c) (show_loc_set completion.missing_actions)(completion.selected_action.p)
+  Format.sprintf "completion [%s] from statement\n %s -corresp: %s \n -missing: %s (%d)\n" (show_which_process completion.root.from_base)(show_raw_statement completion.st_c) (show_correspondance completion.corresp_c) (show_loc_set completion.missing_actions)(completion.selected_action.p)
  
 let show_all_completions daglst = 
    Dag.iter (fun loc listcomp -> 
@@ -524,6 +524,7 @@ let pop () =
 (* add a partial completion to the todo list *) 
 (* return true if a test should be extracted from completion, false otherwise *)
 let register_completion completion =
+  if !about_completion then Printf.printf "Registering completion: %s\n" (show_completion completion);
   completion.st_c.binder := New ;
   let is_opti = (completion.st_c = completion.root.initial_statement) in
   let eq, diseq = recipes_of_head completion.st_c.head in
