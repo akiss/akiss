@@ -34,6 +34,7 @@
         (* Query *)
         "query", QUERY;
         "trace_equiv", TRACEEQ;
+        "trace_incl", TRACEINCL;
         "obs_equiv", OBSEQ;
         "saturate", SAT;
       ]

@@ -14,12 +14,12 @@ let parse_query env line = function
               Printf.printf (if !use_xml then "<?xml-stylesheet type='text/css' href='style.css' ?>%s" else "Saturation is done %s\n") (Base.show_kb kb) 
           | env_elt -> error_message line (Printf.sprintf "The identifiant %s is declared as %s but a process is expected." ident (display_env_elt_type env_elt))
       end
-  | Trace_Eq((ident,line),(ident',line')) -> 
+  | Trace_Eq(both,(ident,line),(ident',line')) -> 
       let p = try Env.find ident env with Not_found -> error_message line (Printf.sprintf "The process %s is not declared" ident) in
       let q = try Env.find ident' env with Not_found -> error_message line (Printf.sprintf "The process %s is not declared" ident') in
       begin 
         match (p,q) with
-          | (Proc(procId),Proc(procId')) -> Tests.equivalence procId procId'  
+          | (Proc(procId),Proc(procId')) -> Tests.equivalence both procId procId'  
           | (env_elt,Proc(_)) 
           | (_,env_elt) -> error_message line (Printf.sprintf "The identifiant %s is declared as %s but a process is expected." ident (display_env_elt_type env_elt))
       end

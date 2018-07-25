@@ -624,13 +624,15 @@ let rec statements_to_tests process_name (statement : statement) otherProcess eq
    
     
 
-let base_to_tests process_name base process other_process = 
+let unreach_to_completion process_name base = 
   List.iter (fun st -> let _, st' = same_term_same_recipe st.st in 
     ignore (register_completion (statement_to_completion process_name (negate_statement st')))
-    ) base.unreachable_solved;
+    ) base.unreachable_solved
+
+let base_to_tests process_name base other_process = 
   statements_to_tests process_name base.rid_solved other_process EqualitiesSet.empty
 
-let equivalence p q =
+let equivalence both p q =
   let time = if !about_bench then Sys.time () else 0. in
   if !use_xml then Printf.printf "<?xml-stylesheet type='text/css' href='style.css' ?><all>" ;
   if !about_progress then Printf.printf "Saturating P\n\n%!";
@@ -648,8 +650,11 @@ let equivalence p q =
   bijection.satP <- satP ;
   bijection.satQ <- satQ ;
   if !about_progress then Printf.printf "Building tests\n%!";
-  base_to_tests P satP processP processQ ;
-  base_to_tests Q satQ processQ processP ; 
+  unreach_to_completion Q satQ ;
+  base_to_tests P satP processQ ; 
+  if both then (
+  unreach_to_completion P satP ;
+  base_to_tests Q satQ processP ); 
   if !about_completion then
     begin 
     Printf.printf "Completions of P\n%!";
@@ -684,7 +689,7 @@ let equivalence p q =
     if !about_tests then show_hashtbl ();
     if !about_bijection then Bijection.show_bijection();
     if !about_bench then  Printf.printf " time: %F equivalence (%d tests)\n"  (Sys.time() -. time) bijection.next_id
-    else  Printf.printf "\nP and Q are trace equivalent. \n" ;
+    else if both then Printf.printf "\nP and Q are trace equivalent. \n" else Printf.printf "\nTraces of P are included in Q. \n";
     if ! use_xml then Printf.printf "</all>"
   with
   | Attack(test,sol) -> begin 

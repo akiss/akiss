@@ -12,7 +12,7 @@ open Parser_functions
 %token FREE CHANS
 %token NEW IF THEN ELSE IN OUT LET PHASE
 %token PHASE
-%token QUERY TRACEEQ OBSEQ SAT
+%token QUERY TRACEEQ OBSEQ SAT TRACEINCL
 
 %token EQ
 %token SLASH SEMI DOT MID BANG COMMA
@@ -116,7 +116,9 @@ query_declaration:
   | QUERY SAT ident DOT
       { Saturate $3 }
   | QUERY TRACEEQ LPAR ident COMMA ident RPAR DOT
-      { Trace_Eq($4,$6) }
+      { Trace_Eq(true,$4,$6) }
+  | QUERY TRACEINCL LPAR ident COMMA ident RPAR DOT
+      { Trace_Eq(false,$4,$6) }
   | QUERY OBSEQ LPAR extended_process COMMA extended_process RPAR DOT
       { Obs_Eq($4,$6) }
 
