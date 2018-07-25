@@ -591,13 +591,13 @@ let rec compute_new_completions process_name  =
 
 (* From solved statements create tests. 
 Opti: when children are identical with same world merge them with the reach parent to reduce number of tests *)  
-let rec statements_to_tests process_name (statement : statement) otherProcess equalities =
+let rec statements_to_tests t c process_name (statement : statement) otherProcess equalities =
   let _,raw_statement' = same_term_same_recipe statement.st in
   let raw_statement = { raw_statement' with head= head_predicate_to_test raw_statement'.binder raw_statement'.head } in
    match statement.st.head with
   | Identical _ -> 
-    ignore (statement_to_tests process_name (Initial(statement)) raw_statement otherProcess);
-    ignore (register_completion (statement_to_completion process_name (negate_statement raw_statement'))) (* Identical don't have children *)
+    if t then ignore (statement_to_tests process_name (Initial(statement)) raw_statement otherProcess);
+    if c then ignore (register_completion (statement_to_completion process_name (negate_statement raw_statement'))) (* Identical don't have children *)
   | _ -> 
     let new_eq, children = List.fold_left 
     (fun (new_eq,children) st -> 
@@ -607,20 +607,20 @@ let rec statements_to_tests process_name (statement : statement) otherProcess eq
         match st.st.head with 
         Identical (s,t) -> 
           let _,st = same_term_same_recipe st.st in
-          ignore (register_completion (statement_to_completion process_name (negate_statement st)));
+          if c then ignore (register_completion (statement_to_completion process_name (negate_statement st)));
           (EqualitiesSet.add (s,t) new_eq, children)
         | _ -> assert false end
       else begin
         (*statements_to_tests process_name st otherProcess; *)
         (new_eq,st :: children) end)
     (equalities, []) statement.children in
-    ignore (statement_to_tests process_name (Initial(statement)) 
+    if t then ignore (statement_to_tests process_name (Initial(statement)) 
       {raw_statement with head = Tests({
         head_binder = raw_statement.binder;
         equalities= new_eq; 
         disequalities = EqualitiesSet.empty})} 
       otherProcess);
-    List.iter (fun st -> statements_to_tests process_name st otherProcess new_eq) children
+    List.iter (fun st -> statements_to_tests t c process_name st otherProcess new_eq) children
    
     
 
@@ -629,8 +629,8 @@ let unreach_to_completion process_name base =
     ignore (register_completion (statement_to_completion process_name (negate_statement st')))
     ) base.unreachable_solved
 
-let base_to_tests process_name base other_process = 
-  statements_to_tests process_name base.rid_solved other_process EqualitiesSet.empty
+let base_to_tests t c process_name base other_process = 
+  statements_to_tests t c process_name base.rid_solved other_process EqualitiesSet.empty
 
 let equivalence both p q =
   let time = if !about_bench then Sys.time () else 0. in
@@ -651,10 +651,10 @@ let equivalence both p q =
   bijection.satQ <- satQ ;
   if !about_progress then Printf.printf "Building tests\n%!";
   unreach_to_completion Q satQ ;
-  base_to_tests P satP processQ ; 
-  if both then (
+  base_to_tests true both P satP processQ ; 
+  base_to_tests both true Q satQ processP ; 
+  if both then 
   unreach_to_completion P satP ;
-  base_to_tests Q satQ processP ); 
   if !about_completion then
     begin 
     Printf.printf "Completions of P\n%!";

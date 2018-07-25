@@ -54,9 +54,12 @@ val add_to_completion :
   Bijection.Run.partial_run -> Bijection.Run.completion -> unit
 val compute_new_completions : Bijection.which_process -> unit
 val statements_to_tests :
+  bool ->
+  bool ->
   Bijection.which_process ->
   Base.statement -> Process.process -> Base.EqualitiesSet.t -> unit
 val unreach_to_completion : Bijection.which_process -> Base.base -> unit
 val base_to_tests :
-  Bijection.which_process -> Base.base -> Process.process -> unit
+  bool ->
+  bool -> Bijection.which_process -> Base.base -> Process.process -> unit
 val equivalence : bool -> Types.procId -> Types.procId -> unit
