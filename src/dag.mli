@@ -95,6 +95,8 @@ exception E
 val subset : dag -> dag -> bool
 val merge : dag -> dag -> dag
 val is_before : dag -> Dag.key option -> LocationSet.elt option -> bool
+val can_be_replaced_by :
+  dag -> LocationSet.elt option -> Dag.key option -> bool
 val should_be_before :
   dag -> Dag.key option -> LocationSet.elt option -> bool
 val is_cyclic : dag -> bool

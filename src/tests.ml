@@ -54,16 +54,24 @@ let same_term_same_recipe st =
   let (useless,body) =
     List.partition
       (fun a ->
-         let recipe_var = Term.unbox_var a.recipe in
-         let t = a.term in
-         try
-         let is_better =  List.find 
-           (fun a' -> let recipe_var' = Term.unbox_var a'.recipe in
-              t = a'.term && not (is_before st.dag a.loc a'.loc) && recipe_var.n > recipe_var'.n
-           ) st.body in
-           let x = Term.unbox_var(is_better.recipe) in
-           sigma_repl.(x.n) <- Some a.recipe ;
-           a.loc = is_better.loc      
+        let recipe_var = Term.unbox_var a.recipe in
+        let t = a.term in
+        try
+        let smallest_recipe =  List.fold_left 
+           (fun best current -> 
+              if t <> current.term
+              then best
+              else
+              let recipe_current = Term.unbox_var current.recipe in
+              let recipe_best = Term.unbox_var best.recipe in
+              if recipe_best.n > recipe_current.n 
+              then current else best 
+           ) a st.body in
+        if smallest_recipe != a then sigma_repl.(recipe_var.n) <- Some smallest_recipe.recipe ;
+        List.exists (fun a' -> 
+              if a'.term <> t
+              then false
+              else can_be_replaced_by st.dag a.loc a'.loc) st.body 
          with Not_found -> false
          )
        st.body
@@ -96,7 +104,8 @@ let rec messages_of_recipes recipe =
 exception No_recipe
   
 let best_recipe base st new_dag unsolved x =
-  let Some l = x.loc in
+  match x.loc with
+  | Some l -> (
   let my_loc = LocationSet.singleton l in
   let other_locs = List.fold_left (fun lset p -> if p.recipe = x.recipe then let Some l' = p.loc in LocationSet.add l' lset else lset) my_loc unsolved in
   if !debug_merge then Printf.printf "From loc %d other identical recipes : %s \n" l.p (show_loc_set other_locs);
@@ -117,6 +126,8 @@ let best_recipe base st new_dag unsolved x =
         dag = expurge_dag_after !new_dag l} base (! Parser_functions.rewrite_rules) in
       new_dag := merge !new_dag (dag_with_one_action_at_end (messages_of_recipes r)  l)  ;
       r
+    )
+  | None -> Printf.eprintf "For atom %s\n and statement %s" (show_body_atom x)(show_raw_statement st);assert false
 
 
 let opti_find_recipe sigm merged_dag fa fb =

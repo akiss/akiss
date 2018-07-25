@@ -103,6 +103,17 @@ let is_before dag l1 l2 =
    | Not_found -> false end 
   | None , Some _ -> true
   | _ -> false
+  
+(* for merge_test*)
+let can_be_replaced_by dag l1 l2 = 
+  match l1, l2 with 
+  | Some l1, Some l2 -> begin
+   try
+   LocationSet.mem l1 (Dag.find l2 dag.rel)
+   with 
+   | Not_found -> assert false end 
+  | None , Some _ -> true
+  | _ -> false
 
 (* To replace a recipe by a one that should be created before *)
 let should_be_before dag l1 l2 =
