@@ -204,7 +204,8 @@ let show_kb kb =
   if !use_xml then
    "<base><deductions>"^(show_statement_list " " (kb.solved_deduction.children))
    ^"</deductions><tests>"^ (show_statement_list " " (kb.rid_solved.children))
-   ^"</tests><unreachables>"^(show_statement_list " " (kb.unreachable_solved))^"</unreachables></base>\n"  
+   ^"</tests><unreachables>"^(show_statement_list " " (kb.unreachable_solved))
+   ^"</unreachables><unsolved>"^(show_statement_list " " (kb.not_solved.children))^"</unsolved></base>\n"  
   else
   (Format.sprintf 
     "Kb : \n - %d statements \n - %d solved deduction \n - %d solved reach and identities \n - %d solved unreach\n\nSolved deduction:\n" 
@@ -293,11 +294,10 @@ let new_base () =
   | _ -> head *)
   
 let canonize_statement st = 
-  { st with
-    head = st.head; (*either the head is not a test or the head is a test and hash_test does not consider it *)
+  { st with (*either the head is not a test or the head is a test and hash_test does not consider it *)
     dag = canonize_dag st.dag;
     inputs = canonize_inputs st.inputs;
-    recipes = canonize_inputs st.recipes;
+    (*recipes = canonize_inputs st.recipes;*)
     choices = canonize_choices st.choices
   }
 

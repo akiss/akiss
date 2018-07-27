@@ -192,17 +192,17 @@ let rec apply_frame recipe (prun : partial_run) =
         ba.term 
       with Not_found -> Printf.eprintf "unbound recipe variable %s in %s" (show_term recipe)(show_raw_statement prun.test.statement); exit 2(* Var(x) *)
      ) with
-      LocPtoQ i -> (Printf.eprintf "apply_frame error %s \n" (show_term recipe); raise (LocPtoQ i))
+      LocPtoQ i -> (Printf.eprintf "apply_frame error %s \ncorresp:%s\n" (show_term recipe)(show_correspondance prun.corresp); raise (LocPtoQ i))
 
 (* Given a partial_run run, try to execute action on one of the available threads of Q *)        
-let try_run run action ext_thread =
+let try_run run (action : location) ext_thread =
   (*Printf.printf "constraints %s \n" (show_correspondance run.test.constraints );*)
   let condition = if is_empty_correspondance run.test.constraints 
     then 
       fun (action : location) (l : location) -> action.io = l.io && run.phase <= l.phase
     else 
       fun action l -> try loc_p_to_q action run.test.constraints = l with LocPtoQ i -> (Printf.eprintf "try run error\n"; raise (LocPtoQ i)) in
-   (*Printf.printf "Testing %s against %s\n" action.chan.name (show_process_start 1 process);*)
+  (* Printf.printf "Testing %d against %s\n" action.p (show_process_start 1 ext_thread.thread);*)
   match Inputs.merge_choices run.choices ext_thread.made_choices with
   | None -> None
   | Some choices -> 
@@ -293,6 +293,7 @@ let rec get_all_new_roots before after dag =
     List.concat [[(before,after)];(get_all_new_roots before after dag); result]) locset [] 
   
 let check_recipes partial_run (r,r')=
+  (*Printf.printf "checking %s = %s\n with %s\n" (show_term r)(show_term r')(show_correspondance partial_run.corresp);*)
   let r = apply_frame r partial_run in
   let r' = apply_frame r' partial_run in
   (*let r'' = Rewriting.normalize r (! Parser_functions.rewrite_rules) in

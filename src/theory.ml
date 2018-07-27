@@ -1,6 +1,7 @@
 open Util
 open Parser_functions
 open Bijection
+open Process
 
 let usage = Printf.sprintf
   "Usage: %s [options] specification-file list"
@@ -24,6 +25,8 @@ let command_line_options_list = [
    Arg.Symbol(["progress";"completion";"canon";"seed";"sat";"saturation";"maude";"exec"],set_debug),
    " Enable additional debug information");
    ("-comp", Arg.Set(about_completion), 
+    "Show all completions"); 
+   ("-completions", Arg.Set(debug_completion), 
     "Enable debug output about completions"); 
    ("-canonization", Arg.Set(about_canonization),
     "Enable debug output about canonization rules");
@@ -69,6 +72,11 @@ let reset_global () =
   rewrite_rules := [];
   functions_list := [];
   tuple_arity := [] ;
+  processes_infos.next_location <- 0;
+  processes_infos.next_nonce <- 0;
+  processes_infos.processes <- BangDag.empty;
+  processes_infos.location_list <- [] ;
+  processes_infos.max_phase <- 0;
   let nb = Base.new_base () in
   (*records = [];*)
   bijection.p <- Process.EmptyP ; 
@@ -78,6 +86,7 @@ let reset_global () =
   bijection.indexP <- Dag.Dag.empty ;
   bijection.indexQ <- Dag.Dag.empty ;
   bijection.next_id <- 0 ;
+  bijection.next_comp_id <- 0;
   bijection.tests <- Tests.empty;
   (*registered_tests <- Tests.empty;*)
   bijection.runs_for_completions_P <- [];
@@ -87,6 +96,8 @@ let reset_global () =
   bijection.todo_completion_P <- [];
   bijection.todo_completion_Q <- [];
   bijection.locs <- Dag.LocationSet.empty;
+  bijection.initial_completions <- [];
+  bijection.initial_tests <- [];
   (*htable = Hashtbl.create 5000 ;*)
   Hashtbl.reset bijection.htable_st 
 

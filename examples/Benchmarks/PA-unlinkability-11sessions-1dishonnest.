@@ -1,0 +1,99 @@
+// Passive Authentication Protocol between a passport (P) and a reader (R)
+// We test the anonymity of the passport
+// SHOULD BE TRUE
+
+// Pieces of data stored in the different passports
+free dgA, dgB.
+
+// channels
+chan c.
+chan chP,chR.
+
+// constants
+free ok.
+free read.
+free ksencI, ksmacI.
+
+// functions
+fun h/1.
+fun mac/2.
+fun senc/2, sdec/2.
+fun sign/2, checksign/2.
+fun vk/1.
+
+sdec(senc(x,y),y) -> x.
+checksign(sign(x,y),vk(y)) -> x.
+
+/*
+Description of the passport role:
+- it plays on channel c
+- it uses encryption/mac keys ksenc/ksmac
+- it stores data dg and the signed version sod
+*/
+
+let passport(ksenc,ksmac,dg,sod,ch) =
+  in(ch, x);
+  let (xenc, xmac) = x in
+  if xmac = mac(xenc, ksmac) then
+  if read = sdec(xenc,ksenc) then
+  let menc = senc((dg, sod),ksenc) in
+  let mmac = mac(menc,ksmac) in
+  out(ch, (menc,mmac)).
+
+/*
+Description of the Reader role:
+- it plays on channel c
+- it uses encryption/mac keys ksenc/ksmac
+- it has the signature key KPrDS
+*/
+
+let reader(KPrDS,ksenc,ksmac,ch) =
+  let menc = senc(read,ksenc) in
+  let mmac = mac(menc,ksmac) in
+  out(ch, (menc, mmac));
+  in(ch,x);
+  let (xenc, xmac) = x in
+  if xmac = mac(xenc, ksmac) then
+  let (xdg,(xhdg, xshdg)) = sdec(xenc,ksenc) in
+  if xhdg = checksign(xshdg, vk(KPrDS)) then
+  if xhdg = h(xdg) then
+  out(ch, ok).
+
+/*
+Passport and Reader in parallel
+*/
+
+let OneSessionPassport(KPrDS,dg,ch1,ch2) =
+  new ksenc;
+  new ksmac;
+  let sod = (h(dg), sign(h(dg),KPrDS)) in
+  (reader(KPrDS,ksenc,ksmac,ch1) | passport(ksenc,ksmac,dg,sod,ch2)).
+
+
+
+let Context (KPrDS) =
+    (!^8 new dg; out(c, dg); OneSessionPassport(KPrDS,dg,chP,chR) )   |    // 8 different Passports 
+    reader(KPrDS,ksencI,ksmacI,chR).			              	   // Passport of I
+
+
+
+
+let Process1 =
+  new KPrDS;
+  out(c, vk(KPrDS));
+  (
+    (!^2 OneSessionPassport(KPrDS,dgA,chP,chR) ) |    // 2 Passports of A
+    Context(KPrDS)
+  ).
+
+let Process2 =
+  new KPrDS;
+  out(c, vk(KPrDS));
+  (
+    OneSessionPassport(KPrDS,dgA,chP,chR) |       // Passport of A
+    OneSessionPassport(KPrDS,dgB,chP,chR) |       // Passport of B
+    Context(KPrDS)
+  ).
+
+
+query trace_equiv(Process1,Process2).

@@ -773,7 +773,7 @@ let is_tuple term =
 let resolution sigma choices dag master slave =
    try begin
    let atom = List.find (fun x -> not (is_var ( x.term))) master.body in
-   (*if atom.loc != None && is_tuple atom.term && not (is_tuple (get_head_recipe slave.head)) then [] else *)
+   if atom.loc != None && is_tuple atom.term && not (is_tuple (get_head_recipe slave.head)) then [] else 
    let dag =
      match (atom.loc) with
      | (Some l) -> let new_dag = Dag.merge dag (Dag.final slave.dag l) in

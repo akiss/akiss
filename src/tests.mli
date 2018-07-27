@@ -1,6 +1,7 @@
 val negate_statement : Base.raw_statement -> Base.raw_statement
 val statement_to_completion :
-  Bijection.which_process -> Base.raw_statement -> Bijection.Run.completion
+  Bijection.which_process ->
+  Base.statement -> Base.raw_statement -> Bijection.Run.completion
 val same_term_same_recipe :
   Base.raw_statement -> Types.substitution * Base.raw_statement
 val recipe_with_earlier_messages :
@@ -29,10 +30,16 @@ val transpose_inputs :
   Types.substitution ->
   Inputs.inputs -> Bijection.Run.partial_run -> Inputs.inputs
 val transpose_recipe :
-  Types.substitution -> Types.term -> Bijection.Run.partial_run -> Types.term
+  Types.substitution -> Types.term -> Bijection.correspondance -> Types.term
 val transpose_recipes :
   Types.substitution ->
-  Inputs.inputs -> Bijection.Run.partial_run -> Inputs.inputs
+  Inputs.inputs -> Bijection.correspondance -> Inputs.inputs
+val transpose_test_head :
+  Base.test_head ->
+  Types.substitution -> Bijection.correspondance -> Base.test_head
+val transpose_head :
+  Base.predicate ->
+  Types.substitution -> Bijection.correspondance -> Base.predicate
 val conj :
   Bijection.Run.partial_run -> Types.substitution * Base.raw_statement
 val try_other_runs :
@@ -55,11 +62,11 @@ val add_to_completion :
 val compute_new_completions : Bijection.which_process -> unit
 val statements_to_tests :
   bool ->
-  bool ->
+  'a ->
   Bijection.which_process ->
   Base.statement -> Process.process -> Base.EqualitiesSet.t -> unit
 val unreach_to_completion : Bijection.which_process -> Base.base -> unit
 val base_to_tests :
   bool ->
-  bool -> Bijection.which_process -> Base.base -> Process.process -> unit
+  'a -> Bijection.which_process -> Base.base -> Process.process -> unit
 val equivalence : bool -> Types.procId -> Types.procId -> unit

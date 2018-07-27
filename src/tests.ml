@@ -25,9 +25,11 @@ let negate_statement (st : raw_statement) =
   | _ -> Printf.printf "negation of %s " (show_raw_statement st); assert false
 
   
-let statement_to_completion process_name (st : raw_statement) =
+let statement_to_completion process_name (statement : statement) (st : raw_statement) =
+  bijection.next_comp_id <- bijection.next_comp_id + 1;
   let locs = locations_of_dag st.dag in 
   {
+    id_c = bijection.next_comp_id;
     st_c = st ;
     corresp_c = empty_correspondance ;
     corresp_back_c = empty_correspondance ;
@@ -36,6 +38,7 @@ let statement_to_completion process_name (st : raw_statement) =
     selected_action = pick_last_or_null st.dag locs ;
     root = { 
       from_base = process_name ;
+      from_statement = statement ;
       initial_statement = st ;
       directory = Dag.empty ;};
     further_completions = [];
@@ -47,14 +50,22 @@ let statement_to_completion process_name (st : raw_statement) =
   and removing predicates in the body with a recipe in a later location
   The function return the substitution which has been used and the new statement *)
 let same_term_same_recipe st =
-  let sigma_repl = Array.make st.nbvars None in
-  let sigma = (sigma_repl, Array.make 0 None) in
+  (*let sigma_repl = Array.make st.nbvars None in
+  let sigma = (sigma_repl, Array.make 0 None) in*)
   st.binder := Master;
   if !debug_merge then Printf.printf "simplification of %s\n" (show_raw_statement st);
+  let master_final = Array.make (st.nbvars) None in
+  let slave_final = Array.make (0) None in
+  let binder = ref New in
+  let nbv = ref 0 in
   let (useless,body) =
     List.partition
       (fun a ->
         let recipe_var = Term.unbox_var a.recipe in
+        let term_var = Term.unbox_var a.term in
+        if master_final.(term_var.n) = None
+        then
+          (master_final.(term_var.n) <- Some(Var({n = !nbv ; status = binder})) ;incr nbv);
         let t = a.term in
         try
         let smallest_recipe =  List.fold_left 
@@ -67,22 +78,35 @@ let same_term_same_recipe st =
               if recipe_best.n > recipe_current.n 
               then current else best 
            ) a st.body in
-        if smallest_recipe != a then sigma_repl.(recipe_var.n) <- Some smallest_recipe.recipe ;
+        let smallest_recipe_var = Term.unbox_var smallest_recipe.recipe in 
+        if master_final.(smallest_recipe_var.n) = None
+        then
+          (master_final.(smallest_recipe_var.n) <- Some(Var({n = !nbv ; status = binder})) ;incr nbv);
+        if smallest_recipe != a 
+        then 
+          master_final.(recipe_var.n) <- master_final.(smallest_recipe_var.n);
+         (* sigma_repl.(recipe_var.n) <- Some smallest_recipe.recipe ;*)
         List.exists (fun a' -> 
               if a'.term <> t
               then false
               else can_be_replaced_by st.dag a.loc a'.loc) st.body 
          with Not_found -> false
          )
-       st.body
+       (List.sort (fun x y -> Pervasives.compare (x.loc,(unbox_var x.term).n) (y.loc,(unbox_var y.term).n)) st.body)
   in
   let body = List.sort_uniq (fun x y -> Pervasives.compare (x.loc,(unbox_var x.term).n) (y.loc,(unbox_var y.term).n)) body in
   if !debug_merge then
     List.iter (fun a -> Format.printf "Removed %s\n" (show_body_atom a)) useless ;
 (*  if useless = [] then st 
   else *)
-  let sigma = Rewriting.pack sigma in
+  let sigma = { 
+    binder = binder; 
+    master =  Array.map Rewriting.get_option master_final;
+    slave = Array.map Rewriting.get_option slave_final;
+    nbvars = !nbv;
+  } in
   let r = apply_subst_statement { st with body = body; } sigma in
+  (* Printf.printf "result: %s\n" (show_raw_statement r); *)
   (*st.binder := New;*)
   (sigma,r)
   
@@ -296,16 +320,25 @@ let apply_frame_2 sigma recipe run =
 let transpose_inputs sigma (recipes : Inputs.inputs) (run : partial_run) : Inputs.inputs =
   {i = Dag.fold (fun key recipe ninputs -> Dag.add (loc_p_to_q key run.corresp) (apply_frame_2 sigma recipe run) ninputs) recipes.i (Dag.empty)}
 
-let rec transpose_recipe sigma recipe (prun : partial_run) =
+let rec transpose_recipe sigma recipe corresp =
   match recipe with
-    | Fun({ id=Frame(l)}, []) ->  Fun({ id=Frame(Bijection.loc_p_to_q l prun.corresp);has_variables=false }, []) 
+    | Fun({ id=Frame(l)}, []) ->  Fun({ id=Frame(Bijection.loc_p_to_q l corresp);has_variables=false }, []) 
     | Fun({ id=Input(l)}, []) -> assert false
-    | Fun(f, args) -> Fun(f, List.map (fun x -> transpose_recipe sigma x prun) args)
-    | Var(x) -> Rewriting.apply_subst_term recipe sigma 
+    | Fun(f, args) -> Fun(f, List.map (fun x -> transpose_recipe sigma x corresp) args)
+    | Var(x) -> Rewriting.apply_subst_term recipe sigma (* Does sigma do the transposition? *)
   
-let transpose_recipes sigma (recipes : Inputs.inputs) (run : partial_run) : Inputs.inputs =
-  {i = Dag.fold (fun key recipe nrec -> Dag.add (loc_p_to_q key run.corresp) (transpose_recipe sigma recipe run) nrec) recipes.i (Dag.empty)}
+let transpose_recipes sigma (recipes : Inputs.inputs) corresp : Inputs.inputs =
+  {i = Dag.fold (fun key recipe nrec -> Dag.add (loc_p_to_q key corresp) (transpose_recipe sigma recipe corresp) nrec) recipes.i (Dag.empty)}
 
+let transpose_test_head head (sigma :  substitution) corresp =
+  {
+    head_binder = sigma.binder ;
+    equalities = EqualitiesSet.map (fun (s,t) -> (transpose_recipe sigma s corresp,transpose_recipe sigma t corresp)) head.equalities;
+    disequalities = EqualitiesSet.map (fun (s,t) -> (transpose_recipe sigma s corresp,transpose_recipe sigma t corresp)) head.disequalities}
+  
+let transpose_head head (sigma :  substitution) corresp =
+  Tests( transpose_test_head (get_test_head head) sigma corresp)
+  
 (* take a run and provide a statement which is the test of the run transposed in the other process *)  
 let conj run =
   let stP = run.test.statement in
@@ -320,17 +353,14 @@ let conj run =
   dag = map_dag (only_observable run.sol.restricted_dag) run.corresp;
   inputs =  transpose_inputs identity_sigma st.recipes run  ;
   choices = run.choices ;
-  head = (let eq, diseq = recipes_of_head st.head in Tests({
-    head_binder = identity_sigma.binder ;
-    equalities = EqualitiesSet.map (fun (s,t) -> (transpose_recipe identity_sigma s run,transpose_recipe identity_sigma t run)) eq;
-    disequalities = EqualitiesSet.map (fun (s,t) -> (transpose_recipe  identity_sigma s run,transpose_recipe identity_sigma t run)) diseq}));
+  head = transpose_head st.head identity_sigma run.corresp;
   body = List.map (fun ba -> {
     loc = (match ba.loc with None -> None | Some l -> Some (loc_p_to_q l run.corresp));
-    recipe = transpose_recipe identity_sigma ba.recipe run;
+    recipe = transpose_recipe identity_sigma ba.recipe run.corresp;
     term = apply_frame_2 identity_sigma ba.recipe run;
     marked = false;
     }) st.body ;
-  recipes = transpose_recipes identity_sigma st.recipes run ; 
+  recipes = transpose_recipes identity_sigma st.recipes run.corresp ; 
   involved_copies = BangSet.empty ; (* TODO *)
   } in
   stP.binder := New;
@@ -356,7 +386,7 @@ let rec add_identities_to_completions head process_name compl =
   List.iter (fun (sigma,compl) -> add_identities_to_completions (apply_subst_test_head head sigma) process_name compl) compl.further_completions;
   match compl.generated_test with
   | None -> ()
-  | Some (subst,test) -> complete_set_of_identities (apply_subst_test_head head subst) process_name test
+  | Some (subst,test) -> complete_set_of_identities (transpose_test_head head subst compl.corresp_back_c) process_name test
 
 
 and complete_set_of_identities head process_name old_test =
@@ -395,7 +425,9 @@ and complete_set_of_identities head process_name old_test =
               head.head_binder := New;              
               complete_set_of_identities tau process_name derived_test) 
             pr.consequences;
-          List.iter (fun (sigma,compl) -> add_identities_to_completions (apply_subst_test_head head' sigma) process_name compl) pr.completions
+          head.head_binder := Master;
+          List.iter (fun (sigma,compl) -> add_identities_to_completions (transpose_test_head (head') sigma compl.corresp_c) process_name compl) pr.completions;
+          head.head_binder := New;
         ) old_test.solutions_done
     with
     Not_found -> () (* the old test is still waiting to be processed: nothing to do *)
@@ -407,7 +439,7 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
   let nb = Dag.cardinal statement.dag.rel in
   try
   if nb != 0 && actual_test process_name statement
-  then begin
+  then begin 
     let dag = if Process.processes_infos.max_phase = 0 then statement.dag 
       else (Printf.printf "a cycle on %s\n"(show_dag statement.dag) ;
         let loc_phase = Array.make (Process.processes_infos.max_phase+2) LocationSet.empty in
@@ -454,16 +486,6 @@ and add_merged_tests prun =
   (*  if false && !debug_tests then Printf.printf "[%d] " (par.test.id); *)
     if prun.test.process_name = par.test.process_name 
     then
-     (* let eq_par, diseq_par = recipes_of_head par.test.statement.head in
-      let eq_prun, diseq_prun = recipes_of_head prun.test.statement.head in
-      if ((Inputs.contains prun.test.statement.inputs par.test.statement.inputs) 
-        &&  (EqualitiesSet.subset (eq_par)(eq_prun)) 
-        &&  (EqualitiesSet.subset (eq_par)(eq_prun)))
-      || ((Inputs.contains par.test.statement.inputs prun.test.statement.inputs) 
-        &&  (EqualitiesSet.subset (diseq_prun)(diseq_par)) 
-        && (EqualitiesSet.subset (diseq_prun)(diseq_par)))
-      then (*if false && !debug_tests then Printf.printf "s,"*)()  else
-      begin *)
         if !debug_merge then Printf.printf "Try merge between < %d + %d >" prun.test.id par.test.id; 
         let merged_statements = merge_tests prun.test.process_name 
           { prun.test.statement with dag = prun.sol.restricted_dag } 
@@ -474,8 +496,10 @@ and add_merged_tests prun =
           (*if false && !debug_tests then Printf.printf "T,";*)
           match statement_to_tests prun.test.process_name (Composed(prun,par)) raw_st (proc (other prun.test.process_name)) with
           | Some new_test ->
-            prun.consequences <- (Master,sigma,new_test) :: prun.consequences;
-            par.consequences <-  (Slave,sigma,new_test) :: par.consequences
+            if not (List.exists (fun (_,_,t) -> t==new_test) prun.consequences) then
+              prun.consequences <- (Master,sigma,new_test) :: prun.consequences;
+            if not (List.exists (fun (_,_,t) -> t==new_test) par.consequences) then
+              par.consequences <-  (Slave,sigma,new_test) :: par.consequences
           | None -> ()
         ) merged_statements
       (*end*)
@@ -506,36 +530,38 @@ let completion_to_test comp =
   let solution = init_sol comp.root.from_base comp.st_c (proc (other comp.root.from_base )) test in
   match find_possible_run solution with
     None -> 
-      if !about_completion then Printf.printf "The completion is not executable \n" 
+      if !debug_completion then Printf.printf "The completion is not executable \n" 
   | Some pr -> 
-    if !about_completion then Printf.printf "Execution of the completion  %s\n" (show_run pr);
+    if !debug_completion then Printf.printf "Execution of the completion  %s\n" (show_run pr);
     let sigma, conjrun = conj pr in 
     begin
     match statement_to_tests (other comp.root.from_base) (Completion) conjrun (proc (comp.root.from_base )) with
-    | Some test -> if !about_completion then Printf.printf "Get test from the completion\n";
+    | Some test -> if !debug_completion then Printf.printf "Get test from the completion\n %s\n" (show_test test);
       comp.generated_test <- Some (sigma, test) 
-    | None -> if !about_completion then Printf.printf "No test from the completion\n"; () end
+    | None -> if !debug_completion then Printf.printf "No test from the completion\n"; () end
     
 let nb_comp = ref 0
 
 let add_to_completion (run : partial_run) (completion : completion) = 
-  (*if !about_completion then 
+  if !debug_completion then 
     Printf.printf "Try completing a completion between \n run %s \n whose test is %s \n and partial completion %s\n" 
-    (show_run run)(show_raw_statement run.test.statement) (show_completion completion);*)
+    (show_run run)(show_raw_statement run.test.statement) (show_completion completion);
   let exception NonBij in
   try
   let corr = { a = Dag.union (fun locP x y -> if x = y then Some x else raise NonBij) run.corresp.a completion.corresp_c.a } in
   let corr_back = { a = Dag.union (fun locQ x y -> if x = y then Some x else raise NonBij) run.corresp_back.a completion.corresp_back_c.a } in
   let missing = LocationSet.filter (fun loc -> try ignore (Dag.find loc corr_back.a); false with Not_found -> true) completion.missing_actions in
   let tau, conjrun = conj run in
-  (*if !about_completion then Printf.printf "Conj = %s \n" (show_raw_statement conjrun);*)
+  (*if !debug_completion then Printf.printf "Conj = %s \n" (show_raw_statement conjrun);*)
   if !debug_merge then Printf.printf "Merge run %d with comp %s\n" run.test.id (show_raw_statement completion.root.initial_statement);
   let sts = merge_tests completion.root.from_base conjrun completion.st_c in
-  (*if !about_completion && sts = [] then  Printf.printf "merge is not possible\n\n";*)
+  (*if !debug_completion && sts = [] then  Printf.printf "merge is not possible\n\n";*)
   List.iter (fun (sigma,st) -> 
+    bijection.next_comp_id <- bijection.next_comp_id + 1;
     let new_comp = {
+        id_c = bijection.next_comp_id;
         st_c = canonize_statement st;
-        corresp_c = corr;
+        corresp_c = canonize_correspondance corr;
         corresp_back_c = corr_back;
         core_corresp = List.filter (fun (l,l') -> try ignore (Dag.find l completion.root.initial_statement.dag.rel); true with Not_found -> false) (Dag.bindings corr.a);
         missing_actions = missing ;
@@ -547,12 +573,16 @@ let add_to_completion (run : partial_run) (completion : completion) =
     if !about_progress then (
       incr nb_comp ;
       if !nb_comp mod 10000 = 0 then Printf.printf "Adding partial comp %d %s\n%!" !nb_comp (show_completion new_comp));
-    if !about_completion then Printf.printf "Registering a new completion from old\n %s \n and %s \n" (show_completion completion)(show_run run);
-    completion.further_completions <- (sigma,new_comp) :: completion.further_completions;
-    run.completions <- (tau,new_comp) :: run.completions;
-    if register_completion new_comp 
+    if !debug_completion then Printf.printf "Registering a new completion %s\n from old\n %s \n and %s \n" (show_completion new_comp)(show_completion completion)(show_run run);
+    (*Printf.printf "for %d:" (completion.id_c);*)
+    let add_test,new_comp = register_completion new_comp in
+    if not (List.exists (fun (s,c) -> c.id_c = new_comp.id_c) completion.further_completions) then
+      completion.further_completions <- (sigma,new_comp) :: completion.further_completions;
+    if not (List.exists (fun (s,c) -> c.id_c = new_comp.id_c) run.completions) then
+      run.completions <- (tau,new_comp) :: run.completions;
+    if add_test
     then  begin
-      if !about_completion then Printf.printf "Completion complete, checking test %s\n" (show_raw_statement st)(*todo*);
+      if !debug_completion then Printf.printf "Completion complete, checking test %s\n" (show_raw_statement st)(*todo*);
       completion_to_test new_comp 
     end
   ) sts
@@ -564,7 +594,7 @@ let rec compute_new_completions process_name  =
   match if process_name = P then bijection.runs_for_completions_Q else bijection.runs_for_completions_P with
   (* First match all run with all completions *)
   | run :: lst -> 
-    if !about_completion then Printf.printf "\nChecking if the following run can complete a completion %s\n%s\n" (show_raw_statement run.test.statement)(show_run run);
+    if !debug_completion then Printf.printf "\nChecking if the following run can complete a completion %s\n%s\n" (show_raw_statement run.test.statement)(show_run run);
     if process_name = P then bijection.runs_for_completions_Q <- lst else bijection.runs_for_completions_P <- lst ;
     List.iter (fun (_,l) ->
     List.iter (fun completion -> add_to_completion run completion) 
@@ -573,16 +603,16 @@ let rec compute_new_completions process_name  =
     compute_new_completions process_name
   (* Then for all new partial completion just created match them with all runs *)  
   | [] -> 
-    if !about_completion then (Printf.printf "\nCompleting new completions\n\n"; show_bijection());
+    if !debug_completion then (Printf.printf "\nCompleting new completions\n\n"; show_bijection());
     while (if process_name = P then bijection.todo_completion_P else bijection.todo_completion_Q) != [] do
       let todo_completion = if process_name = P then bijection.todo_completion_P else bijection.todo_completion_Q in
       match todo_completion with
       | [] -> assert false
       |comp :: lst -> 
-        if !about_completion then Printf.printf "Remains %d completions, processing %s \n" (List.length todo_completion)(show_completion comp);
+        if !debug_completion then Printf.printf "Remains %d completions, processing %s \n" (List.length todo_completion)(show_completion comp);
         if process_name = P then bijection.todo_completion_P <- lst else bijection.todo_completion_Q <- lst ;
         Dag.iter (fun locQ runset ->
-          if !about_completion then Printf.printf "- at loc %d:\n" locQ.p;
+          if !debug_completion then Printf.printf "- at loc %d:\n" locQ.p;
           RunSet.iter (fun run -> 
             if run.test.process_name <> process_name 
             then add_to_completion run comp ) runset)
@@ -592,13 +622,20 @@ let rec compute_new_completions process_name  =
 (* From solved statements create tests. 
 Opti: when children are identical with same world merge them with the reach parent to reduce number of tests *)  
 let rec statements_to_tests t c process_name (statement : statement) otherProcess equalities =
-  let _,raw_statement' = same_term_same_recipe statement.st in
-  let raw_statement = { raw_statement' with head= head_predicate_to_test raw_statement'.binder raw_statement'.head } in
-   match statement.st.head with
+  (* Printf.printf "Getting test (%d) %s %s \n" statement.id (if t then "oui" else "non") (show_raw_statement statement.st); *)
+  let sigma,raw_statement' = same_term_same_recipe statement.st in
+  let equalities = 
+    match statement.st.head with
+    | Identical (s,t) -> EqualitiesSet.add (s,t) equalities
+    | _ -> equalities in
+(*   match statement.st.head with
   | Identical _ -> 
     if t then ignore (statement_to_tests process_name (Initial(statement)) raw_statement otherProcess);
-    if c then ignore (register_completion (statement_to_completion process_name (negate_statement raw_statement'))) (* Identical don't have children *)
-  | _ -> 
+    if c then (
+      let compl = statement_to_completion process_name statement (negate_statement raw_statement') in
+      ignore (register_completion compl); (* Identical don't have children *)
+      bijection.initial_completions <- compl :: bijection.initial_completions );
+  | _ -> *)
     let new_eq, children = List.fold_left 
     (fun (new_eq,children) st -> 
       let is_identical = match st.st.head with Identical _ -> true | _ -> false in
@@ -606,8 +643,11 @@ let rec statements_to_tests t c process_name (statement : statement) otherProces
       then begin
         match st.st.head with 
         Identical (s,t) -> 
-          let _,st = same_term_same_recipe st.st in
-          if c then ignore (register_completion (statement_to_completion process_name (negate_statement st)));
+          (* let _,st' = same_term_same_recipe st.st in
+          if c then (
+            let compl = statement_to_completion process_name st (negate_statement st') in
+            ignore (register_completion compl);
+            bijection.initial_completions <- compl :: bijection.initial_completions ); *)
           (EqualitiesSet.add (s,t) new_eq, children)
         | _ -> assert false end
       else begin
@@ -615,18 +655,20 @@ let rec statements_to_tests t c process_name (statement : statement) otherProces
         (new_eq,st :: children) end)
     (equalities, []) statement.children in
     if t then ignore (statement_to_tests process_name (Initial(statement)) 
-      {raw_statement with head = Tests({
-        head_binder = raw_statement.binder;
+      {raw_statement' with head = Tests(apply_subst_test_head {
+        head_binder = statement.st.binder;
         equalities= new_eq; 
-        disequalities = EqualitiesSet.empty})} 
+        disequalities = EqualitiesSet.empty} sigma)} 
       otherProcess);
-    List.iter (fun st -> statements_to_tests t c process_name st otherProcess new_eq) children
+    List.iter (fun st -> statements_to_tests t c process_name st otherProcess new_eq) statement.children
    
     
 
 let unreach_to_completion process_name base = 
   List.iter (fun st -> let _, st' = same_term_same_recipe st.st in 
-    ignore (register_completion (statement_to_completion process_name (negate_statement st')))
+    let compl = statement_to_completion process_name st (negate_statement st') in
+    ignore (register_completion compl) ;
+    bijection.initial_completions <- compl :: bijection.initial_completions
     ) base.unreachable_solved
 
 let base_to_tests t c process_name base other_process = 
@@ -638,11 +680,11 @@ let equivalence both p q =
   if !about_progress then Printf.printf "Saturating P\n\n%!";
   let (locP,satP) = Horn.saturate p in
   if  !about_saturation then
-    Printf.printf (if !use_xml then "%s" else "Saturation of P:\n %s\n") (show_kb satP);
+    Printf.printf (if !use_xml then "<satp>%s</satp>" else "Saturation of P:\n %s\n") (show_kb satP);
   if !about_progress && not !use_xml then Printf.printf "Saturating Q\n\n%!";
    let (locQ,satQ) = Horn.saturate q in
   if  !about_saturation then
-    Printf.printf (if !use_xml then "%s" else "Saturation of Q:\n %s\n") (show_kb satQ);
+    Printf.printf (if !use_xml then "<satq>%s</satq>" else "Saturation of Q:\n %s\n") (show_kb satQ);
   let processP = (CallP(root_location locP,1,p,Array.make 0 zero,Array.make 0 null_chan)) in
   let processQ = (CallP(root_location locQ,1,q,Array.make 0 zero,Array.make 0 null_chan)) in 
   bijection.p <- processP ;
@@ -655,7 +697,7 @@ let equivalence both p q =
   base_to_tests both true Q satQ processP ; 
   if both then 
   unreach_to_completion P satP ;
-  if !about_completion then
+  if !debug_completion then
     begin 
     Printf.printf "Completions of P\n%!";
     show_all_completions bijection.partial_completions_P;
@@ -686,16 +728,19 @@ let equivalence both p q =
       Printf.printf "\n\n __Actualization of completions of Q (%d runs)__\n%!" (List.length bijection.runs_for_completions_P);
     compute_new_completions Q ; 
     done ;
-    if !about_tests then show_hashtbl ();
+    if !about_tests then show_all_tests ();
+    if !about_completion then show_final_completions ();
     if !about_bijection then Bijection.show_bijection();
     if !about_bench then  Printf.printf " time: %F equivalence (%d tests)\n"  (Sys.time() -. time) bijection.next_id
     else if both then Printf.printf "\nP and Q are trace equivalent. \n" else Printf.printf "\nTraces of P are included in Q. \n";
     if ! use_xml then Printf.printf "</all>"
   with
   | Attack(test,sol) -> begin 
-    if !about_tests then show_hashtbl ();
+    if !about_tests then show_all_tests ();
+    if !about_completion then show_final_completions ();
     if !about_bijection then Bijection.show_bijection();
     if !about_bench then  Printf.printf " time: %F attack found (test n°%d)  \n" (Sys.time() -. time) test.id
     else Printf.printf "\nAn attack has been found for the test %s \n with specific order %s \n\nP and Q are not trace equivalent. \n" 
-    (show_test test)(show_dag sol.restricted_dag)
+    (show_test test)(show_dag sol.restricted_dag);
+    if ! use_xml then Printf.printf "</all>";
     end

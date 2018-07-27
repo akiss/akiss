@@ -38,7 +38,7 @@ let is_empty_correspondance corr = Dag.is_empty corr.a
 
 let show_correspondance c =
   if !use_xml then
-  (Dag.fold (fun lp lq str -> str ^(Format.sprintf  "%d =&gt; %d ;"  lp.p lq.p)) c.a "<corresp>")^"</corresp>"
+  (Dag.fold (fun lp lq str -> str ^(Format.sprintf  "<src>%d</src> =&gt; <dst>%d</dst> ;"  lp.p lq.p)) c.a "<corresp>")^"</corresp>"
   else
   (Dag.fold (fun lp lq str -> str ^(Format.sprintf " %d => %d ;" lp.p lq.p)) c.a "{|")^"|}"
 
@@ -61,6 +61,7 @@ type extra_thread = {
   
 module rec Run : sig 
   type completion = {
+    id_c : int;
     st_c : raw_statement ; (* the current completion g u U_i f_i *)
     corresp_c : correspondance ; (* the correspondance of the union of f_i *)
     corresp_back_c : correspondance ;
@@ -73,9 +74,14 @@ module rec Run : sig
   }
   and complement_root = {
     from_base : which_process; (* the saturated base from which the completion come from *)
+    from_statement : statement; (* for debugging *)
     initial_statement : raw_statement ; (* the unreach or identity from which the completion is issued: g *) 
-    mutable directory : (completion list) Dag.t ; (* For each selected missing action, the list of completions so far, to keep only the most general ones  *)
-  }  
+    mutable directory : (((hash_completion * completion) list) ref) Dag.t ; (* For each selected missing action, the list of completions so far, to keep only the most general ones  *)
+  } 
+  and hash_completion = {
+    hash_st_c : hash_test ; 
+    hash_corresp_c : correspondance ;
+  }
   and  partial_run = {
   test : test; (* The test from which the prun come from *)
   sol : solution;
@@ -144,6 +150,7 @@ end
 = 
 struct
   type completion = {
+    id_c : int;
     st_c : raw_statement ; (* the current completion g u U_i f_i *)
     corresp_c : correspondance ; (* the correspondance of the union of f_i *)
     corresp_back_c : correspondance ;
@@ -156,9 +163,14 @@ struct
   }
   and complement_root = {
     from_base : which_process; (* the saturated base from which the completion come from *)
+    from_statement : statement;
     initial_statement : raw_statement ; (* the unreach or identity from which the completion is issued: g *) 
-    mutable directory : (completion list) Dag.t ; (* For each selected missing action, the list of completions so far, to keep only the most general ones  *)
+    mutable directory : (((hash_completion * completion) list) ref) Dag.t ; (* For each selected missing action, the list of completions so far, to keep only the most general ones  *)
   }  
+  and hash_completion = {
+    hash_st_c : hash_test ; 
+    hash_corresp_c : correspondance ;
+  }
   and partial_run = {
   test : test; (* The test from which the prun come from *)
   sol : solution;
@@ -180,6 +192,7 @@ struct
   last_exe : location ; (* the action whose run lead to this pr *)
   weird_assoc : int ; (* when the parent of an action is not associated to the parent of the associated action *)
   score : int ;
+  (* for selected runs only: the list of merged tests from this run (consequences) and completions from this run (completions) *)
   mutable consequences : (statement_role * substitution * test) list;
   mutable completions : (substitution * completion) list;
 }
@@ -221,17 +234,22 @@ let compare (x : t) (y : t)=
       compare (LocationSet.cardinal x.restrictions,x.weird_assoc,-x.score,x)
               (LocationSet.cardinal y.restrictions,y.weird_assoc,-y.score,y)
 let show_run pr  =
+  if !use_xml 
+  then 
+    show_correspondance pr.corresp
+  else
   (*(List.fold_left (fun str (t,t') -> str ^ (show_term t)  ^ " != " ^ (show_term t') ^ ", " )*)
-    (Format.sprintf "{ %s: \n frame= %s\n corresp= %s\n"
+    (Format.sprintf "{ %s: \n corresp= %s\n"
     (show_which_process pr.test.process_name)
-    (Inputs.show_inputs pr.frame)
     (show_correspondance pr.corresp))
    (* pr.disequalities) ^"\n" *)
         
 let show_partial_run pr =
   (List.fold_left (fun str ext_thread -> str ^ "   " ^(show_loc_set ext_thread.before_locs) ^" : "^(Process.show_process_start 2 ext_thread.thread)^"\n")
   ((List.fold_left (fun str ext_thread -> str ^ "   " ^ (show_loc_set ext_thread.before_locs) ^" : "^(Process.show_process_start 2 ext_thread.thread)^"\n")
-  ((show_run pr) ^ " remaining_actions= " ^ (show_loc_set pr.remaining_actions) ^ "\n qthreads= \n") 
+  (((show_run pr)^ (Format.sprintf " frame= %s\n" (Inputs.show_inputs pr.frame))) 
+  ^ " remaining_actions= " ^ (show_loc_set pr.remaining_actions)
+  ^ "\n qthreads= \n") 
   pr.qthreads) ^ " fthreads=\n") pr.failed_qthreads) 
   ^ (Format.sprintf "\n action=%d; weird = %d ; score = %d ; restricted = %s;  }\n" 
   pr.last_exe.p pr.weird_assoc pr.score (show_loc_set pr.restrictions))
@@ -253,12 +271,22 @@ let rec show_origin o =
   
 and show_test t =
   Format.sprintf 
-  (if !use_xml then "<test><idtest>%d</idtest><origin>%s</origin><infos>%s %d,%d</infos><prname>%s</prname>%s</test>"
+  (if !use_xml then "<test>{<idtest>%d</idtest>}<origin>%s</origin><infos>%s %d,%d</infos><prname>%s</prname>%s</test>"
   else "Test[%d]: %s %s {%d,%d} %s\n%s\n") t.id (show_origin t.origin) (show_int_set t.from) t.new_actions t.nb_actions (show_which_process t.process_name) (show_raw_statement t.statement)
 
   
 let show_completion completion = 
-  Format.sprintf "completion [%s] from statement\n %s -corresp: %s \n -missing: %s (%d)\n" (show_which_process completion.root.from_base)(show_raw_statement completion.st_c) (show_correspondance completion.corresp_c) (show_loc_set completion.missing_actions)(completion.selected_action.p)
+  Format.sprintf (
+    if !use_xml then 
+      "<completion>§<idcomp>%d</idcomp><wp>%s</wp>%s\n%s\n<miss>%s</miss>\n<loc>%d</loc></completion>"
+    else
+      "completion %d[%s] from statement\n %s -corresp: %s \n -missing: %s (%d)\n" )
+    completion.id_c
+    (show_which_process completion.root.from_base)
+    (show_raw_statement completion.st_c) 
+    (show_correspondance completion.corresp_c) 
+    (show_loc_set completion.missing_actions)
+    (completion.selected_action.p)
  
 let show_all_completions daglst = 
    Dag.iter (fun loc listcomp -> 
@@ -284,7 +312,6 @@ module PartialRun =
        end
 
 module RunSet = Set.Make(PartialRun)
-
 
 
 module Test =
@@ -318,6 +345,19 @@ module Test =
 module Tests = Set.Make(Test)
   
 open Run 
+
+let canonize_completion completion = {
+  completion with
+  st_c = canonize_statement completion.st_c;
+  corresp_c = canonize_correspondance completion.corresp_c;
+}
+
+let completion_to_hash_completion completion =
+  { hash_st_c = raw_to_hash_test completion.st_c;
+    hash_corresp_c =  completion.corresp_c;
+  }
+
+
 
 exception Attack of test * solution
 
@@ -402,6 +442,7 @@ type bijection = {
   mutable indexQ : index ;
   mutable choices_indexP : choices_index;
   mutable choices_indexQ : choices_index ;
+  mutable next_comp_id : int;
   mutable next_id : int; (* the index for tests id *)
   mutable tests : Tests.t; (* The remaining tests to test on the other process *)
   (*mutable registered_tests : Tests.t; (* The tests that are set in *)*)
@@ -414,6 +455,9 @@ type bijection = {
   mutable locs : LocationSet.t; (* the locations already in the tests of the base, for optimization only *)
   (*htable : (int list , origin) Hashtbl.t;*)
   htable_st : (hash_test, test) Hashtbl.t;
+  (*Only to print infos *)
+  mutable initial_tests : test list;
+  mutable initial_completions : completion list;
 }
 
 let bijection = 
@@ -428,6 +472,7 @@ let bijection =
   indexQ = Dag.empty ;
   choices_indexP = Dag.empty ;
   choices_indexQ = Dag.empty ;
+  next_comp_id = 0 ;
   next_id = 0 ;
   tests = Tests.empty;
   (*registered_tests = Tests.empty;*)
@@ -440,6 +485,8 @@ let bijection =
   locs = LocationSet.empty;
   (*htable = Hashtbl.create 5000 ;*)
   htable_st = Hashtbl.create 5000 ;
+  initial_tests = [];
+  initial_completions = [];
 }
 
 let show_bijection () =
@@ -455,6 +502,54 @@ open Run
 
 let show_hashtbl () =
   Hashtbl.iter (fun h s -> Printf.printf "-- %s  \n\n" (show_test s)) bijection.htable_st
+
+let hash_view : (test, unit) Hashtbl.t = Hashtbl.create 2000
+let hash_comp_view : (completion,unit) Hashtbl.t = Hashtbl.create 5000
+
+let rec show_all_tests test =
+  if Hashtbl.mem hash_view test then Printf.printf (if !use_xml then ".<idtest>%d</idtest>.\n" else "--> [%d]\n") test.id
+  else (
+  Hashtbl.add hash_view test ();
+  Printf.printf (if !use_xml then "<testnode>%s\n" else "-- %s\n") (show_test test);
+  List.iter (fun  sol -> 
+    if !use_xml then Printf.printf "<solution>";
+    if false && sol.restricted_dag != test.statement.dag then Printf.printf (if !use_xml then "%s\n" else "dag %s\n")  (show_dag sol.restricted_dag);
+    (match sol.selected_run with 
+    | None -> Printf.printf "attack\n" 
+    | Some run -> 
+      Printf.printf (if !use_xml then "%s\n" else "run:%s\n") (show_run run);
+      List.iter (function 
+          (Master,sigma,test) -> show_all_tests test
+        | (Slave,sigma,test) -> Printf.printf (if !use_xml then "<slv><idtest>%d</idtest></slv>," else "*[%d]") test.id)  run.consequences;
+      List.iter (fun (sigma,c) -> Printf.printf (if !use_xml then "[+<idcomp>%d</idcomp>+]," else "+[%d]") c.id_c)  run.completions);      
+    if !use_xml then Printf.printf "</solution>"
+  ) test.solutions_done ;
+    if !use_xml then Printf.printf "</testnode>\n" else Printf.printf "end of (%d)\n" test.id;
+  )
+  
+let rec show_completion_tree completion =
+  if Hashtbl.mem hash_comp_view completion then Printf.printf (if !use_xml then "[-<idcomp>%d</idcomp>-].\n" else "--> [%d]\n") completion.id_c
+  else (
+  Hashtbl.add hash_comp_view completion ();
+  Printf.printf (if !use_xml then "<comptree>%s\n" else "%s\n") (show_completion completion);
+  if completion.selected_action = null_location 
+  then
+    match  completion.generated_test with
+    | None -> Printf.printf "X"
+    | Some (_,t) -> Printf.printf (if !use_xml then "[*<idtest>%d</idtest>*] " else "%d ") t.id
+  else
+    List.iter (fun (_,c) -> show_completion_tree c) completion.further_completions;
+  Printf.printf (if !use_xml then "</comptree>" else "\n")
+  )
+  
+let show_all_tests () = 
+  List.iter show_all_tests (List.rev bijection.initial_tests)
+  
+let show_final_completions () =
+  List.iter (fun c -> 
+    Printf.printf (if !use_xml then "<comproot>(%d)" else "(%d)\n") c.root.from_statement.id;
+    show_completion_tree c;
+    Printf.printf (if !use_xml then "</comproot>\n" else "\n")) bijection.initial_completions
 
 let proc name =
   match name with
@@ -472,16 +567,16 @@ let reorder_int_set s =
 
 (* Add a test to the tests in the queue *)
 let push (statement : raw_statement) process_name origin init =
-  let int_set = match origin with 
-      | Initial _ -> IntegerSet.singleton (bijection.next_id + 1)
-      | Completion -> IntegerSet.singleton (bijection.next_id + 1);
-      | Composed(run1,run2) ->  (IntegerSet.union run1.test.from run2.test.from)
+  bijection.next_id <- bijection.next_id + 1 ;
+  let (int_set,initial) = match origin with 
+      | Initial _ -> IntegerSet.singleton (bijection.next_id),true
+      | Completion -> IntegerSet.singleton (bijection.next_id),true;
+      | Composed(run1,run2) ->  (IntegerSet.union run1.test.from run2.test.from),false
       | Temporary -> assert false
   in
   (*let int_lst = IntegerSet.elements int_set in*)
   (*if origin != Completion && Hashtbl.mem bijection.htable int_lst then ()  else begin
   Hashtbl.add bijection.htable int_lst origin;*)
-  bijection.next_id <- bijection.next_id + 1 ;
   (*if bijection.next_id = 2000 then show_hashtbl ();*)
   let nb = Dag.cardinal statement.dag.rel in
   let test = { null_test with
@@ -502,6 +597,7 @@ let push (statement : raw_statement) process_name origin init =
   if !Util.debug_tests || (!about_progress && bijection.next_id mod 250 = 0) then Printf.printf "\nAdding new test: %s\n%!" (show_test test);
   (*if bijection.next_id mod 10000 = 0 then (*Hashtbl.iter (fun k v -> Printf.printf "%s" (show_raw_statement k)) bijection.htable;*)show_bijection ();*)
   bijection.tests <- Tests.add test bijection.tests;
+  if initial then bijection.initial_tests <- test :: bijection.initial_tests;
   test
 
   
@@ -522,36 +618,45 @@ let pop () =
   test
 
 (* add a partial completion to the todo list *) 
-(* return true if a test should be extracted from completion, false otherwise *)
+(* return true if a test should be extracted from completion, false otherwise with the actual completion *)
 let register_completion completion =
-  if !about_completion then Printf.printf "Registering completion: %s\n" (show_completion completion);
+  if !debug_completion then Printf.printf "Registering completion: %s\n" (show_completion completion);
   completion.st_c.binder := New ;
   let is_opti = (completion.st_c = completion.root.initial_statement) in
   let eq, diseq = recipes_of_head completion.st_c.head in
   let is_consistent = EqualitiesSet.is_empty (EqualitiesSet.inter eq diseq) in
-  if is_consistent || is_opti then begin
+  if is_consistent || is_opti then (
     let to_be_completed = if completion.root.from_base = P then bijection.partial_completions_P else bijection.partial_completions_Q in
     let loc = completion.selected_action in
-    let new_list = Dag.add loc (completion:: (try Dag.find loc to_be_completed with Not_found -> [])) to_be_completed in
-    completion.root.directory <- Dag.add loc (completion:: (
-      try Dag.find loc completion.root.directory with Not_found -> [])) completion.root.directory; 
-    if !about_completion then Printf.printf "New completion: %s\n" (show_completion completion);
-    if completion.root.from_base = P  then bijection.partial_completions_P <- new_list else bijection.partial_completions_Q <- new_list;
-    if is_consistent && not (LocationSet.is_empty completion.missing_actions) then
-    begin
-        if !about_completion then Printf.printf "Adding partial completion %s\n" (show_raw_statement completion.st_c);
-        if completion.root.from_base = P then 
-          bijection.todo_completion_P <- completion :: bijection.todo_completion_P
-        else
-          bijection.todo_completion_Q <- completion :: bijection.todo_completion_Q;
-        false
-    end
-    else
-      is_consistent
-  end
+    if not (Dag.mem loc completion.root.directory) then completion.root.directory <- Dag.add loc (ref []) completion.root.directory;
+    let hash_table_loc = Dag.find loc completion.root.directory in
+    let hash_compl = completion_to_hash_completion completion in
+    (
+    match List.assoc_opt hash_compl !hash_table_loc with
+    | None -> 
+      if !debug_completion then Printf.printf "New completion: %s\n" (show_completion completion);
+      hash_table_loc :=  (hash_compl,completion) :: !hash_table_loc;
+      let new_list = Dag.add loc (completion:: (try Dag.find loc to_be_completed with Not_found -> [])) to_be_completed in
+      if completion.root.from_base = P  then bijection.partial_completions_P <- new_list else bijection.partial_completions_Q <- new_list;
+      if is_consistent && not (LocationSet.is_empty completion.missing_actions) then
+      begin
+          if !debug_completion then Printf.printf "Adding partial completion %s\n" (show_raw_statement completion.st_c);
+          if completion.root.from_base = P then 
+            bijection.todo_completion_P <- completion :: bijection.todo_completion_P
+          else
+            bijection.todo_completion_Q <- completion :: bijection.todo_completion_Q;
+          false, completion
+      end
+      else
+        is_consistent,completion
+    | Some compl -> 
+      if !debug_completion then Printf.printf "(((%s ----> %d )))\n" (show_completion completion)(compl.id_c) ;
+      false,compl (* Todo: add test identities *)
+    )
+  )
   else begin
-    if !about_completion then Printf.printf "Inconsistant completion\n";
-    false
+    if !debug_completion then Printf.printf "Inconsistant completion\n";
+    false,completion
   end
 
 exception LocPtoQ of int

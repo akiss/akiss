@@ -98,6 +98,7 @@ type extra_thread = {
 module rec Run :
   sig
     type completion = {
+      id_c : int;
       st_c : Base.raw_statement;
       corresp_c : correspondance;
       corresp_back_c : correspondance;
@@ -110,8 +111,13 @@ module rec Run :
     }
     and complement_root = {
       from_base : which_process;
+      from_statement : Base.statement;
       initial_statement : Base.raw_statement;
-      mutable directory : completion list Dag.Dag.t;
+      mutable directory : (hash_completion * completion) list ref Dag.Dag.t;
+    }
+    and hash_completion = {
+      hash_st_c : Base.hash_test;
+      hash_corresp_c : correspondance;
     }
     and partial_run = {
       test : test;
@@ -301,6 +307,8 @@ module Tests :
     val find_last_opt : (elt -> bool) -> t -> elt option
     val of_list : elt list -> t
   end
+val canonize_completion : Run.completion -> Run.completion
+val completion_to_hash_completion : Run.completion -> Run.hash_completion
 exception Attack of Run.test * Run.solution
 val null_test : Run.test
 val null_sol : Run.solution
@@ -321,6 +329,7 @@ type bijection = {
   mutable indexQ : index;
   mutable choices_indexP : choices_index;
   mutable choices_indexQ : choices_index;
+  mutable next_comp_id : int;
   mutable next_id : int;
   mutable tests : Tests.t;
   mutable runs_for_completions_P : Run.partial_run list;
@@ -331,10 +340,17 @@ type bijection = {
   mutable todo_completion_Q : Run.completion list;
   mutable locs : Dag.LocationSet.t;
   htable_st : (Base.hash_test, Run.test) Hashtbl.t;
+  mutable initial_tests : Run.test list;
+  mutable initial_completions : Run.completion list;
 }
 val bijection : bijection
 val show_bijection : unit -> unit
 val show_hashtbl : unit -> unit
+val hash_view : (Run.test, unit) Hashtbl.t
+val hash_comp_view : (Run.completion, unit) Hashtbl.t
+val show_completion_tree : Run.completion -> unit
+val show_all_tests : unit -> unit
+val show_final_completions : unit -> unit
 val proc : which_process -> Process.process
 val other : which_process -> which_process
 val reorder_int_set : IntegerSet.t -> IntegerSet.t
@@ -343,7 +359,7 @@ val push :
   which_process -> Run.origin -> (Run.test -> Run.solution) -> Run.test
 val reorder_tests : unit -> unit
 val pop : unit -> Tests.elt
-val register_completion : Run.completion -> bool
+val register_completion : Run.completion -> bool * Run.completion
 exception LocPtoQ of int
 val loc_p_to_q : Dag.Dag.key -> correspondance -> Types.location
 val add_run : RunSet.elt -> unit

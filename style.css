@@ -1,3 +1,11 @@
+satp unsolved{
+  background-color:#eedddd;
+  display:block;
+}
+satq unsolved{
+  background-color:#ddeedd;
+  display:block;
+}
 tests, unreachables{
   display:block;
   margin:20px 0;
@@ -11,17 +19,23 @@ children{
 statement{
   color:blue;
 }
-inputs, choices{
-  font-size:0.8em;
+nbvars{
+  font-size:0.6em;
   display:inline-block;
+  padding:0 4px;
+  color:#555555;
+}
+inputs, choices{
+  display:none;
 }
 dag{
   display:inline-block;
   color:green;
   font-size:0.7em;
 }
-recipes{
-  display:none;
+recipes inputs{
+  font-size:0.8em;
+  display:inline-block;
 }
 rec{
   font-weight:bold;}
@@ -68,4 +82,51 @@ origin initial{
 }
 origin composed{
   color:#00dddd;
+}
+testnode{
+  display:block;
+  margin-left:20px;
+  border:1px dashed yellow;
+}
+corresp{
+  display:block;
+  font-size:0.8em;
+}
+corresp src{
+  color:green;
+}
+corresp dst{
+  color:#FF8822;
+}
+solution{
+  display:block;
+  border-top:1px dotted yellow;
+}
+slv idtest{
+  color:#880000;
+  font-size:0.6em;
+}
+subst{
+  font-size:0.5em;
+}
+idcomp{
+  color:#cc6600;
+}
+completion{
+  display:block;
+}
+comptree{
+  display:block;
+  margin-left:20px;
+}
+comproot{
+  display:block;
+  border:1px solid #FFDDAA;
+}
+miss{
+  color:#0099FF;
+  font-size:0.8em;
+}
+wp{
+  display:none;
 }
