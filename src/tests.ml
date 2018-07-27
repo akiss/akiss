@@ -626,17 +626,14 @@ let rec statements_to_tests t c process_name (statement : statement) otherProces
   let sigma,raw_statement' = same_term_same_recipe statement.st in
   let equalities = 
     match statement.st.head with
-    | Identical (s,t) -> EqualitiesSet.add (s,t) equalities
+    | Identical (s,t) -> 
+      if c then (
+        let compl = statement_to_completion process_name statement (negate_statement raw_statement') in
+        ignore (register_completion compl);
+        bijection.initial_completions <- compl :: bijection.initial_completions );
+        EqualitiesSet.add (s,t) equalities
     | _ -> equalities in
-(*   match statement.st.head with
-  | Identical _ -> 
-    if t then ignore (statement_to_tests process_name (Initial(statement)) raw_statement otherProcess);
-    if c then (
-      let compl = statement_to_completion process_name statement (negate_statement raw_statement') in
-      ignore (register_completion compl); (* Identical don't have children *)
-      bijection.initial_completions <- compl :: bijection.initial_completions );
-  | _ -> *)
-    let new_eq, children = List.fold_left 
+  let new_eq, children = List.fold_left 
     (fun (new_eq,children) st -> 
       let is_identical = match st.st.head with Identical _ -> true | _ -> false in
       if is_identical && (st.st.inputs,st.st.dag,st.st.choices,st.st.body) = (statement.st.inputs,statement.st.dag,statement.st.choices,statement.st.body) 
