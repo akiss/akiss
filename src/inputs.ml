@@ -18,7 +18,7 @@ let show_inputs inputs =
 let show_choices choices =
   if Dag.is_empty choices.c then "" 
   else if !use_xml then 
-  (Dag.fold (fun l i str -> (if str = "" then "<choices>" else str ^ " , ") ^ Format.sprintf "<input><loc>%d:</loc><term>%d</term></input>" l.p i) choices.c "" ) ^ "</choices>"
+  (Dag.fold (fun l i str -> (if str = "" then "<choices>" else str ^ " , ") ^ Format.sprintf "<input><loc>%d:</loc><map>%d</map></input>" l.p i) choices.c "" ) ^ "</choices>"
   else
   (Dag.fold (fun l i str -> (if str = "" then "[" else str ^ " | ") ^ Format.sprintf "<%d>: %d" l.p  i) choices.c "" ) ^ "]"
 

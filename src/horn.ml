@@ -590,7 +590,7 @@ let normalize_new_statement f = (* This opti slow down the algo a bit much*)
     let t' = Rewriting.normalize t (!Parser_functions.rewrite_rules) in 
     if not (Rewriting.equals_ac t t')
     then begin (*Printf.printf "hea: %s\n" (show_raw_statement f); *)
-      Some {f with head = Reach} end (* A knows is also a reach statement *)
+      None (*Some {f with head = Reach}*) end (* A knows is also a reach statement but the reach statement has already been processed *)
     else Some {f with head = Knows(Rewriting.normalize r (!Parser_functions.rewrite_rules),t)}
   | Identical(r,r') -> Some {f with 
       head = Identical(Rewriting.normalize r (!Parser_functions.rewrite_rules),
@@ -1018,8 +1018,10 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
       let v = Rewriting.variants st.nbvars term (! Parser_functions.rewrite_rules) in
       List.iter (fun (_,sigma) -> 
         if !about_seed then Format.printf "- variant for output: %s\n" (show_substitution sigma);
+        let new_st = apply_subst_statement st sigma in
+        let new_head = match new_st.head with Knows(r,t) -> Knows(r,Rewriting.normalize t !Parser_functions.rewrite_rules) | _ -> assert false in
         add_statement kb solved_parent unsolved_parent test_parent (Some pr)
-          (apply_subst_statement st sigma)) v 
+          ({new_st with head = new_head})) v 
      | SeqP(Output({observable = Public} as loc, t), pr) -> (* the reach part of the output *)
       let next_dag = Dag.put_at_end st.dag loc in
       let identity_sigma = Rewriting.identity_subst st.nbvars in

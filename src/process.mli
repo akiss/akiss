@@ -102,6 +102,7 @@ type processes_infos = {
   mutable next_nonce : int;
   mutable processes : process_infos BangDag.t;
   mutable location_list : Types.location list;
+  mutable nonce_list : Types.nonceId list;
   mutable max_phase : int;
 }
 val processes_infos : processes_infos
@@ -117,6 +118,7 @@ val convert_term :
 val convert_chan :
   Types.procId ->
   Types.chanId array -> Types.relative_temp_term -> Types.chanId
+val new_nonce : string -> int -> Types.nonceId
 val new_location :
   Types.procId ->
   int -> Types.io -> string -> Types.location option -> int -> Types.location

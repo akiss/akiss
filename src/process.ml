@@ -44,6 +44,7 @@ type processes_infos = {
    mutable next_nonce : int;
    mutable processes : process_infos BangDag.t;
    mutable location_list : location list;
+   mutable nonce_list : nonceId list;
    mutable max_phase : int;
 }
 
@@ -52,6 +53,7 @@ let processes_infos = {
      next_nonce = 0 ;
      processes = BangDag.empty ;
      location_list = [];
+     nonce_list = [];
      max_phase = 0;
 }
 
@@ -111,6 +113,17 @@ let convert_chan pr chans chan =
       chans.(count_type_nb !(pr.types.(th.th)) pr th.th)
   | _ -> assert(false)
   
+let new_nonce str n =
+  try List.find (fun l -> l.n = n) processes_infos.nonce_list
+  with
+  | Not_found ->
+    let nonce = {name=str;n=n} in
+    if !about_location then 
+      Printf.printf "n[%d] : %s\n" n str;
+    processes_infos.nonce_list <- nonce :: processes_infos.nonce_list;
+    nonce
+
+  
 let new_location (pr : procId) p ( io : io ) str parent phase =
   try List.find (fun l -> l.p = p) processes_infos.location_list
   with
@@ -141,7 +154,7 @@ let rec convert_pr infos process parent phase=
   match process with
   | NilB -> EmptyP
   | NameB ((rel_n,str),p) -> 
-     nonces.(rel_n) <- {name = str; n=nonce+rel_n}; 
+     nonces.(rel_n) <- new_nonce str (nonce+rel_n); 
      convert_pr infos p parent phase
   | InputB (ch,(rel_loc,Some str),p) -> 
     let chan = convert_chan pr chans ch in
