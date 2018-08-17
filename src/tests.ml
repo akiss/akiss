@@ -33,13 +33,14 @@ let statement_to_completion process_name (statement : statement) (st : raw_state
     st_c = st ;
     corresp_c = empty_correspondance ;
     corresp_back_c = empty_correspondance ;
-    core_corresp = [] ;
+    (*core_corresp = [] ;*)
     missing_actions = locs ;
     selected_action = pick_last_or_null st.dag locs ;
     root = { 
       from_base = process_name ;
       from_statement = statement ;
       initial_statement = st ;
+      hash_initial_statement = raw_to_hash_test st;
       directory = Dag.empty ;};
     further_completions = [];
     generated_test = None;
@@ -131,7 +132,14 @@ let best_recipe base st new_dag unsolved x =
   match x.loc with
   | Some l -> (
   let my_loc = LocationSet.singleton l in
-  let other_locs = List.fold_left (fun lset p -> if p.recipe = x.recipe then let Some l' = p.loc in LocationSet.add l' lset else lset) my_loc unsolved in
+  let other_locs = List.fold_left (fun lset p -> 
+    if p.recipe = x.recipe 
+    then 
+      match p.loc with
+      | Some l' -> LocationSet.add l' lset 
+      | None -> assert false
+    else lset
+    ) my_loc unsolved in
   if !debug_merge then Printf.printf "From loc %d other identical recipes : %s \n" l.p (show_loc_set other_locs);
   try 
     let r = 
@@ -404,7 +412,9 @@ and complete_set_of_identities head process_name old_test =
     try 
       List.iter 
         (fun sol ->
-          let Some pr = sol.selected_run in
+          match sol.selected_run with
+          | None -> assert false
+          | Some pr ->
           if not (check_identities pr head) then
           begin
             Bijection.remove_run pr;
@@ -561,9 +571,9 @@ let add_to_completion (run : partial_run) (completion : completion) =
     let new_comp = {
         id_c = bijection.next_comp_id;
         st_c = canonize_statement st;
-        corresp_c = canonize_correspondance corr;
+        corresp_c = (*canonize_correspondance*) corr;
         corresp_back_c = corr_back;
-        core_corresp = List.filter (fun (l,l') -> try ignore (Dag.find l completion.root.initial_statement.dag.rel); true with Not_found -> false) (Dag.bindings corr.a);
+        (*core_corresp = List.filter (fun (l,l') -> try ignore (Dag.find l completion.root.initial_statement.dag.rel); true with Not_found -> false) (Dag.bindings corr.a);*)
         missing_actions = missing ;
         selected_action = pick_last_or_null st.dag missing ;
         root = completion.root ;
@@ -575,16 +585,18 @@ let add_to_completion (run : partial_run) (completion : completion) =
       if !nb_comp mod 10000 = 0 then Printf.printf "Adding partial comp %d %s\n%!" !nb_comp (show_completion new_comp));
     if !debug_completion then Printf.printf "Registering a new completion %s\n from old\n %s \n and %s \n" (show_completion new_comp)(show_completion completion)(show_run run);
     (*Printf.printf "for %d:" (completion.id_c);*)
-    let add_test,new_comp = register_completion new_comp in
-    if not (List.exists (fun (s,c) -> c.id_c = new_comp.id_c) completion.further_completions) then
-      completion.further_completions <- (sigma,new_comp) :: completion.further_completions;
-    if not (List.exists (fun (s,c) -> c.id_c = new_comp.id_c) run.completions) then
-      run.completions <- (tau,new_comp) :: run.completions;
-    if add_test
-    then  begin
-      if !debug_completion then Printf.printf "Completion complete, checking test %s\n" (show_raw_statement st)(*todo*);
-      completion_to_test new_comp 
-    end
+    match register_completion new_comp with
+    | add_test, Some new_comp ->
+      if not (List.exists (fun (s,c) -> c.id_c = new_comp.id_c) completion.further_completions) then
+        completion.further_completions <- (sigma,new_comp) :: completion.further_completions;
+      if not (List.exists (fun (s,c) -> c.id_c = new_comp.id_c) run.completions) then
+        run.completions <- (tau,new_comp) :: run.completions;
+      if add_test
+      then  begin
+        if !debug_completion then Printf.printf "Completion complete, checking test %s\n" (show_raw_statement st)(*todo*);
+        completion_to_test new_comp 
+      end
+    | _ , None -> ()
   ) sts
   with 
   | NonBij -> ()

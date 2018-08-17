@@ -42,9 +42,9 @@ let show_correspondance c =
   else
   (Dag.fold (fun lp lq str -> str ^(Format.sprintf " %d => %d ;" lp.p lq.p)) c.a "{|")^"|}"
 
-let canonize_correspondance corr =
+(*let canonize_correspondance corr =
   { a = List.fold_left (fun c' (l,l') -> Dag.add l l' c') Dag.empty (Dag.bindings corr.a)}
-
+*)
 
 module IntegerSet = Set.Make(struct type t = int let compare = compare end)  
 module IntegerMap = Map.Make(struct type t = int let compare = compare end)  
@@ -65,7 +65,7 @@ module rec Run : sig
     st_c : raw_statement ; (* the current completion g u U_i f_i *)
     corresp_c : correspondance ; (* the correspondance of the union of f_i *)
     corresp_back_c : correspondance ;
-    core_corresp : (location * location) list ;
+    (*core_corresp : (location * location) list ;*)
     missing_actions :  LocationSet.t; (* all the locations which are present on the initial statement but not on the runs *)
     selected_action : location; (*Among all missing locations the one to complete first *)
     root : complement_root;
@@ -76,11 +76,12 @@ module rec Run : sig
     from_base : which_process; (* the saturated base from which the completion come from *)
     from_statement : statement; (* for debugging *)
     initial_statement : raw_statement ; (* the unreach or identity from which the completion is issued: g *) 
-    mutable directory : (((hash_completion * completion) list) ref) Dag.t ; (* For each selected missing action, the list of completions so far, to keep only the most general ones  *)
+    hash_initial_statement : hash_test ; (* the hash of the initial_statement *) 
+    mutable directory : (((hash_completion * completion) list) ref) Dag.t ; (* For each selected missing action, the list of completions so far, to avoid duplicates *)
   } 
   and hash_completion = {
     hash_st_c : hash_test ; 
-    hash_corresp_c : correspondance ;
+    hash_corresp_c : (location * location) list ;
   }
   and  partial_run = {
   test : test; (* The test from which the prun come from *)
@@ -154,7 +155,7 @@ struct
     st_c : raw_statement ; (* the current completion g u U_i f_i *)
     corresp_c : correspondance ; (* the correspondance of the union of f_i *)
     corresp_back_c : correspondance ;
-    core_corresp : (location * location) list ;
+    (*core_corresp : (location * location) list ;*)
     missing_actions :  LocationSet.t; (* all the locations which are present on the initial statement but not on the runs *)
     selected_action : location; (*Among all missing locations the one to complete first *)
     root : complement_root;
@@ -163,13 +164,14 @@ struct
   }
   and complement_root = {
     from_base : which_process; (* the saturated base from which the completion come from *)
-    from_statement : statement;
+    from_statement : statement; (* for debugging to have its id*)
     initial_statement : raw_statement ; (* the unreach or identity from which the completion is issued: g *) 
-    mutable directory : (((hash_completion * completion) list) ref) Dag.t ; (* For each selected missing action, the list of completions so far, to keep only the most general ones  *)
+    hash_initial_statement : hash_test ;
+    mutable directory : (((hash_completion * completion) list) ref) Dag.t ; (* For each selected missing action, the list of completions so far, to avoid duplicates and not optimal completions *)
   }  
   and hash_completion = {
     hash_st_c : hash_test ; 
-    hash_corresp_c : correspondance ;
+    hash_corresp_c : (location * location) list ;
   }
   and partial_run = {
   test : test; (* The test from which the prun come from *)
@@ -339,6 +341,8 @@ module Test =
           | (Completion , Completion ) -> compare x.id y.id
           | (Completion , _) -> -1
           | (_, Completion ) ->  1
+          | (Temporary,_) 
+          | (_,Temporary) -> assert false
      (*     | (_,_) -> assert false *)
    end
 
@@ -346,15 +350,15 @@ module Tests = Set.Make(Test)
   
 open Run 
 
-let canonize_completion completion = {
+(*let canonize_completion completion = {
   completion with
   st_c = canonize_statement completion.st_c;
   corresp_c = canonize_correspondance completion.corresp_c;
-}
+}*)
 
 let completion_to_hash_completion completion =
   { hash_st_c = raw_to_hash_test completion.st_c;
-    hash_corresp_c =  completion.corresp_c;
+    hash_corresp_c = Dag.bindings completion.corresp_c.a;
   }
 
 
@@ -520,7 +524,8 @@ let rec show_all_tests test =
       Printf.printf (if !use_xml then "%s\n" else "run:%s\n") (show_run run);
       List.iter (function 
           (Master,sigma,test) -> show_all_tests test
-        | (Slave,sigma,test) -> Printf.printf (if !use_xml then "<slv><idtest>%d</idtest></slv>," else "*[%d]") test.id)  run.consequences;
+        | (Slave,sigma,test) -> Printf.printf (if !use_xml then "<slv><idtest>%d</idtest></slv>," else "*[%d]") test.id
+        | _ -> assert false)  run.consequences;
       List.iter (fun (sigma,c) -> Printf.printf (if !use_xml then "[+<idcomp>%d</idcomp>+]," else "+[%d]") c.id_c)  run.completions);      
     if !use_xml then Printf.printf "</solution>"
   ) test.solutions_done ;
@@ -535,7 +540,7 @@ let rec show_completion_tree completion =
   if completion.selected_action = null_location 
   then
     match  completion.generated_test with
-    | None -> Printf.printf "X"
+    | None -> () (*Printf.printf "X"*)
     | Some (_,t) -> Printf.printf (if !use_xml then "[*<idtest>%d</idtest>*] " else "%d ") t.id
   else
     List.iter (fun (_,c) -> show_completion_tree c) completion.further_completions;
@@ -622,16 +627,21 @@ let pop () =
 let register_completion completion =
   if !debug_completion then Printf.printf "Registering completion: %s\n" (show_completion completion);
   completion.st_c.binder := New ;
-  let is_opti = (completion.st_c = completion.root.initial_statement) in
+  let hash_compl = completion_to_hash_completion completion in
+  let is_opti = (hash_compl.hash_st_c = completion.root.hash_initial_statement) in
+  if !debug_completion && is_opti then Printf.printf "optimal statement\n";
+  let core_corresp = List.filter (fun (l,l') -> try ignore (Dag.find l' completion.root.initial_statement.dag.rel); true with Not_found -> false) (Dag.bindings completion.corresp_c.a) in
   let eq, diseq = recipes_of_head completion.st_c.head in
   let is_consistent = EqualitiesSet.is_empty (EqualitiesSet.inter eq diseq) in
-  if is_consistent || is_opti then (
+  if is_consistent || is_opti then (* The optimal completions are kept because they can be used to discard further ones *)
+  (
     let to_be_completed = if completion.root.from_base = P then bijection.partial_completions_P else bijection.partial_completions_Q in
     let loc = completion.selected_action in
     if not (Dag.mem loc completion.root.directory) then completion.root.directory <- Dag.add loc (ref []) completion.root.directory;
     let hash_table_loc = Dag.find loc completion.root.directory in
-    let hash_compl = completion_to_hash_completion completion in
     (
+   match List.find_opt (fun (hash_c,compl) -> core_corresp = hash_c.hash_corresp_c) !hash_table_loc with
+    | None -> (
     match List.assoc_opt hash_compl !hash_table_loc with
     | None -> 
       if !debug_completion then Printf.printf "New completion: %s\n" (show_completion completion);
@@ -645,18 +655,21 @@ let register_completion completion =
             bijection.todo_completion_P <- completion :: bijection.todo_completion_P
           else
             bijection.todo_completion_Q <- completion :: bijection.todo_completion_Q;
-          false, completion
+          false,Some completion
       end
       else
-        is_consistent,completion
+        is_consistent,Some completion
     | Some compl -> 
       if !debug_completion then Printf.printf "(((%s ----> %d )))\n" (show_completion completion)(compl.id_c) ;
-      false,compl (* Todo: add test identities *)
+      false,Some compl (* Todo: add test identities *)
     )
+  | Some (_,compl) -> 
+      if !debug_completion then Printf.printf "  %d is opti\n" (compl.id_c) ;
+      false,None)
   )
   else begin
     if !debug_completion then Printf.printf "Inconsistant completion\n";
-    false,completion
+    false,Some completion
   end
 
 exception LocPtoQ of int

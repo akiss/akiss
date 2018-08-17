@@ -8,7 +8,6 @@ type correspondance = { a : Types.location Dag.Dag.t; }
 val empty_correspondance : correspondance
 val is_empty_correspondance : correspondance -> bool
 val show_correspondance : correspondance -> string
-val canonize_correspondance : correspondance -> correspondance
 module IntegerSet :
   sig
     type elt = int
@@ -102,7 +101,6 @@ module rec Run :
       st_c : Base.raw_statement;
       corresp_c : correspondance;
       corresp_back_c : correspondance;
-      core_corresp : (Types.location * Types.location) list;
       missing_actions : Dag.LocationSet.t;
       selected_action : Types.location;
       root : complement_root;
@@ -113,11 +111,12 @@ module rec Run :
       from_base : which_process;
       from_statement : Base.statement;
       initial_statement : Base.raw_statement;
+      hash_initial_statement : Base.hash_test;
       mutable directory : (hash_completion * completion) list ref Dag.Dag.t;
     }
     and hash_completion = {
       hash_st_c : Base.hash_test;
-      hash_corresp_c : correspondance;
+      hash_corresp_c : (Types.location * Types.location) list;
     }
     and partial_run = {
       test : test;
@@ -307,7 +306,6 @@ module Tests :
     val find_last_opt : (elt -> bool) -> t -> elt option
     val of_list : elt list -> t
   end
-val canonize_completion : Run.completion -> Run.completion
 val completion_to_hash_completion : Run.completion -> Run.hash_completion
 exception Attack of Run.test * Run.solution
 val null_test : Run.test
@@ -359,7 +357,7 @@ val push :
   which_process -> Run.origin -> (Run.test -> Run.solution) -> Run.test
 val reorder_tests : unit -> unit
 val pop : unit -> Tests.elt
-val register_completion : Run.completion -> bool * Run.completion
+val register_completion : Run.completion -> bool * Run.completion option
 exception LocPtoQ of int
 val loc_p_to_q : Dag.Dag.key -> correspondance -> Types.location
 val add_run : RunSet.elt -> unit
