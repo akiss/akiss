@@ -518,7 +518,7 @@ let rec one_rule old_sigma t p rule =
     | [sigma] ->  let sigma = pack sigma in 
       sigma.binder := Master;
       let t'= repl_position t p r in
-      (*Printf.printf "<> %s %s\n <<> %s" (show_term t)(show_substitution sigma)(show_term t');*)
+     (* Printf.printf "<one rule>t= %s; sigma= %s\n give: %s\n" (show_term t)(show_substitution sigma)(show_term t');*)
     [(apply_subst_term t' sigma, 
       compose_master ({old_sigma with 
           master=Array.map (fun t -> apply_subst_term t identity) old_sigma.master})
@@ -599,9 +599,11 @@ let rec feed n positions =
 		|  [] -> []
       )
       positions)
-;;
+
 
 let rec normalize_under term_t positions rules =
+  (*Printf.printf "[normalization of %s \n" (show_term term_t);
+  let r =*)
   match term_t with
   | Var(_) -> term_t
   | Fun(name, arg_list) ->
@@ -616,7 +618,9 @@ let rec normalize_under term_t positions rules =
 	      function n ->
 		normalize_under term_s (feed n positions) rules)
 	    arg_list numbers)
-;;
+   (* in
+    Printf.printf " got %s ]\n" (show_term r);
+    r*)
 
 let simplify_2 term_t (t1, sigma1, p1) (t2, sigma2, p2) rules =
   (*let s1 = Fun("!tuple!",
@@ -667,15 +671,15 @@ let rec simplify_1 c clist term_t rules =
 		   (sc, hd :: sl)
        )
      | _ -> (c, clist)
-;;
+
 
 let rec simplify term_t config_list rules =
-  (*Printf.printf "simplify %s %s <<end\n" (show_term term_t) (show_configurations config_list);*)
+  (*Printf.printf "simplify %s :: %s <<end\n" (show_term term_t) (show_configurations config_list);*)
     match config_list with
     | hd :: tl -> 
       let (simphd, simptl) = (simplify_1 hd tl term_t rules) in simphd :: (simplify term_t simptl rules)
     | _ -> config_list
-;;
+
 
 (* let simplify term_t vars_t next_dumb configuration rules = *)
 (*   simplify_0 term_t vars_t next_dumb rules *)
@@ -696,7 +700,7 @@ let rec iterate_all term_t configuration rules =
        else 
 	  (iterate_all term_t next_simpl rules))
   )
-;;
+
 
 let rec max_var maxi t =
   match t with
@@ -706,34 +710,36 @@ let rec max_var maxi t =
 
 
 let variants nbv t rules =
-  (* Printf.printf "Compute variants of : %s\n" (show_term t); *)
+  (* Printf.printf "\nCompute variants of : %s\n" (show_term t); *)
   (*let vars_t = vars_of_term t in*)
   let sigma = identity_subst nbv in
   iterate_all t [(apply_subst_term t sigma, sigma, init_pos t)] rules
 
 let one_unifier ssigma sigmas tsigma sigmat = 
-  let sigmas = { binder = ref Master; nbvars = sigmas.nbvars; master = Array.copy sigmas.master; slave = Array.copy sigmas.slave} in
+  let sigmas = { binder = sigmas.binder; nbvars = sigmas.nbvars; master = Array.copy sigmas.master; slave = Array.copy sigmas.slave} in
   let sigma_init = (Array.make sigmas.nbvars None, Array.make sigmat.nbvars None) in
-   (*Printf.printf "terms with variants %s -+- %s \n corresponding substitution sigma s =  %s \nsigma t = %s\n%!" 
-    (show_term ssigma)(show_term tsigma)(show_substitution sigmas)(show_substitution sigmat);*)
   sigmas.binder := Master;
   sigmat.binder := Slave ;
+  (*Printf.printf "terms with variants %s -+- %s \n corresponding substitution\n sigma s =  %s \nsigma t = %s\n%!" 
+    (show_term ssigma)(show_term tsigma)(show_substitution sigmas)(show_substitution sigmat);*)
   let t1t2 = (ssigma,tsigma) ::Array.to_list( Array.map2 (fun x y -> (x,y)) sigmas.master sigmat.master) in
   match csu t1t2 sigma_init with
   | [sigma] -> let sigma = pack sigma in [ compose sigmas sigma ]
-  | [] -> []
+  | [] -> (*Printf.printf "no unif\n\n" ;*)[]
   | _ -> failwith "too many unifiers"
-;;
+
 
 let unifiers nbv s t rules =
+  let s = normalize s rules in
+  let t = normalize t rules in
   let vs = variants nbv s rules in
-  (*Printf.printf "result s: %s\n variants of %s\n" (show_configurations vs)(show_term t);*)
+  (*Printf.printf "______\n\nresult s: %s\n variants of %s\n" (show_configurations vs)(show_term t);*)
   let vt = variants nbv t rules in
-  (*Printf.printf "result t: %s\n"(show_configurations vt);*)
+  (*Printf.printf "______\n\nresult t: %s\n"(show_configurations vt);*)
   let w = combine vs vt in
   trconcat (trmap (fun ((x, y, _), (z, t, _)) ->
 			   one_unifier x y z t) w)
-;;
+
 
 let variants nbv t rules =
   List.map (fun (a,b,_) -> a,b) (variants nbv t rules)

@@ -1099,6 +1099,7 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
       st.binder := Master;
       let sterm = concretize st.inputs s in
       let tterm = concretize st.inputs t in 
+      (*Printf.printf "comparing %s == %s\n" (show_term sterm) (show_term tterm);*)
       let unifiers = Rewriting.unifiers st.nbvars sterm tterm (! Parser_functions.rewrite_rules) in 
       List.iter (fun subst -> trace_statements kb ineqs solved_parent unsolved_parent test_parent pr (apply_subst_statement st subst)) unifiers
     | SeqP(TestInequal(s, t), pr) ->
@@ -1106,7 +1107,7 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
       if s <> t then 
        trace_statements kb ((s,t)::ineqs) solved_parent unsolved_parent test_parent pr st
     | CallP(loc, j, procId, args, chans) -> 
-      let args = Array.map (concretize st.inputs) args in
+      (*let args = Array.map (concretize st.inputs) args in*)
       for i = 1 to j do
       (*Format.printf "Adding %d-th copy of %s \n%!" i procId.name;*)
       let pr = expand_call loc i procId args chans in
@@ -1137,8 +1138,9 @@ and add_statement kb solved_parent unsolved_parent test_parent process st =
        test_parent = test_parent;
        } in 
      (if !debug_saturation 
-     then Printf.printf "Addition of %s \n unsolved: %s\n solved: %s \n test: %s \n %!" 
+     then Printf.printf "Addition of %s \n unsolved: %s solved: %s test: %s process: %s\n\n %!" 
       (show_statement "" st)(show_raw_statement unsolved_parent.st)(show_raw_statement solved_parent.st)(show_raw_statement test_parent.st)
+      (match process with None -> "none" | Some pr -> show_process_start 3 pr)
      else if !about_progress && kb.next_id mod 500 = 0 then Printf.printf "Addition of %s \n%!" (show_statement "" st));
      Hashtbl.add kb.htable hash_st st;
      if is_solved_st 

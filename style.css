@@ -25,7 +25,10 @@ nbvars{
   padding:0 4px;
   color:#555555;
 }
-inputs, choices{
+i {
+  color:#880088;
+}
+inputs{
   display:none;
 }
 dag{
@@ -49,9 +52,18 @@ input loc{
   color:green;
   vertical-align:default;
 }
+choices{
+  font-size:smaller;
+}
 choices input loc{
   color:#FF00dd;
   vertical-align:default;
+}
+choices input map{
+  color:#dd00dd; 
+}
+choices input cho{
+  color:#888888;
 }
 findex{
   font-weight:bold;

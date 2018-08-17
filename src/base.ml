@@ -144,9 +144,9 @@ let show_predicate p =
  | Knows(r,t) -> if !use_xml then "<pred>K(<rec>"^ (show_term r) ^ "</rec>,<term>" ^ (show_term t) ^ "</term>)</pred>" else
       "knows(" ^ (show_term r) ^ "," ^ (show_term t) ^ ")"
  | Identical(r,r') ->
-      "identical(" ^ (show_term r) ^ "," ^ (show_term r') ^ ")"
- | Reach -> "reach"
- | Unreachable -> "unreach"
+     (if !use_xml then "<i>identical</i>(" else "identical" )^ (show_term r) ^ "," ^ (show_term r') ^ ")"
+ | Reach -> if !use_xml then "<r>reach</r>" else "reach"
+ | Unreachable -> if !use_xml then "<u>unreach</u>" else "unreach"
  | Tests(h) -> 
     "tests(" ^ (show_test_head h) ^ ")"
 
