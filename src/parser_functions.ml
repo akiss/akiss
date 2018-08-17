@@ -252,7 +252,7 @@ let rec parse_temp_term procId env = function
           | Var(v) -> V(v)
           | Name(n) -> N(n)
 (*          | PublicName(n) -> Term.apply_function n []*)
-          | Chan(c) -> C(c)
+          | Chan(c) -> error_message line (Printf.sprintf "Excepting a term but %s : chan provided." s)
           | Func(f) when f.arity = 0 -> F(f,[])
           | ArgVar(id) -> begin match !(procId.types.(id.th)) with
               | TermType ->  (*Printf.printf "<< %s<%d<< %d\n" s line id.th;*) A(id) 

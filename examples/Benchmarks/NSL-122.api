@@ -39,7 +39,17 @@ let Scenario (s) =
   out(cd,pk(ka));
   out(cd,pk(kb));
   (
-    A(ca,a,b,ka,pk(kb)) | B(cb,b,a,kb,pk(ka),s)
+    A(ca,a,b,ka,pk(kb)) | B(cb,b,a,kb,pk(ka),s) |
+
+    !^15 A (ca,a,b,ka,pk(kb)) | !^15 new nb; B(cb,b,a,kb,pk(ka),nb) |
+
+    !^15 A (cb,b,a,kb,pk(ka)) | !^15 new nb; B(ca,a,b,ka,pk(kb),nb) |
+
+    !^15 A (ca,a,c,ka,pk(kc)) | 
+    !^15 A (cb,b,c,kb,pk(kc)) |
+
+    !^15 new nb; B(cb,b,c,kb,pk(kc),nb) |	
+    !^15 new nb; B(ca,a,c,ka,pk(kc),nb)
   ).
     
 

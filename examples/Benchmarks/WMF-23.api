@@ -35,14 +35,14 @@ let Scenario(s) =
  (
    A(ca,a,b,kas,s) | B(cb,b,a,kbs) | S(cs,a,b,kas,kbs) |
 
-   (  new kab; A(ca,a,b,kas,kab) ) | (  B(cb,b,a,kbs) ) | (  S(cs,a,b,kas,kbs) ) |
-   (  new kab; A(cb,b,a,kbs,kab) ) | (  B(ca,a,b,kas) ) | (  S(cs,b,a,kbs,kas) ) |
+   ( !^2 new kab; A(ca,a,b,kas,kab) ) | ( !^2 B(cb,b,a,kbs) ) | ( !^2 S(cs,a,b,kas,kbs) ) |
+   ( !^2 new kab; A(cb,b,a,kbs,kab) ) | ( !^2 B(ca,a,b,kas) ) | ( !^2 S(cs,b,a,kbs,kas) ) |
 
-   (  new kab; A(ca,a,c,kas,kab) ) | (  S(cs,a,c,kas,kcs) ) |
-   (  new kab; A(cb,b,c,kbs,kab) ) | (  S(cs,b,c,kbs,kcs) ) |
+   ( new kab; A(ca,a,c,kas,kab) ) | ( S(cs,a,c,kas,kcs) ) |
+   ( new kab; A(cb,b,c,kbs,kab) ) | ( S(cs,b,c,kbs,kcs) ) |
 
-   (  B(cb,b,c,kbs) ) | (  S(cs,c,b,kcs,kbs) ) |
-   (  B(ca,a,c,kas) ) | (  S(cs,c,a,kcs,kas) )
+   ( B(cb,b,c,kbs) ) | ( S(cs,c,b,kcs,kbs) ) |
+   ( B(ca,a,c,kas) ) | ( S(cs,c,a,kcs,kas) )
 
 ).
 

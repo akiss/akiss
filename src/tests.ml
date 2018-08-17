@@ -441,7 +441,7 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
   if nb != 0 && actual_test process_name statement
   then begin 
     let dag = if Process.processes_infos.max_phase = 0 then statement.dag 
-      else (Printf.printf "a cycle on %s\n"(show_dag statement.dag) ;
+      else (
         let loc_phase = Array.make (Process.processes_infos.max_phase+2) LocationSet.empty in
         Dag.iter (fun loc _ -> loc_phase.(loc.phase) <- LocationSet.add loc loc_phase.(loc.phase)) statement.dag.rel ;
         for i = Process.processes_infos.max_phase - 1 downto 1 do
