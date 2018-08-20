@@ -41,16 +41,15 @@ let Scenario (s) =
   (
     A(ca,a,b,ka,pk(kb)) | B(cb,b,a,kb,pk(ka),s) |
 
-    !^2 A (ca,a,b,ka,pk(kb)) | !^2 new nb; B(cb,b,a,kb,pk(ka),nb) |
+    !^30 A (ca,a,b,ka,pk(kb)) | !^30 new nb; B(cb,b,a,kb,pk(ka),nb) |
 
-    !^2 A (cb,b,a,kb,pk(ka)) | !^2 new nb; B(ca,a,b,ka,pk(kb),nb) |
+    !^30 A (cb,b,a,kb,pk(ka)) | !^30 new nb; B(ca,a,b,ka,pk(kb),nb) |
 
-    !^2 A (ca,a,c,ka,pk(kc)) | 
-    !^2 A (cb,b,c,kb,pk(kc)) |
+    !^30 A (ca,a,c,ka,pk(kc)) | 
+    !^30 A (cb,b,c,kb,pk(kc)) |
 
-    !^2 new nb; B(cb,b,c,kb,pk(kc),nb) |	
-    !^2 new nb; B(ca,a,c,ka,pk(kc),nb)
-
+    !^30 new nb; B(cb,b,c,kb,pk(kc),nb) |	
+    !^30 new nb; B(ca,a,c,ka,pk(kc),nb)
   ).
     
 

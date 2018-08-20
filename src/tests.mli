@@ -45,10 +45,8 @@ val conj :
 val try_other_runs :
   Base.test_head -> Bijection.Run.solution -> Bijection.Solutions.elt option
 val add_identities_to_completions :
-  Base.test_head ->
-  Bijection.which_process -> Bijection.Run.completion -> unit
-val complete_set_of_identities :
-  Base.test_head -> Bijection.which_process -> Bijection.Run.test -> unit
+  Base.test_head -> Bijection.Run.completion -> unit
+val complete_set_of_identities : Base.test_head -> Bijection.Run.test -> unit
 val statement_to_tests :
   Bijection.which_process ->
   Bijection.Run.origin ->

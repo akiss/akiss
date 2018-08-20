@@ -1,0 +1,67 @@
+/* This is the EKE (Encrypted Key Exchange) protocol introduced by 
+   Bellovin and Merritt in their paper "Encrypted Key Exchange: Password
+   Based Protocols Secure Against Dictionary Attacks"
+
+   The goal of the protocol is to escalate a (weak) password w shared
+   between two parties to a (strong) encryption key r. The protocol
+   proceeds informaly as follows:
+
+   1. A -> B: senc(pk(k), w)                (fresh key k)
+   2. B -> A: senc(aenc(r, pk(k)), w)
+   3. A -> B: senc(na, r)                   (fresh nonce na)
+   4. B -> A: senc(<na, nb>, r)             (fresh nonce nb)
+   5. A -> B: senc(nb, r)                 
+   
+   The last three steps performs a handshake to prevent replay attacks.
+
+   This file models and session of the prtocol and shows it is resistant
+   against guessing attacks of w.
+*/ 
+fun enc/2, dec/2, aenc/3, adec/2, pk/1, h/1, pair/2, fst/1, snd/1.
+
+chan c, cab,cba.
+
+
+reduc dec(enc(X, Y), Y) -> X.
+reduc enc(dec(X, Y), Y) -> X.
+reduc adec(aenc(X, pk(Y), Z), Y) -> X.
+reduc fst(pair(X,Y)) -> X.
+reduc snd(pair(X,Y)) -> Y.
+
+
+let A(w) = 
+  new k;
+  out(cab, enc(pk(k), w));
+  in(cba,x1);
+  new na;
+  out(cab,enc(na, adec(dec(x1,w),k)));
+  in(cba,x2);
+  if fst(dec(x2, adec(dec(x1,w),k)))=na
+  then
+    out(cab,snd(dec(x2,adec(dec(x1,w),k)))).
+
+let B(w) = 
+  in(cab, y1);
+  new r ; 
+  new rb;
+  out(cba, enc(aenc(r, dec(y1, w), rb), w));
+  in(cab, y2);
+  new nb;
+  out(cba, enc(pair(dec(y2,r),nb) ,r)).
+
+let P(w) = !^2 (A(w) | B(w)).
+
+let revealW(w) = 
+  phase 2; 
+  out(c, w).
+  
+let revealV = 
+  new v; 
+  phase 2; 
+  out(c, v).
+
+let P1 =  new w; (P(w) | revealW(w)).
+let P2 =  new w; (P(w) | revealV).
+
+
+query trace_equiv(P1,P2).

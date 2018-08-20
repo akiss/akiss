@@ -104,7 +104,7 @@ let reset_global () =
 
 
 let process_file f =
-  if !about_bench then Printf.printf "%s%!" f;
+  if !about_bench then Printf.printf "%70s%!" f;
   
   let ch_in = open_in f in
   let lexbuf = Lexing.from_channel ch_in in

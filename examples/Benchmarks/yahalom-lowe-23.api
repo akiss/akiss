@@ -1,0 +1,72 @@
+(*
+  Yahalom - Lowe protocol (without the last message)
+  A, B, S :  principal
+  Na, Nb : fresh numbers
+  Kas, Kbs, Kab :   key
+
+  1.   A -> B : A, Na
+  2.   B -> S : {A, Na, Nb}Kbs
+  3.   S -> A : {B, Kab, Na, Nb}Kas
+  4.   S -> B : {A, Kab}Kbs
+*)
+
+//Channels :
+
+chan ca,cb,cs.
+
+//Public data :
+free a,b,c.
+free s1,s2,kcs.
+
+fun senc/2,sdec/2.
+sdec(senc(x,y),y) -> x.
+
+// Alice:
+let A(ch,ida,idb,kas) =
+  new na;
+  out(ch,(ida,na));
+  in(ch,x0);
+  let (=idb,xkab,=na,xnb) = sdec(x0,kas) in
+  0.
+
+// Bob :
+let B(ch,idb,ida,kbs) =
+  in(ch,y0);
+  let (=ida,yna) = y0 in
+  new nb;
+  out(ch,senc((ida,yna,nb),kbs));
+  in(ch,y1);
+  let (=ida,ykab) = sdec(y1,kbs) in
+  0.
+
+// Server :
+let S(ch,ida,idb,kas,kbs,s) =
+  in(ch,z0);
+  let (=ida,zna,znb) = sdec(z0,kbs) in
+  out(cs,(senc((idb,s,zna,znb),kas),senc((ida,s1),kbs))).
+
+
+let Scenario(s) =
+  new kas; new kbs;
+ (
+   A(ca,a,b,kas) | B(cb,b,a,kbs) | S(cs,a,b,kas,kbs,s) |
+
+   ( !^2 A(ca,a,b,kas) ) | (  !^2 B(cb,b,a,kbs) ) | ( !^2 new kab; S(cs,a,b,kas,kbs,kab) ) |
+   (  !^2 A(cb,b,a,kbs) ) | (  !^2 B(ca,a,b,kas) ) | ( !^2 new kab; S(cs,b,a,kbs,kas,kab) ) |
+
+   (  A(ca,a,c,kas) ) | ( new kab; S(cs,a,c,kas,kcs,kab) ) |
+   (  A(cb,b,c,kbs) ) | ( new kab; S(cs,b,c,kbs,kcs,kab) ) |
+						        
+   (  B(cb,b,c,kbs) ) | ( new kab; S(cs,c,b,kcs,kbs,kab) ) |
+   (  B(ca,a,c,kas) ) | ( new kab; S(cs,c,a,kcs,kas,kab) )
+
+).
+
+
+// Protocols :
+let P = Scenario(s1).
+
+let Q = Scenario(s2).
+
+
+query trace_equiv(P,Q).

@@ -80,6 +80,7 @@ module rec Run : sig
     mutable directory : (((hash_completion * completion) list) ref) Dag.t ; (* For each selected missing action, the list of completions so far, to avoid duplicates *)
   } 
   and hash_completion = {
+    is_opti : bool;
     hash_st_c : hash_test ; 
     hash_corresp_c : (location * location) list ;
   }
@@ -170,6 +171,7 @@ struct
     mutable directory : (((hash_completion * completion) list) ref) Dag.t ; (* For each selected missing action, the list of completions so far, to avoid duplicates and not optimal completions *)
   }  
   and hash_completion = {
+    is_opti : bool ;
     hash_st_c : hash_test ; 
     hash_corresp_c : (location * location) list ;
   }
@@ -357,7 +359,10 @@ open Run
 }*)
 
 let completion_to_hash_completion completion =
-  { hash_st_c = raw_to_hash_test completion.st_c;
+  let hash_test = raw_to_hash_test completion.st_c in
+  { 
+    is_opti = (hash_test = completion.root.hash_initial_statement);
+    hash_st_c = hash_test;
     hash_corresp_c = Dag.bindings completion.corresp_c.a;
   }
 
@@ -628,19 +633,18 @@ let register_completion completion =
   if !debug_completion then Printf.printf "Registering completion: %s\n" (show_completion completion);
   completion.st_c.binder := New ;
   let hash_compl = completion_to_hash_completion completion in
-  let is_opti = (hash_compl.hash_st_c = completion.root.hash_initial_statement) in
-  if !debug_completion && is_opti then Printf.printf "optimal statement\n";
+  if !debug_completion && hash_compl.is_opti then Printf.printf "optimal statement\n";
   let core_corresp = List.filter (fun (l,l') -> try ignore (Dag.find l' completion.root.initial_statement.dag.rel); true with Not_found -> false) (Dag.bindings completion.corresp_c.a) in
   let eq, diseq = recipes_of_head completion.st_c.head in
   let is_consistent = EqualitiesSet.is_empty (EqualitiesSet.inter eq diseq) in
-  if is_consistent || is_opti then (* The optimal completions are kept because they can be used to discard further ones *)
+  if is_consistent || hash_compl.is_opti then (* The optimal completions are kept because they can be used to discard further ones *)
   (
     let to_be_completed = if completion.root.from_base = P then bijection.partial_completions_P else bijection.partial_completions_Q in
     let loc = completion.selected_action in
     if not (Dag.mem loc completion.root.directory) then completion.root.directory <- Dag.add loc (ref []) completion.root.directory;
     let hash_table_loc = Dag.find loc completion.root.directory in
     (
-   match List.find_opt (fun (hash_c,compl) -> core_corresp = hash_c.hash_corresp_c) !hash_table_loc with
+   match List.find_opt (fun (hash_c,compl) -> hash_c.is_opti && core_corresp = hash_c.hash_corresp_c) !hash_table_loc with
     | None -> (
     match List.assoc_opt hash_compl !hash_table_loc with
     | None -> 
@@ -669,7 +673,7 @@ let register_completion completion =
   )
   else begin
     if !debug_completion then Printf.printf "Inconsistant completion\n";
-    false,Some completion
+    false,None
   end
 
 exception LocPtoQ of int

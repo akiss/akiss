@@ -387,17 +387,17 @@ let rec try_other_runs head solution =
       try_other_runs head solution
   end
 
-let rec add_identities_to_completions head process_name compl =
+let rec add_identities_to_completions head (*process_name*) compl =
   let h = get_test_head (compl.st_c.head) in
   h.equalities <- EqualitiesSet.union h.equalities head.equalities;
   h.disequalities <- EqualitiesSet.union h.disequalities head.disequalities ;
-  List.iter (fun (sigma,compl) -> add_identities_to_completions (apply_subst_test_head head sigma) process_name compl) compl.further_completions;
+  List.iter (fun (sigma,compl) -> add_identities_to_completions (apply_subst_test_head head sigma) (*process_name*) compl) compl.further_completions;
   match compl.generated_test with
   | None -> ()
-  | Some (subst,test) -> complete_set_of_identities (transpose_test_head head subst compl.corresp_back_c) process_name test
+  | Some (subst,test) -> complete_set_of_identities (transpose_test_head head subst compl.corresp_back_c) (*process_name*) test
 
 
-and complete_set_of_identities head process_name old_test =
+and complete_set_of_identities head (*process_name*) old_test =
   let old_eq,old_diseq = recipes_of_head old_test.statement.head in
   let new_eq,new_diseq = head.equalities,head.disequalities in
   let diff_eq = EqualitiesSet.diff new_eq old_eq in
@@ -433,10 +433,10 @@ and complete_set_of_identities head process_name old_test =
               head.head_binder := status;
               let tau = apply_subst_test_head head' sigma in
               head.head_binder := New;              
-              complete_set_of_identities tau process_name derived_test) 
+              complete_set_of_identities tau (*process_name*) derived_test) 
             pr.consequences;
           head.head_binder := Master;
-          List.iter (fun (sigma,compl) -> add_identities_to_completions (transpose_test_head (head') sigma compl.corresp_c) process_name compl) pr.completions;
+          List.iter (fun (sigma,compl) -> add_identities_to_completions (transpose_test_head (head') sigma compl.corresp_c) (*process_name*) compl) pr.completions;
           head.head_binder := New;
         ) old_test.solutions_done
     with
@@ -473,7 +473,7 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
       statement.binder := New ;
       (*Printf.printf "Updating an existing test which is \n%s\nwith %s \n subst %s \n"
           (show_test test)(show_raw_statement statement)(show_substitution sigma);*)
-      complete_set_of_identities head' process_name test ;
+      complete_set_of_identities head' (*process_name*) test ;
       Some test
     with 
     Not_found -> 
@@ -568,7 +568,7 @@ let add_to_completion (run : partial_run) (completion : completion) =
   (*if !debug_completion && sts = [] then  Printf.printf "merge is not possible\n\n";*)
   List.iter (fun (sigma,st) -> 
     bijection.next_comp_id <- bijection.next_comp_id + 1;
-    let new_comp = {
+    let new_comp' = {
         id_c = bijection.next_comp_id;
         st_c = canonize_statement st;
         corresp_c = (*canonize_correspondance*) corr;
@@ -582,17 +582,19 @@ let add_to_completion (run : partial_run) (completion : completion) =
       } in
     if !about_progress then (
       incr nb_comp ;
-      if !nb_comp mod 10000 = 0 then Printf.printf "Adding partial comp %d %s\n%!" !nb_comp (show_completion new_comp));
-    if !debug_completion then Printf.printf "Registering a new completion %s\n from old\n %s \n and %s \n" (show_completion new_comp)(show_completion completion)(show_run run);
+      if !nb_comp mod 10000 = 0 then Printf.printf "Adding partial comp %d %s\n%!" !nb_comp (show_completion new_comp'));
+    if !debug_completion then Printf.printf "Registering a new completion %s\n from old\n %s \n and %s \n" (show_completion new_comp')(show_completion completion)(show_run run);
     (*Printf.printf "for %d:" (completion.id_c);*)
-    match register_completion new_comp with
+    match register_completion new_comp' with
     | add_test, Some new_comp ->
       if not (List.exists (fun (s,c) -> c.id_c = new_comp.id_c) completion.further_completions) then
         completion.further_completions <- (sigma,new_comp) :: completion.further_completions;
       if not (List.exists (fun (s,c) -> c.id_c = new_comp.id_c) run.completions) then
         run.completions <- (tau,new_comp) :: run.completions;
-      if add_test
-      then  begin
+      if new_comp.st_c.head != new_comp'.st_c.head then 
+        add_identities_to_completions (get_test_head new_comp'.st_c.head) new_comp;
+      if add_test then 
+      begin
         if !debug_completion then Printf.printf "Completion complete, checking test %s\n" (show_raw_statement st)(*todo*);
         completion_to_test new_comp 
       end
@@ -740,7 +742,7 @@ let equivalence both p q =
     if !about_tests then show_all_tests ();
     if !about_completion then show_final_completions ();
     if !about_bijection then Bijection.show_bijection();
-    if !about_bench then  Printf.printf " time: %F equivalence (%d tests)\n"  (Sys.time() -. time) bijection.next_id
+    if !about_bench then  Printf.printf " time: %6.2f  equivalence (%3d tests) \n"  (Sys.time() -. time) bijection.next_id
     else if both then Printf.printf "\nP and Q are trace equivalent. \n" else Printf.printf "\nTraces of P are included in Q. \n";
     if ! use_xml then Printf.printf "</all>"
   with
@@ -748,7 +750,7 @@ let equivalence both p q =
     if !about_tests then show_all_tests ();
     if !about_completion then show_final_completions ();
     if !about_bijection then Bijection.show_bijection();
-    if !about_bench then  Printf.printf " time: %F attack found (test n°%d)  \n" (Sys.time() -. time) test.id
+    if !about_bench then  Printf.printf " time: %6.2f attack found (test n°%d)\n" (Sys.time() -. time) test.id
     else Printf.printf "\nAn attack has been found for the test %s \n with specific order %s \n\nP and Q are not trace equivalent. \n" 
     (show_test test)(show_dag sol.restricted_dag);
     if ! use_xml then Printf.printf "</all>";

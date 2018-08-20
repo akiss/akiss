@@ -115,6 +115,7 @@ module rec Run :
       mutable directory : (hash_completion * completion) list ref Dag.Dag.t;
     }
     and hash_completion = {
+      is_opti : bool;
       hash_st_c : Base.hash_test;
       hash_corresp_c : (Types.location * Types.location) list;
     }
