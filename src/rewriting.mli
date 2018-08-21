@@ -4,6 +4,9 @@ exception Not_unifiable
 exception Not_matchable
 val recompose_term : Types.term list -> Types.term
 val find_sub : Types.varId -> 'a * 'a -> 'a
+val is :
+  Types.varId ->
+  Types.term -> Types.term option array * Types.term option array -> bool
 val occurs :
   Types.varId ->
   Types.term -> Types.term option array * Types.term option array -> bool
@@ -34,6 +37,8 @@ val apply_subst_term : Types.term -> Types.substitution -> Types.term
 val compose_master :
   Types.substitution -> Types.substitution -> Types.substitution
 val compose : Types.substitution -> Types.substitution -> Types.substitution
+val identity_subst : int -> Types.substitution
+val merging_subst : int -> Types.statement_role ref -> Types.substitution
 val sum_to_list : Types.term -> Types.term list
 val equals_ac : Types.term -> Types.term -> bool
 val list_equals_ac : Types.term list -> Types.term list -> bool
@@ -70,8 +75,6 @@ val show_configuration :
   Types.term * Types.substitution * position list -> string
 val show_configurations :
   (Types.term * Types.substitution * position list) list -> string
-val identity_subst : int -> Types.substitution
-val merging_subst : int -> Types.statement_role ref -> Types.substitution
 val prepend : 'a -> 'a list list -> 'a list list
 val init_pos : Types.term -> int list list
 val at_position : Types.term -> int list -> Types.term

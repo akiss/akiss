@@ -250,7 +250,26 @@ let rec compose sigma tau =
     slave  = sigma.slave;
   }
 
-
+ 
+let identity_subst nbv =
+  let binder = ref Master in
+  let master = Array.make nbv (Var({status=binder; n=0})) in
+  { binder = binder ;
+    nbvars = nbv ;
+    master = Array.mapi (fun i _ -> Var({status=binder; n=i})) master ; 
+    slave = Array.make 0 (Var({status=binder; n=0}))
+  }
+  
+(* In test.ml to merge test heads *)
+let merging_subst nbv binder =
+  let master = Array.make nbv (Var({status=binder; n=0})) in
+  { binder = binder ;
+    nbvars = nbv ;
+    master = Array.mapi (fun i _ -> Var({status=binder; n=i})) master ; 
+    slave = Array.make 0 (Var({status=binder; n=0}))
+  } 
+  
+  
 (* mgm *)
 
 
@@ -422,37 +441,20 @@ type position = int list;;
 let show_position (p : position) : string =
   String.concat ""
     (trmap string_of_int p)
-;;
+
 
 let show_positions positions =
   String.concat " " (trmap show_position positions)
-;;
+
 
 let show_configuration (t, sigma, positions) =
   (show_term t) ^ ", sig: " ^ (show_substitution sigma) ^ ", pos : " ^ (show_positions positions)
-;;
+
 
 let rec show_configurations c =
   "\n[\n" ^ (String.concat ";\n" (trmap show_configuration c)) ^ "\n]"
-;;
 
-let identity_subst nbv =
-  let binder = ref Master in
-  let master = Array.make nbv (Var({status=binder; n=0})) in
-  { binder = binder ;
-    nbvars = nbv ;
-    master = Array.mapi (fun i _ -> Var({status=binder; n=i})) master ; 
-    slave = Array.make 0 (Var({status=binder; n=0}))
-  }
-  
-(* In test.ml to merge test heads *)
-let merging_subst nbv binder =
-  let master = Array.make nbv (Var({status=binder; n=0})) in
-  { binder = binder ;
-    nbvars = nbv ;
-    master = Array.mapi (fun i _ -> Var({status=binder; n=i})) master ; 
-    slave = Array.make 0 (Var({status=binder; n=0}))
-  }
+
 
 (*type mask =
   | VarMask

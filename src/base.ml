@@ -117,7 +117,7 @@ type base =
 
 let rec check_binder_term binder term =
   match term with
-  | Var(x) -> x.status == binder
+  | Var(x) -> if x.status == binder then true else (Printf.printf "\nBINDER ERROR at %s\n" (show_term term);true)
   | Fun(_,lst) -> List.for_all (check_binder_term binder) lst
   
 let check_binder_head binder head = 

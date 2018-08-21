@@ -27,20 +27,27 @@ let rec run_until_io process made_choices first frame =
   | ChoiceP(l,proclst) -> 
     dispatch
     (List.map (fun (i,p) -> run_until_io p (Inputs.add_choice l i made_choices) first frame) proclst)
-  | SeqP(Input(l) as entry,p) 
-  | SeqP(Output(l,_) as entry,p) -> 
-    (match l.io with
+  | SeqP(Input({io = Input(chanId); observable= Public}) ,p) 
+  | SeqP(Output({io = Output(chanId); observable= Public},_) ,p) -> 
+    ([],[{ made_choices = made_choices; before_locs = first; thread = process}],[])
+  | SeqP(Input({io = Input(chanId); observable= Hidden; phase = ph} as l),p) -> 
+    ([(l,None, {c = chanId; io = In; ph = ph},{ made_choices = made_choices; before_locs = first; thread = p})],[],[])
+  | SeqP(Output({io = Output(chanId); observable= Hidden; phase = ph} as l,t),p) -> 
+    ([(l,Some t, {c = chanId; io = Out; ph = ph},{ made_choices = made_choices; before_locs = first; thread = p})],[],[])
+ (* | SeqP(Output(l,_) as entry,p) -> 
+    let chanId = match l.io with
     | Output(chanId)
-    | Input(chanId) -> 
-      (match chanId.visibility with
+    | Input(chanId) -> chanId in
+    (match l.observable with
       | Public -> ([],[{ made_choices = made_choices; before_locs = first; thread = process}],[])
       | Hidden -> let term,io = 
         (match entry with
         | Input(l) -> None,In
-        | Output(l,t) -> Some t, Out) in
+        | Output(l,t) -> Some t, Out
+        | _ -> assert false) in
           ([(l,term, {c = chanId; io = io; ph = l.phase},{ made_choices = made_choices; before_locs = first; thread = p})],[],[])
         )
-    | _ -> assert false)
+    | _ -> assert false)*)
   | SeqP(Test(t,t'),p) -> 
     let t = apply_subst_inputs t frame in
     let t' = apply_subst_inputs t' frame in
@@ -62,7 +69,7 @@ let rec run_until_io process made_choices first frame =
       dispatch (List.init n (fun i -> 
         let pr = expand_call l (i+1) p terms chans in
         run_until_io pr made_choices first frame ))
-  | SeqP(OutputA(_,_),_) -> assert false
+  | _ -> assert false
   
 let reduc_and_run loc_input loc_output term_output thread_input thread_output frame =
   let process_input = Process.apply_subst_process loc_input term_output thread_input.thread in

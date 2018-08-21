@@ -566,14 +566,13 @@ let add_to_completion (run : partial_run) (completion : completion) =
   if !debug_merge then Printf.printf "Merge run %d with comp %s\n" run.test.id (show_raw_statement completion.root.initial_statement);
   let sts = merge_tests completion.root.from_base conjrun completion.st_c in
   (*if !debug_completion && sts = [] then  Printf.printf "merge is not possible\n\n";*)
-  List.iter (fun (sigma,st) -> 
+  List.iter (fun ((sigma : substitution),st) -> 
     bijection.next_comp_id <- bijection.next_comp_id + 1;
     let new_comp' = {
         id_c = bijection.next_comp_id;
         st_c = canonize_statement st;
-        corresp_c = (*canonize_correspondance*) corr;
+        corresp_c = corr;
         corresp_back_c = corr_back;
-        (*core_corresp = List.filter (fun (l,l') -> try ignore (Dag.find l completion.root.initial_statement.dag.rel); true with Not_found -> false) (Dag.bindings corr.a);*)
         missing_actions = missing ;
         selected_action = pick_last_or_null st.dag missing ;
         root = completion.root ;
@@ -583,16 +582,26 @@ let add_to_completion (run : partial_run) (completion : completion) =
     if !about_progress then (
       incr nb_comp ;
       if !nb_comp mod 10000 = 0 then Printf.printf "Adding partial comp %d %s\n%!" !nb_comp (show_completion new_comp'));
-    if !debug_completion then Printf.printf "Registering a new completion %s\n from old\n %s \n and %s \n" (show_completion new_comp')(show_completion completion)(show_run run);
+    if !debug_completion then 
+      Printf.printf "Registering a new completion %s\n from old\n %s \n and %s \n" 
+      (show_completion new_comp')(show_completion completion)(show_run run);
     (*Printf.printf "for %d:" (completion.id_c);*)
     match register_completion new_comp' with
     | add_test, Some new_comp ->
+      let sigma = 
+        if new_comp.st_c.head = new_comp'.st_c.head then sigma
+        else (
+          let head = get_test_head new_comp'.st_c.head in
+          let sig_id = Rewriting.merging_subst sigma.nbvars new_comp.st_c.binder in
+          head.head_binder := Master ; 
+          add_identities_to_completions (apply_subst_test_head head sig_id) new_comp;
+          let sigm = Rewriting.compose sigma sig_id in
+          head.head_binder := New ;
+          sigm) in
       if not (List.exists (fun (s,c) -> c.id_c = new_comp.id_c) completion.further_completions) then
         completion.further_completions <- (sigma,new_comp) :: completion.further_completions;
       if not (List.exists (fun (s,c) -> c.id_c = new_comp.id_c) run.completions) then
         run.completions <- (tau,new_comp) :: run.completions;
-      if new_comp.st_c.head != new_comp'.st_c.head then 
-        add_identities_to_completions (get_test_head new_comp'.st_c.head) new_comp;
       if add_test then 
       begin
         if !debug_completion then Printf.printf "Completion complete, checking test %s\n" (show_raw_statement st)(*todo*);
@@ -715,6 +724,7 @@ let equivalence both p q =
     Printf.printf "Completions of Q\n";
     show_all_completions bijection.partial_completions_Q end ;
   Bijection.reorder_tests () ;
+  let nb_tests_init = bijection.next_id in
   let nb_open = ref 0 in
   try
     while not (Tests.is_empty bijection.tests) do
@@ -742,7 +752,7 @@ let equivalence both p q =
     if !about_tests then show_all_tests ();
     if !about_completion then show_final_completions ();
     if !about_bijection then Bijection.show_bijection();
-    if !about_bench then  Printf.printf " time: %6.2f  equivalence (%3d tests) \n"  (Sys.time() -. time) bijection.next_id
+    if !about_bench then  Printf.printf " time: %6.2f  equivalence (%3d tests, extra: %3d) sat: %5d\n"  (Sys.time() -. time) bijection.next_id (bijection.next_id - nb_tests_init)(bijection.satP.next_id + bijection.satQ.next_id)
     else if both then Printf.printf "\nP and Q are trace equivalent. \n" else Printf.printf "\nTraces of P are included in Q. \n";
     if ! use_xml then Printf.printf "</all>"
   with
@@ -750,7 +760,7 @@ let equivalence both p q =
     if !about_tests then show_all_tests ();
     if !about_completion then show_final_completions ();
     if !about_bijection then Bijection.show_bijection();
-    if !about_bench then  Printf.printf " time: %6.2f attack found (test n°%d)\n" (Sys.time() -. time) test.id
+    if !about_bench then  Printf.printf " time: %6.2f attack found (test n°%d,total:%d, extra: %3d) sat: %5d\n" (Sys.time() -. time) test.id bijection.next_id (bijection.next_id - nb_tests_init)(bijection.satP.next_id + bijection.satQ.next_id)
     else Printf.printf "\nAn attack has been found for the test %s \n with specific order %s \n\nP and Q are not trace equivalent. \n" 
     (show_test test)(show_dag sol.restricted_dag);
     if ! use_xml then Printf.printf "</all>";
