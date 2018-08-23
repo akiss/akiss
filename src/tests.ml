@@ -46,6 +46,7 @@ let statement_to_completion process_name (statement : statement) (st : raw_state
     generated_test = None;
   }
   
+let get_opt = function None -> assert false | Some t -> t
 
   (* This function canonize statements by replacing several recipes for the same term by one recipe
   and removing predicates in the body with a recipe in a later location
@@ -102,8 +103,8 @@ let same_term_same_recipe st =
   else *)
   let sigma = { 
     binder = binder; 
-    master =  Array.map Rewriting.get_option master_final;
-    slave = Array.map Rewriting.get_option slave_final;
+    master =  Array.map get_opt master_final;
+    slave = Array.map get_opt slave_final;
     nbvars = !nbv;
   } in
   let r = apply_subst_statement { st with body = body; } sigma in
@@ -313,7 +314,7 @@ let actual_test process_name (st : raw_statement) =
     constraints_back = corr;
   } in
   let solution = init_sol process_name st (proc process_name) test in
-  if !debug_execution then Printf.printf "\nChecking actual of %s \nwith dag = %s\n" (show_test test)(show_dag st.dag);
+  if !debug_execution then Printf.printf "\nChecking actual of %s \nwith dag = %s\n%!" (show_test test)(show_dag st.dag);
   match find_possible_run solution with
     None ->  false 
   | Some sol -> true
@@ -445,6 +446,7 @@ and complete_set_of_identities head (*process_name*) old_test =
 
 and statement_to_tests process_name origin (statement : raw_statement) otherProcess =
   (* let statement = match origin with Initial _ -> same_term_same_recipe statement | _-> statement in *)
+  (*Printf.printf "st2tests %s\n" (show_raw_statement statement);*)
   let exception CyclicDag in
   let nb = Dag.cardinal statement.dag.rel in
   try
@@ -470,9 +472,9 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
       statement.binder := Master;
       let head' = apply_subst_test_head head_t sigma in
       if !debug_tests then 
+        Printf.printf "Updating an existing test which is \n%s\nwith %s \n subst %s \n"
+          (show_test test)(show_raw_statement statement)(show_substitution sigma);
       statement.binder := New ;
-      (*Printf.printf "Updating an existing test which is \n%s\nwith %s \n subst %s \n"
-          (show_test test)(show_raw_statement statement)(show_substitution sigma);*)
       complete_set_of_identities head' (*process_name*) test ;
       Some test
     with 
@@ -645,7 +647,7 @@ let rec compute_new_completions process_name  =
 (* From solved statements create tests. 
 Opti: when children are identical with same world merge them with the reach parent to reduce number of tests *)  
 let rec statements_to_tests t c process_name (statement : statement) otherProcess equalities =
-  (* Printf.printf "Getting test (%d) %s %s \n" statement.id (if t then "oui" else "non") (show_raw_statement statement.st); *)
+  (* Printf.printf "Getting test (%d) %s %s \n%!" statement.id (if t then "oui" else "non") (show_raw_statement statement.st); *)
   let sigma,raw_statement' = same_term_same_recipe statement.st in
   let equalities = 
     match statement.st.head with
@@ -663,6 +665,7 @@ let rec statements_to_tests t c process_name (statement : statement) otherProces
       then begin
         match st.st.head with 
         Identical (s,t) -> 
+          (*Printf.printf "eq %s=%s\n %!" (show_term s)(show_term t);*)
           (* let _,st' = same_term_same_recipe st.st in
           if c then (
             let compl = statement_to_completion process_name st (negate_statement st') in
@@ -712,9 +715,9 @@ let equivalence both p q =
   bijection.satP <- satP ;
   bijection.satQ <- satQ ;
   if !about_progress then Printf.printf "Building tests\n%!";
-  unreach_to_completion Q satQ ;
   base_to_tests true both P satP processQ ; 
   base_to_tests both true Q satQ processP ; 
+  unreach_to_completion Q satQ ;
   if both then 
   unreach_to_completion P satP ;
   if !debug_completion then

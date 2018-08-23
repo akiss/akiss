@@ -251,5 +251,6 @@ let rec apply_subst_process loc term pr = try
   | ParallelP(lp) -> ParallelP(List.map (apply_subst_process loc term) lp)
   | SeqP(a,p) -> SeqP(apply_subst_action loc term a,apply_subst_process loc term p)
   | ChoiceP(l,lp)->ChoiceP(l,List.map (fun (i,p) -> (i,apply_subst_process loc term p)) lp)
-  | CallP(l,i,procId,args,chans) -> CallP(l,i,procId,args,chans)
+  | CallP(l,i,procId,args,chans) -> 
+    CallP(l,i,procId,Array.map (fun t -> repl_hidden_loc loc term t) args,chans)
   with Invalid_argument a -> Format.printf "Process substitution error\n" ; raise (Invalid_argument a)

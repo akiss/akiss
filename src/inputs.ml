@@ -88,7 +88,7 @@ let merge_choices_add_link c1 c2 l1 l2=
 **)
 let get l input =
   try Dag.find l input.i with 
-  Not_found -> begin Printf.printf "Error: no %d on %s \n%!" (l.p)(show_inputs input); raise Not_found end
+  Not_found -> begin Printf.printf "Error: location %d not found on input %s \n%!" (l.p)(show_inputs input); raise Not_found end
 
 let map f input = 
   { i = Dag.map f input.i}

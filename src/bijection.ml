@@ -59,6 +59,9 @@ type extra_thread = {
   thread : Process.process;
   }
   
+let show_extra_thread th =
+  Printf.sprintf "%s <| %s ==> %s " (show_loc_set th.before_locs) (Inputs.show_choices th.made_choices) (Process.show_process_start 3 th.thread)
+  
 module rec Run : sig 
   type completion = {
     id_c : int;

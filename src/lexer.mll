@@ -57,6 +57,7 @@ rule token = parse
 | "(*" { comment_par lexbuf } (* Paragraph comment *)
 (* Main Configuration *)
 | '='   { EQ }
+| "!="   { DISEQ }
 | '/'   { SLASH }
 | ';'   { SEMI }
 | '.'   { DOT }

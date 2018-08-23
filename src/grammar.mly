@@ -14,7 +14,7 @@ open Parser_functions
 %token PHASE
 %token QUERY TRACEEQ OBSEQ SAT TRACEINCL
 
-%token EQ
+%token EQ DISEQ
 %token SLASH SEMI DOT MID BANG COMMA
 %token PLUS QUADDOT
 %token LPAR RPAR LBRACE RBRACE
@@ -169,6 +169,10 @@ plain_process:
       { IfThenElse($2,$4,$6,Nil) }
   | IF term EQ term THEN plain_process ELSE plain_process
       { IfThenElse($2,$4,$6,$8) }
+  | IF term DISEQ term THEN plain_process
+      { IfThenElse($2,$4,Nil,$6) }
+  | IF term DISEQ term THEN plain_process ELSE plain_process
+      { IfThenElse($2,$4,$8,$6) }
   | LET pattern EQ term IN plain_process
       { Let($2,$4,$6,Nil) }
   | LET pattern EQ term IN plain_process ELSE plain_process

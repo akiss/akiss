@@ -77,11 +77,6 @@ let print_flags () =
 
 (** {2 Predicates and clauses, conversions and printing} *)
 
-(** Possible predicates are
-  *   "knows" of arity 3 (world, recipe, term);
-  *   "identical" and "ridentical" of arity 3 (world, recipe, recipe);
-  *   "reach" of arity 1 (world). *)
-
 
 let is_deduction_st st = 
   match st.head with 
@@ -117,15 +112,6 @@ let rec vars_of_atom = function
 let get_head_recipe = function 
   | Knows( r, _) -> r
   | _ -> assert(false)
-
-
-(*let get_recipes = function
-  | Knows( r, _) -> [r]
-  | Identical( r1, r2) -> [r1;r2]
-  | Reach -> []
-  | Unreachable -> []
-  | Tests(_) -> assert false (*EqualitiesSet.fold (fun (r,r') lst -> r :: r' :: lst) diseq (EqualitiesSet.fold (fun (r,r') lst -> r :: r' :: lst) equal [])*)
-*)
 
 let get_term atom = atom.term
 
@@ -367,18 +353,20 @@ let simplify_statement st =
         not (List.mem recipe_var hvars) &&
         let t = a.term in
         let l = a.loc in
-        try
-          let is_better =  List.find 
+        match List.find_opt 
             (fun a' ->
               let recipe_var' = unbox_var a'.recipe in
               (( recipe_var.n < recipe_var'.n && l = a'.loc)
                   || Dag.should_be_before (st.dag) (a'.loc) l)
-                  && Rewriting.equals_ac t (a'.term) ) st.body in
+                  && Rewriting.equals_ac t (a'.term) ) st.body with
+        | Some is_better ->
           if !about_canonization then
               Printf.printf "Atom %s removed due to %s\n" (show_body_atom a) (show_body_atom is_better);
-          try sigma_repl.(recipe_var.n) <- Some is_better.recipe; true
-          with Invalid_argument _ -> Printf.eprintf "Error when simplify_statement %s \n" (show_raw_statement st);exit 6 
-         with Not_found -> false
+          (try sigma_repl.(recipe_var.n) <- Some is_better.recipe; true
+          with 
+            Invalid_argument _ -> 
+              Printf.eprintf "Error when simplify_statement %s \n" (show_raw_statement st);exit 6 )
+         | None -> false
          )
        st.body
   in
@@ -934,23 +922,38 @@ let rec concretize inputs term =
 
 
  
-let rec hidden_chan_statement kb  (loc_input , None ,ineq_input,st_input,pr_input) (loc_output, Some term_output,ineq_output,st_output,pr_output) solved_parent unsolved_parent test_parent  =
+let rec hidden_chan_statement kb  (loc_input , term_input ,ineq_input,st_input,pr_input) (loc_output,  term_output,ineq_output,st_output,pr_output) solved_parent unsolved_parent test_parent  =
+  match term_input,term_output with
+  | None, Some term_output -> (
   match Inputs.merge_choices_add_link st_output.choices st_input.choices loc_output loc_input with
     None -> ()
   | Some choices ->
   let dag = Dag.merge st_output.dag st_input.dag in
   if Dag.is_cyclic dag then () 
   else (
+  st_input.binder := Slave;
+  st_output.binder := Master;
+  if !about_seed then Printf.printf "Computing hiden_chan_statement\n -link %d <-> %d\n -input %s \n -output %s\n%!" loc_input.p loc_output.p (show_raw_statement st_input)(show_raw_statement st_output);
+  if st_input.binder = st_output.binder then (
+    (*Printf.printf "same statement %s and %s\n" (show_raw_statement st_input)(show_raw_statement st_output);*)
+    let sig_id = Rewriting.identity_subst st_output.nbvars in
+    let st = apply_subst_statement { st_output with choices = choices ; dag = dag } sig_id in
+    let ineqs = (ineq_output @  ineq_input) in
+    trace_statements kb ineqs solved_parent unsolved_parent test_parent pr_output st ;
+    let process_input = Process.apply_subst_process loc_input term_output pr_input in
+    (*Printf.printf "subst %d by %s process : %s\n" loc_input.p (show_term term_output) (show_process_start 3 process_input);*)
+    trace_statements kb ineqs solved_parent unsolved_parent test_parent process_input st 
+  )
+  else
   let sigma = ((Array.make st_output.nbvars None),(Array.make st_input.nbvars None)) in
-  st_input.binder:= Slave;
-  st_output.binder:= Master;
-  if !about_seed then Printf.printf "Computing hiden_chan_statement\n -input %s \n -output %s\n%!" (show_raw_statement st_input)(show_raw_statement st_output);
+   (*Printf.printf "Computing hiden_chan_statement\n -link %d <-> %d\n" loc_input.p loc_output.p;*)
   let sigmas = Inputs.csu sigma st_output.inputs st_input.inputs in
   if sigmas = [] then ()
   else (
   let dag = Dag.put_at_end (Dag.put_at_end dag loc_input) loc_output in
   List.iter (fun sigma -> 
     let sigma = Rewriting.pack sigma in
+    (*Printf.printf "subst %s\n" (show_substitution sigma);*)
     let st =
       let body =
         List.map (fun x -> {
@@ -973,11 +976,13 @@ let rec hidden_chan_statement kb  (loc_input , None ,ineq_input,st_input,pr_inpu
       involved_copies = BangSet.union st_output.involved_copies st_input.involved_copies ; }
     in
     let ineqs = List.map (fun (s,t) -> (Rewriting.apply_subst_term s sigma,Rewriting.apply_subst_term t sigma)) (ineq_output @  ineq_input) in
-    (*let process_output = Process.apply_subst_process loc_input term_output pr_output in*)
     trace_statements kb ineqs solved_parent unsolved_parent test_parent pr_output st ;
     let process_input = Process.apply_subst_process loc_input term_output pr_input in
+    (*Printf.printf "subst %d by %s process : %s\n" loc_input.p (show_term term_output) (show_process_start 3 process_input);*)
     trace_statements kb ineqs solved_parent unsolved_parent test_parent process_input st 
   ) sigmas ))
+  )
+  | _ -> assert false
  
 and trace_statements kb ineqs solved_parent unsolved_parent test_parent process st =
   let rec add_ineqs_statements ineqs idsigma st =
@@ -1025,22 +1030,15 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
      | SeqP(Output({observable = Public} as loc, t), pr) -> (* the reach part of the output *)
       let next_dag = Dag.put_at_end st.dag loc in
       let identity_sigma = Rewriting.identity_subst st.nbvars in
-      (*let term = Rewriting.normalize (concretize st.inputs t) (! Parser_functions.rewrite_rules)in*)
       let binder = identity_sigma.binder in
       st.binder := Master;
       let st = apply_subst_statement st identity_sigma in
-      (*let next_head = Knows(Fun({id= Frame(loc); has_variables = false},[]), term) in*)
       let st = { st with
         binder = binder; 
         dag = next_dag ;
         head = Reach;
         } in
-      (* let v = Rewriting.variants st.nbvars term (! Parser_functions.rewrite_rules) in *)
       begin 
-      (*List.iter (fun (_,sigma) -> 
-        if !about_seed then Format.printf "- variant %s\n" (show_substitution sigma);
-        add_statement kb solved_parent unsolved_parent solved_parent(Some pr)
-          (apply_subst_statement st sigma)) v ;*)
       add_ineqs_statements ineqs identity_sigma st ;
       add_statement kb solved_parent unsolved_parent test_parent (Some (SeqP(OutputA(loc, t), pr))) st
       end
@@ -1073,20 +1071,23 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
       begin
       add_ineqs_statements ineqs identity_sigma st ;
       add_statement kb solved_parent unsolved_parent test_parent (Some pr) st end
-    | SeqP(Input({io = Input({visibility = Hidden} as chan)} as loc), pr) -> (try
-      List.iter (fun stout -> 
-        hidden_chan_statement kb (loc,None,ineqs,st,pr) stout solved_parent unsolved_parent test_parent) 
-          (ChanMap.find { c= chan; io = Out; ph =loc.phase} kb.hidden_chans) with Not_found -> ());
+    | SeqP(Input({io = Input({visibility = Hidden} as chan)} as loc), pr) -> (
+      match ChanMap.find_opt { c= chan; io = Out; ph =loc.phase} kb.hidden_chans with
+      | None -> ()
+      | Some chans -> 
+        List.iter (fun stout -> 
+          hidden_chan_statement kb (loc,None,ineqs,st,pr) stout solved_parent unsolved_parent test_parent) chans);
       kb.hidden_chans <- ChanMap.add { c = chan; io = In; ph = loc.phase} 
         ((loc,None,ineqs,st,pr):: ( try 
           ChanMap.find { c= chan; io = In; ph =loc.phase} kb.hidden_chans 
           with Not_found -> []))
         kb.hidden_chans 
-    | SeqP(Output({io = Output({visibility = Hidden} as chan)} as loc, t), pr) -> 
-      (try
-      List.iter (fun stin -> 
-        hidden_chan_statement kb stin (loc,Some t,ineqs,st,pr) solved_parent unsolved_parent test_parent) 
-          (ChanMap.find { c= chan; io = In; ph =loc.phase} kb.hidden_chans) with Not_found -> ());
+    | SeqP(Output({io = Output({visibility = Hidden} as chan)} as loc, t), pr) -> (
+      match ChanMap.find_opt { c= chan; io = In; ph =loc.phase} kb.hidden_chans with
+      | None -> ()
+      | Some chans -> 
+        List.iter (fun stin -> 
+          hidden_chan_statement kb stin (loc,Some t,ineqs,st,pr) solved_parent unsolved_parent test_parent) chans);
       kb.hidden_chans <- ChanMap.add { c = chan; io = Out; ph = loc.phase} 
         ((loc,Some t,ineqs,st,pr):: ( try 
           ChanMap.find { c= chan; io = Out; ph =loc.phase} kb.hidden_chans 

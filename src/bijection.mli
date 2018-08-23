@@ -94,6 +94,7 @@ type extra_thread = {
   made_choices : Inputs.choices;
   thread : Process.process;
 }
+val show_extra_thread : extra_thread -> string
 module rec Run :
   sig
     type completion = {
