@@ -4,8 +4,8 @@ open Dag
 open Base
 open Process
 open Bijection
-open Term
 open Bijection.Run
+open Bijection.Test
 
 let rec apply_subst_inputs term frame =
   match term with
@@ -103,7 +103,7 @@ and test_all_internal_communications all_pending_set end_new_lst frame =
     let conj_chan = { chan_kind with io = Base.switch_io chan_kind.io} in (
     match ChanMap.find_opt conj_chan all_pending_set with
     | Some old_chan_lst -> 
-      let old_chan_lst = List.filter (fun (l,t,p) -> not (List.exists (fun (lo,te,_,th) -> lo == l && te == t && th=p) end_new_lst)) old_chan_lst in
+      let old_chan_lst = List.filter (fun (l,t,p) -> not (List.exists (fun (lo,te,_,th) -> lo == l && te == t && th==p) end_new_lst)) old_chan_lst in
       let res= test_reduc_for_one (loc,term,chan_kind,ext_thread) conj_chan old_chan_lst all_pending_set frame in
       dispatch [res;res2] 
     | None -> res2)

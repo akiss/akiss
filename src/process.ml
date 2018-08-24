@@ -1,6 +1,5 @@
 (*open Parser*)
 open Types
-open Term
 open Dag
 open Parser_functions
 open Util
@@ -56,6 +55,12 @@ let processes_infos = {
      nonce_list = [];
      max_phase = 0;
 }
+
+(*let (=process=) x y =
+  match x,y with
+  | SeqP(a,p),SeqP(a',p') -> 
+  | ChoiceP(l,_),ChoiceP(l',_) -> l==l'
+  | CallP(l,_,_,_,_),CallP(l',_,_,_,_) -> l==l'*)
 
 let show_action a =
   match a with

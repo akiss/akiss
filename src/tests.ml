@@ -5,7 +5,7 @@ open Base
 open Process
 open Bijection
 open Bijection.Run
-open Term
+open Bijection.Test
 open Process_execution
 
 let negate_statement (st : raw_statement) =
@@ -46,7 +46,7 @@ let statement_to_completion process_name (statement : statement) (st : raw_state
     generated_test = None;
   }
   
-let get_opt = function None -> assert false | Some t -> t
+
 
   (* This function canonize statements by replacing several recipes for the same term by one recipe
   and removing predicates in the body with a recipe in a later location
@@ -57,7 +57,7 @@ let same_term_same_recipe st =
   st.binder := Master;
   if !debug_merge then Printf.printf "simplification of %s\n" (show_raw_statement st);
   let master_final = Array.make (st.nbvars) None in
-  let slave_final = Array.make (0) None in
+  (*let slave_final = Array.make (0) None in*)
   let binder = ref New in
   let nbv = ref 0 in
   let (useless,body) =
@@ -94,17 +94,17 @@ let same_term_same_recipe st =
               else can_be_replaced_by st.dag a.loc a'.loc) st.body 
          with Not_found -> false
          )
-       (List.sort (fun x y -> Pervasives.compare (x.loc,(unbox_var x.term).n) (y.loc,(unbox_var y.term).n)) st.body)
+       (List.sort (fun x y -> Pervasives.compare (x.loc,(Term.unbox_var x.term).n) (y.loc,(Term.unbox_var y.term).n)) st.body)
   in
-  let body = List.sort_uniq (fun x y -> Pervasives.compare (x.loc,(unbox_var x.term).n) (y.loc,(unbox_var y.term).n)) body in
+  let body = List.sort_uniq (fun x y -> Pervasives.compare (x.loc,(Term.unbox_var x.term).n) (y.loc,(Term.unbox_var y.term).n)) body in
   if !debug_merge then
-    List.iter (fun a -> Format.printf "Removed %s\n" (show_body_atom a)) useless ;
+    List.iter (fun a -> Printf.printf "Removed %s\n" (show_body_atom a)) useless ;
 (*  if useless = [] then st 
   else *)
   let sigma = { 
     binder = binder; 
     master =  Array.map get_opt master_final;
-    slave = Array.map get_opt slave_final;
+    slave = Array.make 0 zero;(* Array.map get_opt slave_final;*)
     nbvars = !nbv;
   } in
   let r = apply_subst_statement { st with body = body; } sigma in
@@ -199,7 +199,7 @@ let opti_find_recipe sigm merged_dag fa fb =
   | Broken_Precedence -> 
     if !debug_merge then Printf.printf "No simple recipes, entering safe mode\n";
     let sigma = Rewriting.pack sigm in 
-    let body,useless = List.partition (fun x -> is_var x.term) 
+    let body,useless = List.partition (fun x -> Term.is_var x.term) 
       (List.map (fun x-> {x with recipe = Rewriting.apply_subst_term x.recipe sigma; term = Rewriting.apply_subst_term x.term sigma }) fab_body) in
     (sigma,body,useless)
             
@@ -251,12 +251,12 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
         in
         sigma.binder := Master;
         let tau = (Array.make sigma.nbvars None) in
-        if !debug_merge then Format.printf "The merged test without (all) recipes from subst %s:\n %s\nunsolved = %s %!"
+        if !debug_merge then Printf.printf "The merged test without (all) recipes from subst %s:\n %s\nunsolved = %s %!"
             (show_substitution sigma)(show_raw_statement st_without_recipes)(show_atom_list unsolved);
         let new_dag = ref merged_dag in
         try
           List.iter (fun x ->  
-          let n = (unbox_var x.recipe).n in
+          let n = (Term.unbox_var x.recipe).n in
           let base = if process_name = P then bijection.satP else bijection.satQ in
           match tau.(n) with
           | None ->
@@ -283,15 +283,15 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
               ) unsolved;
            let tau = Rewriting.pack (tau, Array.make 0 None) in
            let result = apply_subst_statement {st_without_recipes with dag = !new_dag} tau in
-           if !debug_merge then Format.printf "The merged test: %s\n%!" (show_raw_statement result);
+           if !debug_merge then Printf.printf "The merged test: %s\n%!" (show_raw_statement result);
            let (sigm,result) = same_term_same_recipe result in
-           if !debug_merge then Format.printf "New clean merged test: %s\n%!" (show_raw_statement result);
+           if !debug_merge then Printf.printf "New clean merged test: %s\n%!" (show_raw_statement result);
            let rho = Rewriting.compose sigma (Rewriting.compose_master tau sigm) in
-           if !debug_merge then Format.printf "Final substitution rho: %s\n%!" (show_substitution rho);
+           if !debug_merge then Printf.printf "Final substitution rho: %s\n%!" (show_substitution rho);
            (rho,result) :: lst
            with
             No_recipe -> 
-              if !debug_merge then Format.printf "No recipe found for some input aborting...\n"  ; 
+              if !debug_merge then Printf.printf "No recipe found for some input aborting...\n%!"  ; 
               lst
         (*end 
         | _ -> assert false*))

@@ -150,3 +150,5 @@ let rec pp_list pp sep chan = function
       pp chan x ;
       output_string chan sep ;
       pp_list pp sep chan tl
+
+let get_opt = function None -> assert false | Some t -> t      

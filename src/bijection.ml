@@ -68,12 +68,11 @@ module rec Run : sig
     st_c : raw_statement ; (* the current completion g u U_i f_i *)
     corresp_c : correspondance ; (* the correspondance of the union of f_i *)
     corresp_back_c : correspondance ;
-    (*core_corresp : (location * location) list ;*)
     missing_actions :  LocationSet.t; (* all the locations which are present on the initial statement but not on the runs *)
     selected_action : location; (*Among all missing locations the one to complete first *)
     root : complement_root;
     mutable further_completions : (substitution * completion) list;
-    mutable generated_test : (substitution * test) option;
+    mutable generated_test : (substitution * Test.test) option;
   }
   and complement_root = {
     from_base : which_process; (* the saturated base from which the completion come from *)
@@ -88,7 +87,7 @@ module rec Run : sig
     hash_corresp_c : (location * location) list ;
   }
   and  partial_run = {
-  test : test; (* The test from which the prun come from *)
+  test : Test.test; (* The test from which the prun come from *)
   sol : solution;
   corresp : correspondance ; (* a mapping from the actions of P to the actions of Q *)
   corresp_back : correspondance ; (* the reverse mapping from the actions of Q to the actions of P *)
@@ -109,7 +108,7 @@ module rec Run : sig
   weird_assoc : int ; (* when the parent of an action is not associated to the parent of the associated action *)
   score : int ;
   (* for complete runs *)
-  mutable consequences : (statement_role * substitution * test) list; (* the merged tests from this run, empty if this run is not part of the solution  *)
+  mutable consequences : (statement_role * substitution * Test.test) list; (* the merged tests from this run, empty if this run is not part of the solution  *)
   mutable completions : (substitution * completion) list; (* the completion from this run, empty if this run is not part of the solution  *)
 }
 and origin = 
@@ -118,19 +117,7 @@ and origin =
   | Completion 
   | Temporary
   
-and test = {
-  process_name : which_process; (* Is it a test of P or of Q?*)
-  statement : raw_statement ; (* the solved statement seen as the test to check *)
-  origin : origin;
-  id : int;
-  from : IntegerSet.t;
-  nb_actions : int; (* used to order the tests *)
-  mutable new_actions : int; (* compared to the base actions, used to order the tests *)
-  mutable constraints : correspondance; (* Try to pass the test prioritary satisfying the constraints *)
-  mutable constraints_back : correspondance; (* Inverse mapping *)
-  mutable solutions_todo : solution list;
-  mutable solutions_done : solution list;
-}
+
 (* records which are the partial executions of a test *) 
 and solution = {
   init_run : partial_run;
@@ -138,18 +125,12 @@ and solution = {
   mutable partial_runs_todo : Solutions.t; (*partial_run list;*)
   mutable possible_runs_todo : Solutions.t; (* Queue here before processing *)
   mutable possible_runs : Solutions.t; (* Run which are not compatible for the current bijection, to test if no other option *)
-  mutable movable : int; (*Number of tests which are merged require to consider changing the partition *) 
+  mutable movable : int; (*Number of Test.tests which are merged require to consider changing the partition *) 
   mutable restricted_dag : dag;
   mutable selected_run : partial_run option;
-  sol_test : test;
+  sol_test : Test.test;
 }
 type t = partial_run
-val show_run : partial_run -> string
-val show_partial_run : partial_run -> string
-val show_origin : origin -> string
-val show_test : test -> string
-val show_completion : completion -> string
-val show_all_completions : completion list Dag.t -> unit
 val compare : t -> t -> int 
 end
 = 
@@ -164,7 +145,7 @@ struct
     selected_action : location; (*Among all missing locations the one to complete first *)
     root : complement_root;
     mutable further_completions : (substitution * completion) list;
-    mutable generated_test : (substitution * test) option;
+    mutable generated_test : (substitution * Test.test) option;
   }
   and complement_root = {
     from_base : which_process; (* the saturated base from which the completion come from *)
@@ -179,7 +160,7 @@ struct
     hash_corresp_c : (location * location) list ;
   }
   and partial_run = {
-  test : test; (* The test from which the prun come from *)
+  test : Test.test; (* The test from which the prun come from *)
   sol : solution;
   corresp : correspondance ; (* a mapping from the actions of P to the actions of Q *)
   corresp_back : correspondance ; (* the reverse mapping from the actions of Q to the actions of P *)
@@ -200,7 +181,7 @@ struct
   weird_assoc : int ; (* when the parent of an action is not associated to the parent of the associated action *)
   score : int ;
   (* for selected runs only: the list of merged tests from this run (consequences) and completions from this run (completions) *)
-  mutable consequences : (statement_role * substitution * test) list;
+  mutable consequences : (statement_role * substitution * Test.test) list;
   mutable completions : (substitution * completion) list;
 }
   
@@ -210,20 +191,7 @@ and origin =
   | Composed of partial_run * partial_run 
   | Completion 
   | Temporary
-  
-and test = {
-  process_name : which_process; (* Is it a test of P or of Q?*)
-  statement : raw_statement ; (* the solved statement seen as the test to check *)
-  origin : origin;
-  id : int;
-  from : IntegerSet.t;
-  nb_actions : int; (* used to order the tests *)
-  mutable new_actions : int; (* compared to the base actions, used to order the tests *)
-  mutable constraints : correspondance; (* Try to pass the test prioritary satisfying the constraints *)
-  mutable constraints_back : correspondance; (* Inverse mapping *)
-  mutable solutions_todo : solution list;
-  mutable solutions_done : solution list;
-}
+
 (* records which are the partial executions of a test *) 
 and solution = {
   init_run : partial_run;
@@ -234,12 +202,92 @@ and solution = {
   mutable movable : int; (*Number of tests which are merged require to consider changing the partition *) 
   mutable restricted_dag : dag;
   mutable selected_run : partial_run option;
-  sol_test : test;
+  sol_test : Test.test;
 }
 type t = partial_run
 let compare (x : t) (y : t)= 
       compare (LocationSet.cardinal x.restrictions,x.weird_assoc,-x.score,x)
               (LocationSet.cardinal y.restrictions,y.weird_assoc,-y.score,y)
+
+
+end
+and Test : sig 
+type test = {
+  process_name : which_process; (* Is it a test of P or of Q?*)
+  statement : raw_statement ; (* the solved statement seen as the test to check *)
+  origin : Run.origin;
+  id : int;
+  from : IntegerSet.t;
+  nb_actions : int; (* used to order the tests *)
+  mutable new_actions : int; (* compared to the base actions, used to order the tests *)
+  mutable constraints : correspondance; (* Try to pass the test prioritary satisfying the constraints *)
+  mutable constraints_back : correspondance; (* Inverse mapping *)
+  mutable solutions_todo : Run.solution list;
+  mutable solutions_done : Run.solution list;
+}
+type t = test
+val compare : t -> t -> int
+end
+= struct
+type test = {
+  process_name : which_process; (* Is it a test of P or of Q?*)
+  statement : raw_statement ; (* the solved statement seen as the test to check *)
+  origin : Run.origin;
+  id : int;
+  from : IntegerSet.t;
+  nb_actions : int; (* used to order the tests *)
+  mutable new_actions : int; (* compared to the base actions, used to order the tests *)
+  mutable constraints : correspondance; (* Try to pass the test prioritary satisfying the constraints *)
+  mutable constraints_back : correspondance; (* Inverse mapping *)
+  mutable solutions_todo : Run.solution list;
+  mutable solutions_done : Run.solution list;
+}
+type t = test
+let compare (x : Test.test) (y : Test.test)=
+           
+        match (x.origin , y.origin) with
+          | (Initial st1, Initial st2) ->
+            let r = compare (x.new_actions, x.nb_actions) (y.new_actions, y.nb_actions) in
+            if r = 0 then begin
+              match x.statement.head,y.statement.head with
+              | Identical(_) ,Reach -> -1
+              | Reach,Identical(_) -> 1
+              | _ -> 
+              let r = - (compare st1.id st2.id) in
+              if r = 0 then compare x.process_name y.process_name else - r end else - r
+           | (Initial _, Composed _) -> 1
+           | (Composed _ , Initial _) -> -1
+           | (Composed(_), Composed(_)) ->
+              let r = compare (IntegerSet.cardinal x.from)(IntegerSet.cardinal y.from) in
+              if r = 0 then 
+              compare x.id y.id 
+              else -r
+          | (Completion , Completion ) -> compare x.id y.id
+          | (Completion , _) -> -1
+          | (_, Completion ) ->  1
+          | (Temporary,_) 
+          | (_,Temporary) -> assert false
+end
+and Solutions : Set.S with type elt = Run.t 
+  = Set.Make(Run) 
+and Tests : Set.S with type elt = Test.t
+  = Set.Make(Test)
+
+module PartialRun =
+       struct
+         type t = Run.partial_run
+         let compare (x : Run.partial_run) (y : Run.partial_run) =
+            let z = compare x.test.id y.test.id in
+            if z = 0 then
+              compare x y
+            else z
+       end
+
+module RunSet = Set.Make(PartialRun)
+  
+open Run 
+open Test
+
 let show_run pr  =
   if !use_xml 
   then 
@@ -276,7 +324,7 @@ let rec show_origin o =
   | Completion -> "comp"
   | Temporary -> "T"
   
-and show_test t =
+and show_test (t : test) =
   Format.sprintf 
   (if !use_xml then "<test>{<idtest>%d</idtest>}<origin>%s</origin><infos>%s %d,%d</infos><prname>%s</prname>%s</test>"
   else "Test[%d]: %s %s {%d,%d} %s\n%s\n") t.id (show_origin t.origin) (show_int_set t.from) t.new_actions t.nb_actions (show_which_process t.process_name) (show_raw_statement t.statement)
@@ -303,63 +351,6 @@ let show_all_completions daglst =
 let show_solution_set sol =
   Solutions.iter (fun prun -> Printf.printf "possible run: %s"  (show_run prun)) sol
 
-end
-
-and Solutions : Set.S with type elt = Run.t 
-  = Set.Make(Run) 
-
-module PartialRun =
-       struct
-         type t = Run.partial_run
-         let compare (x : Run.partial_run) (y : Run.partial_run) =
-            let z = compare x.test.id y.test.id in
-            if z = 0 then
-              compare x y
-            else z
-       end
-
-module RunSet = Set.Make(PartialRun)
-
-
-module Test =
-  struct
-    type t = Run.test
-      let compare (x : Run.test) (y : Run.test)=
-           
-        match (x.origin , y.origin) with
-          | (Initial st1, Initial st2) ->
-            let r = compare (x.new_actions, x.nb_actions) (y.new_actions, y.nb_actions) in
-            if r = 0 then begin
-              match x.statement.head,y.statement.head with
-              | Identical(_) ,Reach -> -1
-              | Reach,Identical(_) -> 1
-              | _ -> 
-              let r = - (compare st1.id st2.id) in
-              if r = 0 then compare x.process_name y.process_name else - r end else - r
-           | (Initial _, Composed _) -> 1
-           | (Composed _ , Initial _) -> -1
-           | (Composed(_), Composed(_)) ->
-              let r = compare (IntegerSet.cardinal x.from)(IntegerSet.cardinal y.from) in
-              if r = 0 then 
-              compare x.id y.id 
-              else -r
-          | (Completion , Completion ) -> compare x.id y.id
-          | (Completion , _) -> -1
-          | (_, Completion ) ->  1
-          | (Temporary,_) 
-          | (_,Temporary) -> assert false
-     (*     | (_,_) -> assert false *)
-   end
-
-module Tests = Set.Make(Test)
-  
-open Run 
-
-(*let canonize_completion completion = {
-  completion with
-  st_c = canonize_statement completion.st_c;
-  corresp_c = canonize_correspondance completion.corresp_c;
-}*)
 
 let completion_to_hash_completion completion =
   let hash_test = raw_to_hash_test completion.st_c in

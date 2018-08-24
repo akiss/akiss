@@ -127,7 +127,12 @@ let get_head st = st.head
 
 let get_body st = st.body
 
-
+let compare_loc_opt l1 l2 =
+  match l1,l2 with
+  | None , Some l1 -> 1
+  | Some l1,Some l2 -> Pervasives.compare l1.p l2.p
+  | Some _ , None -> -1
+  | None, None -> 0
 
 (** {3 Unification and substitutions} *)
 
@@ -341,15 +346,80 @@ let rule_shift st =
   * remove derivations for which the recipe does not occur elsewhere in the
   * statement as long as one derivation remains. *)
 let simplify_statement st =
-  let hvars = vars_of_atom st.head (*vars_of_term_list (get_recipes st.head)*) in
-  (*Printf.printf "simplification of %s\n" (show_raw_statement st);*)
-  let sigma_repl = Array.make st.nbvars None in
-  let sigma = (sigma_repl, Array.make 0 None) in
+  (*let hvars = vars_of_atom st.head (*vars_of_term_list (get_recipes st.head)*) in
   st.binder := Master;
+  let master_final = Array.make (st.nbvars) None in
+  let binder = ref New in
+  let nbv = ref 0 in
   let (useless,body) =
     List.partition
       (fun a ->
         let recipe_var = unbox_var a.recipe in
+        List.iter (fun (x : varId) -> 
+          if master_final.(x.n) = None
+          then (master_final.(x.n) <- Some(Var({n = !nbv ; status = binder})) ;incr nbv);
+        ) (vars_of_term a.term);
+        let t = a.term in
+        try
+        let smallest_recipe =  List.fold_left 
+           (fun best current -> 
+              if not (Rewriting.equals_ac t current.term)
+              then best
+              else
+              let recipe_current = Term.unbox_var current.recipe in
+              let recipe_best = Term.unbox_var best.recipe in
+              if recipe_best.n > recipe_current.n 
+              then current else best 
+           ) a st.body in
+        let smallest_recipe_var = Term.unbox_var smallest_recipe.recipe in 
+        if master_final.(smallest_recipe_var.n) = None
+        then
+          (master_final.(smallest_recipe_var.n) <- Some(Var({n = !nbv ; status = binder})) ;incr nbv);
+        if smallest_recipe != a 
+        then 
+          master_final.(recipe_var.n) <- master_final.(smallest_recipe_var.n);
+         (* sigma_repl.(recipe_var.n) <- Some smallest_recipe.recipe ;*)
+        List.exists (fun a' -> 
+              if a'.term <> t
+              then false
+              else Dag.can_be_replaced_by st.dag a.loc a'.loc) st.body 
+         with Not_found -> false
+         )
+       (List.sort (fun x y -> Pervasives.compare (x.loc,(Term.unbox_var x.recipe).n) (y.loc,(Term.unbox_var y.recipe).n)) st.body)
+  in
+  let body = List.sort_uniq (fun x y -> Pervasives.compare (x.loc,(Term.unbox_var x.recipe).n) (y.loc,(Term.unbox_var y.recipe).n)) body in
+  if t then
+    List.iter (fun a -> Format.printf "Removed %s\n" (show_body_atom a)) useless ;
+(*  if useless = [] then st 
+  else *)
+  let sigma = { 
+    binder = binder; 
+    master =  Array.map get_opt master_final;
+    slave = Array.make 0 zero;(* Array.map get_opt slave_final;*)
+    nbvars = !nbv;
+  } in
+  let r = apply_subst_statement { st with body = body; } sigma in
+   Printf.printf "result: %s\n" (show_raw_statement r); 
+  (*st.binder := New;*)
+  r*)
+  
+  try 
+  let hvars = vars_of_atom st.head (*vars_of_term_list (get_recipes st.head)*) in
+  (*Printf.printf "simplification of %s\n" (show_raw_statement st);*)
+  let sigma_repl = Array.make st.nbvars None in
+  st.binder := Master;
+  let binder = ref New in
+  let nbv = ref 0 in
+  let (useless,body) =
+    List.partition
+      (fun a ->
+        List.iter (fun (x : varId) -> 
+          if sigma_repl.(x.n) = None
+          then (sigma_repl.(x.n) <- Some(Var({n = !nbv ; status = binder})) ;incr nbv);
+        ) (vars_of_term a.term);
+        let recipe_var = unbox_var a.recipe in
+        if sigma_repl.(recipe_var.n) = None then (
+           sigma_repl.(recipe_var.n) <- Some(Var({n = !nbv ; status = binder})) ;incr nbv);
         not (List.mem recipe_var hvars) &&
         let t = a.term in
         let l = a.loc in
@@ -360,22 +430,39 @@ let simplify_statement st =
                   || Dag.should_be_before (st.dag) (a'.loc) l)
                   && Rewriting.equals_ac t (a'.term) ) st.body with
         | Some is_better ->
+          let better = (unbox_var is_better.recipe).n in
           if !about_canonization then
               Printf.printf "Atom %s removed due to %s\n" (show_body_atom a) (show_body_atom is_better);
-          (try sigma_repl.(recipe_var.n) <- Some is_better.recipe; true
-          with 
-            Invalid_argument _ -> 
-              Printf.eprintf "Error when simplify_statement %s \n" (show_raw_statement st);exit 6 )
+          if sigma_repl.(better) = None then 
+            sigma_repl.(better) <- sigma_repl.(recipe_var.n)
+          else 
+            (sigma_repl.(recipe_var.n) <- sigma_repl.(better); decr nbv); 
+          true
          | None -> false
          )
-       st.body
+       (List.sort (fun x y -> compare_loc_opt x.loc y.loc) st.body)
   in
+  let sigma = { 
+    binder = binder; 
+    master =  Array.map (function Some x -> x | None -> zero) sigma_repl;
+    slave = Array.make 0 zero;
+    nbvars = !nbv;
+  } in
+  let r = apply_subst_statement { st with body = body; } sigma in
+  (* Printf.printf "result: %s\n" (show_raw_statement r); *)
+  (*st.binder := New;*)
+  r
+  with 
+    Invalid_argument _ -> 
+      Printf.eprintf "Error when simplify_statement %s \n" (show_raw_statement st);exit 6 
   (*if !about_canonization then
     List.iter (fun a -> Format.printf "Simplify statement removes %s\n" (show_body_atom a)) useless ;*)
-  if useless = [] then st 
+  (*if useless = [] then st 
   else 
     let sigma = Rewriting.pack sigma in
-    apply_subst_statement { st with body = body;} sigma
+    apply_subst_statement { st with body = body;} sigma*)
+    
+    
 
 let canonical_form statement =
   if is_deduction_st statement && is_solved statement then

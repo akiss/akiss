@@ -6,6 +6,6 @@ and b = {
 }
 
 let () = 
-let foo = { a = No } in
+let rec foo = { a = No } in
 foo.a <- Yes foo ;
 Printf.printf "%B%!" (foo = foo)
