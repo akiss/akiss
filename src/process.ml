@@ -84,9 +84,9 @@ let rec show_process_start i pr =
   match pr with
   | EmptyP -> "0"
   | ParallelP(lp) ->( List.fold_left (fun str p -> str ^ "|" ^ (show_process_start i p)) "(" lp ) ^ ")"
-  | ChoiceP(l,lp)->( List.fold_left (fun str (i,p) -> str ^ "+" ^ (show_process_start i p)) "(" lp ) ^ ")"
+  | ChoiceP(l,lp)->( List.fold_left (fun str (j,p) -> str ^ "+" ^ (show_process_start i p)) "(" lp ) ^ ")"
   | SeqP(a,p) -> (show_action a) ^ ";" ^ (show_process_start (i - 1) p)
-  | CallP(l,i,procId,args,chans) -> procId.name ^ (if i = 1 then "" else (string_of_int i))
+  | CallP(l,j,procId,args,chans) -> procId.name ^ (if j = 1 then "" else (string_of_int j))
 
 let rec count_type_nb typ pr i =
   if i = -1 then -1 
@@ -207,8 +207,8 @@ let rec convert_pr infos process parent phase=
   with Invalid_argument(_) -> Printf.eprintf "Error when converting %s \n" (show_bounded_process process);exit 6
  
 let expand_call loc copy (procId : procId) args chans=
-  if  !about_seed then Format.printf "Expansion of %s (%d;%d)\nwhich is %s \n%!"
-     (show_procId procId)(Array.length args)(Array.length chans) (show_bounded_process procId.process);
+  if  !about_seed then Format.printf "Expansion of %s (%s;%d)\nwhich is %s \n%!"
+     (show_procId procId)(String.concat "," (Array.to_list(Array.map show_term args)))(Array.length chans) (show_bounded_process procId.process);
   let indexes =
   try (BangDag.find (loc,copy) processes_infos.processes)
   with Not_found -> begin 

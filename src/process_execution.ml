@@ -56,7 +56,7 @@ let rec run_until_io process made_choices first frame =
     else begin 
     (*let t'' = Rewriting.normalize t (! Parser_functions.rewrite_rules) in
     let t''' = Rewriting.normalize t' (! Parser_functions.rewrite_rules) in
-    Printf.printf "Test fail %s = %s \n" (show_term t'')(show_term t''');*)
+    Printf.printf "Test fail %s \n    =     %s \n%!" (show_term t'')(show_term t''');*)
       ([],[],[{ made_choices = made_choices; before_locs = first; (*disequalities = [] ;*) thread = process}]) end
   | SeqP(TestInequal(t,t'),p) ->
     let t = apply_subst_inputs t frame in

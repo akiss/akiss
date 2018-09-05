@@ -1112,7 +1112,7 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
         if !about_seed then Format.printf "- variant for output: %s\n" (show_substitution sigma);
         let new_st = apply_subst_statement st sigma in
         let new_head = match new_st.head with Knows(r,t) -> Knows(r,Rewriting.normalize t !Parser_functions.rewrite_rules) | _ -> assert false in
-        add_statement kb solved_parent unsolved_parent test_parent (Some pr)
+        add_statement kb solved_parent unsolved_parent test_parent (Some EmptyP)
           ({new_st with head = new_head})) v 
      | SeqP(Output({observable = Public} as loc, t), pr) -> (* the reach part of the output *)
       let next_dag = Dag.put_at_end st.dag loc in
@@ -1127,7 +1127,7 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
         } in
       begin 
       add_ineqs_statements ineqs identity_sigma st ;
-      add_statement kb solved_parent unsolved_parent test_parent (Some (SeqP(OutputA(loc, t), pr))) st
+      add_statement kb solved_parent unsolved_parent test_parent (Some (ParallelP([SeqP(OutputA(loc, t), pr);pr]))) st
       end
     | SeqP(Input({observable = Public} as loc), pr) -> 
       let next_dag = Dag.put_at_end st.dag loc in

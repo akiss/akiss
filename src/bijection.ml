@@ -300,14 +300,16 @@ let show_run pr  =
    (* pr.disequalities) ^"\n" *)
         
 let show_partial_run pr =
-  (List.fold_left (fun str ext_thread -> str ^ "   " ^(show_loc_set ext_thread.before_locs) ^" : "^(Process.show_process_start 2 ext_thread.thread)^"\n")
-  ((List.fold_left (fun str ext_thread -> str ^ "   " ^ (show_loc_set ext_thread.before_locs) ^" : "^(Process.show_process_start 2 ext_thread.thread)^"\n")
+  (List.fold_left (fun str ext_thread -> str ^ "   " ^(show_loc_set ext_thread.before_locs) ^" : "^(Process.show_process_start 3 ext_thread.thread)^"\n")
+  ((List.fold_left (fun str ext_thread -> str ^ "   " ^ (show_loc_set ext_thread.before_locs) ^" : "^(Process.show_process_start 3 ext_thread.thread)^"\n")
   (((show_run pr)^ (Format.sprintf " frame= %s\n" (Inputs.show_inputs pr.frame))) 
   ^ " remaining_actions= " ^ (show_loc_set pr.remaining_actions)
   ^ "\n qthreads= \n") 
   pr.qthreads) ^ " fthreads=\n") pr.failed_qthreads) 
   ^ (Format.sprintf "\n action=%d; weird = %d ; score = %d ; restricted = %s;  }\n" 
   pr.last_exe.p pr.weird_assoc pr.score (show_loc_set pr.restrictions))
+  
+(*let show_executions sol =*)
 
   
 let rec show_origin o =
