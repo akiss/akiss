@@ -289,13 +289,14 @@ let check_one_to_one (tests1, trace1) (tests2, trace2) rew =
       tests2
   in
     fail1 = [] && fail2 = []
-
+          
 let check_one_to_more (tests1, trace1) list rew =
   if List.exists (fun x -> check_one_to_one (tests1, trace1) x rew) list then
-    ()
+    None
   else
-    raise (OneToMoreFail(trace1, tests1))
-
+     Some (trace1, tests1)
+    (*raise (OneToMoreFail(trace1, tests1))*)
+    
 let square ~expected s t =
   Printf.printf
     "Checking fine grained %sequivalence of %s and %s\n%!"
@@ -319,29 +320,32 @@ let square ~expected s t =
       lt
   in
   let stests, ttests = wait_pending2 stests ttests in
-  try
-    ignore
-      (Lwt_list.filter_p
-         (fun x -> wrap1 (fun x -> true) (check_one_to_more x ttests Theory.rewrite_rules))
-         stests);
-    ignore
-      (Lwt_list.filter_p
-         (fun x -> wrap1 (fun x -> true) (check_one_to_more x stests Theory.rewrite_rules))
-         ttests);
+  (*try*)
+    let fail_stests =
+      (Lwt_list.filter_map_p
+         (fun x -> wrap1 (fun x -> x) (check_one_to_more x ttests Theory.rewrite_rules))
+         stests) in
+    let fail_ttests =
+      (Lwt_list.filter_map_p
+         (fun x -> wrap1 (fun x -> x) (check_one_to_more x stests Theory.rewrite_rules))
+         ttests) in
+    let fail_stests, fail_ttests = wait_pending2 fail_stests fail_ttests in
+    if fail_stests = [] && fail_ttests = [] then begin
     Printf.printf "%s and %s are fine-grained trace equivalent\n%!"
       (show_string_list s) (show_string_list t);
-    if not expected then exit 1
-  with
-    | OneToMoreFail(tr, tests) -> 
-        Printf.printf
+    if not expected then exit 1 end
+    else (
+    Printf.printf
           "cannot establish trace equivalence of %s and %s\n%!" 
           (show_string_list s) (show_string_list t);
+    List.iter (fun (tr,tests) -> 
         Printf.printf
           "the trace %s has no equivalent trace on the other side\n%!"
           (show_trace tr);
         Printf.printf "its tests are\n%!%s\n%!"
           (show_tests tests);
-        if expected then exit 1
+        if expected then exit 1 ) (fail_stests @ fail_ttests))
+        
 
 let inclusion_ft ~expected s t =
   Printf.printf
@@ -366,25 +370,27 @@ let inclusion_ft ~expected s t =
       lt
   in
   let stests, ttests = wait_pending2 stests ttests in
-  try
-    ignore
-      (Lwt_list.filter_p
-         (fun x -> wrap1 (fun x -> true) (check_one_to_more x ttests Theory.rewrite_rules))
-         stests);
+    let fail_stests =
+      (Lwt_list.filter_map_p
+         (fun x -> wrap1 (fun x -> x) (check_one_to_more x ttests Theory.rewrite_rules))
+         stests) 
+    and fail_ttests = return [] in
+    let fail_stests, fail_ttests = wait_pending2 fail_stests fail_ttests in
+    if fail_stests = [] then begin    
     Printf.printf "%s is fine-grained trace included in %s\n%!"
       (show_string_list s) (show_string_list t);
-    if not expected then exit 1
-  with
-    | OneToMoreFail(tr, tests) -> 
-        Printf.printf
+    if not expected then exit 1 end
+  else ( 
+    Printf.printf
           "cannot establish trace inclusion of %s in %s\n%!" 
           (show_string_list s) (show_string_list t);
+    List.iter (fun (tr, tests) -> 
         Printf.printf
           "the trace %s has no equivalent trace on the other side\n%!"
           (show_trace tr);
         Printf.printf "its tests are\n%!%s\n%!"
-          (show_tests tests);
-        if expected then exit 1
+          (show_tests tests)) fail_stests;
+        if expected then exit 1 )
 	  
 let stat_equiv frame1 frame2 rew =
   
