@@ -30,6 +30,8 @@ type relative_location = int * (string option) (* option for input *)
 type relative_nonce = int * string (* name of the nonce *)
 type relative_temp_term =
   | F of funId * relative_temp_term list (*function*)
+  | Xor of relative_temp_term list
+  | Z
   | T of int * relative_temp_term list (*tuple*)
   | P of int * int * relative_temp_term (*pattern*)
   | N of relative_nonce (*nonce*)
@@ -76,6 +78,8 @@ let rec show_bounded_process p =
 and show_relative_term t = 
   match t with 
   | F (f,args) -> if args = [] then f.name else (List.fold_left (fun s t -> (if s = "" then (f.name ^ "(") else s ^ ",") ^ show_relative_term t) "" args) ^ ")"
+  | Xor(args) -> (List.fold_left (fun s t -> (if s = "" then ( "(") else s ^ "+") ^ show_relative_term t) "" args) ^ ")"
+  | Z -> "0"
   | T (n,args) -> (List.fold_left (fun s t -> s ^ "," ^ show_relative_term t)  "(" args) ^ ")"
   | P (i,n,t) -> Printf.sprintf "Proj_%d(%s)" i (show_relative_term t)
   | N(i,s) -> s
@@ -96,12 +100,14 @@ type statement_role =
   | Slave
   | New
   | Rule
+  | Extra of int
 
 let show_binder = function 
   | Master -> "M"
   | Slave -> "$"
   | New -> "*"
   | Rule -> "§"
+  | Extra(n) -> "~"
 
 type varId = {
    n : int ; (* ref ?*)
@@ -158,6 +164,7 @@ let rec show_term t =
  | Fun({id=Tuple(n)},args) -> "(" ^ (show_term_list args) ^ ")"
  | Fun({id=Projection(m,n)},args) -> "Proj_"^(string_of_int m)^"(" ^ (show_term_list args) ^ ")"
  | Fun({id=Plus},[l;r]) ->  (show_term l) ^ "+" ^ (show_term r) 
+ | Fun({id=Plus},args) ->   "+?" ^ (string_of_int (List.length args)) 
  | Fun({id=Zero},[]) ->   "0" 
  | Fun({id=Nonce(n)},[]) -> Format.sprintf "n[%d]" n.n  
  | Fun({id=Input(l)},[]) -> Format.sprintf "i[%d]" l.p  
@@ -186,8 +193,11 @@ type subst_lst = (varId * term) list
 
 type subst_array =
     (term option) array
+    
+type subst_extra = { binder_extra : statement_role ref; nb_extra : int; subst_extra : subst_array }
 
-
+type subst_maker = { m : subst_array ; s : subst_array; e : (subst_extra list)}
+    
 type substitution = {
     binder : statement_role ref;
     nbvars : int ;

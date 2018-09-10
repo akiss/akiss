@@ -1,22 +1,3 @@
-(****************************************************************************)
-(* Akiss                                                                    *)
-(* Copyright (C) 2011-2014 Baelde, Ciobaca, Delaune, Kremer                 *)
-(*                                                                          *)
-(* This program is free software; you can redistribute it and/or modify     *)
-(* it under the terms of the GNU General Public License as published by     *)
-(* the Free Software Foundation; either version 2 of the License, or        *)
-(* (at your option) any later version.                                      *)
-(*                                                                          *)
-(* This program is distributed in the hope that it will be useful,          *)
-(* but WITHOUT ANY WARRANTY; without even the implied warranty of           *)
-(* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            *)
-(* GNU General Public License for more details.                             *)
-(*                                                                          *)
-(* You should have received a copy of the GNU General Public License along  *)
-(* with this program; if not, write to the Free Software Foundation, Inc.,  *)
-(* 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.              *)
-(****************************************************************************)
-
 (** Manipulating clauses and saturating knowledge base *)
 open Types
 open Util
@@ -96,11 +77,28 @@ let is_reach_st st =
 
 (** A statement is solved if all its premises have a variable as their last
   * argument. *)
+  
+let is_solved_atom a =
+  assert (is_var a.recipe) ; 
+  match a.loc with 
+  | None -> is_var a.term 
+  | Some _ -> is_sum_term a.term
 
 let is_solved st = 
   List.for_all
-    (fun a -> assert (is_var a.recipe) ; is_var a.term)
-    st.body
+    is_solved_atom st.body
+    
+let find_unsolved st = 
+  match List.find_opt (fun a -> not (is_solved_atom a)) st.body  with
+  | Some a -> a
+  | None -> assert false
+  
+(*let rec find_rigid term = 
+  match term with
+  | Var(x) -> None
+  | Fun({id = Plus}, args) -> List.find (fun t -> match find_rigid t with Some _ -> true | None -> false) args  
+  | _ -> Some Term*)
+    
 
 let rec vars_of_atom = function
   | Knows( r , t) -> vars_of_term_list [r;t]
@@ -338,7 +336,7 @@ let rule_shift st =
       then Format.printf "shift 0 on the statement: %s \n" (show_raw_statement stt); 
       stt
     end *)
-  | _ -> st
+  | _ -> st 
 
 
 (** For statements that are not canonized we still apply some simplifications
@@ -738,43 +736,45 @@ let update kb vip f =
   * This corresponds to the "Resolution" rule in the paper.
   * Return the list of newly generated clauses. *)
 
-(*
+
 let resolution_plus master =
-   let atom = List.find (fun x -> not (is_var (get_term x.pred))) master.body in
-    (* Forbid resolution against f0+ clause if selected atom is marked. *)
-   if atom.marked then [] else
-	(* Do all unifications in the rule *)
-	let x1 = { n = 1 ; status = ref Slave; canonized = false} in
-	let x2 = { n = 2 ; status = ref Slave; canonized = false} in
-	let x11 = { n = 3 ; status = ref Slave; canonized = false} in
-	let x12 = { n = 4 ; status = ref Slave; canonized = false} in
-	(* split a plus into a varaibles' list and a rigid factors' list *)
-	let rec explode_term t =
-		match t with
-		| Fun({id = Plus},[l;r]) -> 
-			let (v1,t1) = explode_term l in 
-			let (v2,t2) = explode_term r in 
-			(v1@v2,t1@t2)
-		| Var(x) -> ([x],[])
-		| Fun(f,l)-> ([],[Fun(f,l)]) in
-	(* assume that lst contains all combination for terms except term then do all combinations with term *)
-	let rec addaux term lst =
-		match lst with
-		| (t11,t12) :: q -> (term::t11,t12)::(t11,term::t12)::(addaux term q)
-		| [] -> [] in
-	(* generate all combinations *)
-	let rec exponential terms sigmalist = 
-		match terms with
-		| t :: q ->
-			addaux t (exponential q sigmalist)
-		| [] -> sigmalist in
-	(* Create a sum from a terms' list *)
-	let rec sum_from l =
-		match l with
-		| [x] -> x
-		| x :: m -> Fun({id = Plus; has_variables = true},[x ; (sum_from m)])
-		| [] -> assert false in
-	(* when the atom contains a variable, special case where the variable can be split*)
+  let atom = find_unsolved master in
+  (* Forbid resolution against f0+ clause if selected atom is marked. *)
+  if atom.marked then [] else
+  (* Do all unifications in the rule *)
+  let binder = ref Slave in
+  let rx1 = { n = 0 ; status = binder; } in
+  let rx2 = { n = 1 ; status = binder; } in
+  let tx1 = { n = 2 ; status = binder; } in
+  let tx2 = { n = 3 ; status = binder; } in
+  let sigma = sigma_maker_init master.nbvars 4 in
+ (* (* split a plus into a variables' list and a rigid factors' list *)
+  let rec explode_term t =
+    match t with
+    | Fun({id = Plus},[l;r]) -> 
+      let (v1,t1) = explode_term l in 
+      let (v2,t2) = explode_term r in 
+      (v1@v2,t1@t2)
+    | Var(x) -> ([x],[])
+    | Fun(f,l)-> ([],[Fun(f,l)]) in
+  (* assume that lst contains all combination for terms except term then do all combinations with term *)
+  let rec addaux term lst =
+    match lst with
+    | (t11,t12) :: q -> (term::t11,t12)::(t11,term::t12)::(addaux term q)
+    | [] -> [] in
+  (* generate all combinations *)
+  let rec exponential terms sigmalist = 
+    match terms with
+    | t :: q ->
+      addaux t (exponential q sigmalist)
+    | [] -> sigmalist in
+  (* Create a sum from a terms' list *)
+  let rec sum_from l =
+    match l with
+    | [x] -> x
+    | x :: m -> Fun({id = Plus; has_variables = true},[x ; (sum_from m)])
+    | [] -> assert false in
+  (* when the atom contains a variable, special case where the variable can be split*)
 	let rec addvar x1 x2 rx x11 x12 x lst =
 		let xa = fresh_variable () and xb = fresh_variable () in
 		match lst with
@@ -786,69 +786,65 @@ let resolution_plus master =
 			:: [ (x11 , sum_from (Var(xa)::t11)); (x12 , sum_from (Var(xb)::t12));(x,Fun({id = Plus; has_variables = true},[Var(xa);Var(xb)]))]
 			:: (addvar  x1 x2 rx x11 x12 x q)
 		| [] -> [] in
-	(* apply a substitution in our local formatting *) 
-	let rec apply_subst binder x t' t =
-		match t with 
-		| Fun (f, args) -> Fun( f, List.map (fun t -> apply_subst binder x t' t ) args)
-		| Var (x') -> if x' = x then t' else Var({n = x.n ; status = binder; canonized = false}) in
-	let apply_pred binder x t' rx rt a =
-		match a with
-		| Knows(r,t) -> Knows(apply_subst binder rx rt r, apply_subst binder x t' t)
-		| Identical(r,r') -> Identical(apply_subst binder rx rt r,apply_subst binder rx rt r')
-		| Reach -> Reach in
 	(* build a list of all possible cases of unification *)
 	let sigmas =
-		match atom.pred with 
-		| Knows(Var(rx),t) ->
 		(*Predicate("knows",[Var(w);Fun("plus",[Var(x1);Var(x2)]);Fun("plus",[Var(x11);Var(x12)])]))*)
-			begin List.filter (fun x -> x <> []) (
+			List.filter (fun x -> x <> []) (
 			match explode_term t with
 			| ([],a1::a2::l) -> List.fold_left 
-				(fun statements (l1,l2) -> 
+				(fun sig_mini (l1,l2) -> 
 					if l1 = [] || l2 = [] 
-					then statements
-					else [(x11 , sum_from l1 );(x12 , sum_from l2)]::statements)
+					then sig_mini
+					else [(x11 , sum_from l1 );(x12 , sum_from l2)]::sig_mini)
 				[] (exponential (a2::l) [([a1],[])])
 			| ([],l) -> []
 			| ([x],a::l) -> 
 				if List.mem x ( vars_of_term_list (a::l)) 
 				then failwith "Unexpected term (TODO)"
 				else addvar x1 x2 rx x11 x12 x (exponential l [([a],[])])
-			| _ ->  failwith "loop" ) end 
-		| _ -> assert(false) 
-	in
+			| _ ->  failwith "loop" )
+  in *)
+  let sigmas =
+    Rewriting.csu [
+      (atom.term,Fun({id = Plus; has_variables = true},[Var(tx1);Var(tx2)]) );
+      (atom.recipe, Fun({id = Plus; has_variables = true},[Var(rx1);Var(rx2)]))] sigma
+  in
       (* Create results *)
       List.map
         (fun sigma ->
-           let binder = ref Slave in
-           let sigma = Rewriting.process sigma in
+           let sigma = Rewriting.pack sigma in
+           let t1 = Rewriting.apply_subst_term (Var (tx1)) sigma in
+           let t1_rigid = not (is_sum_term t1) in
            let result =
            {
-           binder = binder ;
-           nbvars = master.nbvars + 2 ; (*TODO*)
+           binder = sigma.binder ;
+           nbvars = sigma.nbvars ;
            dag = master.dag ;
-           inputs = Inputs.map (fun t -> apply_pred binder ) inputs;
-           head = { master.head with pred = apply_pred binder };
-           body = {loc = x.loc ; marked = true ; pred = apply_pred binder }
-               :: {loc = x.loc ; marked = false ; pred = apply_pred binder }
-               :: (List.map (fun x -> { x with pred = apply_pred binder} )
-                 (List.filter (fun x -> (x <> atom)) master.body))
+           inputs = Inputs.map (fun t -> Rewriting.apply_subst_term t sigma) master.inputs;
+           recipes = Inputs.map (fun t -> Rewriting.apply_subst_term t sigma) master.recipes;
+           head = apply_subst_pred master.head sigma ;
+           body = {loc = atom.loc ; marked = t1_rigid ; recipe = Rewriting.apply_subst_term (Var (rx1)) sigma ; term = t1 }
+               :: {loc = atom.loc ; marked = not (t1_rigid) ; recipe = Rewriting.apply_subst_term (Var (rx2)) sigma ; term =  Rewriting.apply_subst_term (Var (tx2)) sigma }
+               :: (List.map (fun x -> { x with recipe = Rewriting.apply_subst_term x.recipe sigma; term = Rewriting.apply_subst_term x.term sigma} )
+                 (List.filter (fun x -> (x <> atom)) master.body));
+           choices = master.choices;
+           involved_copies = master.involved_copies;
            }
            in
              if !debug_output then Format.printf "RESO+: %s\n\n"
                (show_raw_statement result);
              result)
         sigmas
-*)
+
 let is_tuple term =
   match term with
   | Fun ({id = Tuple _},_) -> true
   | _ -> false
 
 let resolution sigma choices dag master slave =
-   try begin
-   let atom = List.find (fun x -> not (is_var ( x.term))) master.body in
+   let atom = find_unsolved master in
    if atom.loc != None && is_tuple atom.term && not (is_tuple (get_head_recipe slave.head)) then [] else 
+   begin try
    let dag =
      match (atom.loc) with
      | (Some l) -> let new_dag = Dag.merge dag (Dag.final slave.dag l) in
@@ -895,9 +891,9 @@ let resolution sigma choices dag master slave =
                (show_raw_statement result);
            result)
         sigmas 
-    end
-    with Dag.Impossible -> []
-
+  with Dag.Impossible -> []
+  end
+ 
 (** [equation fa fb] takes two solved clauses and, when they are solved clauses
   * concluding "knows", attempts to combine them: if the terms and worlds can be
   * unified, generate a clause concluding that the recipes are "identical".
@@ -1032,7 +1028,7 @@ let rec hidden_chan_statement kb  (loc_input , term_input ,ineq_input,st_input,p
     trace_statements kb ineqs solved_parent unsolved_parent test_parent process_input st 
   )
   else
-  let sigma = ((Array.make st_output.nbvars None),(Array.make st_input.nbvars None)) in
+  let sigma = sigma_maker_init st_output.nbvars st_input.nbvars in
    (*Printf.printf "Computing hiden_chan_statement\n -link %d <-> %d\n" loc_input.p loc_output.p;*)
   let sigmas = Inputs.csu sigma st_output.inputs st_input.inputs in
   if sigmas = [] then ()
@@ -1294,10 +1290,51 @@ let theory_statements kb fname arity =
         let head = match st.head with
         | Knows(r,t) -> Knows(r, Rewriting.normalize t (! Parser_functions.rewrite_rules))
         | _ -> assert false  in
-        if !about_seed then Format.printf "- variant for theory  of %s %s\n%!" (show_term (Fun({id=fname;has_variables=true},[]))) (show_substitution sigma);
+        if !about_seed then 
+          Format.printf "- variant for theory of function %s : %s\n%!" 
+            (show_term (Fun({id=fname;has_variables=true},[]))) (show_substitution sigma);
         add_statement kb kb.solved_deduction kb.not_solved kb.rid_solved None
         {st with head = head} ) v
+        
+let statement_f1 =
+  let binder = ref Master in
+  let rx1 = Var({status=binder;n=0}) in
+  let rx2 = Var({status=binder;n=1}) in
+  let tx1 = Var({status=binder;n=2}) in
+  let tx2 = Var({status=binder;n=3}) in
+     { 
+       binder = binder; 
+       nbvars = 4; 
+       dag = Dag.empty; 
+       choices = Inputs.new_choices; 
+       inputs = Inputs.new_inputs; 
+       recipes = Inputs.new_inputs; 
+       head=Knows(Fun({id=Plus;has_variables=true},[rx1;rx2]),tx2);
+       body=[ {loc=None;recipe = rx1; term = tx1; marked=true};
+              {loc=None;recipe = rx2; term = Fun({id=Plus;has_variables=true},[tx1;tx2]); marked = true }];
+       involved_copies = BangSet.empty;
+     }
 
+let statement_f2 =
+  let binder = ref Master in
+  let rx1 = Var({status=binder;n=0}) in
+  let rx2 = Var({status=binder;n=1}) in
+  let tx1 = Var({status=binder;n=2}) in
+  let tx2 = Var({status=binder;n=3}) in
+  let tx3 = Var({status=binder;n=4}) in
+     { 
+       binder = binder; 
+       nbvars = 5; 
+       dag = Dag.empty; 
+       choices = Inputs.new_choices; 
+       inputs = Inputs.new_inputs; 
+       recipes = Inputs.new_inputs; 
+       head=Knows(Fun({id=Plus;has_variables=true},[rx1;rx2]),Fun({id=Plus;has_variables=true},[tx1;tx2]));
+       body=[ {loc=None;recipe = rx1; term = Fun({id=Plus;has_variables=true},[tx1;tx3]); marked=true};
+              {loc=None;recipe = rx2; term = Fun({id=Plus;has_variables=true},[tx3;tx2]); marked =true}];
+       involved_copies = BangSet.empty;
+     }
+     
 
 let extra_resolution kb solved unsolved =
   if !debug_saturation then Printf.printf "Try resolution between #%d and #%d\n%!" solved.id unsolved.id;
@@ -1307,7 +1344,7 @@ let extra_resolution kb solved unsolved =
   | Some merged_choice ->
   let merged_dag = Dag.merge unsolved.st.dag solved.st.dag in
   if Dag.is_cyclic merged_dag then false else
-  let sigma = ((Array.make unsolved.st.nbvars None),(Array.make solved.st.nbvars None)) in
+  let sigma = sigma_maker_init unsolved.st.nbvars solved.st.nbvars in
   solved.st.binder:= Slave;
   unsolved.st.binder:= Master;
   let sigmas = Inputs.csu sigma solved.st.inputs unsolved.st.inputs in
@@ -1326,7 +1363,7 @@ let extra_equation kb solved1 solved2 =
   | Some merged_choice ->
   let merged_dag = Dag.merge solved1.st.dag solved2.st.dag in
   if Dag.is_cyclic merged_dag then false else
-  let sigma = ((Array.make solved1.st.nbvars None),(Array.make solved2.st.nbvars None)) in
+  let sigma = sigma_maker_init solved1.st.nbvars solved2.st.nbvars in
   solved2.st.binder:= Slave;
   solved1.st.binder:= Master;
   let sigmas = Inputs.csu sigma solved1.st.inputs solved2.st.inputs in
@@ -1366,7 +1403,12 @@ let rec process_equation kb new_solved old_solved =
 let saturate procId  =
   let kb = Base.new_base () in
   List.iter (fun f -> theory_statements kb (Regular(f)) f.arity) !Parser_functions.functions_list;
-  List.iter (fun i -> theory_statements kb (Tuple(i)) i; for j = 0 to i - 1 do theory_statements kb (Projection(j,i)) 1 done ) !Parser_functions.tuple_arity;
+  List.iter (fun i -> 
+    theory_statements kb (Tuple(i)) i; 
+    for j = 0 to i - 1 do theory_statements kb (Projection(j,i)) 1 done ) !Parser_functions.tuple_arity;
+  theory_statements kb Zero 0;
+  add_statement kb kb.solved_deduction kb.not_solved kb.rid_solved None statement_f1;
+  add_statement kb kb.solved_deduction kb.not_solved kb.rid_solved None statement_f2;
   let ind = processes_infos.next_location in
   processes_infos.next_location <- processes_infos.next_location + 1 ;
   trace_statements kb [] kb.solved_deduction kb.not_solved kb.rid_solved
@@ -1386,9 +1428,15 @@ let saturate procId  =
         if !debug_saturation then Printf.printf "Start resolutions with #%d\n" solved.id;
         List.iter (fun unsolved -> process_resolution_new_solved kb solved unsolved) kb.not_solved.children
       end
-    else begin let unsolved = Queue.take(kb.ns_todo) in
+    else begin 
+      let unsolved = Queue.take(kb.ns_todo) in
       if !debug_saturation then Printf.printf "Start resolutions of #%d\n" unsolved.id;
-      List.iter (fun solved -> process_resolution_new_unsolved kb solved unsolved) kb.solved_deduction.children end
+      List.iter 
+        (fun st -> add_statement kb kb.solved_deduction unsolved 
+          unsolved.test_parent unsolved.process st )
+        (resolution_plus unsolved.st);
+      List.iter (fun solved -> process_resolution_new_unsolved kb solved unsolved) kb.solved_deduction.children
+    end
   done ;
   (ind,kb)  
 

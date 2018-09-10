@@ -144,7 +144,7 @@ let show_predicate p =
  | Knows(r,t) -> if !use_xml then "<pred>K(<rec>"^ (show_term r) ^ "</rec>,<term>" ^ (show_term t) ^ "</term>)</pred>" else
       "knows(" ^ (show_term r) ^ "," ^ (show_term t) ^ ")"
  | Identical(r,r') ->
-     (if !use_xml then "<i>identical</i>(" else "identical" )^ (show_term r) ^ "," ^ (show_term r') ^ ")"
+     (if !use_xml then "<i>identical</i>(" else "identical(" )^ (show_term r) ^ "," ^ (show_term r') ^ ")"
  | Reach -> if !use_xml then "<r>reach</r>" else "reach"
  | Unreachable -> if !use_xml then "<u>unreach</u>" else "unreach"
  | Tests(h) -> 
@@ -155,7 +155,7 @@ let show_body_atom a =
   if !use_xml then 
   "<pred>K<loc>"^l^"</loc>(<rec>"^(show_term a.recipe)^"</rec>,<term>"^(show_term a.term)^"</term>)</pred>"
   else
-  "knows_"^l^"("^(show_term a.recipe)^","^(show_term a.term)^")"
+   (if a.marked then "KnOwS_" else "knows_")^l^"("^(show_term a.recipe)^","^(show_term a.term)^")"
 
 
 let rec show_atom_list lst = Format.sprintf "%s" (String.concat ", " (trmap show_body_atom lst))
@@ -288,10 +288,6 @@ let new_base () =
   } in
   kb 
 
-(*let canonize_head head =
-  match head with
-  | Tests(eq) -> eq.equalities <- (EqualitiesSet.of_list (EqualitiesSet.elements eq.equalities));eq.disequalitiesEqualitiesSet.of_list (EqualitiesSet.elements diseq))
-  | _ -> head *)
   
 let canonize_statement st = 
   { st with (*either the head is not a test or the head is a test and hash_test does not consider it *)

@@ -70,8 +70,10 @@ let command_line_options_list = [
 let reset_global () =
   environment := (Env.empty:env_elt Env.t);
   rewrite_rules := [];
+  processes_list := [];
   functions_list := [];
   tuple_arity := [] ;
+  use_xor := false;
   processes_infos.next_location <- 0;
   processes_infos.next_nonce <- 0;
   processes_infos.processes <- BangDag.empty;

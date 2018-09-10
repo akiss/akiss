@@ -1,7 +1,7 @@
 {
   open Grammar
 
-  let keyword_table = Hashtbl.create 10
+  let keyword_table = Hashtbl.create 26
 
   let _ =
     List.iter (fun (kwd,tok) -> Hashtbl.add keyword_table kwd tok)
@@ -65,7 +65,7 @@ rule token = parse
 | '|'   { MID }
 | "!^"  { BANG }
 | '+'   { PLUS }
-| ">>"  { PHASE }
+(*| ">>"  { PHASE }*)
 (*| "::"  { QUADDOT }*)
 | '('   { LPAR }
 | ')'   { RPAR }

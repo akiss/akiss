@@ -12,6 +12,8 @@ type temp_term =
   | Id of ident
   | FuncApp of ident * temp_term list
   | Tuple of temp_term list
+  | FPlus of temp_term * temp_term
+  | FZero
 
 type functions =
   | Function of ident * int * bool
@@ -101,10 +103,12 @@ let display_env_elt_type = function
   | Proc p -> "the process " ^ (show_procId p) 
   | PatVar _ -> "a variable of a pattern"
 
-let show_temp_term = function
+let rec show_temp_term = function
   | Id (s,l) -> s
   | FuncApp((s,l),args) -> s ^ "(...)"
   | Tuple(args) -> "((...))"
+  | FPlus(s,t) -> (show_temp_term s) ^ "+" ^(show_temp_term t)
+  | FZero -> "0"
 
 let show_environment env = 
   Env.fold (fun k v str -> str ^ k ^ ": " ^ (display_env_elt_type v) ^ "\n" ) env "Environement:"
@@ -138,14 +142,20 @@ let rec parse_rewrite_rule lhs env binder nb = function
         match Env.find s env with
           | Func f ->
               if (f.arity) <> List.length args
-              then error_message line (Printf.sprintf "The function %s is given %d arguments but is expecting %d arguments" s (List.length args) (f.arity));
-
+              then error_message line (
+                Printf.sprintf "The function %s is given %d arguments but is expecting %d arguments" 
+                s (List.length args) (f.arity));
               let (args', env',nb') = parse_rewrite_rule_list lhs env binder nb args in
               Fun({id=Regular(f);has_variables=true}, args'), env', nb'
-          | env_elt -> error_message line (Printf.sprintf "The identifiant %s is declared as %s but a constructor function symbol is expected." s (display_env_elt_type env_elt))
+          | env_elt -> error_message line (
+              Printf.sprintf "The identifiant %s is declared as %s but a constructor function symbol is expected." 
+              s (display_env_elt_type env_elt))
       with
         Not_found -> error_message line (Printf.sprintf "The function %s is not declared" s)
       end
+  | FPlus(s,t) -> let (args', env',nb') = parse_rewrite_rule_list lhs env binder nb [s;t] in
+              Fun({id=Plus;has_variables=true}, args'), env', nb'
+  | FZero -> zero,env,nb
   | Tuple(args) -> 
       let n = List.length args in
       let (args', env',nb') = parse_rewrite_rule_list lhs env binder nb args in
@@ -176,6 +186,10 @@ let rewrite_rule_proj n =
   for i = 0 to n - 1 do
     rewrite_rules := rewrite_rule_proj i n :: !rewrite_rules
   done
+  
+let rewrite_rule_xor =
+  let binder = ref Types.Rule in
+  ()
 
 let parse_rewrite_rule env (lhs,rhs) = 
   let binder = ref Types.Rule in
@@ -244,6 +258,7 @@ let parse_chan procId env = function
 (******** Parse temp_terms ********)
 
 let (tuple_arity : int list ref) = ref []
+let use_xor = ref false
 
 let rec parse_temp_term procId env = function
   | Id (s,line) ->
@@ -276,6 +291,8 @@ let rec parse_temp_term procId env = function
       with
         Not_found -> error_message line (Printf.sprintf "The function %s is not declared" s)
       end
+  | FPlus(s,t) -> Xor( (List.map (parse_temp_term procId env) [s;t]))
+  | FZero -> Z
   | Tuple(args) ->
       let n = List.length args in
       if not (List.mem n !tuple_arity) 
@@ -508,6 +525,8 @@ let parse_process_declaration_list lst =
   (*;Printf.printf "%s\n" (show_environment !environment)*)
 
 
+(* To be accessed by maude.ml and parsemaude.ml *)  
+let nonces : ((int * nonceId) list)ref = ref [] 
   
     
     

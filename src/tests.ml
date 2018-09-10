@@ -164,7 +164,7 @@ let best_recipe base st new_dag unsolved x =
 
 
 let opti_find_recipe sigm merged_dag fa fb =
-  let sigm' = Rewriting.copy_subst sigm in
+  let sigm' = Term.copy_subst sigm in
   let exception Broken_Precedence in
   let fab_body = fa.body @ fb.body in
   try
@@ -214,7 +214,7 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
   if is_cyclic merged_dag 
   then [] 
   else
-    let sigma = ((Array.make fa.nbvars None),(Array.make fb.nbvars None)) in
+    let sigma = Term.sigma_maker_init fa.nbvars fb.nbvars in
     fa.binder:= Master;
     fb.binder:= Slave;
     let sigmas = Inputs.csu sigma fa.inputs fb.inputs in
@@ -281,7 +281,7 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
                 if not (recipe_with_earlier_messages !new_dag x.loc recipe)
                 then failwith ("There is a bug with " ^ (show_term recipe))
               ) unsolved;
-           let tau = Rewriting.pack (tau, Array.make 0 None) in
+           let tau = Rewriting.pack {m=tau; s=Array.make 0 None;e=[]} in
            let result = apply_subst_statement {st_without_recipes with dag = !new_dag} tau in
            if !debug_merge then Printf.printf "The merged test: %s\n%!" (show_raw_statement result);
            let (sigm,result) = same_term_same_recipe result in
@@ -714,6 +714,7 @@ let equivalence both p q =
   bijection.q <- processQ ;
   bijection.satP <- satP ;
   bijection.satQ <- satQ ;
+  let time_sat = if !about_bench then Sys.time () else 0. in
   if !about_progress then Printf.printf "Building tests\n%!";
   base_to_tests true both P satP processQ ; 
   base_to_tests both true Q satQ processP ; 
@@ -729,16 +730,20 @@ let equivalence both p q =
   Bijection.reorder_tests () ;
   let nb_tests_init = bijection.next_id in
   let nb_open = ref 0 in
+  let time_start_tests = if !about_bench then Sys.time () else 0. in  
+  let time_ten_tests = ref time_start_tests in
   try
     while not (Tests.is_empty bijection.tests) do
       if !about_progress then Printf.printf "\n\n+++++ New iteration of the big loop +++++\n%!";
       if !about_progress then Printf.printf "Testing %d tests\n%!" (Tests.cardinal bijection.tests);
       while not (Tests.is_empty bijection.tests) do
         let test = pop () in
+        incr nb_open;
+        if !about_bench && !nb_open = 10 then time_ten_tests := Sys.time ();
         if !debug_tests then Printf.printf (if !use_xml then "<opentest>%s" else "Open %s\n%!") (show_test test);
         if !about_progress && (not !debug_tests) 
         then 
-          (incr nb_open; 
+          ( 
           if !nb_open mod 250 = 0 then Printf.printf "Open test #%d (%d in stack)\n" test.id (Tests.cardinal bijection.tests));
         (*if test.id = 335 then debug_execution := true ;*)
         find_set_of_runs test ;
@@ -755,7 +760,7 @@ let equivalence both p q =
     if !about_tests then show_all_tests ();
     if !about_completion then show_final_completions ();
     if !about_bijection then Bijection.show_bijection();
-    if !about_bench then  Printf.printf " time: %6.2f  equivalence (%3d tests, extra: %3d) sat: %5d\n"  (Sys.time() -. time) bijection.next_id (bijection.next_id - nb_tests_init)(bijection.satP.next_id + bijection.satQ.next_id)
+    if !about_bench then  Printf.printf " time: %6.2f  equivalence (%3d tests, extra:%3d, 10 in%4.3f) sat: %5d %5.2f\n"  (Sys.time() -. time) bijection.next_id (bijection.next_id - nb_tests_init)(!time_ten_tests -. time_start_tests)(bijection.satP.next_id + bijection.satQ.next_id)(time_sat -. time)
     else if both then Printf.printf "\nP and Q are trace equivalent. \n" else Printf.printf "\nTraces of P are included in Q. \n";
     if ! use_xml then Printf.printf "</all>"
   with
@@ -763,7 +768,7 @@ let equivalence both p q =
     if !about_tests then show_all_tests ();
     if !about_completion then show_final_completions ();
     if !about_bijection then Bijection.show_bijection();
-    if !about_bench then  Printf.printf " time: %6.2f attack found (test n°%d,total:%d, extra: %3d) sat: %5d\n" (Sys.time() -. time) test.id bijection.next_id (bijection.next_id - nb_tests_init)(bijection.satP.next_id + bijection.satQ.next_id)
+    if !about_bench then  Printf.printf " time: %6.2f attack found (test n°%d,total:%d, extra:%3d, 10 in%4.3f) sat: %5d %5.2f\n" (Sys.time() -. time) test.id bijection.next_id (bijection.next_id - nb_tests_init)(!time_ten_tests -. time_start_tests)(bijection.satP.next_id + bijection.satQ.next_id)(time_sat -. time)
     else Printf.printf "\nAn attack has been found for the test %s \n with specific order %s \n\nP and Q are not trace equivalent. \n" 
     (show_test test)(show_dag sol.restricted_dag);
     if ! use_xml then Printf.printf "</all>";

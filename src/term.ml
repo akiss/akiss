@@ -30,10 +30,7 @@ let rec var_set_of_term_list vs term_list =
 and var_set_of_term vs = function
   | Fun(_, term_list) -> var_set_of_term_list vs term_list
   | Var(x) -> VariableSet.add x vs
-  
-(*type dag = {
-  rel : LocationSet.t Dag.t ;
-}*)
+
 
 
 let is_var term = match term with
@@ -44,7 +41,11 @@ let unbox_var = function
   | Var(x) -> x
   | _ -> invalid_arg "unbox_var"
 
-
+let rec is_sum_term term = 
+  match term with
+  | Var(x) -> true
+  | Fun({id = Plus}, args) -> List.for_all is_sum_term args
+  | _ -> false
 
 let rec vars_of_term_list term_list =
   unique (List.concat (List.map vars_of_term term_list))
@@ -204,3 +205,31 @@ let rec contains_plus t =
 	| Fun(_,l) -> List.fold_left (fun r a -> r || contains_plus a) false l
 
 *)
+
+(* Rewrite functions use by maude.ml *)
+let sigma_maker_init i j = {m=Array.make i None; s=Array.make j None; e=[]}
+
+let copy_subst sigma =
+  { m = Array.copy sigma.m ; s = Array.copy sigma.s ; e = List.map (fun e -> {e with subst_extra = Array.copy e.subst_extra}) sigma.e}
+  
+let copy_subst_add_extra sigma n bind =
+  { m = Array.copy sigma.m ; s = Array.copy sigma.s ; e = (List.map (fun e -> {e with subst_extra = Array.copy e.subst_extra}) sigma.e) 
+    @ [{binder_extra = bind; nb_extra = n ; subst_extra= Array.make n None}]}
+  
+let show_subst_array subst =
+  (Array.fold_left (fun str t -> (if str = "" then "[|" else (str ^ ".")) ^ (match t with None -> "?" | Some t -> show_term t)) "" subst) ^ "|]"
+
+let show_subst_maker subst =
+  Printf.sprintf "Master %s\n Slave %s\n Extra:%d" (show_subst_array subst.m) (show_subst_array subst.s) (List.length subst.e)
+  
+let find_sub x sigma =
+  match !(x.status) with
+  | Master -> sigma.m
+  | Slave -> sigma.s
+  | Extra(n) -> (List.nth (sigma.e) n).subst_extra
+  | Rule -> sigma.s
+  | _ -> assert false
+
+let maude_current_sigma = ref (sigma_maker_init 0 0)  
+let maude_current_binder = ref New
+let maude_current_nbv = ref 0

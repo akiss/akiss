@@ -99,6 +99,9 @@ let rec convert_term pr locations nonces arguments term =
   | F(f,args) -> 
     Fun({id=Regular(f);has_variables=true},
       List.map (convert_term pr locations nonces arguments) args)
+  | Xor(args) -> Fun({id=Plus;has_variables=true},
+      List.map (convert_term pr locations nonces arguments) args)
+  | Z -> zero
   | T(n,args) -> 
     Fun({id=Tuple(n);has_variables=true},
       List.map (convert_term pr locations nonces arguments) args)

@@ -2,21 +2,18 @@
 open Types
 open Term
 open Util
+open Maude
 
-let show_subst_array subst =
-  (Array.fold_left (fun str t -> str ^ (match t with None -> "?" | Some t -> show_term t)) "[|" subst) ^ "|]"
 
 (*let list_diff big small = 
   List.filter (function x -> not (List.mem x small))  big*)
 
-let copy_subst sigma =
-  let s1,s2 = sigma in
-  (Array.copy s1, Array.copy s2)
 
 (** Unification and matching *)
 
 exception Not_unifiable
 exception Not_matchable
+exception Call_Maude
 
 
 (*let rec subst_one x small = function
@@ -47,9 +44,6 @@ let rec recompose_term lst =
 	| t1 :: t2 :: q -> Fun({id = Plus; has_variables = true},[t1;recompose_term (t2 ::q)])
 	| t1 :: [] -> t1
 	| [] -> Fun({id = Zero; has_variables = false},[])
-
-let find_sub x sigma =
-    if !(x.status) = Master then fst(sigma) else snd(sigma)
 
 (* given a sum split the sum in three parts: variables, constants functions, all functions *)
 let rec explode_term t sigma =
@@ -173,7 +167,7 @@ let csu pairlst sigma =
   try
   let hard = unify [] pairlst sigma in
   if hard = [] then [sigma]
-  else [] (*Call Maude on hard with sigma *)
+  else acunifiers false hard sigma (*Call Maude on hard with sigma *)
   with 
   | Not_unifiable ->  (*Printf.printf "no unif\n";*)[]
 
@@ -181,8 +175,9 @@ let csu pairlst sigma =
 let get_option = function None -> assert false | Some t -> t
 
 let pack sigma =
-  let master_final = Array.make (Array.length(fst(sigma))) None in
-  let slave_final = Array.make (Array.length(snd(sigma))) None in
+  let master_final = Array.make (Array.length(sigma.m)) None in
+  let slave_final = Array.make (Array.length(sigma.s)) None in
+  let extra_final = List.map (fun e -> Array.make (e.nb_extra)  None) sigma.e in
   let binder = ref New in
   let nbv = ref 0 in
   (* Build a new term from a term an a processed substitution *)
@@ -195,8 +190,13 @@ let pack sigma =
     match t with
     | Fun(f,args) -> Fun(f, List.map (fun t -> apply_subst_term t) args )
     | Var(x) -> begin
-       let indexes = if !(x.status) = Master then master_final else slave_final in
-       match indexes.(x.n) with 
+      let indexes = 
+        match !(x.status) with 
+        Master -> master_final 
+        | Slave | Rule -> slave_final 
+        | Extra n -> (List.nth extra_final n) 
+        | _ -> assert false in
+      match indexes.(x.n) with 
        | Some(t) -> t
        | None -> 
          let sub = find_sub x sigma in 
@@ -211,8 +211,8 @@ let pack sigma =
       | None -> put_term_of final i init.(i)
     done    
   in
-  doit master_final (fst(sigma));
-  doit slave_final (snd(sigma));
+  doit master_final (sigma.m);
+  doit slave_final (sigma.s);
   { 
     binder = binder; 
     master =  Array.map get_option master_final;
@@ -354,10 +354,11 @@ and may_match_plus hard pattern model lst sigma =
 
 (** Most general matcher *)
 let rec csm p m = 
+  (*Printf.printf "matching %s against pattern %s \n%!" (show_term m) (show_term p);*)
   try 
     let (hard,sigma) = match_ac [] [(p, m)] [] in
     if hard = [] then [sigma]
-    else [] (*TODo*)
+    else assert false (*TODo*)
   with Not_matchable -> []
 
 
@@ -515,7 +516,7 @@ let rec repl_position t p s =
 let rec one_rule old_sigma t p rule = 
   let identity = identity_subst old_sigma.nbvars in
   let (l, r) = (*fresh_copy*) (rule.lhs, rule.rhs) in
-  let sigma = (Array.make old_sigma.nbvars None,Array.make rule.nbvars None) in
+  let sigma = {m= (Array.make old_sigma.nbvars None); s=(Array.make rule.nbvars None); e=[]} in
     match csu [((at_position t p),l)] sigma with
     | [sigma] ->  let sigma = pack sigma in 
       sigma.binder := Master;
@@ -526,7 +527,7 @@ let rec one_rule old_sigma t p rule =
           master=Array.map (fun t -> apply_subst_term t identity) old_sigma.master})
         sigma)]
     | [] ->  []
-    | _ -> assert false
+    | _ -> raise Call_Maude
 ;;
 
 let all_rules old_sigma t p rules =
@@ -719,7 +720,7 @@ let variants nbv t rules =
 
 let one_unifier ssigma sigmas tsigma sigmat = 
   let sigmas = { binder = sigmas.binder; nbvars = sigmas.nbvars; master = Array.copy sigmas.master; slave = Array.copy sigmas.slave} in
-  let sigma_init = (Array.make sigmas.nbvars None, Array.make sigmat.nbvars None) in
+  let sigma_init = { m=Array.make sigmas.nbvars None; s=Array.make sigmat.nbvars None; e=[]} in
   sigmas.binder := Master;
   sigmat.binder := Slave ;
   (*Printf.printf "terms with variants %s -+- %s \n corresponding substitution\n sigma s =  %s \nsigma t = %s\n%!" 
@@ -728,10 +729,11 @@ let one_unifier ssigma sigmas tsigma sigmat =
   match csu t1t2 sigma_init with
   | [sigma] -> let sigma = pack sigma in [ compose sigmas sigma ]
   | [] -> (*Printf.printf "no unif\n\n" ;*)[]
-  | _ -> failwith "too many unifiers"
+  | _ -> raise Call_Maude
 
 
 let unifiers nbv s t rules =
+  try
   let s = normalize s rules in
   let t = normalize t rules in
   let vs = variants nbv s rules in
@@ -740,8 +742,11 @@ let unifiers nbv s t rules =
   (*Printf.printf "______\n\nresult t: %s\n"(show_configurations vt);*)
   let w = combine vs vt in
   trconcat (trmap (fun ((x, y, _), (z, t, _)) ->
-			   one_unifier x y z t) w)
+       one_unifier x y z t) w)
+  with Call_Maude -> List.map pack (Maude.acunifiers true [(s,t)] (sigma_maker_init nbv 0))
 
 
 let variants nbv t rules =
+  try
   List.map (fun (a,b,_) -> a,b) (variants nbv t rules)
+  with Call_Maude -> maude_current_nbv := nbv; Maude.variants t

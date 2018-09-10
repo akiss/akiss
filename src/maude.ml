@@ -1,34 +1,74 @@
-(****************************************************************************)
-(* Akiss                                                                    *)
-(* Copyright (C) 2011-2014 Baelde, Ciobaca, Delaune, Kremer                 *)
-(*                                                                          *)
-(* This program is free software; you can redistribute it and/or modify     *)
-(* it under the terms of the GNU General Public License as published by     *)
-(* the Free Software Foundation; either version 2 of the License, or        *)
-(* (at your option) any later version.                                      *)
-(*                                                                          *)
-(* This program is distributed in the hope that it will be useful,          *)
-(* but WITHOUT ANY WARRANTY; without even the implied warranty of           *)
-(* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            *)
-(* GNU General Public License for more details.                             *)
-(*                                                                          *)
-(* You should have received a copy of the GNU General Public License along  *)
-(* with this program; if not, write to the Free Software Foundation, Inc.,  *)
-(* 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.              *)
-(****************************************************************************)
-
 open Term
 open Util
+open Types
+open Parser_functions
 
 let debug= false (* debug *)
 let pdebug = false (* pdebug *) (* show parsing info *)
 let sdebug = false (* show maude script *)
 
-let terms_of_rules rules =
-  List.fold_left
-    (fun tms (l,r) -> l::r::tms)
-    []
-    rules
+let show_binder_maude = function 
+  Master -> "x"
+ | Slave | Rule -> "y"
+ | Extra(0) -> "z"
+ | _ -> "_"
+ 
+ 
+let rec print_maude_term t sigma =
+ match t with
+ | Fun({id=Regular(f)},args) -> "w" ^ f.name ^(if args = [] then " " else  "(" ^ (print_maude_term_list args sigma) ^ ")")
+ | Fun({id=Tuple(n)},args) -> "tuple"^(string_of_int n)^"(" ^ (print_maude_term_list args sigma ) ^ ")"
+ | Fun({id=Projection(m,n)},args) -> "proj"^(string_of_int m)^"o"^(string_of_int n)^"(" ^ (print_maude_term_list args sigma) ^ ")"
+ | Fun({id=Plus},[l;r]) ->  (print_maude_term l sigma) ^ " + " ^ (print_maude_term r sigma) 
+ | Fun({id=Plus},args) ->   "+?" ^ (string_of_int (List.length args)) 
+ | Fun({id=Zero},[]) ->   " zero " 
+ | Fun({id=Nonce(n)},[]) -> 
+    if not (List.mem_assoc n.n !Parser_functions.nonces) 
+    then 
+      Parser_functions.nonces := (n.n, n) :: !Parser_functions.nonces;   
+    Format.sprintf "nonce%d " n.n  
+ | Fun({id=Input(l)},[]) -> Format.sprintf "i[%d]" l.p  
+ | Fun({id=Frame(l)},[]) -> Format.sprintf "w[%d]" l.p
+ | Var(id) -> (
+    match sigma with 
+    None -> (show_binder_maude !(id.status)) ^ (string_of_int id.n) ^ ":Term "
+    | Some sigm -> 
+    begin
+    match (find_sub id sigm).(id.n) with
+    | None -> (show_binder_maude !(id.status)) ^ (string_of_int id.n) ^ ":Term "
+    | Some t -> print_maude_term t sigma end )
+ | _ -> invalid_arg ("Todo")
+and print_maude_term_list args sigma = 
+  match args with
+  | [x] -> print_maude_term x sigma
+  | x :: l -> ( (print_maude_term x sigma) ^ "," ^ (print_maude_term_list l sigma) )
+  | [] -> ""
+  
+let print_maude_pairlst with_rules pairlst sigma=
+  Parser_functions.nonces := [] ;
+  let terms = List.fold_left (fun str (s,t) -> 
+    ( if str = "" then (if with_rules then "variant " else "")^"unify in Current : " else  str ^ " /\\ ") 
+     ^ (print_maude_term s (Some sigma)) ^ " =? " ^ (print_maude_term t (Some sigma))) "" pairlst in
+  "mod Current is\nincluding "^(if with_rules then "Theory" else "AKISS")^" .\n" ^
+  (List.fold_left (fun str (n,_) -> 
+     str ^ "op nonce"^(string_of_int n) ^" : -> Term .\n") "" !Parser_functions.nonces) 
+  ^ "endm\n\n" ^ terms ^ ".\n"
+  
+let print_maude_variants term =
+  Parser_functions.nonces := [] ;
+  let term = print_maude_term term None in
+  "mod Current is\nincluding Theory .\n" ^
+  (List.fold_left (fun str (n,_) -> 
+     str ^ "op nonce"^(string_of_int n) ^" : -> Term .\n") "" !Parser_functions.nonces) 
+  ^ "endm\n\nget variants " ^ term ^ ".\n"
+  
+let print_maude_rules () =
+  "mod Theory is\nincluding AKISS .\n" ^
+  (List.fold_left
+    (fun str rule -> str ^ "eq "^(print_maude_term rule.lhs None )^" = "^(print_maude_term rule.rhs None)^" [variant] .\n")
+    ""
+    !Parser_functions.rewrite_rules)
+  ^ "endm\n\n"
 
 let input_line chan =
   let line = input_line chan in
@@ -36,108 +76,48 @@ let input_line chan =
       Format.printf "input line > %S\n%!" line ;
     line
 
-(** Printing Maude terms and modules *)
+let rec times n str =
+  if n = 0 then "" else begin str ^ times (n-1) str end
 
-let rec print chan = function
-
-  | Fun ("!tuple!",l) ->
-      let n = List.length l in
-      let f = Format.sprintf "akiss%duple" n in
-        print chan (Fun (f,l))
-  | Fun ("!test!",[]) ->
-      print chan (Fun ("akisstest",[]))
-  | Fun ("!out!",[Fun(c,[])]) ->
-      print chan (Fun ("akissout",[Fun ("akissch"^c,[])]))
-  | Fun ("!in!",[Fun(c,[]);t]) ->
-	if startswith c "!hidden!" then
-	print chan (Fun ("akissin",[Fun("akisschhidden"^(String.sub c 8 ((String.length c) - 8)),[]);t]))
-	else
-        print chan (Fun ("akissin",[Fun("akissch"^c,[]);t]))
-  | Fun (s,[]) | Var s ->
-      begin try
-        Scanf.sscanf s "w%d"
-          (fun _ -> Format.fprintf chan "akiss%s" s)
-      with Scanf.Scan_failure _ ->
-        begin try
-          Scanf.sscanf s "!n!%d"
-            (fun n -> Format.fprintf chan "akissn%d" n)
-        with Scanf.Scan_failure _ ->
-          Util.output_string chan s
-        end
-      end
-  | Fun (s,args) ->
-      Format.fprintf chan "%s(%a)" s (Util.pp_list print ", ") args
-
-let sprint t =
-  print Format.str_formatter t ;
-  Format.flush_str_formatter ()
-
-let rec times n f =
-  if n = 0 then () else begin f () ; times (n-1) f end
-
-let cursig = ref []
-
-  
-let print_module rules extrasig chan () =
-  cursig := [] ;
-  let op name arity =
-    cursig := (name,arity) :: !cursig ;
-    Format.fprintf chan "op %s : %a-> Term .\n" name
-      (fun chan () -> times arity (fun () -> Format.fprintf chan "Term "))
-      ()
+let print_maude_signature () =
+  let op name arity = Format.sprintf "op %s : %s-> Term .\n" name (times arity "Term ") in
+  let print_env_elt _ env str =
+    match env with
+    | Func (f) -> op ("w" ^f.name) f.arity 
+    | _ -> ""
   in
-    Format.fprintf chan "mod AKISS is\nsorts Term .\n" ;
-
-    (* Constructors for tuples, actions, worlds and predicates *)
-    op "akissout" 1 ; op "akissin" 2 ; op "akisstest" 0 ;
-    op "world" 2 ; op "empty" 0 ;
-    op "knows" 3 ; op "reach" 1 ; op "identical" 3 ; op "ridentical" 3 ;
-    op "akisschthen" 0;op "xx" 0;
-    List.iter (fun c -> op ("akissch"^c) 0) !Term.channels ;
-
-    (* Declarations from the input file: theory symbols and private names *)
-    List.iter
-      (fun (f,n) ->
-         if f = "plus" then
-           Format.fprintf chan "op plus : Term Term -> Term [assoc comm] .\n"
-         else
-           op f n)
-      !fsymbols ;
-    List.iter (fun v -> op v 0) !private_names ;
-
-    (* Tuples, parameters, names and variables not declared in input file
-     * but present in the term, given as extrasig. *)
-    List.iter
-      (fun n ->
-         op (Printf.sprintf "akiss%duple" n) n)
-      extrasig.tuples ;
-    List.iter
-      (fun n -> op ("akissw" ^ string_of_int n) 0)
-      extrasig.params ;
-    List.iter
-      (fun n -> op ("akissn" ^ string_of_int n) 0)
-      extrasig.names ;
-    List.iter
-      (fun n -> op ("akisschhiddenZ" ^ string_of_int n) 0)
-      extrasig.hiddenchan ;
-    if !vars <> [] || extrasig.vars <> [] then
-      Format.fprintf chan "var %a : Term .\n"
-        (Util.pp_list Util.output_string " ")
-        (Util.unique (List.rev_append !vars extrasig.vars)) ;
-
-    (* Rewrite rules *)
-    let c = ref 0 in
-    List.iter
-      (fun (left,right) ->
-         incr c ;
-         Format.fprintf chan
-           "eq [rule%d] : %a = %a [variant] .\n"
-           !c print left print right)
-      rules ;
-
-    Format.fprintf chan "endm\n\n"
+  let str = ref "" in
+  List.iter (fun i -> 
+    str := !str ^ op ("tuple" ^ (string_of_int i)) i ; 
+    for j = 0 to i - 1 do
+      str := !str ^ op ("proj" ^ (string_of_int j) ^ "o" ^ (string_of_int i)) 1 
+    done
+  ) !Parser_functions.tuple_arity;
+  "mod AKISS is\nsorts Term .\n op _ + _ : Term Term -> Term [assoc comm] .\n op zero : -> Term .\n"
+  ^ !str
+  ^ (Env.fold print_env_elt !environment "")
+  ^ "endm\n\n"
 
 (** Interacting with a maude process *)
+let find_in_path x =
+  let path = Str.split (Str.regexp ":") (Sys.getenv "PATH") in
+  List.find
+    Sys.file_exists
+    (List.map (fun d -> Filename.concat d x) path)
+
+let maude_binary = lazy (
+  try
+    find_in_path "maude"
+  with
+    | Not_found ->
+        Printf.eprintf "Cound not find maude in PATH!\n" ;
+        exit 1
+)
+
+let maude_command = lazy (
+  let lazy maude_binary = maude_binary in
+  maude_binary ^ " -batch -no-banner -no-ansi-color -no-advise"
+)
 
 let get_chans =
   let dummy = stdin,stdout in
@@ -158,7 +138,7 @@ let get_chans =
       !chans
     end else begin
       close () ;
-      let pair = Unix.open_process (Lazy.force Config.maude_command) in
+      let pair = Unix.open_process (Lazy.force maude_command) in
       chans := pair ;
       countdown := 10000 ;
       pair
@@ -167,7 +147,7 @@ let get_chans =
       
 let run_maude print_query parse_result =
   if pdebug then
-    Format.printf "<< maude command: %s\n"  (Lazy.force Config.maude_command);
+    Format.printf "<< maude command: %s\n"  (Lazy.force maude_command);
   let chan_out,chan_in = get_chans () in
       (* let chan_out,chan_in = *)
       (* 	Unix.open_process (Lazy.force Config.maude_command) in *)
@@ -178,26 +158,38 @@ let run_maude print_query parse_result =
   Format.pp_print_flush fin () ;
   let result = parse_result chan_out in
       (* Unix.close_process (chan_out,chan_in); *)
+  if pdebug then
+    Format.printf ">> ok\n" ;
   result
 
 
 (** Unification mod AC + R*)
 
-let unifiers s t rules =
+
+
+let acunifiers with_rules pairlst sigma =
   if debug then
-    Format.printf "<< maude unifiers: %s =? %s\n" (show_term s) (show_term t) ;
-  let esig = sig_of_term_list [s;t] in
-  let query chan =
-    Format.fprintf chan "%a\n" (print_module rules esig) () ;
-    Format.fprintf chan "variant unify %a =? %a .\n" print s print t ; 
+    List.iter (fun (s,t) -> Format.printf " %s =? %s /\\\n" (show_term s) (show_term t)) pairlst ;
+  if debug then 
+    Printf.printf "%s%s%s%!"
+      (print_maude_signature ())
+      (if with_rules then print_maude_rules () else "") 
+      (print_maude_pairlst with_rules pairlst sigma);
+    (*Format.fprintf chan "unify in AKISS %a =? %a .\n" print s print t ; *)
     (* Format.fprintf chan "quit \n" *)
+  let query chan =
+    Format.fprintf chan "%s%s%s"
+      (print_maude_signature ())
+      (if with_rules then print_maude_rules () else "") 
+      (print_maude_pairlst with_rules pairlst sigma)
   in 
+  (*query Format.std_formatter*)
   let parse_unifiers ch lexbuf =
     match Parsemaude.main Lexmaude.token lexbuf with
     | `Unify substs ->
       if debug then
         List.iter
-          (fun s -> Printf.printf "Result> %s\n" (show_subst s))
+          (fun s -> Printf.printf "Result> %s\n" (show_subst_maker s))
           substs ;
       substs
     | _ -> assert false
@@ -215,57 +207,12 @@ let unifiers s t rules =
     (fun chan -> query chan)
     (fun chan -> parse_unifiers chan)
       
-let unifiers s t rules =
-  let v = unifiers s t rules in
-  (* let v = rename_in_subst v in *)
-    if debug then begin
-      Format.printf "unifiers %s %s (%d solutions):\n%!"
-        (show_term s) (show_term t) (List.length v) ;
-      List.iter (fun s -> Format.printf " %s\n" (show_subst s)) v
-    end ;
-    v
-
-
-
-let acunifiers s t =
-  if debug then
-    Format.printf "<< maude unifiers: %s =? %s\n" (show_term s) (show_term t) ;
-  let esig = sig_of_term_list [s;t] in
-  let query chan =
-    Format.fprintf chan "%a\n" (print_module [] esig) () ;
-    Format.fprintf chan "unify %a =? %a .\n" print s print t ; 
-    (* Format.fprintf chan "quit \n" *)
-  in 
-  let parse_unifiers ch lexbuf =
-    match Parsemaude.main Lexmaude.token lexbuf with
-    | `Unify substs ->
-      if debug then
-        List.iter
-          (fun s -> Printf.printf "Result> %s\n" (show_subst s))
-          substs ;
-      substs
-    | _ -> assert false
-  in
-  let parse_unifiers ch =
-    let lexbuf = (Lexing.from_channel ch) in
-    try parse_unifiers ch lexbuf with
-    | Parsing.Parse_error as e ->
-      Format.printf
-        "Error while parsing maude output.\n" ;
-      query Format.std_formatter ;
-      raise e
-  in
-  run_maude
-    (fun chan -> query chan)
-    (fun chan -> parse_unifiers chan)
-      
-let acunifiers s t  =
-  let v = acunifiers s t  in
+let acunifiers with_rules pairlst sigma =
+  maude_current_sigma := sigma;
+  let v = acunifiers with_rules pairlst sigma in
   (* let v = rename_in_subst v in *)
   if debug then begin
-    Format.printf "unifiers %s %s (%d solutions):\n%!"
-        (show_term s) (show_term t) (List.length v) ;
-    List.iter (fun s -> Format.printf " %s\n" (show_subst s)) v
+    List.iter (fun s -> Format.printf " %s\n" (show_subst_maker s)) v
   end ;
   v
 
@@ -273,24 +220,26 @@ let acunifiers s t  =
       
 (** variants of a term *)
 
-let variants t rules =
+let variants t =
   if debug then
     Format.printf "<< maude variants: %s \n" (show_term t) ;
-  let esig = sig_of_term_list [t] in
+  if debug then 
+    Printf.printf  "%s%s%s%!" (print_maude_signature ()) (print_maude_rules ())(print_maude_variants t);
   let query chan =
-    Format.fprintf chan "%a\n" (print_module rules esig) () ;
-    Format.fprintf chan "get variants %a .\n" print t ;
+    Format.fprintf chan "%s%s%s" (print_maude_signature ()) (print_maude_rules ())(print_maude_variants t)
+    (* Format.fprintf chan "%a\n" (print_module rules esig) () ;
+    Format.fprintf chan "get variants %a .\n" print t ;*)
     (* Format.fprintf chan "quit \n" *)
   in 
   let parse_variants ch =
     match Parsemaude.main Lexmaude.token (Lexing.from_channel ch) with
     | `Variants v ->
       if debug then
-	(
-      	  let (_, sl) = List.split v in
-          List.iter
-      	    (fun s -> Printf.printf "Result> %s\n"(show_subst s))
-      	    sl ;
+      (
+        let (_, sl) = List.split v in
+         List.iter
+          (fun s -> Printf.printf "Result> %s\n"(show_substitution s))
+          sl 
 	);
       v
     | _ -> assert false
@@ -307,8 +256,8 @@ let variants t rules =
     (fun chan -> query chan)
     (fun chan -> parse_variants chan)
       
-let variants t rules =
-  let v = variants t rules in
+let variants t  =
+  let v = variants t in
   (* let v = rename_in_subst v in *)
   if debug then begin
     Format.printf "variants %s (%d solutions):\n%!"
@@ -317,8 +266,9 @@ let variants t rules =
     end ;
   v
 
-(** Matching *)
 
+(** Matching *)
+(*
 let acmatchers s t =
   let esig = sig_of_term_list [s;t] in
 
@@ -439,3 +389,4 @@ let normalize t rules =
     end ;
     nt
 
+*)

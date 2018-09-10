@@ -209,6 +209,10 @@ term:
       { FuncApp($1,$3) }
   | LPAR term_list RPAR
       { if List.length $2 = 1 then List.hd $2 else Tuple($2) }
+  | term PLUS term
+      { FPlus($1,$3) }
+  | INT
+      { if $1 = 0 then FZero else error_message (Parsing.symbol_start_pos ()).Lexing.pos_lnum "Syntax Error" }
 
 term_list:
   | term
