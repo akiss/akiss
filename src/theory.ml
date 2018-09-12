@@ -48,6 +48,8 @@ let command_line_options_list = [
     "Show information about tests");
    ("-merge", Arg.Set(debug_merge), 
     "Show information about merging tests");
+   ("-maude", Arg.Set(about_maude), 
+    "Show information about maude interface");
    ("-progress", Arg.Set(about_progress),
     "Print info in about progression of Akiss");
    ("-bench", Arg.Set(about_bench),

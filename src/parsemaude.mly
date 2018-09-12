@@ -32,6 +32,7 @@ let make_substitution_variant pairlst =
     slave = Array.make 0 zero;
     nbvars = !current_max_var
   } 
+  
 
 %}
 
@@ -69,7 +70,7 @@ let make_substitution_variant pairlst =
 
 %start main
 
-%type < [ `Variants of ( (Types.term * Types.substitution) list) | `Unify of (Types.subst_maker list) | `Match of (Types.subst_maker list) | `Norm of Types.term | `Equal of bool ] > main
+%type < [ `Variants of ( (Types.term * Types.substitution) list) | `Unify of (Types.subst_maker list) | `Match of (Types.subst_lst list) | `Norm of Types.term | `Equal of bool ] > main
 
 %%
 main:
@@ -83,7 +84,7 @@ main:
      result:
  | unifierPreamble unifierList { `Unify $2 }
  | acunifierPreamble acunifierList { `Unify $2 }
- | matchPreamble matcherList { `Match [] }
+ | matchPreamble matcherList { `Match $2 }
  | variantPreamble variantList { `Variants $2 }
  | reducePreamble Rewritesline Result resultTerm {`Norm zero }
  | equalsPreamble Rewritesline Result Bool Colon bool { `Equal true }
@@ -138,7 +139,7 @@ main:
 
      matcher:
  | Solution Number substitution
-     {update_subst $3}
+     { $3}
 
      
      variantPreamble:

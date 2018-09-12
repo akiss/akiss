@@ -12,7 +12,6 @@ open Maude
 (** Unification and matching *)
 
 exception Not_unifiable
-exception Not_matchable
 exception Call_Maude
 
 
@@ -56,7 +55,7 @@ let rec explode_term t sigma =
           end
     | Fun(f,l)-> List.fold_left (fun x t -> x && is_constant t) true l in 
    match t with
-   | Fun({id = Plus; has_variables = true},[l;r]) ->
+   | Fun({id = Plus; },[l;r]) ->
           let (v1,t1,c1) = explode_term l sigma in 
           let (v2,t2,c2) = explode_term r sigma in 
           (v1@v2,t1@t2,c1@c2)
@@ -309,13 +308,6 @@ and list_equals_ac l1 l2 =
 		| ([],l) -> false end
 	| [] -> l2 = []
 
-let rec new_or_same x t sigma =
-  try
-    if (List.assoc x sigma) = t then
-      sigma
-    else
-      raise Not_matchable
-  with Not_found -> (x, t) :: sigma
 
 
 (** Most general matcher *)
@@ -348,17 +340,17 @@ and may_match_plus hard pattern model lst sigma =
 	let (xs,ts,cs)= explode_term pattern in 
 	if xs = [] && List.length ts = List.length cs then
 		begin if equals_ac pattern model then
-			match_ac ((pattern,model)::hard) lst sigma
+			match_ac hard lst sigma
 		else raise Not_matchable end
 	else match_ac ((pattern,model)::hard) lst sigma
 
 (** Most general matcher *)
-let rec csm p m = 
+let rec csm binder p m = 
   (*Printf.printf "matching %s against pattern %s \n%!" (show_term m) (show_term p);*)
   try 
     let (hard,sigma) = match_ac [] [(p, m)] [] in
     if hard = [] then [sigma]
-    else assert false (*TODo*)
+    else Maude.acmatchers binder hard sigma 
   with Not_matchable -> []
 
 
@@ -369,7 +361,7 @@ let rec csm p m =
 
 let rec top_rewrite t rule =
   (*Printf.printf "top rewrite %s \n%!" (show_rewrite_rule rule);*)
-    match csm rule.lhs t with
+    match csm rule.binder_rule rule.lhs t with
     | [sigma] -> [apply_subst rule.rhs sigma]
     | [] -> []
     | sigma :: q -> Printf.printf "> ?/? \n%!"; [apply_subst rule.rhs sigma] (* is it ok ? *)
@@ -516,7 +508,7 @@ let rec repl_position t p s =
 let rec one_rule old_sigma t p rule = 
   let identity = identity_subst old_sigma.nbvars in
   let (l, r) = (*fresh_copy*) (rule.lhs, rule.rhs) in
-  let sigma = {m= (Array.make old_sigma.nbvars None); s=(Array.make rule.nbvars None); e=[]} in
+  let sigma = {m= (Array.make old_sigma.nbvars None); s=(Array.make rule.nbvars_rule None); e=[]} in
     match csu [((at_position t p),l)] sigma with
     | [sigma] ->  let sigma = pack sigma in 
       sigma.binder := Master;

@@ -64,10 +64,13 @@ let same_term_same_recipe st =
     List.partition
       (fun a ->
         let recipe_var = Term.unbox_var a.recipe in
-        let term_var = Term.unbox_var a.term in
+        let var,cst = Horn.explode_term a.term in
+        assert (cst = []);
+        List.iter (fun term_var ->
+        let term_var = Term.unbox_var term_var in
         if master_final.(term_var.n) = None
         then
-          (master_final.(term_var.n) <- Some(Var({n = !nbv ; status = binder})) ;incr nbv);
+          (master_final.(term_var.n) <- Some(Var({n = !nbv ; status = binder})) ;incr nbv)) var;
         let t = a.term in
         try
         let smallest_recipe =  List.fold_left 
@@ -94,9 +97,9 @@ let same_term_same_recipe st =
               else can_be_replaced_by st.dag a.loc a'.loc) st.body 
          with Not_found -> false
          )
-       (List.sort (fun x y -> Pervasives.compare (x.loc,(Term.unbox_var x.term).n) (y.loc,(Term.unbox_var y.term).n)) st.body)
+       (List.sort (fun x y -> Pervasives.compare (x.loc, x.term) (y.loc, y.term)) st.body)
   in
-  let body = List.sort_uniq (fun x y -> Pervasives.compare (x.loc,(Term.unbox_var x.term).n) (y.loc,(Term.unbox_var y.term).n)) body in
+  let body = List.sort_uniq (fun x y -> Pervasives.compare (x.loc, x.term) (y.loc, y.term)) body in
   if !debug_merge then
     List.iter (fun a -> Printf.printf "Removed %s\n" (show_body_atom a)) useless ;
 (*  if useless = [] then st 
@@ -144,9 +147,9 @@ let best_recipe base st new_dag unsolved x =
   if !debug_merge then Printf.printf "From loc %d other identical recipes : %s \n" l.p (show_loc_set other_locs);
   try 
     let r = 
-    Horn.consequence {st with 
+    Horn.consequence true {st with 
       head = Knows(x.recipe,x.term);
-      dag = preceding_dag !new_dag l} base (! Parser_functions.rewrite_rules) in
+      dag = preceding_dag !new_dag l} base.solved_deduction (! Parser_functions.rewrite_rules) in
     if other_locs <> my_loc then new_dag := merge !new_dag (dag_with_actions_at_end (messages_of_recipes r)  other_locs)  ;
     r
   with
@@ -154,9 +157,9 @@ let best_recipe base st new_dag unsolved x =
     if !debug_merge then Printf.printf "No recipe...\n";
     if other_locs = my_loc then raise No_recipe
     else
-      let r = Horn.consequence {st with 
+      let r = Horn.consequence true {st with 
         head = Knows(x.recipe,x.term);
-        dag = expurge_dag_after !new_dag l} base (! Parser_functions.rewrite_rules) in
+        dag = expurge_dag_after !new_dag l} base.solved_deduction (! Parser_functions.rewrite_rules) in
       new_dag := merge !new_dag (dag_with_one_action_at_end (messages_of_recipes r)  l)  ;
       r
     )

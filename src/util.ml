@@ -7,8 +7,6 @@ let bench_start () = bench_cur := Sys.time ()
 let bench_stop () = bench := !bench +. Sys.time () -. !bench_cur *)
 let last_time = ref 0.
 
- let debug_output = ref false
-(*let verbose_output = ref false*)
 let about_seed = ref false
 let debug_seed = ref false
 let about_saturation = ref false
@@ -21,7 +19,6 @@ let about_bijection = ref false
 let debug_execution = ref false
 let about_theory = ref false
 let debug_merge = ref false
-let about_traces = ref false
 let about_maude = ref false
 let about_canonization = ref false
 let about_progress = ref false

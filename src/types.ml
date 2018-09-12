@@ -158,6 +158,7 @@ type term =
   | Fun of funInfos * term list
   | Var of varId
 
+let show_varId id = (show_binder !(id.status)) ^ (string_of_int id.n)
 let rec show_term t =
  match t with
  | Fun({id=Regular(f)},args) -> if args = [] then f.name else f.name ^ "(" ^ (show_term_list args) ^ ")"
@@ -169,7 +170,7 @@ let rec show_term t =
  | Fun({id=Nonce(n)},[]) -> Format.sprintf "n[%d]" n.n  
  | Fun({id=Input(l)},[]) -> Format.sprintf "i[%d]" l.p  
  | Fun({id=Frame(l)},[]) -> Format.sprintf "w[%d]" l.p
- | Var(id) -> (show_binder !(id.status)) ^ (string_of_int id.n)
+ | Var(id) -> show_varId id
  | _ -> invalid_arg ("Todo")
 and show_term_list = function
   | [x] -> show_term x
@@ -179,17 +180,20 @@ and show_term_list = function
 let zero = Fun({id=Zero;has_variables=false},[])
 
 type rewrite_rule = {
-  binder : statement_role ref;
-  nbvars : int ; 
+  binder_rule : statement_role ref;
+  nbvars_rule : int ; 
   lhs : term ;
   rhs : term ;
 }
 
 let show_rewrite_rule r = 
   Format.sprintf
-    "(%s:%d) %s ==> %s\n"(show_binder !(r.binder)) r.nbvars (show_term r.lhs)(show_term r.rhs)
+    "(%s:%d) %s ==> %s\n"(show_binder !(r.binder_rule)) r.nbvars_rule (show_term r.lhs)(show_term r.rhs)
 
 type subst_lst = (varId * term) list
+
+let show_subst_lst lst =
+  List.fold_left (fun str (x,t) -> str ^ "; " ^ (show_varId x) ^ "->" ^ (show_term t)) "subst_lst: " lst
 
 type subst_array =
     (term option) array

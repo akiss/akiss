@@ -75,6 +75,8 @@ let letters = letter (('.'| letter | digit) * )
   | 'w' (letters as n) {Func (n)}
   | 'x' (digits as n) {if debug then Printf.printf "x " ;Var({status = ref Types.Master; n = (int_of_string n)})}
   | 'y' (digits as n) {if debug then Printf.printf "y " ;Var({status = ref Types.Slave; n = (int_of_string n)})}
+  | 'z' (digits as n) {if debug then Printf.printf "z " ;Var({status = ref (Types.Extra 0); n = (int_of_string n)})}
+  | '_' (digits as n) {if debug then Printf.printf "_ " ;Var({status = !Term.maude_current_binder; n = (int_of_string n)})}
   | "nonce" (digits as n) {if debug then Printf.printf "nonce " ;Nonce (int_of_string n)}
   | "tuple" (digits as n) {if debug then Printf.printf "tuple " ;Tuple (int_of_string n)}
   | "proj" (digits as n1) "o" (digits as n2) {Proj(int_of_string n1,int_of_string n2)}

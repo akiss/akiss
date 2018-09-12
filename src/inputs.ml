@@ -102,7 +102,7 @@ let csu sigma inputs1 inputs2 =
   let hard = Dag.fold (fun l pl hard -> Rewriting.unify hard [pl] sigma) to_list [] in
   if hard = [] 
   then [sigma]
-  else [] (* Call Maude *)
+  else Maude.acunifiers false hard sigma
   with
   | Rewriting.Not_unifiable -> []
   
@@ -114,9 +114,9 @@ let csu_recipes sigma recipe1 recipe2 =
   let hard = Dag.fold (fun _ pl hard -> try Rewriting.unify hard [pl] sigma with Rewriting.Not_unifiable -> hard) to_list [] in
   if hard = [] 
   then [sigma]
-  else [] (* Call Maude *)
+  else Maude.acunifiers false hard sigma
 
-let csm inputs1 inputs2 = 
+let csm binder inputs1 inputs2 = 
   let to_list = Dag.merge (fun loc i1 i2 -> 
     match (i1,i2) with
     | (Some i1, Some i2) -> Some(i1,i2)
@@ -125,9 +125,9 @@ let csm inputs1 inputs2 =
   let (hard,sigma) = Dag.fold (fun l pl (hard,sigma) -> Rewriting.match_ac hard [pl] sigma) to_list ([],[]) in
   if hard = [] 
   then [sigma]
-  else [] (* Call Maude *)
+  else Maude.acmatchers binder hard sigma
   with
-  | Rewriting.Not_matchable -> []
+  | Term.Not_matchable -> []
 
 let merge sigma inputs1 inputs2 =
   { i =
@@ -144,8 +144,8 @@ let merge_recipes sigma inputs1 inputs2 =
   Dag.merge (fun loc i1 i2 -> 
     match (i1,i2) with
     | (Some i1, Some i2) -> 
-      if Rewriting.csm i1 i2 <> [] then Some(Rewriting.apply_subst_term i2 sigma) else 
-      if Rewriting.csm i2 i1 <> [] then Some(Rewriting.apply_subst_term i1 sigma) else 
+      if Rewriting.csm sigma.binder i1 i2 <> [] then Some(Rewriting.apply_subst_term i2 sigma) else 
+      if Rewriting.csm sigma.binder i2 i1 <> [] then Some(Rewriting.apply_subst_term i1 sigma) else 
       if Term.vars_of_term i1 = [] 
       then Some(Rewriting.apply_subst_term i1 sigma)
       else if Term.vars_of_term i2 = [] 

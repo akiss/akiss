@@ -176,8 +176,8 @@ let rewrite_rule_proj i n =
   vars := Types.Var({status = binder; n = i})::!vars
   done ; 
   {
-   binder = binder; 
-   nbvars=n; 
+   binder_rule = binder; 
+   nbvars_rule =n; 
    lhs=Fun({id=Projection(i,n);has_variables=true},[ Fun({id=Tuple(n);has_variables=true},!vars)]); 
    rhs=List.nth !vars i
   }
@@ -195,7 +195,7 @@ let parse_rewrite_rule env (lhs,rhs) =
   let binder = ref Types.Rule in
   let (t,env,nb) = (parse_rewrite_rule true env binder 0 lhs) in
   let (t',_,_) =(parse_rewrite_rule false env binder 0 rhs) in
-  {binder = binder; nbvars=nb; lhs=t; rhs=t'}
+  {binder_rule = binder; nbvars_rule=nb; lhs=t; rhs=t'}
 
 let functions_list : funId list ref = ref []
 
