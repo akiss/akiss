@@ -90,8 +90,8 @@ let print_maude_signature () =
   let op name arity = Format.sprintf "op %s : %s-> Term .\n" name (times arity "Term ") in
   let print_env_elt _ env str =
     match env with
-    | Func (f) -> op ("w" ^f.name) f.arity 
-    | _ -> ""
+    | Func (f) -> str ^ (op ("w" ^f.name) f.arity)
+    | _ -> str
   in
   let str = ref "" in
   List.iter (fun i -> 

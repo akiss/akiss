@@ -1,4 +1,3 @@
-
 open Types
 
 module Location =
@@ -16,29 +15,14 @@ type dag = {
   rel : LocationSet.t Dag.t ;
 }
 
-
+let empty_loc = LocationSet.empty
 
 (**
   Printers
 **)
 
 let show_loc_set ls =
-  (*let l_save = ref null_location in
-  let first = ref true in
-  
-  LocationSet.iter (fun l ->
-    if !first 
-    then (l_save := l; first := false)
-    else (assert (Location.compare !l_save l <= 0); l_save := l)
-  ) ls;*)
-  
-  (*print_string "\n\nshow_loc\n";
-  LocationSet.iter (fun l -> Printf.printf "%d," l.p) ls;
-  print_string "\n";
-  *)
-  let r = LocationSet.fold (fun l str -> (if str = "" then "" else str ^ "," ) ^ (string_of_int l.p)) ls "" in
-  (* Printf.printf "Version with Fold : %s\nend of show_loc\n\n" r;*)
-  r;;
+  LocationSet.fold (fun l str -> (if str = "" then "" else str ^ "," ) ^ (string_of_int l.p)) ls "" 
 
 let show_dag dag =
   if !Util.use_xml then 
@@ -49,6 +33,16 @@ let show_dag dag =
   else
   (Dag.fold (fun l ls str -> str ^(Format.sprintf " %d<" l.p) ^ (show_loc_set ls)) dag.rel "{")^"}"
 
+let compare_loc_set l1 l2 =
+  let l1 = LocationSet.elements l1 in
+  let l2 = LocationSet.elements l2 in
+  let rec aux l1 l2 = 
+    match l1,l2 with
+    | [] , l1 :: _ -> 1
+    | l1 :: q1 ,l2 :: q2 -> if l1.p = l2.p then aux q1 q2 else Pervasives.compare l1.p l2.p
+    | _ :: _ , [] -> -1
+    | [], [] -> 0 in
+  aux l1 l2
 
 (**
   Dag stuff
@@ -94,38 +88,14 @@ let merge dag1 dag2 =
 let merge dag1 dag2 =
   merge dag1 (merge (merge dag1 dag2) dag2)
 
-let is_before dag l1 l2 =
-  match l1, l2 with 
-  | Some l1, Some l2 -> begin
-   try
-   LocationSet.mem l2 (Dag.find l1 dag.rel)
-   with 
-   | Not_found -> false end 
-  | None , Some _ -> true
-  | _ -> false
-  
-(* for merge_test*)
-let can_be_replaced_by dag l1 l2 = 
-  match l1, l2 with 
-  | Some l1, Some l2 -> begin
-   try
-   LocationSet.mem l1 (Dag.find l2 dag.rel)
-   with 
-   | Not_found -> assert false end 
-  | None , Some _ -> true
-  | _ -> false
+let is_before_all dag l locs =
+  try
+    LocationSet.is_empty (LocationSet.diff locs (Dag.find l dag.rel))
+  with 
+  | Not_found -> assert false
+   
 
-(* To replace a recipe by a one that should be created before *)
-let should_be_before dag l1 l2 =
-  match l1, l2 with 
-  | Some l1, Some l2 -> begin
-   try
-   LocationSet.mem l2 (Dag.find l1 dag.rel)
-   with 
-   | Not_found -> false end 
-  | None , Some _ -> false
-  | Some _, None -> true
-  | None,None -> false (* in this case the recipe number matter *)
+(* for merge_test*)
 
 let is_cyclic dag =
   Dag.exists (fun l ls -> LocationSet.exists (fun l' -> l=l') ls) dag.rel
@@ -133,12 +103,16 @@ let is_cyclic dag =
 exception Impossible
 
 (* create the dag where the last location of dag are before l, check that phases of dag are before l too  *)  
-let final dag l=
+(*let final dag l=
   let final = Dag.filter (fun k set -> 
     if LocationSet.is_empty set then 
       if k.phase > l.phase then raise Impossible else true else false) dag.rel in
-  {rel = Dag.map (fun _ -> LocationSet.singleton l) final}
-
+  {rel = Dag.map (fun _ -> LocationSet.singleton l) final}*)
+  
+(* for resolution*)  
+let put_set_at_end dag locset =
+  let minphase= LocationSet.fold (fun l minphase -> min minphase l.phase) locset 1000000 in
+  {rel = Dag.mapi (fun loc lset -> if minphase < loc.phase then raise Impossible else LocationSet.union lset locset) dag.rel}
 (* For execution *)
 
 let dag_with_one_action_at_end locs action =
@@ -169,26 +143,13 @@ let pick_last_or_null dag locs =
   with Not_found -> null_location
   
 (* For finding recipes in test.ml, merge_tests*)
-let expurge_dag_after dag loc =
-  {rel= Dag.filter (fun l lset -> not (LocationSet.mem l (Dag.find loc dag.rel))) dag.rel}
+let expurge_dag_after dag locs =
+  {rel= Dag.filter (fun l lset -> not (LocationSet.is_empty (LocationSet.inter locs lset))) dag.rel}
   
-let preceding_dag dag loc =
-  {rel= Dag.filter (fun l lset ->  (LocationSet.mem loc (Dag.find l dag.rel))) dag.rel}
+(* The <. operator from the theory *)  
+let preceding_dag dag locs =
+  {rel= Dag.filter (fun l lset ->  (LocationSet.is_empty (LocationSet.diff locs lset))) dag.rel}
   
 let dag_with_actions_at_end locs lset = 
   { rel = LocationSet.fold (fun l dag -> Dag.add l lset dag) locs (Dag.empty)}
 
-(* let () =
-   let ch : Parser_functions.chanId= {name="c";id=0}  in
-   let l1 = {p= 1; chan=ch} in
-   let l2 = {p= 2; chan=ch} in
-   let l3 = {p=3; chan=ch} in
-   let l4 ={p=4; chan=ch} in
-   let dag12 = singleton l1 l2 in
-   let dag23 = singleton l2 l3 in
-   let dag = merge dag12 dag23 in
-   let dag24 = singleton l2 l4 in
-   let dagc = merge dag dag24 in
-   if not (is_cyclic dagc) then
-   print_dag dagc
-   *)

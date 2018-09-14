@@ -18,7 +18,7 @@ let dispatch tuple = List.fold_left (fun (lst1,lst2,lst3) (x,y,z) -> (List.rev_a
 (* return a tuple : 
   - the (chan,threads) waiting for a silent action, 
   - the updated threads, 
-  - the threads which have failed due to a test *)
+  - the threads which have failed due to a test (* for debug outputs *)*)
 let rec run_until_io process made_choices first frame =
   (*Printf.printf "run until io %s \n%!" (show_process_start 3 process);*)
   match process with
@@ -167,12 +167,10 @@ let next_partial_run run action full_p proc l frame locs choices =
       frame = frame;
       choices = choices;
       phase = l.phase;
-      (*disequalities =  run.disequalities;*)
       pending_qthreads = merge_pending_lst run.pending_qthreads pt;
       qthreads = qt ;
       failed_qthreads = fqt @ run.failed_qthreads ;
       restrictions = restrictions;
-      (*performed_restrictions = run.performed_restrictions;*)
       parent = Some run;
       last_exe = action;
       weird_assoc = run.weird_assoc + (
@@ -320,7 +318,8 @@ let rec next_solution solution =
   solution.partial_runs <- pr :: solution.partial_runs;
   if LocationSet.is_empty pr.restrictions then begin
     let first_actions = first_actions_among pr.sol.restricted_dag pr.remaining_actions in
-    let current_loc = try LocationSet.choose first_actions with Not_found -> assert false in
+    let current_loc = try LocationSet.choose first_actions 
+      with Not_found -> (Printf.printf "no first action in %s with %s\n" (show_loc_set pr.remaining_actions)(show_dag pr.sol.restricted_dag); assert false) in
     try
     let (new_runs,new_loc) = next_run_with_action current_loc pr in 
     if !debug_execution && new_runs = [] then Printf.printf "No possible run from this trace \n"  ;

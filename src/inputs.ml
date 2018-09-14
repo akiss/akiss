@@ -162,6 +162,9 @@ let apply_subst_recipes sigma inputs =
 let are_normal inputs =
   Dag.for_all (fun l t -> let t' = Rewriting.normalize t (!Parser_functions.rewrite_rules) in Rewriting.equals_ac t t') inputs.i
 
+let renormalize inputs =   
+  {i = Dag.map (fun t -> Rewriting.normalize t (!Parser_functions.rewrite_rules)) inputs.i}
+  
   (* To avoid merging too much tests *)
 let contains input1 input2 =
  let r = Dag.merge (fun loc i1 i2 -> 

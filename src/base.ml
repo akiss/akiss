@@ -24,7 +24,7 @@ type predicate =
   | Unreachable
 
 type body_atom = {
-   loc : location option;
+   loc : LocationSet.t;
    recipe : term ;
    term : term ;
    marked : bool; (* for xor *)
@@ -151,11 +151,11 @@ let show_predicate p =
     "tests(" ^ (show_test_head h) ^ ")"
 
 let show_body_atom a =
-  let l = match a.loc with Some l -> string_of_int l.p | None -> "." in
+  (*let l = match a.loc with Some l -> string_of_int l.p | None -> "." in*)
   if !use_xml then 
-  "<pred>K<loc>"^l^"</loc>(<rec>"^(show_term a.recipe)^"</rec>,<term>"^(show_term a.term)^"</term>)</pred>"
+  "<pred>K<loc>"^(show_loc_set a.loc)^"</loc>(<rec>"^(show_term a.recipe)^"</rec>,<term>"^(show_term a.term)^"</term>)</pred>"
   else
-   (if a.marked then "KnOwS_" else "knows_")^l^"("^(show_term a.recipe)^","^(show_term a.term)^")"
+   (if a.marked then "KnOwS_" else "knows_")^(show_loc_set a.loc)^"("^(show_term a.recipe)^","^(show_term a.term)^")"
 
 
 let rec show_atom_list lst = Format.sprintf "%s" (String.concat ", " (trmap show_body_atom lst))
