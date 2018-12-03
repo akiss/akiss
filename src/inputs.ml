@@ -50,6 +50,13 @@ let add_to_frame loc term outputs =
 (**
   Choice stuff
 **)
+let get_output_of_input c l = 
+  try let p = Dag.find l c.c in
+  let (l, _) = Dag.find_first (fun l -> compare l.p p >= 0) c.c in
+  assert (l.p = p);
+  l
+  with Not_found -> assert false
+
 let subset_choices c1 c2 =
   (*let exception E in *)
   try ignore (Dag.merge (fun loc i1 i2 -> 

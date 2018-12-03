@@ -100,7 +100,7 @@ let restr_set dag dag1 locs2 =
   Dag.fold (fun l1 _ locset ->
   if (List.mem l1 locs2) ||
    ( List.exists 
-    (fun l2 -> LocationSet.mem l2 (Dag.find l1 dag.rel)) locs2)
+    (fun l2 -> LocationSet.mem l2 (try Dag.find l1 dag.rel with Not_found -> assert false)) locs2)
   then
     LocationSet.add l1 locset
   else locset 

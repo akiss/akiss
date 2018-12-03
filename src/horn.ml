@@ -337,11 +337,16 @@ let rule_shift st =
 exception No_Eval
 exception Unsound_Statement
   
-let rec eval_recipe inputs solved_atom term =
+let rec eval_recipe choices inputs solved_atom term =
   match term with
-  | Fun({id=Frame({io = Output(_,t)})},[]) -> eval_recipe inputs solved_atom t 
-  | Fun({id=Input(l)},[]) -> Inputs.get l inputs
-  | Fun(f,args) -> Fun(f,List.map (eval_recipe inputs solved_atom) args)
+  | Fun({id=Frame({io = Output(_,t)})},[]) -> eval_recipe choices inputs solved_atom t 
+  | Fun({id=Input({observable = Public} as l)},[]) -> Inputs.get l inputs
+  | Fun({id=Input({observable = Hidden} as l)},[]) -> 
+    eval_recipe choices inputs solved_atom (
+      match (Inputs.get_output_of_input choices l).io with 
+      Output(_,t)-> t 
+      | _ -> assert false) 
+  | Fun(f,args) -> Fun(f,List.map (eval_recipe choices inputs solved_atom) args)
   | Var(x) -> (try 
      (List.find (fun a -> a.recipe = term) solved_atom).term 
     with Not_found -> raise No_Eval )
@@ -357,7 +362,7 @@ let simplify_statement st =
   let var_recipe_body,other_body = List.partition (fun b -> is_var b.recipe) st.body in
   let other_body = List.filter (fun b -> 
     try 
-    let t = eval_recipe st.inputs var_recipe_body b.recipe in
+    let t = eval_recipe st.choices st.inputs var_recipe_body b.recipe in
     if Rewriting.equals_ac (Rewriting.normalize t (!Parser_functions.rewrite_rules))  b.term then
       false
     else (
@@ -452,6 +457,7 @@ let normalize_identical f = f (*
     f.body)
   then begin (*Printf.printf "terms: %s\n" (show_raw_statement f);*) None end
   else 
+  let f = {f with recipes = Inputs.renormalize f.recipes} in
   match f.head with 
   | Reach -> Some f
   | Unreachable -> Some f
@@ -473,44 +479,6 @@ let normalize_identical f = f (*
         disequalities = EqualitiesSet.map (fun (r,r') -> Rewriting.normalize r (!Parser_functions.rewrite_rules),
             Rewriting.normalize r' (!Parser_functions.rewrite_rules)) hd.disequalities })}
 
-  let normalize_new_statement_2 f = 
-  Some { f with 
-    inputs = Inputs.renormalize f.inputs;
-    head = 
-      match f.head with 
-      | Reach -> f.head
-      | Unreachable ->  f.head
-      | Knows(r,t) -> Knows(Rewriting.normalize r (!Parser_functions.rewrite_rules),Rewriting.normalize t (!Parser_functions.rewrite_rules))
-      | Identical(r,r') ->Identical(Rewriting.normalize r (!Parser_functions.rewrite_rules),Rewriting.normalize r' (!Parser_functions.rewrite_rules))
-      | Tests(_) -> assert false 
-  }
-
-  let normalize_new_statement_3 f = Some f
-  
-  let normalize_new_statement_4 f = (* This opti slow down the algo a bit much*)
-  if not (Inputs.are_normal f.inputs) 
-  then begin (*Printf.printf "input: %s\n" (show_raw_statement f);*) None end
-  else
-  if not (List.for_all 
-    (fun a -> let t' = Rewriting.normalize a.term (!Parser_functions.rewrite_rules) in Rewriting.equals_ac a.term t')
-    f.body)
-  then begin (*Printf.printf "terms: %s\n" (show_raw_statement f);*) None end
-  else 
-  match f.head with 
-  | Reach -> Some f
-  | Unreachable -> Some f
-  | Knows(r,t) -> 
-    let t' = Rewriting.normalize t (!Parser_functions.rewrite_rules) in 
-    if not (Rewriting.equals_ac t t')
-    then begin (*Printf.printf "hea: %s\n" (show_raw_statement f); *)
-      None (*Some {f with head = Reach}*) end (* A knows is also a reach statement but the reach statement has already been processed *)
-    else Some f
-  | Identical(r,r') -> Some f 
-  | Tests(_) -> assert false (*Some {f with 
-      head = Tests(EqualitiesSet.map (fun (r,r') -> Rewriting.normalize r (!Parser_functions.rewrite_rules),
-            Rewriting.normalize r' (!Parser_functions.rewrite_rules))equal,
-            EqualitiesSet.map (fun (r,r') -> Rewriting.normalize r (!Parser_functions.rewrite_rules),
-            Rewriting.normalize r' (!Parser_functions.rewrite_rules))diseq) }*) (* this case is not used *)
 
 (*let remove_marking f = {f with body = List.map (fun a -> {a with marked = false}) f.body }*)
 
@@ -666,6 +634,7 @@ let is_tuple term =
 
 let resolution sigma choices dag master slave =
    let atom = find_unsolved master in
+   (* Printf.printf "Slave: %s\n Selected atom %s\n" (show_raw_statement slave)(show_body_atom atom);*)
    if atom.loc != empty_loc && is_tuple atom.term && not (is_tuple (get_head_recipe slave.head)) then [] else 
    begin try
    let dag =
@@ -682,6 +651,7 @@ let resolution sigma choices dag master slave =
       (atom.term, get_head_term slave.head);
       (atom.recipe, get_head_recipe slave.head)] sigma (*recipes should be modulo xor*)
     in
+   (* Printf.printf "Unifiers %d\n" (List.length sigmas);*)
       (* Create results *)
     List.map
       (fun sigma ->

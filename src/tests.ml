@@ -270,7 +270,7 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
         let rho = Rewriting.compose_master sigma tau in
         if Horn.is_solved test_merge_init then 
           (rho,test_merge_init)::lst
-        else begin
+        else (
         let kb = base_of_name process_name in
         let st = {
           id = kb.next_id ; 
@@ -296,7 +296,7 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
             | [subst_inputs],[subst_recipes] -> (Rewriting.compose_with_subst_lst rho (subst_inputs @ subst_recipes),st.st)::lst
              )
           ) lst kb.temporary_merge_test_result;
-        end
+        )
         (*let new_dag = ref merged_dag in
         try
           List.iter (fun x ->  
@@ -632,7 +632,7 @@ let add_to_completion (run : partial_run) (completion : completion) =
   try
   let llocs, _ = List.split (Dag.bindings completion.root.initial_statement.dag.rel) in
   let set = restr_set run.sol.restricted_dag 
-    run.test.statement.dag
+    (only_observable run.test.statement.dag)
     (List.fold_left (fun lst l -> try (loc_p_to_q  l run.corresp_back)::lst with LocPtoQ _ -> lst) [] llocs) in 
   let tau, conjrun = trunconj set run in
   let corr = { a = Dag.merge (fun locP x y -> 

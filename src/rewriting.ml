@@ -91,8 +91,7 @@ and occurs_list x l sigma =
     | h::q -> occurs x h sigma || occurs_list x q sigma
 
 let rec unify hard pairlst sigma =
-  (*let s1,s2 = sigma in
-  Printf.printf "Subst%s,%s \n%!" (show_subst_array s1) (show_subst_array s2);*)
+  (*Printf.printf "Subst%s,%s \n%!" (show_subst_array sigma.m) (show_subst_array sigma.s);*)
   let rec combine l1 l2 l =
     match (l1,l2) with
     | (h1::q1,h2::q2) -> (h1,h2)::(combine q1 q2 l)
@@ -116,8 +115,7 @@ let rec unify hard pairlst sigma =
           end
     | (t, (Var(y) as s))::q -> unify hard ((s,t)::q) sigma
     | ((Fun({id = Plus}, _) as sa), (Fun({id=Plus}, _) as ta))::q -> may_unify_plus hard sa ta q sigma
-    | (Fun({id = f}, sa), Fun({id = g}, ta))::q when f = g ->
-	unify hard (combine sa ta q) sigma
+    | (Fun({id = f}, sa), Fun({id = g}, ta))::q when f = g -> unify hard (combine sa ta q) sigma
     | _ ->  raise Not_unifiable
 and may_unify_plus hard sa ta pairlst sigma =
 	let (xs,ts,cs)= explode_term sa sigma in 

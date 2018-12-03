@@ -195,7 +195,7 @@ let rewrite_rule_xor_1 =
     binder_rule = binder;
     nbvars_rule = 2;
     lhs = Fun({id=Plus;has_variables=true},[Fun({id=Plus;has_variables=true},[x;y]);y]);
-    rhs = y;
+    rhs = x;
   }
 
 let rewrite_rule_xor_2 =
@@ -205,6 +205,16 @@ let rewrite_rule_xor_2 =
     binder_rule = binder;
     nbvars_rule = 1;
     lhs = Fun({id=Plus;has_variables=true},[x;x]);
+    rhs = zero;
+  }
+  
+let rewrite_rule_xor_3 =
+  let binder = ref Types.Rule in
+  let x = Types.Var({status=binder;n=0}) in
+  { 
+    binder_rule = binder;
+    nbvars_rule = 1;
+    lhs = Fun({id=Plus;has_variables=true},[x;zero]);
     rhs = x;
   }
 
@@ -308,7 +318,7 @@ let rec parse_temp_term procId env = function
       with
         Not_found -> error_message line (Printf.sprintf "The function %s is not declared" s)
       end
-  | FPlus(s,t) -> if not !use_xor then (use_xor := true; rewrite_rules := rewrite_rule_xor_1 :: rewrite_rule_xor_2 :: !rewrite_rules);
+  | FPlus(s,t) -> if not !use_xor then (use_xor := true; rewrite_rules := rewrite_rule_xor_1 :: rewrite_rule_xor_2 :: rewrite_rule_xor_3 :: !rewrite_rules);
       Xor( (List.map (parse_temp_term procId env) [s;t]))
   | FZero -> Z
   | Tuple(args) ->
