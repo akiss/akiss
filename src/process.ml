@@ -140,7 +140,7 @@ let new_location (pr : procId) p ( io : io ) str parent phase =
     begin if !about_location then 
       match io with 
       | Input(chan) -> Printf.printf "%d : in(%s)  > %d[ph:%d] \n" p str par phase
-      | Output(chan) -> Printf.printf "%d : out(%s) > %d[ph:%d]\n" p str par phase
+      | Output(chan,_) -> Printf.printf "%d : out(%s) > %d[ph:%d]\n" p str par phase
       | Call -> Printf.printf " %d : %s      > %d[ph:%d] \n" p str par phase
       | Choice-> Printf.printf " %d: %s       > %d[ph:%d] \n" p str par phase
       end ;
@@ -149,7 +149,7 @@ let new_location (pr : procId) p ( io : io ) str parent phase =
       io=io; 
       name=str; 
       phase=phase; 
-      observable = (match io with Input(chan) | Output(chan) -> chan.visibility | _ -> Hidden);
+      observable = (match io with Input(chan) | Output(chan,_) -> chan.visibility | _ -> Hidden);
       parent=parent
     } in
     processes_infos.location_list <- l :: processes_infos.location_list;
@@ -171,9 +171,10 @@ let rec convert_pr infos process parent phase=
      SeqP(Input(locations.(rel_loc)),convert_pr infos p (if chan.visibility = Public then Some new_loc else parent) phase)
   | OutputB(ch,(rel_loc,Some str),term,p) -> 
     let chan = convert_chan pr chans ch in
-    let new_loc = new_location pr (location+rel_loc) (Output(chan))  str parent phase in
+    let new_term = convert_term pr locations nonces args term in
+    let new_loc = new_location pr (location+rel_loc) (Output(chan,new_term))  str parent phase in
      locations.(rel_loc) <- new_loc;
-     SeqP(Output(locations.(rel_loc),convert_term pr locations nonces args term),
+     SeqP(Output(locations.(rel_loc),new_term),
        convert_pr infos p (if chan.visibility = Public then Some new_loc else parent) phase)
   | TestIfB((rel_loc,Some str),s,t,p1,p2) -> 
      let s = convert_term pr locations nonces args s in 

@@ -65,11 +65,16 @@ let is_reach_st st =
   | Reach -> true
   | _ -> false
   
+let is_test_st st = 
+  match st.head with
+  | Tests(_) -> true
+  | _ -> false
+  
 let is_solved_atom a =
-  assert (is_var a.recipe) ; 
+  if not (is_var a.recipe) then false else ( 
   if a.marked 
   then is_var a.term 
-  else is_sum_term a.term
+  else is_sum_term a.term )
 
 let is_solved st = 
   List.for_all
@@ -78,7 +83,7 @@ let is_solved st =
 let find_unsolved st = 
   match List.find_opt (fun a -> not (is_solved_atom a)) st.body  with
   | Some a -> a
-  | None -> assert false
+  | None -> Printf.printf "%s" (show_raw_statement st); assert false
   
 (*let rec find_rigid term = 
   match term with
@@ -109,6 +114,8 @@ let get_head_recipe = function
 let get_head_term = function 
   | Knows(  _, t) -> t
   | _ -> assert(false)
+
+
 
 
 
@@ -327,11 +334,18 @@ let rule_shift st =
     end *)
   | _ -> st 
 
+exception No_Eval
+exception Unsound_Statement
+  
+let rec eval_recipe inputs solved_atom term =
+  match term with
+  | Fun({id=Frame({io = Output(_,t)})},[]) -> eval_recipe inputs solved_atom t 
+  | Fun({id=Input(l)},[]) -> Inputs.get l inputs
+  | Fun(f,args) -> Fun(f,List.map (eval_recipe inputs solved_atom) args)
+  | Var(x) -> (try 
+     (List.find (fun a -> a.recipe = term) solved_atom).term 
+    with Not_found -> raise No_Eval )
 
-(** For statements that are not canonized we still apply some simplifications
-  * to avoid explosions: if a term is derived using several recipes, we can
-  * remove derivations for which the recipe does not occur elsewhere in the
-  * statement as long as one derivation remains. *)
 let simplify_statement st =
   try 
   (*Printf.printf "simplification of %s\n" (show_raw_statement st);*)
@@ -340,6 +354,18 @@ let simplify_statement st =
   let binder = ref New in
   let nbv = ref 0 in
   let body_maker = ref [] in
+  let var_recipe_body,other_body = List.partition (fun b -> is_var b.recipe) st.body in
+  let other_body = List.filter (fun b -> 
+    try 
+    let t = eval_recipe st.inputs var_recipe_body b.recipe in
+    if Rewriting.equals_ac (Rewriting.normalize t (!Parser_functions.rewrite_rules))  b.term then
+      false
+    else (
+      Printf.printf "%s = %s \n %s%!" (show_term t)(show_term b.term) (show_raw_statement st);
+      raise Unsound_Statement )
+    with
+    No_Eval -> true 
+  ) other_body in 
     List.iter
       (fun a ->
         List.iter (fun (x : varId) -> 
@@ -363,9 +389,9 @@ let simplify_statement st =
             else assert false;
             body_maker := (a , ref a.loc ) :: !body_maker
          )
-       (List.sort (fun x y -> compare_loc_set x.loc y.loc) st.body)
+       (List.sort (fun x y -> compare_loc_set x.loc y.loc) var_recipe_body)
   ;
-  let body = List.map (fun (b,locset) -> {b with loc = !locset}) !body_maker in
+  let body = other_body @ List.map (fun (b,locset) -> {b with loc = !locset}) !body_maker in
   let sigma = { 
     binder = binder; 
     master =  Array.map (function Some x -> x | None -> zero) sigma_repl;
@@ -438,11 +464,14 @@ let normalize_identical f = f (*
   | Identical(r,r') -> Some {f with 
       head = Identical(Rewriting.normalize r (!Parser_functions.rewrite_rules),
             Rewriting.normalize r' (!Parser_functions.rewrite_rules))}
-  | Tests(_) -> assert false (*Some {f with 
-      head = Tests(EqualitiesSet.map (fun (r,r') -> Rewriting.normalize r (!Parser_functions.rewrite_rules),
-            Rewriting.normalize r' (!Parser_functions.rewrite_rules))equal,
-            EqualitiesSet.map (fun (r,r') -> Rewriting.normalize r (!Parser_functions.rewrite_rules),
-            Rewriting.normalize r' (!Parser_functions.rewrite_rules))diseq) }*) (* this case is not used *)
+  | Tests(hd) -> Some {f with 
+      head = Tests({
+        hd with 
+        equalities= 
+          EqualitiesSet.map (fun (r,r') -> Rewriting.normalize r (!Parser_functions.rewrite_rules),
+            Rewriting.normalize r' (!Parser_functions.rewrite_rules))hd.equalities;
+        disequalities = EqualitiesSet.map (fun (r,r') -> Rewriting.normalize r (!Parser_functions.rewrite_rules),
+            Rewriting.normalize r' (!Parser_functions.rewrite_rules)) hd.disequalities })}
 
   let normalize_new_statement_2 f = 
   Some { f with 
@@ -457,6 +486,31 @@ let normalize_identical f = f (*
   }
 
   let normalize_new_statement_3 f = Some f
+  
+  let normalize_new_statement_4 f = (* This opti slow down the algo a bit much*)
+  if not (Inputs.are_normal f.inputs) 
+  then begin (*Printf.printf "input: %s\n" (show_raw_statement f);*) None end
+  else
+  if not (List.for_all 
+    (fun a -> let t' = Rewriting.normalize a.term (!Parser_functions.rewrite_rules) in Rewriting.equals_ac a.term t')
+    f.body)
+  then begin (*Printf.printf "terms: %s\n" (show_raw_statement f);*) None end
+  else 
+  match f.head with 
+  | Reach -> Some f
+  | Unreachable -> Some f
+  | Knows(r,t) -> 
+    let t' = Rewriting.normalize t (!Parser_functions.rewrite_rules) in 
+    if not (Rewriting.equals_ac t t')
+    then begin (*Printf.printf "hea: %s\n" (show_raw_statement f); *)
+      None (*Some {f with head = Reach}*) end (* A knows is also a reach statement but the reach statement has already been processed *)
+    else Some f
+  | Identical(r,r') -> Some f 
+  | Tests(_) -> assert false (*Some {f with 
+      head = Tests(EqualitiesSet.map (fun (r,r') -> Rewriting.normalize r (!Parser_functions.rewrite_rules),
+            Rewriting.normalize r' (!Parser_functions.rewrite_rules))equal,
+            EqualitiesSet.map (fun (r,r') -> Rewriting.normalize r (!Parser_functions.rewrite_rules),
+            Rewriting.normalize r' (!Parser_functions.rewrite_rules))diseq) }*) (* this case is not used *)
 
 (*let remove_marking f = {f with body = List.map (fun a -> {a with marked = false}) f.body }*)
 
@@ -626,7 +680,7 @@ let resolution sigma choices dag master slave =
    let sigmas =
     Rewriting.csu [
       (atom.term, get_head_term slave.head);
-      (atom.recipe, get_head_recipe slave.head)] sigma
+      (atom.recipe, get_head_recipe slave.head)] sigma (*recipes should be modulo xor*)
     in
       (* Create results *)
     List.map
@@ -710,13 +764,11 @@ let equation sigma choices dag fa fb =
           | _ -> invalid_arg("equation")
 
 (** {1 Saturation procedure} *)
-
 let rec concretize inputs term =
    match term with
    | Fun({id=Input(l)},[]) -> Inputs.get l inputs
    | Fun(f,args) -> Fun(f,List.map (concretize inputs) args)
    | _ -> term  
-
 
  
 let rec hidden_chan_statement kb  (loc_input , term_input ,ineq_input,st_input,pr_input) (loc_output,  term_output,ineq_output,st_output,pr_output) solved_parent unsolved_parent test_parent  =
@@ -879,7 +931,7 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
           ChanMap.find { c= chan; io = In; ph =loc.phase} kb.hidden_chans 
           with Not_found -> []))
         kb.hidden_chans 
-    | SeqP(Output({io = Output({visibility = Hidden} as chan)} as loc, t), pr) -> (
+    | SeqP(Output({io = Output({visibility = Hidden} as chan, _)} as loc, t), pr) -> (
       match ChanMap.find_opt { c= chan; io = In; ph =loc.phase} kb.hidden_chans with
       | None -> ()
       | Some chans -> 
@@ -916,10 +968,10 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
 
 and add_statement kb solved_parent unsolved_parent test_parent process st = 
   if !debug_saturation then Format.printf "Adding statement %s \n%!" (show_raw_statement st);
-  let is_solved_st = is_solved st in
   match update kb st with
   | None -> ()
   | Some new_st -> begin 
+     let is_solved_st = is_solved new_st in
      let new_st = canonize_statement new_st in
      let hash_st = raw_to_hash_statement new_st in
      new_st.binder:=if is_solved_st then Slave else Master;
@@ -939,7 +991,7 @@ and add_statement kb solved_parent unsolved_parent test_parent process st =
      then Printf.printf "Addition of %s \n unsolved: %s solved: %s test: %s process: %s\n\n %!" 
       (show_statement "" st)(show_raw_statement unsolved_parent.st)(show_raw_statement solved_parent.st)(show_raw_statement test_parent.st)
       (match process with None -> "none" | Some pr -> show_process_start 3 pr)
-     else if !about_progress && kb.next_id mod 500 = 0 then Printf.printf "Addition of %s \n%!" (show_statement "" st));
+     else if !about_progress && kb.next_id mod (match st.st.head with Tests(_) -> 5000 | _ -> 500) = 0 then Printf.printf "Addition of %s \n%!" (show_statement "" st));
      Hashtbl.add kb.htable hash_st st;
      if is_solved_st 
      then 
@@ -959,7 +1011,7 @@ and add_statement kb solved_parent unsolved_parent test_parent process st =
             match process with 
            | None -> ()
            | Some process -> trace_statements kb [] solved_parent unsolved_parent st process st.st end
-         | Tests(_) -> assert false
+         | Tests(_) -> kb.temporary_merge_test_result <- st :: kb.temporary_merge_test_result
          end 
      else begin
        Queue.add st kb.ns_todo;
@@ -1013,7 +1065,10 @@ let extra_resolution kb solved unsolved =
   let sigma = sigma_maker_init unsolved.st.nbvars solved.st.nbvars in
   solved.st.binder:= Slave;
   unsolved.st.binder:= Master;
-  let sigmas = Inputs.csu sigma solved.st.inputs unsolved.st.inputs in
+  let sigmas = match Inputs.csu_recipes sigma solved.st.recipes unsolved.st.recipes with
+  | [] -> []
+  | [s] -> Inputs.csu s solved.st.inputs unsolved.st.inputs
+  | _ -> assert false in 
   if sigmas = [] then false
   else begin 
     List.iter (fun sigma -> List.iter 
@@ -1032,7 +1087,10 @@ let extra_equation kb solved1 solved2 =
   let sigma = sigma_maker_init solved1.st.nbvars solved2.st.nbvars in
   solved2.st.binder:= Slave;
   solved1.st.binder:= Master;
-  let sigmas = Inputs.csu sigma solved1.st.inputs solved2.st.inputs in
+  let sigmas = match Inputs.csu_recipes sigma solved1.st.recipes solved2.st.recipes with
+  | [] -> []
+  | [s] -> Inputs.csu s solved1.st.inputs solved2.st.inputs
+  | _ -> assert false in 
   if sigmas = [] then false
   else begin 
     List.iter (fun sigma -> List.iter 
@@ -1065,7 +1123,18 @@ let rec process_equation kb new_solved old_solved =
     then 
       List.iter (fun st -> process_equation kb new_solved st) old_solved.children
 
-
+let merge_sat kb = 
+  while not (Queue.is_empty(kb.ns_todo)) do
+    let unsolved = Queue.take(kb.ns_todo) in
+    if !debug_saturation then Printf.printf "Start merge resolutions of #%d\n" unsolved.id;
+    if !Parser_functions.use_xor then 
+    List.iter 
+      (fun st -> add_statement kb kb.solved_deduction unsolved 
+          unsolved.test_parent unsolved.process st )
+      (resolution_plus unsolved.st);
+    List.iter (fun solved -> process_resolution_new_unsolved kb solved unsolved) kb.solved_deduction.children
+  done
+   
 let saturate procId  =
   let kb = Base.new_base () in
   List.iter (fun f -> theory_statements kb (Regular(f)) f.arity) !Parser_functions.functions_list;
@@ -1097,6 +1166,7 @@ let saturate procId  =
     else begin 
       let unsolved = Queue.take(kb.ns_todo) in
       if !debug_saturation then Printf.printf "Start resolutions of #%d\n" unsolved.id;
+      if !Parser_functions.use_xor then
       List.iter 
         (fun st -> add_statement kb kb.solved_deduction unsolved 
           unsolved.test_parent unsolved.process st )

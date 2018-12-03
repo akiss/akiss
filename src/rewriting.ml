@@ -249,7 +249,22 @@ let rec compose sigma tau =
     slave  = sigma.slave;
   }
 
- 
+let rec compose_with_subst_lst sigma subst =
+  let nbvars = ref 0 in
+  let binder = ref New in
+  let rec repl = function
+    | Var(x) -> let v = Var({n = !nbvars; status = binder}) in incr nbvars; v
+    | Fun(symbol, args ) -> Fun(symbol, List.map repl args ) in
+  let subst = List.map (fun (x,t) -> (x,repl t)) subst in
+  Array.iteri (fun i term -> sigma.master.(i) <- apply_subst term subst) sigma.master ;
+  Array.iteri (fun i term -> sigma.slave.(i) <- apply_subst term subst) sigma.slave ;
+  { 
+    binder = binder; 
+    nbvars = !nbvars;
+    master = sigma.master;
+    slave  = sigma.slave;
+  }
+
 let identity_subst nbv =
   let binder = ref Master in
   let master = Array.make nbv (Var({status=binder; n=0})) in

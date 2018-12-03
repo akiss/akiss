@@ -50,6 +50,7 @@ type hash_statement = {
   hnbvars : int ;
   hdag : dag ;
   hinputs :  inputs ;
+  hrecipes : inputs ;
   hchoices : choices ;
   hhead : predicate ;
   hbody : body_atom list ;
@@ -60,6 +61,7 @@ type hash_test = {
   htnbvars : int ;
   htdag : dag ;
   htinputs :  inputs ;
+  htrecipes : inputs ;
   htchoices : choices ;
   htbody : body_atom list ;
 }
@@ -108,6 +110,8 @@ type base =
    mutable reachable_solved : statement list ;*)
    mutable unreachable_solved : statement list; 
    not_solved : statement ;
+   temporary_merge_test : statement ;
+   mutable temporary_merge_test_result : statement list;
    mutable s_todo : statement Queue.t ; 
    mutable ns_todo : statement Queue.t ; 
    mutable hidden_chans : ((location * (term option) * ((term*term)list) * raw_statement * process) list) ChanMap.t ;
@@ -281,6 +285,8 @@ let new_base () =
      reachable_solved = [];*)
      unreachable_solved = [] ;
      not_solved = new_statement () ;
+     temporary_merge_test = new_statement () ;
+     temporary_merge_test_result = [] ;
      hidden_chans = ChanMap.empty;
      s_todo = Queue.create () ;
      ns_todo = Queue.create() ;
@@ -293,10 +299,10 @@ let canonize_statement st =
   { st with (*either the head is not a test or the head is a test and hash_test does not consider it *)
     dag = canonize_dag st.dag;
     inputs = canonize_inputs st.inputs;
-    (*recipes = canonize_inputs st.recipes;*)
+    recipes = canonize_inputs st.recipes;
     choices = canonize_choices st.choices
   }
 
-let raw_to_hash_statement st = { hbinder = st.binder ; hnbvars = st.nbvars; hdag = st.dag; hinputs= st.inputs; hchoices= st.choices; hhead = st.head;hbody=st.body}
+let raw_to_hash_statement st = { hbinder = st.binder ; hnbvars = st.nbvars; hdag = st.dag; hinputs= st.inputs; hrecipes=st.recipes; hchoices= st.choices; hhead = st.head;hbody=st.body}
 
-let raw_to_hash_test st = { htbinder = st.binder ; htnbvars = st.nbvars; htdag = st.dag; htinputs= st.inputs; htchoices= st.choices; htbody=st.body}
+let raw_to_hash_test st = { htbinder = st.binder ; htnbvars = st.nbvars; htdag = st.dag; htinputs= st.inputs; htrecipes=st.recipes; htchoices= st.choices; htbody=st.body}

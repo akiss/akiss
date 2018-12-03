@@ -93,12 +93,25 @@ let is_before_all dag l locs =
     LocationSet.is_empty (LocationSet.diff locs (Dag.find l dag.rel))
   with 
   | Not_found -> assert false
-   
+
+(* For truncconj *)
+
+let restr_set dag dag1 locs2 =
+  Dag.fold (fun l1 _ locset ->
+  if (List.mem l1 locs2) ||
+   ( List.exists 
+    (fun l2 -> LocationSet.mem l2 (Dag.find l1 dag.rel)) locs2)
+  then
+    LocationSet.add l1 locset
+  else locset 
+  ) dag1.rel LocationSet.empty
 
 (* for merge_test*)
 
 let is_cyclic dag =
   Dag.exists (fun l ls -> LocationSet.exists (fun l' -> l=l') ls) dag.rel
+  
+  
 
 exception Impossible
 

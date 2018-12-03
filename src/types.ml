@@ -123,11 +123,11 @@ let null_nonce = {name = "null" ; n= -1}
 
 type io =
    | Input of chanId
-   | Output of chanId
+   | Output of chanId * term
    | Choice
    | Call
 
-type location = {
+and location = {
  p : int;
  io : io;
  name : string;
@@ -136,10 +136,7 @@ type location = {
  parent : location option; (*the previous i/o of the syntax tree *)
 }
 
-let rec null_location = { p = -1; io = Call; name = "null_loc"; phase = 0 ; observable = Hidden; parent = None}
-let root_location i = { p = i; io = Call; name = "root"; phase = 0 ; observable = Hidden; parent = None}
-
-type funName = 
+and funName = 
   | Regular of funId (* f,g,h *)
   | Nonce of nonceId (* new n. P *)
   | Plus
@@ -149,14 +146,17 @@ type funName =
   | Frame of location (*ie w0, w1,.. *)
   | Input of location (* transitional for process *)
 
-type funInfos = { 
+and funInfos = { 
    id : funName;
    has_variables : bool ; 
 }
 
-type term =
+and term =
   | Fun of funInfos * term list
   | Var of varId
+  
+let rec null_location = { p = -1; io = Call; name = "null_loc"; phase = 0 ; observable = Hidden; parent = None}
+let root_location i = { p = i; io = Call; name = "root"; phase = 0 ; observable = Hidden; parent = None}
 
 let show_varId id = (show_binder !(id.status)) ^ (string_of_int id.n)
 let rec show_term t =

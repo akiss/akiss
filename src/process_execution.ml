@@ -28,11 +28,11 @@ let rec run_until_io process made_choices first frame =
     dispatch
     (List.map (fun (i,p) -> run_until_io p (Inputs.add_choice l i made_choices) first frame) proclst)
   | SeqP(Input({io = Input(chanId); observable= Public}) ,p) 
-  | SeqP(Output({io = Output(chanId); observable= Public},_) ,p) -> 
+  | SeqP(Output({io = Output(chanId,_); observable= Public},_) ,p) -> 
     ([],[{ made_choices = made_choices; before_locs = first; thread = process}],[])
   | SeqP(Input({io = Input(chanId); observable= Hidden; phase = ph} as l),p) -> 
     ([(l,None, {c = chanId; io = In; ph = ph},{ made_choices = made_choices; before_locs = first; thread = p})],[],[])
-  | SeqP(Output({io = Output(chanId); observable= Hidden; phase = ph} as l,t),p) -> 
+  | SeqP(Output({io = Output(chanId,_); observable= Hidden; phase = ph} as l,t),p) -> 
     ([(l,Some t, {c = chanId; io = Out; ph = ph},{ made_choices = made_choices; before_locs = first; thread = p})],[],[])
  (* | SeqP(Output(l,_) as entry,p) -> 
     let chanId = match l.io with
@@ -204,7 +204,13 @@ let try_run run (action : location) ext_thread =
   (*Printf.printf "constraints %s \n" (show_correspondance run.test.constraints );*)
   let condition = if is_empty_correspondance run.test.constraints 
     then 
-      fun (action : location) (l : location) -> action.io = l.io && run.phase <= l.phase
+      fun (action : location) (l : location) -> (
+        match action.io , l.io with 
+        | Input c1, Input c2 
+        | Output (c1, _) ,Output (c2, _) -> c1 == c2
+        | _ -> false
+        )
+        && run.phase <= l.phase
     else 
       fun action l -> try loc_p_to_q action run.test.constraints = l with LocPtoQ i -> (Printf.eprintf "try run error\n"; raise (LocPtoQ i)) in
   (* Printf.printf "Testing %d against %s\n" action.p (show_process_start 1 ext_thread.thread);*)

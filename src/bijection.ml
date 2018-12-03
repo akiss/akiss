@@ -26,7 +26,6 @@ let head_predicate_to_test binder pred =
 
 type which_process = P | Q
 
-
 let show_which_process p =
 match p with P -> "P" | Q -> "Q"
 
@@ -52,11 +51,12 @@ module IntegerMap = Map.Make(struct type t = int let compare = compare end)
 let show_int_set s =
   (IntegerSet.fold (fun e str -> (if str = "" then "((" else (str^",")) ^(string_of_int e)) s "" ) ^"))"
 
+(* For execution of processes *)  
 type extra_thread = {
-  before_locs : LocationSet.t;
-  made_choices : Inputs.choices;
+  before_locs : LocationSet.t; (* the set of indexes that shoul have been reduced to unlock this thread *)
+  made_choices : Inputs.choices; (* the choices that are made if this thread is selected *)
   (*disequalities : (term * term) list;*)
-  thread : Process.process;
+  thread : Process.process; (* the thread itself *)
   }
   
 let show_extra_thread th =
@@ -64,20 +64,20 @@ let show_extra_thread th =
   
 module rec Run : sig 
   type completion = {
-    id_c : int;
+    id_c : int; (* primary key *)
     st_c : raw_statement ; (* the current completion g u U_i f_i *)
     corresp_c : correspondance ; (* the correspondance of the union of f_i *)
-    corresp_back_c : correspondance ;
+    corresp_back_c : correspondance ; (* the inverse mapping *)
     missing_actions :  LocationSet.t; (* all the locations which are present on the initial statement but not on the runs *)
     selected_action : location; (*Among all missing locations the one to complete first *)
-    root : complement_root;
-    mutable further_completions : (substitution * completion) list;
-    mutable generated_test : (substitution * Test.test) option;
+    root : complement_root; (* data about the test that origin this completion *)
+    mutable further_completions : completion list;
+    mutable generated_test : Test.test option;
   }
   and complement_root = {
     from_base : which_process; (* the saturated base from which the completion come from *)
-    from_statement : statement; (* for debugging *)
-    initial_statement : raw_statement ; (* the unreach or identity from which the completion is issued: g *) 
+    from_statement : statement; (* the unreach or identity test from which the completion is issued*)
+    initial_statement : raw_statement ; (* from_statement.st *) 
     hash_initial_statement : hash_test ; (* the hash of the initial_statement *) 
     mutable directory : (((hash_completion * completion) list) ref) Dag.t ; (* For each selected missing action, the list of completions so far, to avoid duplicates *)
   } 
@@ -109,7 +109,7 @@ module rec Run : sig
   score : int ;
   (* for complete runs *)
   mutable consequences : (statement_role * substitution * Test.test) list; (* the merged tests from this run, empty if this run is not part of the solution  *)
-  mutable completions : (substitution * completion) list; (* the completion from this run, empty if this run is not part of the solution  *)
+  mutable completions :  completion list; (* the completion from this run, empty if this run is not part of the solution  *)
 }
 and origin = 
   | Initial of statement 
@@ -144,8 +144,8 @@ struct
     missing_actions :  LocationSet.t; (* all the locations which are present on the initial statement but not on the runs *)
     selected_action : location; (*Among all missing locations the one to complete first *)
     root : complement_root;
-    mutable further_completions : (substitution * completion) list;
-    mutable generated_test : (substitution * Test.test) option;
+    mutable further_completions : completion list;
+    mutable generated_test : Test.test option;
   }
   and complement_root = {
     from_base : which_process; (* the saturated base from which the completion come from *)
@@ -182,7 +182,7 @@ struct
   score : int ;
   (* for selected runs only: the list of merged tests from this run (consequences) and completions from this run (completions) *)
   mutable consequences : (statement_role * substitution * Test.test) list;
-  mutable completions : (substitution * completion) list;
+  mutable completions : completion list;
 }
   
 
@@ -527,7 +527,7 @@ let rec show_all_tests test =
           (Master,sigma,test) -> show_all_tests test
         | (Slave,sigma,test) -> Printf.printf (if !use_xml then "<slv><idtest>%d</idtest></slv>," else "*[%d]") test.id
         | _ -> assert false)  run.consequences;
-      List.iter (fun (sigma,c) -> Printf.printf (if !use_xml then "[+<idcomp>%d</idcomp>+]," else "+[%d]") c.id_c)  run.completions);      
+      List.iter (fun c -> Printf.printf (if !use_xml then "[+<idcomp>%d</idcomp>+]," else "+[%d]") c.id_c)  run.completions);      
     if !use_xml then Printf.printf "</solution>"
   ) test.solutions_done ;
     if !use_xml then Printf.printf "</testnode>\n" else Printf.printf "end of (%d)\n" test.id;
@@ -542,9 +542,9 @@ let rec show_completion_tree completion =
   then
     match  completion.generated_test with
     | None -> () (*Printf.printf "X"*)
-    | Some (_,t) -> Printf.printf (if !use_xml then "[*<idtest>%d</idtest>*] " else "%d ") t.id
+    | Some (t) -> Printf.printf (if !use_xml then "[*<idtest>%d</idtest>*] " else "%d ") t.id
   else
-    List.iter (fun (_,c) -> show_completion_tree c) completion.further_completions;
+    List.iter (fun c -> show_completion_tree c) completion.further_completions;
   Printf.printf (if !use_xml then "</comptree>" else "\n")
   )
   
@@ -566,6 +566,11 @@ let other name =
   match name with 
   | P -> Q
   | Q -> P
+  
+let base_of_name name =
+  match name with 
+  | P -> bijection.satP
+  | Q -> bijection.satQ
   
 let reorder_int_set s =
   IntegerSet.fold (fun e set -> IntegerSet.add e s) s IntegerSet.empty
