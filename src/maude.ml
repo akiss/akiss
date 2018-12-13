@@ -25,7 +25,7 @@ let rec print_maude_term t sigma =
     then 
       Parser_functions.nonces := (n.n, n) :: !Parser_functions.nonces;   
     Format.sprintf "nonce%d " n.n  
- | Fun({id=Input(l)},[]) -> Format.sprintf "i[%d]" l.p  
+ | Fun({id=InputVar(l)},[]) -> Format.sprintf "i[%d]" l.p  
  | Fun({id=Frame(l)},[]) -> Format.sprintf "w[%d]" l.p
  | Var(id) -> (
     match sigma with 

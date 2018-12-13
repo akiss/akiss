@@ -26,23 +26,6 @@ let about_location = ref false
 let use_xml = ref false
 let about_bench = ref false
 
-(*let verboseOutput a =
-  if !verbose_output || about_verbose then
-    Format.printf a
-  else
-    Format.ifprintf Format.std_formatter a
-
-let debugOutput a =
-  if !debug_output || !about_debug then
-    Format.printf a
-  else
-    Format.ifprintf Format.std_formatter a*)
-
-(* let normalOutput a =
-  if !verbose_output || !debug_output then
-    Format.ifprintf Format.std_formatter a
-  else
-    Format.printf a *)
 
 (* TODO use the standard library:
  *  - List.rev is already tailrec
@@ -55,11 +38,11 @@ let trmap f l = List.rev (List.rev_map f l)
   * tail-recursive) and the following union function is preferable.
   * It does not preserve the order. *)
 
-let rec union acc = function
+(*let rec union acc = function
   | [] -> acc
   | traces :: l -> union (List.rev_append traces acc) l
 
-let union l = union [] l
+let union l = union [] l*)
 
 (** Return a list without duplicates, for structural equality. *)
 let unique =
@@ -73,11 +56,11 @@ let unique =
 
 (** [create_list elem no]
   * creates a list containing [no] times the element [elem]. *)
-let rec create_list elem no = 
+(*let rec create_list elem no = 
   if no = 0 then
     []
   else
-    elem :: (create_list elem (no - 1))
+    elem :: (create_list elem (no - 1))*)
 
 (** [create_consecutive start no] returns the list
   * [start;start+1;...;start+no-1] of length [no]. *)

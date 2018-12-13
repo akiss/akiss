@@ -367,7 +367,7 @@ let transpose_inputs sigma (recipes : Inputs.inputs) (run : partial_run) : Input
 let rec transpose_recipe sigma recipe corresp =
   match recipe with
     | Fun({ id=Frame(l)}, []) ->  Fun({ id=Frame(Bijection.loc_p_to_q l corresp);has_variables=false }, []) 
-    | Fun({ id=Input(l)}, []) -> assert false
+    | Fun({ id=InputVar(l)}, []) -> assert false
     | Fun(f, args) -> Fun(f, List.map (fun x -> transpose_recipe sigma x corresp) args)
     | Var(x) -> Rewriting.apply_subst_term recipe sigma (* Does sigma do the transposition? *)
   

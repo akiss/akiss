@@ -1,10 +1,12 @@
 open Types
 (* Types *)
 
+(*
 type setting =
   | Classic
   | Private
   | Eavesdrop
+*)
 
 type ident = string * int
 
@@ -50,7 +52,7 @@ type extended2_process =
   | ExtendedProcess of ident * ident list * extended_process
 
 type declaration =
-  | Setting of setting * int
+(*  | Setting of setting * int *)
   | FuncDecl of functions list
   | ReducList of ( temp_term * temp_term ) list
   | FreeName of ident list
@@ -69,7 +71,6 @@ type env_elt =
   | Var of relative_location 
   | XVar of varId
   | Name of relative_nonce 
-(*  | PublicName of Term.symbol *)
   | Func of funId 
   | Chan of chanId
   | Proc of procId

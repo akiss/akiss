@@ -93,7 +93,13 @@ let rec null_statement = {
   master_parent = null_statement; slave_parent = null_statement; test_parent = null_statement}
 
 type i_o = In | Out
-type chankey = { c : chanId ; io : i_o ; ph : int}
+
+type chankey = { 
+  c : chanId ; 
+  io : i_o ; 
+  ph : int
+}
+
 let switch_io = function In -> Out | Out -> In
 
 module ChanMap = Map.Make(struct

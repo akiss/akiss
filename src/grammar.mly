@@ -37,8 +37,8 @@ open Parser_functions
 /****** Main entry *********/
 
 main:
-  | option_setting
-      { Setting ($1,(Parsing.symbol_start_pos ()).Lexing.pos_lnum) }
+  /*| option_setting
+      { Setting ($1,(Parsing.symbol_start_pos ()).Lexing.pos_lnum) }*/
   | FUN function_symbol_declaration_list
       { FuncDecl $2 }
   | rewrite_rule_list
@@ -59,14 +59,14 @@ main:
       { error_message (Parsing.symbol_start_pos ()).Lexing.pos_lnum "Syntax Error :( " }
 
 /****** Option setting *******/
-
+/******
 option_setting:
   | SET SEMANTICS EQ CLASSIC DOT
       { Classic }
   | SET SEMANTICS EQ PRIVATE DOT
       { Private }
   | SET SEMANTICS EQ EAVESDROP DOT
-      { Eavesdrop }
+      { Eavesdrop }*******/
 
 /****** Function symbol declaration *******/
 function_symbol_declaration_list:

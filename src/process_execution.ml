@@ -9,7 +9,7 @@ open Bijection.Test
 
 let rec apply_subst_inputs term frame =
   match term with
-    | Fun({ id=Input(l)}, []) -> Inputs.get l frame
+    | Fun({ id=InputVar(l)}, []) -> Inputs.get l frame
     | Fun(f, args) -> Fun(f, List.map (fun x -> apply_subst_inputs x frame) args)
     | Var(x) -> Var(x)
 
@@ -190,7 +190,7 @@ let rec apply_frame recipe (prun : partial_run) =
        try(
   match recipe with
     | Fun({ id=Frame(l)}, []) -> Inputs.get (Bijection.loc_p_to_q l prun.corresp) prun.frame
-    | Fun({ id=Input(l)}, []) -> Inputs.get l prun.frame
+    | Fun({ id=InputVar(l)}, []) -> Inputs.get l prun.frame
     | Fun(f, args) -> Fun(f, List.map (fun x -> apply_frame x prun) args)
     | Var(x) -> try 
         let ba = List.find (fun ba -> ba.recipe = Var(x) ) prun.test.statement.body in 

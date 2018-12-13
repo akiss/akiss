@@ -24,7 +24,6 @@ type action =
   | OutputA of location * term (* auxiliary output for seed generation *)
   | Test of term * term
   | TestInequal of term * term
-;;
 
 type process =
   | EmptyP
@@ -109,7 +108,7 @@ let rec convert_term pr locations nonces arguments term =
     Fun({id=Projection(i,n);has_variables=true},
       [convert_term pr locations nonces arguments args])
   | N((rel_n,_)) -> Fun({id=Nonce(nonces.(rel_n));has_variables=false},[])
-  | V((rel_loc,_)) -> Fun({id=Input(locations.(rel_loc));has_variables=true},[])
+  | V((rel_loc,_)) -> Fun({id=InputVar(locations.(rel_loc));has_variables=true},[])
   | A(th) -> arguments.(count_type_nb !(pr.types.(th.th)) pr th.th)
   | C(_) -> assert false
   
@@ -239,7 +238,7 @@ let expand_call loc copy (procId : procId) args chans=
 
 let rec repl_hidden_loc loc term t =
    match t with
-   | Fun({id=Input(l)},[]) -> if l = loc then term else t
+   | Fun({id=InputVar(l)},[]) -> if l = loc then term else t
    | Fun(f,args) -> Fun(f,List.map (repl_hidden_loc loc term) args)
    | _ -> t
    

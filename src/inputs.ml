@@ -4,9 +4,14 @@ open Term
 open Util
 
 exception Incompatible_choices
-type inputs = { i : term Dag.t ;
+
+type inputs = { 
+  i : term Dag.t ;
 }
-type choices = { c : int Dag.t}
+
+type choices = {
+  c : int Dag.t
+}
 
 let show_inputs inputs =
   if Dag.is_empty inputs.i then "" 
@@ -185,7 +190,7 @@ let contains input1 input2 =
     | (None,None) -> None) input1.i input2.i in
   Dag.is_empty r
 
-let debug input1 input2 =
+(*let debug input1 input2 =
  let r = Dag.merge (fun loc i1 i2 -> 
     match (i1,i2) with
     | (Some i1, Some i2) -> if i1 = i2 then None else Some loc
@@ -194,4 +199,4 @@ let debug input1 input2 =
     | (None,None) -> None) input1.i input2.i in
     try
   let (a,b) = Dag.choose r in a.p  
-  with Not_found -> 0
+  with Not_found -> 0*)

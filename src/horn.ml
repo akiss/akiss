@@ -340,8 +340,8 @@ exception Unsound_Statement
 let rec eval_recipe choices inputs solved_atom term =
   match term with
   | Fun({id=Frame({io = Output(_,t)})},[]) -> eval_recipe choices inputs solved_atom t 
-  | Fun({id=Input({observable = Public} as l)},[]) -> Inputs.get l inputs
-  | Fun({id=Input({observable = Hidden} as l)},[]) -> 
+  | Fun({id=InputVar({observable = Public} as l)},[]) -> Inputs.get l inputs
+  | Fun({id=InputVar({observable = Hidden} as l)},[]) -> 
     eval_recipe choices inputs solved_atom (
       match (Inputs.get_output_of_input choices l).io with 
       Output(_,t)-> t 
@@ -736,7 +736,7 @@ let equation sigma choices dag fa fb =
 (** {1 Saturation procedure} *)
 let rec concretize inputs term =
    match term with
-   | Fun({id=Input(l)},[]) -> Inputs.get l inputs
+   | Fun({id=InputVar(l)},[]) -> Inputs.get l inputs
    | Fun(f,args) -> Fun(f,List.map (concretize inputs) args)
    | _ -> term  
 

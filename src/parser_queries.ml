@@ -49,4 +49,3 @@ let parse_one_declaration = function
       if !about_seed then begin Printf.printf "Rewrite rules (%d):\n" (List.length !rewrite_rules);
          List.iter (fun r -> Printf.printf "- %s\n" (show_rewrite_rule r)) !rewrite_rules end;
       parse_query !environment line query 
-  | _ -> failwith "todo"
