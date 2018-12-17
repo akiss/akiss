@@ -52,7 +52,7 @@ let make_substitution_variant pairlst =
 %token <int * int> Proj
 %token <Types.varId> Var
 %token <int> Int
-%token Equals Dot Slash Comma Colon Arrow
+%token Equals Dot Wedge Comma Colon Arrow
 %token EqualUnify EqualMatch
 %token LeftP RightP
 %token Zero
@@ -108,12 +108,16 @@ main:
   }
 
      acunifierPreamble:
- | Unify In Identifier Colon term EqualUnify term Dot
+ | Unify In Identifier Colon setequationsPreamble Dot
  Decisiontimeline{ 
     if debug then Printf.printf "acunifierPreamble ";
     current_binder := ref (Extra (List.length !maude_current_sigma.e));
     current_max_var := 0;
   }
+  
+  setequationsPreamble:
+ | term EqualUnify term {}
+ | term EqualUnify term Wedge setequationsPreamble {}
      
      acunifierList:
  | No Unifier Dot { [] }

@@ -1,0 +1,47 @@
+(* public communication channel *)
+chan c, chMS, chSN.
+private chan read_ms1,write_ms1,read_sn1,write_sn1,read_ms2,write_ms2,read_sn2,write_sn2.
+
+(* public identity of MS *)
+free macfail, syncfail,reject,ok,hop.
+
+
+(* UMTS AKA protocol specific mac and key generation functions *)
+fun f0/2.
+fun f1/3.
+fun f2/2.
+fun f5/2.
+fun succ/1.
+
+
+let AKA_MS(ch,k) =
+  in(ch, x);
+  let (xrand, msg, xmac) = x in
+  let xsqn = k + msg in
+  let mac = f1(k, xrand, xsqn) in
+  out(ch,hop);
+  if xmac = mac then
+  out(ch,ok).
+
+let CELL_MS(read_ms,write_ms,v) =
+  out(read_ms,v);
+  in(write_ms,x);
+  CELL_MS(read_ms,write_ms,x).
+  
+let AKA_SN(read_sn,write_sn,ch,k,osqn)=
+    new rand;
+    let mac = f1(k, rand, osqn) in
+    out(ch, (rand,k + osqn, mac )).
+      
+let single = 
+  new k;
+  new rand;
+  new osqn;
+  let mac = f1(k, rand, osqn) in
+  out(chSN, (rand,k + osqn, mac ));
+  AKA_MS(chMS,k).
+ 
+
+
+(*query trace_equiv(Process1,Process2).*)
+query saturate single.

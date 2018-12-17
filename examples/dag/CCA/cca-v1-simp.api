@@ -1,0 +1,51 @@
+// API IBM
+
+
+fun enc/2, dec/2.
+free data, imp, exp, kp, pin, kp3, pan.
+chan C.
+
+reduc dec(enc(X, Y), Y) -> X.
+
+let Encipher(km) = 
+  in(C,X1);
+  in(C,X2);
+  out(C,enc(X1,dec(X2,km + data))).
+
+let KeyPartImport3(km,cond) = 
+  in(C,Z1);
+  in(C,Z2);
+  in(C,Z3);
+  out(C,enc(Z1 + dec(Z3, km + Z2 + kp),  km + Z2));
+  in(C,Y1);
+  in(C,Y2);
+  in(C,Y3);
+  out(C,enc(dec(Y1, Y2 + dec(Y3, km + imp)), km + Y2));
+  in(C,X);
+  if X = cond
+  then in(C,Z).
+
+let P1 =  
+  new km ;
+  new kp1;
+  new kp2;
+  new pdk ;
+  let Xp = enc(kp1 + kp2, km + imp + kp) in 
+  out(C, Xp);
+  let Xkek = kp1 + kp2 + kp3 in 
+  out(C, enc(pdk, Xkek + pin));
+  KeyPartImport3(km,enc(pan,pdk)).
+
+let P2=  
+  new km ;
+  new kp1;
+  new kp2;
+  new pdk ;
+  let Xp = enc(kp1 + kp2, km + imp + kp) in 
+  out(C, Xp);
+  let Xkek = kp1 + kp2 + kp3 in
+  out(C, enc(pdk, Xkek + pin));
+  new w;
+  KeyPartImport3(km,w).
+
+query trace_equiv( P1 , P2).

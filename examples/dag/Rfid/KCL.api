@@ -1,0 +1,54 @@
+// RFID protocol KCL07
+
+
+fun h/2.
+chan C, CT, CR.
+
+//  Alice-Bob notation
+//   R --> T: r1
+//   T --> R: <idA+r2, h(r1,kA)+r2>
+
+
+
+let Treader(idA,kA,idB,kB) = 
+  new r3;
+  out(CR,r3);
+  in(CR,Z);
+  let (Z1,Z2) = Z in (
+  if Z2 + Z1 = h(r3,kA)+idA 
+  then 
+    out(CR,0) +
+  if Z2 + Z1 = h(r3,kB)+idB
+  then 
+    out(CR,0)).
+
+let Ttag(idA,kA) = 
+  in(CT,X);
+  new r4;
+  out(CT,(idA+r4 , h(X,kA)+r4)).
+
+let Psame = 
+  new idA;
+  new idB ;
+  new kA;
+  new kB;
+  new r1;
+  new r2 ;
+  out(C,r1);
+  out(C,(idA + r2 , h(r1,kA) + r2));
+  (Ttag(idA,kA) | Treader(idA,kA,idB,kB)).
+
+let Pdiff = 
+  new idA;
+  new idB ;
+  new kA;
+  new kB;
+  new r1;
+  new r2;
+  out(C,r1);
+  out(C,(idA + r2 , h(r1,kA) + r2));
+  (Ttag(idB,kB) | Treader(idA,kA,idB,kB)).
+
+
+
+query trace_equiv(Psame,Pdiff).

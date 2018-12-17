@@ -1,0 +1,69 @@
+// Nonce protocol as decribed in Gong's paper (1993)
+// Protecting Poorly Chosen Secrets from Guessing Attacks (page 11)
+
+// A -> S: A, B
+// S -> A: A, B, ns
+// A -> B: {A, B, na1, na2, ca, {ns}Ka}Ks, ns, ra
+// B -> S: {A, B, na1, na2, ca, {ns}Ka}Ks,  {B, A, nb1, nb2, cb, {ns}Kb}Ks
+// S -> B: {na1, k + na2}Ka,  {nb1, k + nb2}Kb
+// B -> A: {na1, k + na2}Ka, {f1(ra),rb}k
+// A -> B: {f2(rb)}k
+
+
+
+fun  senc/2, sdec/2, f1/1, f2/1,aenc/2, adec/2, pk/1.
+free A, B, ns.
+chan CA, CB, CS.
+
+reduc adec(aenc(X,pk(Y)),Y) -> X.
+reduc senc(sdec(X,Y),Y) -> X.
+reduc sdec(senc(X,Y),Y) -> X.
+
+// Role A slightly simplified
+
+let PA(pwA,sks) =  
+  in(CA,X1);
+  new ra;
+  new na1;
+  new na2;
+  new ca;
+  out(CA,(aenc((A,B,na1,na2,ca,senc(X1,pwA)),pk(sks)),ra));
+  in(CA, X);
+  let (X2,X3) = X in 
+  let (=na1,Xl) = sdec(X2,pwA) in
+  let Xk = Xl + na2 in 
+  let (=f1(ra),Xrb) = sdec(X3,Xk) in 
+  out(CA,senc(f2(Xrb),Xk)).
+
+
+// Role B slightly simplified
+
+let PB(pwB,sks) = 
+  in(CB,Y1);
+  new nb1;
+  new nb2;
+  new rb;
+  new cb;
+  out(CB,aenc((B,A,nb1,nb2,cb,senc(Y1,pwB)),pk(sks)));
+  in(CB,Y);
+  let (Y2,Y3) = Y in 
+  let (=nb1,Yl) = sdec(Y2,pwB) in
+  let Yk = Yl + nb2 in 
+  out(CB, senc((f1(Y3),rb), Yk)).
+      
+// Role S slightly simplified
+let S(sks,pwA,pwB)= 
+  in(CS,Z);
+  let (Z1,Z2) = Z in
+  let (=A, =B, Zna1, Zna2,Zcaa,=senc(ns,pwA)) = adec(Z1,sks) in 
+  let (=B, =A, Znb1, Znb2,Zcab,=senc(ns,pwB)) = adec(Z2,sks) in 
+  new k;
+  out(CS, (senc((Zna1,k+Zna2),pwA), senc((Znb1,k+Znb2),pwB))).
+
+let P(pwA,o) = new pwB; new sks ;out(CS,pk(sks)); (PA(pwA,sks) | PB(pwB,sks) | S(sks,pwA,pwB) | phase 2;out(CS,o)).
+
+let PwA = new pwA; P(pwA,pwA).
+
+let Pfresh = new pwA;new o; P(pwA,o).
+
+query trace_incl(PwA,Pfresh).

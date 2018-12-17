@@ -61,7 +61,7 @@ let letters = letter (('.'| letter | digit) * )
   | digits "ms" { Ms }
   | "0" | "zero" { Zero }
   | "-->" {Arrow}
-  | "/" { Slash }
+  | "/\\" { Wedge }
   | "+" { Plus }
   | "," { Comma }
   | ":" { Colon }

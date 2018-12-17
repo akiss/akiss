@@ -51,7 +51,7 @@ let statement_to_completion process_name (statement : statement) (st : raw_state
   (* This function canonize statements by replacing several recipes for the same term by one recipe
   and removing predicates in the body with a recipe in a later location
   The function return the substitution which has been used and the new statement *)
-let same_term_same_recipe st = Horn.simplify_statement st (*
+(*let same_term_same_recipe st = Horn.simplify_statement st 
   (*let sigma_repl = Array.make st.nbvars None in
   let sigma = (sigma_repl, Array.make 0 None) in*)
   st.binder := Master;
@@ -294,6 +294,7 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
           else (
             match Inputs.csm test_merge_init.binder st.st.inputs test_merge_init.inputs, Inputs.csm test_merge_init.binder st.st.recipes test_merge_init.recipes with
             | [subst_inputs],[subst_recipes] -> (Rewriting.compose_with_subst_lst rho (subst_inputs @ subst_recipes),st.st)::lst
+            | _ -> Printf.eprintf "This unification case has not been implemented yet." ; assert false
              )
           ) lst kb.temporary_merge_test_result;
         )
@@ -734,7 +735,7 @@ let rec compute_new_completions process_name  =
 Opti: when children are identical with same world merge them with the reach parent to reduce number of tests *)  
 let rec statements_to_tests t c process_name (statement : statement) otherProcess equalities =
   (* Printf.printf "Getting test (%d) %s %s \n%!" statement.id (if t then "oui" else "non") (show_raw_statement statement.st); *)
-  let sigma,raw_statement' = same_term_same_recipe statement.st in
+  let sigma,raw_statement' = Horn.simplify_statement statement.st in
   (*Printf.printf "simplified: %s\n" (show_raw_statement raw_statement');*)
   let equalities = 
     match statement.st.head with
@@ -775,7 +776,7 @@ let rec statements_to_tests t c process_name (statement : statement) otherProces
     
 
 let unreach_to_completion process_name base = 
-  List.iter (fun st -> let _, st' = same_term_same_recipe st.st in 
+  List.iter (fun st -> let _, st' = Horn.simplify_statement st.st in 
     let compl = statement_to_completion process_name st (negate_statement st') in
     ignore (register_completion compl) ;
     bijection.initial_completions <- compl :: bijection.initial_completions

@@ -1,0 +1,107 @@
+(* public communication channel *)
+chan c, chMS, chSN.
+private chan read_ms1,write_ms1,read_sn1,write_sn1,read_ms2,write_ms2,read_sn2,write_sn2.
+
+(* public identity of MS *)
+free imsi_wtn, mac_fail, sync_fail,reject.
+
+
+(* UMTS AKA protocol specific mac and key generation functions *)
+fun f0/2.
+fun f1/2.
+fun f2/2.
+fun f3/2.
+fun f4/2.
+fun f5/2.
+fun succ/1.
+
+(* symmetric key encryption function *)
+fun senc/3.
+fun sdec/2.
+sdec(k, senc(k, r, m)) -> m.
+
+(* public key generation function *)
+fun pub/1.
+
+(* public key encryption function *)
+fun aenc/3.
+fun adec/2.
+adec(k, aenc(pub(k), r, m)) -> m.
+
+let AKA_MS(ch,read_ms,write_ms,k) =
+  in(read_ms,osqn);  
+  out(write_ms,osqn);  
+  new r_ms;
+  in(ch, x);
+  let (xrand, xautn) = x in
+  let (msg, xmac) = xautn in
+  let ak = f5(k, xrand) in
+  let xsqn = sdec(ak, msg) in
+  let mac = f1(k, (xrand, xsqn)) in
+  if xmac != mac 
+  then 
+    out(ch, mac_fail)
+  else (
+    if xsqn = osqn
+    then 
+      out(ch, sync_fail)
+    else (
+      in(read_ms,z);
+      out(write_ms,xsqn);
+      let res = f2(k, xrand) in
+      out(ch, res)
+    ) 
+  ).
+
+let CELL_MS(read_ms,write_ms,v) =
+  out(read_ms,v);
+  in(write_ms,x);
+  CELL_MS(read_ms,write_ms,x).
+  
+let AKA_SN(read_sn,write_sn,ch,k)=
+    in(read_sn,osqn);  
+    out(read_sn,osqn);  
+    new rand;
+    new r_sn;
+    new s;
+    new r;
+    let mac = f1(k, (rand, osqn)) in
+    let res = f2(k, rand) in
+    let ak = f5(k, rand) in
+    let autn = (senc(ak, r_sn, osqn), mac) in
+    out(ch, (rand, autn));
+    in(ch, xres);
+    if xres = res
+    then (
+      in(read_sn,z);
+      out(write_sn,succ(z))
+    )
+    else out(ch, reject).
+    
+let CELL_SN(read_sn,write_sn,v) =
+  out(read_sn,v);
+  in(write_sn,x);
+  CELL_SN(read_sn,write_sn,x).
+
+
+let single_session(read_ms,write_ms,read_sn,write_sn) =
+  new k;
+  new osqn;
+  ( CELL_MS(read_ms,write_ms,osqn) | CELL_SN(read_sn,write_sn,osqn) 
+  | AKA_MS(chMS,read_ms,write_ms,k) | AKA_SN(read_sn,write_sn,chSN,k)).
+  
+let double_session =
+  new k;
+  new osqn;
+  ( CELL_MS(read_ms1,write_ms1,osqn) | CELL_SN(read_sn1,write_sn1,osqn) 
+  | AKA_MS(chMS,read_ms1,write_ms1,k) | AKA_SN(read_sn1,write_sn1,chSN,k)).
+  
+
+let Process1 =
+   !^2 single_session(read_ms1,write_ms1,read_sn1,write_sn1). 
+
+let Process2 =
+  double_session.
+
+
+query trace_equiv(Process1,Process2).

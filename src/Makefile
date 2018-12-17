@@ -1,4 +1,3 @@
-HAS_NPROC := $(shell if ocamlfind query nproc-nonproc >/dev/null 2>&1; then echo yes; fi)
 
 ML =  types.ml parser_functions.ml grammar.ml lexer.ml \
 	util.ml dag.ml term.ml  \
@@ -6,9 +5,9 @@ ML =  types.ml parser_functions.ml grammar.ml lexer.ml \
 	 rewriting.ml inputs.ml \
 	  process.ml base.ml  horn.ml \
 	 bijection.ml process_execution.ml tests.ml\
-	 parser_queries.ml theory.ml
+	 parser_queries.ml main.ml
 MLI = $(wildcard $(ML:.ml=.mli)) grammar.mli parsemaude.mli
-OCAMLC = ocamlfind ocamlopt -g -annot -package str,unix $(if $(HAS_NPROC),-package nproc)
+OCAMLC = ocamlfind ocamlopt -g -annot -package str,unix
 OCAMLDEP = ocamldep -native
 CMA = cmxa
 CMO = cmx
@@ -17,14 +16,7 @@ OBJS = $(ML:.ml=.$(CMO))
 akiss: $(OBJS)
 	$(OCAMLC) -linkpkg -o akiss $(OBJS)
 
-ifeq ($(HAS_NPROC),)
-lwt_compat.ml: lwt_compat_pure.ml
-	cp $< $@
-main.$(CMO): lwt_compat.$(CMO)
-else
-lwt_compat.ml:
-	echo > $@
-endif
+
 
 %.$(CMO): %.ml
 	$(OCAMLC) -c $<

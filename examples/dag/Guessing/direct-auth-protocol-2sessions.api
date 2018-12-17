@@ -1,0 +1,75 @@
+// Direct Authentication Protocol as decribed in Gong's paper (1993)
+// Protecting Poorly Chosen Secrets from Guessing Attacks (page 13)
+
+// A -> B: ra, {pubA}pw
+// B -> A: {B, A, nb1, nb2, cb, {ra}pw}pubA
+// A -> B: {nb1, k + nb2}pw
+// B -> A: {f1(ra),rb}k
+// A -> B: {f2(rb)}k
+
+// pw is a poorly choosen secret between A and B
+
+
+fun  senc/2, sdec/2, f1/1, f2/1, aenc/2, adec/2, pk/1.
+free A,B.
+private pw, nb1,nb2, ra, rb, pfresh, ska, cb, k;
+chan C,CA, CB, CA2, CB2.
+
+reduc adec(aenc(X,pk(Y)),Y) -> X.
+reduc senc(sdec(X,Y),Y) -> X.
+reduc sdec(senc(X,Y),Y) -> X.
+
+
+// Role A 
+
+let A(k,pw,skA) =  
+  new ra;
+  out(CA,pair(ra,senc(pk(ska),pw)));
+  in(CA, X0);
+  let (=B,(=A,(X3,(X4,(X5,=senc(ra,pw))))))) = adec(X0,ska) in 
+  out(CA, senc(pair(X3,k + X4),pw));
+  in(CA, X7);
+  let (=f1(ra),X8) = sdec(X7,k) in
+  out(CA, senc(f2(X8)),k).
+
+
+// Role B
+
+let B(k,pw,nb1,nb2) = 
+  in(CB,Y);
+  let (Y1,Y2) = Y in 
+  let Ypub = sdec(Y2,pw) in
+  out(CB,aenc((B,(A,(nb1,(nb2,(cb,senc(Yra,pw)))))),Ypub));
+  in(CB,Y3);
+  let (=nb1,Y32) = sdec(Y3,pw) in
+  let Yk = Y32 + nb2 in 
+  out(CB, senc(pair(f1(Yra),rb), Yk));
+  in(CB,Y4);
+  if Y4 = senc(f2(rb),k) then 0.
+	
+// Role A 
+
+AA =  out(CA2,pair(ra,senc(pk(ska),pw))).
+          in(CA2, XX0). let XX = adec(XX0,ska) in [fst(XX) = B]. [fst(snd(XX)) = A].
+	  let XX3 = fst(snd(snd(XX))) in let XX4 = fst(snd(snd(snd(XX)))) in let XX5 = fst(snd(snd(snd(snd(XX))))) in let XX6 = fst(snd(snd(snd(snd(snd(XX)))))) in
+	  [XX6 = senc(ra,pw)].
+          out(CA2, senc(pair(XX3,k + XX4),pw)). in(CA2, XX7). [fst(sdec(XX7,k)) = f1(ra)]. out(CA2, senc(f2(snd(sdec(XX7,k))),k)).0;
+
+
+// Role B
+
+BB = in(CB2,YY).let YYra = fst(YY) in  let YY2 = snd(YY) in let YYpub = sdec(YY2,pw) in
+        out(CB2,aenc(pair(B,pair(A,pair(nb1,pair(nb2,pair(cb,senc(YYra,pw)))))),YYpub)).
+        in(CB2,YY3) .  [fst(sdec(YY3,pw)) = nb1].
+        let YYk = snd(sdec(YY3,pw)) + nb2 in out(CB2, senc(pair(f1(YYra),rb), YYk)).
+	in(CB2,YY4).[YY4 = senc(f2(rb),k)].0;
+	
+
+
+P = A || B || BB || AA ;
+
+Pw = (P   >> out(C,pw));
+
+Pfresh = (P  >> out(C,pfresh));
+
+includedct? Pw in Pfresh;

@@ -1,0 +1,67 @@
+// RFID protocol YPL'05
+
+
+fun h/1.
+chan C, CR, CT.
+
+// We model RFID tags that authenticate with a reader
+// in the following way:
+
+//  Alice-Bob notation
+// Reader and Tag know k1,k2,k and the values k1 and k2 are updated
+// after a successfull session.
+//   R --> T: r1
+//   T --> R: h(k1 + r1 + k)
+//   R --> T:  h(k2)
+//   both update their keys k1,k2 as follows:
+//   new k1 = k1 + h(k2)
+//   new k2 = k2 + h(k1 + r1 + k)
+
+// Note that in process TtagA we use "new kA1" and "new kA2" instead of kA1 and kA2 to model
+// the fact that the keys have been updated after the first session.
+
+
+let Treader(kA,kA1,kA2,kB,kB1,kB2,r1) = 
+  new r2;
+  out(CR,r2);
+  in(CR,Z);
+  (
+  (if Z = h(kA1+h(kA2)+r2+kA)
+  then 
+    out(CR,h(kA2+h(kA1+r1+kA))))
+  +
+  (if Z = h(kB1+r2+kB)
+  then 
+    out(CR,h(kB2)))).
+
+let Ttag(kA,kA1,kA2) = 
+  in(CT,X);
+  out(CT,h(kA1+X+kA)).
+
+let Psame = 
+  new kA;
+  new kA1;
+  new kA2;
+  new kB;
+  new kB1;
+  new kB2;
+  new r1;
+  out(C,r1);
+  out(C,h(kA1+r1+kA));
+  out(C,h(kA2));
+  (Ttag(kA,kA1 + h(kA2),kA2 + h(kA1 + r1 + kA)) | Treader(kA,kA1,kA2,kB,kB1,kB2,r1)).
+
+let Pdiff = 
+  new kA;
+  new kA1;
+  new kA2;
+  new kB;
+  new kB1;
+  new kB2;
+  new r1;
+  out(C,r1);
+  out(C,h(kA1+r1+kA));
+  out(C,h(kA2));
+  (Ttag(kB,kB1,kB2) | Treader(kA,kA1,kA2,kB,kB1,kB2,r1)).
+
+query trace_equiv(Psame,Pdiff).
