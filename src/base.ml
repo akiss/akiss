@@ -106,6 +106,8 @@ module ChanMap = Map.Make(struct
     type t = chankey
       let compare x y = compare x y
   end)
+  
+  
 
 type base = 
 { 
@@ -180,6 +182,20 @@ let show_raw_statement st =
     "(%d%s) %s <== %s \n       %s %s %s\n       %s\n" st.nbvars (show_binder !(st.binder)) (show_predicate st.head)(show_atom_list st.body)(show_inputs st.inputs)(show_dag st.dag)(show_choices st.choices)(show_inputs st.recipes) in 
   string ^ if not (check_binder_st st) then (st.binder := Rule;  " BINDER ERROR " ) else ""
   
+let show_chan_key chkey =
+   if !use_xml then 
+      Format.sprintf "<ckey>%s %s %d</ckey>\n" chkey.c.name (match chkey.io with In -> "in" | Out -> "out") chkey.ph
+    else
+      Format.sprintf "[%s]%s-%d" chkey.c.name (match chkey.io with In -> "in" | Out -> "out") chkey.ph
+  
+let show_chan_statements chmap =
+  ChanMap.fold ( fun key lst str -> str ^ "\n<chanset>" ^ (show_chan_key key) ^(List.fold_left (fun str (l,t,terms,st,pr) -> 
+    str ^
+    if !use_xml then 
+      Format.sprintf "<hidden>%d %s</hidden>\n" l.p (show_raw_statement st)
+    else
+      Format.sprintf "loc %d, %s\n" l.p (show_raw_statement st)
+  ) ": " lst) ^ "</chanset>") chmap ""
 
 let show_hash_test st =
   let string = 
@@ -215,7 +231,8 @@ let show_kb kb =
    "<base><deductions>"^(show_statement_list " " (kb.solved_deduction.children))
    ^"</deductions><tests>"^ (show_statement_list " " (kb.rid_solved.children))
    ^"</tests><unreachables>"^(show_statement_list " " (kb.unreachable_solved))
-   ^"</unreachables><unsolved>"^(show_statement_list " " (kb.not_solved.children))^"</unsolved></base>\n"  
+   ^"</unreachables><unsolved>"^(show_statement_list " " (kb.not_solved.children))
+   ^"</unsolved><hiddenchans>"^(show_chan_statements kb.hidden_chans)^"</hiddenchans></base>\n"  
   else
   (Format.sprintf 
     "Kb : \n - %d statements \n - %d solved deduction \n - %d solved reach and identities \n - %d solved unreach\n\nSolved deduction:\n" 
@@ -227,8 +244,8 @@ let show_kb kb =
   ^ (show_statement_list " " (kb.unreachable_solved))
   ^ "Not solved: \n"
   ^ (show_statement_list " " (kb.not_solved.children))
-(*  ^ "Todo solved: " ^ (show_statements_id kb.s_todo)
-  ^ "\nTodo not solved: " ^ (show_statements_id kb.ns_todo)*)
+  ^ "hidden chan statement: " ^ (show_chan_statements kb.hidden_chans)
+ (* ^ "\nTodo not solved: " ^ (show_statements_id kb.ns_todo)*)
   ^ "\n"
 
   

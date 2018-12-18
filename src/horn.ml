@@ -752,7 +752,7 @@ let rec hidden_chan_statement kb  (loc_input , term_input ,ineq_input,st_input,p
   else (
   st_input.binder := Slave;
   st_output.binder := Master;
-  if !about_seed then Printf.printf "Computing hiden_chan_statement\n -link %d <-> %d\n -input %s \n -output %s\n%!" loc_input.p loc_output.p (show_raw_statement st_input)(show_raw_statement st_output);
+  if !about_seed then Printf.printf "Computing hidden_chan_statement\n -link %d <-> %d\n -input %s \n -output %s\n%!" loc_input.p loc_output.p (show_raw_statement st_input)(show_raw_statement st_output);
   if st_input.binder = st_output.binder then (
     (*Printf.printf "same statement %s and %s\n" (show_raw_statement st_input)(show_raw_statement st_output);*)
     let sig_id = Rewriting.identity_subst st_output.nbvars in
@@ -929,7 +929,7 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
     | CallP(loc, j, procId, args, chans) -> 
       (*let args = Array.map (concretize st.inputs) args in*)
       for i = 1 to j do
-      (*Format.printf "Adding %d-th copy of %s \n%!" i procId.name;*)
+      (* if !about_seed then Format.printf "Adding %d-th copy of %s \n%!" i procId.name; *)
       let pr = expand_call loc i procId args chans in
       trace_statements kb ineqs solved_parent unsolved_parent test_parent pr {st with involved_copies = BangSet.add (loc,i) st.involved_copies}
       done

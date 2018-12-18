@@ -19,6 +19,9 @@ children{
 statement{
   color:blue;
 }
+chanset{
+  display:block;
+}
 nbvars{
   font-size:0.6em;
   display:inline-block;
