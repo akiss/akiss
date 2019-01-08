@@ -208,8 +208,12 @@ let rec convert_pr infos process parent phase=
   | PhaseB(i,p) -> processes_infos.max_phase <- max processes_infos.max_phase i ; convert_pr infos p parent i
   | _ -> assert false
   with Invalid_argument(_) -> Printf.eprintf "Error when converting %s \n" (show_bounded_process process);exit 6
+  
+let memoize_call : (location * int * term array * chanId array,process) Hashtbl.t=  Hashtbl.create 10
  
 let expand_call loc copy (procId : procId) args chans=
+  try Hashtbl.find memoize_call (loc,copy,args,chans)  
+  with Not_found -> (
   if  !about_seed then Format.printf "Expansion of %s (%s;%d)\nwhich is %s \n%!"
      (show_procId procId)(String.concat "," (Array.to_list(Array.map show_term args)))(Array.length chans) (show_bounded_process procId.process);
   let indexes =
@@ -231,7 +235,8 @@ let expand_call loc copy (procId : procId) args chans=
       (Array.make procId.nbloc null_location),
       (Array.make procId.nbnonces null_nonce), args, chans) 
       procId.process loc.parent loc.phase  in
-  process
+  Hashtbl.add memoize_call (loc,copy,args,chans) process;
+  process )
 (*  convert_pr (procId, indexes.first_location, indexes.first_nonce, 
     (Array.make procId.nbloc null_location),
     (Array.make procId.nbnonces null_nonce), args, chans) procId.process loc.parent *)

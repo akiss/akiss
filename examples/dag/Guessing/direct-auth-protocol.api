@@ -10,16 +10,13 @@
 // pw is a poorly choosen secret between A and B
 
 
-fun  fst/1,snd/1,pair/2,senc/2, sdec/2, f1/1, f2/1, aenc/2, adec/2, pk/1.
+fun  senc/2, sdec/2, f1/1, f2/1, aenc/2, adec/2, pk/1.
 free A,B.
 chan C,CA, CB, CA2, CB2,G.
 
 reduc adec(aenc(X,pk(Y)),Y) -> X.
 reduc senc(sdec(X,Y),Y) -> X.
 reduc sdec(senc(X,Y),Y) -> X.
-reduc fst(pair(X,Y)) -> X.
-reduc snd(pair(X,Y)) -> Y.
-reduc pair(fst(X),snd(Y)) -> pair(X,Y).
 
 
 // Role A 
@@ -30,10 +27,9 @@ let Alice(pw,skA) =
   in(CA, X0);
   let (=B,=A,nb1,nb2,cb,=senc(ra,pw)) = adec(X0,skA) in 
   new k;
-  out(CA, senc(pair(nb1,k + nb2),pw));
+  out(CA, senc((nb1,k + nb2),pw));
   in(CA, X1);
-  if f1(ra) = fst(X1) then
-  let rb = snd(sdec(X1,k)) in
+  let (=f1(ra),rb) = sdec(X1,k) in
   out(CA, senc(f2(rb),k)).
 
 
@@ -48,16 +44,16 @@ let Bob(pw) =
   new nb2;
   out(CB,aenc((B,A,nb1,nb2,cb,senc(ra,pw)),pubA));
   in(CB,Y3);
-  if nb1 = fst(sdec(Y3,pw)) then
-  let k = snd(sdec(Y3,pw)) + nb2 in 
+  let (=nb1,knb2) = sdec(Y3,pw) in
+  let k = knb2 + nb2 in 
   new rb;
-  out(CB, senc(pair(f1(ra),rb), k));
+  out(CB, senc((f1(ra),rb), k));
   in(CB,Y4);
   if Y4 = senc(f2(rb),k) then 0.
 
 
 
-let P(pw) = new skA;( !^2 Alice(pw,skA) | !^2 Bob(pw)) .
+let P(pw) = new skA;(  Alice(pw,skA) |  Bob(pw)) .
 
 let Pw = new pw; (P(pw) | phase 2; out(G,pw)).
 

@@ -148,8 +148,8 @@ let check_binder_st st =
 
 (** {3 Printing} *)
 let show_test_head h =
-  (EqualitiesSet.fold ( fun (r,r') str -> (if str = "" then "" else str ^ ", ") ^ (show_term r) ^ "=" ^ (show_term r') ) h.equalities "" ) 
-    ^  ";" ^ (EqualitiesSet.fold ( fun (r,r') str -> (if str = "" then "" else str ^ ", ") ^ (show_term r) ^ "!=" ^ (show_term r') ) h.disequalities "")
+  (EqualitiesSet.fold ( fun (r,r') str -> (if str = "" then "" else str ^ "  °  ") ^ (show_term r) ^ " = " ^ (show_term r') ) h.equalities "" ) 
+     ^ (EqualitiesSet.fold ( fun (r,r') str -> (if str = "" then " | " else str ^ ", ") ^ (show_term r) ^ " != " ^ (show_term r') ) h.disequalities "")
 
 let show_predicate p = 
  match p with
@@ -165,12 +165,12 @@ let show_predicate p =
 let show_body_atom a =
   (*let l = match a.loc with Some l -> string_of_int l.p | None -> "." in*)
   if !use_xml then 
-  "<pred>K<loc>"^(show_loc_set a.loc)^"</loc>(<rec>"^(show_term a.recipe)^"</rec>,<term>"^(show_term a.term)^"</term>)</pred>"
+  "<pred>"^(if a.marked then "K+" else "K")^"<loc>"^(show_loc_set a.loc)^"</loc>(<rec>"^(show_term a.recipe)^"</rec>,<term>"^(show_term a.term)^"</term>)</pred>"
   else
    (if a.marked then "KnOwS_" else "knows_")^(show_loc_set a.loc)^"("^(show_term a.recipe)^","^(show_term a.term)^")"
 
 
-let rec show_atom_list lst = Format.sprintf "%s" (String.concat ", " (trmap show_body_atom lst))
+let rec show_atom_list lst = List.fold_left (fun str b -> (if str = "" then "" else str ^ ",") ^ (show_body_atom b)) "" lst
 
 let show_raw_statement st =
   let string = 

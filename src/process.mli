@@ -134,6 +134,7 @@ val convert_pr :
   Types.procId * int * int * Types.location array * Types.nonceId array *
   Types.term array * Types.chanId array ->
   Types.bounded_process -> Types.location option -> int -> process
+val memoize_call: (Types.location * int * Types.term array * Types.chanId array,process) Hashtbl.t
 val expand_call :
   Types.location ->
   int -> Types.procId -> Types.term array -> Types.chanId array -> process

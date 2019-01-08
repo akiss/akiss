@@ -1,0 +1,60 @@
+// Gong protocol as described in the SPORE repository
+// Pa and Pb are passwords
+
+// 1.  	A -> B: A, B, Na
+// 2.  	B -> S: A, B, Na, Nb
+// 3.  	S -> B: Ns, f1(Ns,Nb,A,Pb)+K, f2(Ns,Nb,A,Pb)+Ha,f3(Ns,Nb,A,Pb)+Hb,g(K,Ha,Hb,Pb)
+// 4.  	B -> A: Ns, Hb
+// 5.  	A -> B: Na
+// K = f1(Ns,Na,B,Pa)
+// Ha = f2(Ns,Na,B,Pa)
+// Hb = f3(Ns,Na,B,Pa)
+
+
+fun f1/4,f2/4,f3/4,g/4.
+free A,B.
+chan C,G.
+
+
+// P =
+//  let X1 = pair(A,pair(B,nA)) in out(C,X1).
+//  let X2 = pair(A,pair(B,pair(nA,nB))) in out(C,X2).
+//  let Y1 = f1(nS,nB,A,pwB) in let Y2 = f2(nS,nB,A,pwB) in let Y3 = f3(nS,nB,A,pwB) in
+//  let Z1 = f1(nS,nA,B,pwA) in let Z2 = f2(nS,nA,B,pwA) in let Z3 = f3(nS,nA,B,pwA) in out(C,pair(nS,pair(Y1+Z1,pair(Y2+Z2,pair(Y3+Z3,g(Z1,Z2,Z3,pwB)))))).
+//  let X4 = pair(nS,Z3) in out(C,X4).
+//  let X5 = nA in out(C,X5).0;
+
+// below a simplified version - pairs are decomposed
+
+let P(pwA,pwB) = 
+  new nA;
+  new nB;
+  new nS;
+  out(C,nA);
+  out(C,nB);
+  out(C,nS);
+  let Y1 = f1(nS,nB,A,pwB) in 
+  let Y2 = f2(nS,nB,A,pwB) in 
+  let Y3 = f3(nS,nB,A,pwB) in
+  let Z1 = f1(nS,nA,B,pwA) in 
+  let Z2 = f2(nS,nA,B,pwA) in 
+  let Z3 = f3(nS,nA,B,pwA) in 
+  out(C,Y1+Z1);
+  out(C,Y2+Z2);
+  out(C,Y3+Z3);
+  out(C,g(Z1,Z2,Z3,pwB));
+  out(C,Z3).
+
+let PwA = 
+  new pwA;
+  new pwB ;
+  (P(pwA,pwB) | phase 2;out(G,pwA)).
+  
+let Pfresh = 
+  new pwA;
+  new pwB ;
+  new n;
+  (P(pwA,pwB) | phase 2;out(G,n)).
+
+query trace_incl(PwA,Pfresh).
+

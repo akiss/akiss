@@ -63,7 +63,7 @@ let S(sks,pwA,pwB)=
   new k;
   out(CS, (senc(pair(Zna1,k+Zna2),pwA), senc(pair(Znb1,k+Znb2),pwB))).
 
-let P(pwA,o) = new pwB; new sks ;out(CS,pk(sks)); (PA(pwA,sks) | PB(pwB,sks) | S(sks,pwA,pwB) | phase 2;out(CS,o)).
+let P(pwA,o) = new pwB; new sks ;out(CS,pk(sks)); (!^2 PA(pwA,sks) | !^2 PB(pwB,sks) | !^2 S(sks,pwA,pwB) | phase 2;out(CS,o)).
 
 let PwA = new pwA; P(pwA,pwA).
 

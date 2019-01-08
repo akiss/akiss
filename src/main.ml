@@ -56,6 +56,8 @@ let command_line_options_list = [
     "Bench compatible output");
    ("-xml", Arg.Set(use_xml),
     "Print info in xml format");
+   ("-all", Arg.Set(about_all_attacks),
+    "Find all attacks");
   (*"--extra", Arg.Int (fun i -> extra_output := i),
    "<n>  Display information <n>"*)
   (*("--output-dot", Arg.String (fun s -> dotfile := Some s),
@@ -81,6 +83,7 @@ let reset_global () =
   processes_infos.processes <- BangDag.empty;
   processes_infos.location_list <- [] ;
   processes_infos.max_phase <- 0;
+  Hashtbl.clear memoize_call;
   let nb = Base.new_base () in
   (*records = [];*)
   bijection.p <- Process.EmptyP ; 
@@ -102,6 +105,7 @@ let reset_global () =
   bijection.locs <- Dag.LocationSet.empty;
   bijection.initial_completions <- [];
   bijection.initial_tests <- [];
+  bijection.attacks <- [];
   (*htable = Hashtbl.create 5000 ;*)
   Hashtbl.reset bijection.htable_st 
 

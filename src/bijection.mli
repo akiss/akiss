@@ -366,6 +366,7 @@ type bijection = {
   htable_st : (Base.hash_test, Test.test) Hashtbl.t;
   mutable initial_tests : Test.test list;
   mutable initial_completions : Run.completion list;
+  mutable attacks : (Test.test * Run.solution) list;
 }
 val bijection : bijection
 val show_bijection : unit -> unit

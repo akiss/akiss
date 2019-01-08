@@ -485,7 +485,7 @@ and complete_set_of_identities head (*process_name*) old_test =
       List.iter 
         (fun sol ->
           match sol.selected_run with
-          | None -> assert false
+          | None -> assert !about_all_attacks
           | Some pr ->
           if not (check_identities pr head) then
           begin
@@ -595,7 +595,7 @@ and find_set_of_runs test =
   | sol :: queue -> 
     test.solutions_todo <- queue;
     match find_possible_run sol with
-    | None -> raise (Bijection.Attack(test,sol))
+    | None -> bijection.attacks <- (test,sol):: bijection.attacks; if not !about_all_attacks then raise (Attack(test,sol))
     | Some pr -> 
       test.solutions_done <- sol :: test.solutions_done; 
       if ! debug_tests then Printf.printf "Execution of test %d: %s \n" test.id (show_correspondance pr.corresp);
@@ -820,7 +820,7 @@ let equivalence both p q =
   let nb_tests_init = bijection.next_id in
   let nb_open = ref 0 in
   let time_start_tests = if !about_bench then Sys.time () else 0. in  
-  let time_ten_tests = ref time_start_tests in
+  let time_ten_tests = ref time_start_tests in (
   try
     while not (Tests.is_empty bijection.tests) do
       if !about_progress then Printf.printf "\n\n+++++ New iteration of the big loop +++++\n%!";
@@ -846,18 +846,33 @@ let equivalence both p q =
       Printf.printf "\n\n __Actualization of completions of Q (%d runs)__\n%!" (List.length bijection.runs_for_completions_P);
     compute_new_completions Q ; 
     done ;
+  with
+  | Attack(test,sol) -> ());
+  
     if !about_tests then show_all_tests ();
     if !about_completion then show_final_completions ();
-    if !about_bijection then Bijection.show_bijection();
+    if !about_bijection then show_bijection();
     if !about_bench then  Printf.printf 
-    " time:%6.2f tr equiv (%3d tests, mg:%3d, 10:%4.3f)%5d sat>%4d ded+%4d ri+%4d unr in%5.2f\n"  
-    (Sys.time() -. time) bijection.next_id (bijection.next_id - nb_tests_init)(!time_ten_tests -. time_start_tests)(nb_statements)  (count_statements bijection.satP.solved_deduction + count_statements bijection.satQ.solved_deduction)
-    (count_statements bijection.satP.rid_solved + count_statements bijection.satQ.rid_solved)
-    (List.length bijection.satP.unreachable_solved + List.length bijection.satQ.unreachable_solved)
-    (time_sat -. time)
-    else if both then Printf.printf "\nP and Q are trace equivalent. \n" else Printf.printf "\nTraces of P are included in Q. \n";
-    if ! use_xml then Printf.printf "</all>"
-  with
+      " time:%6.2f %s (%3d tests, mg:%3d, 10:%4.3f)%5d sat>%4d ded+%4d ri+%4d unr in%5.2f\n"  
+      (Sys.time() -. time) 
+      (if bijection.attacks = [] then if both then "tr equiv" else "tr incl " else " attack ")
+      bijection.next_id (bijection.next_id - nb_tests_init)(!time_ten_tests -. time_start_tests)(nb_statements)  (count_statements bijection.satP.solved_deduction + count_statements bijection.satQ.solved_deduction)
+      (count_statements bijection.satP.rid_solved + count_statements bijection.satQ.rid_solved)
+      (List.length bijection.satP.unreachable_solved + List.length bijection.satQ.unreachable_solved)
+      (time_sat -. time)
+    else (
+      if bijection.attacks = [] 
+      then (
+          if both 
+          then Printf.printf "\nP and Q are trace equivalent. \n" 
+          else Printf.printf "\nTraces of P are included in Q. \n")
+      else (
+        Printf.printf "\nAn attack has been found:\n";
+        List.iter (fun (test,sol) -> 
+          Printf.printf "\n-A witness test is %s \n with specific order %s \n" (show_test test)(show_dag sol.restricted_dag))
+        bijection.attacks ));
+      if ! use_xml then Printf.printf "</all>"
+ (* with
   | Attack(test,sol) -> begin 
     if !about_tests then show_all_tests ();
     if !about_completion then show_final_completions ();
@@ -872,4 +887,4 @@ let equivalence both p q =
     else Printf.printf "\nAn attack has been found for the test %s \n with specific order %s \n\nP and Q are not trace equivalent. \n" 
     (show_test test)(show_dag sol.restricted_dag);
     if ! use_xml then Printf.printf "</all>";
-    end
+    end *)

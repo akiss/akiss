@@ -463,6 +463,7 @@ type bijection = {
   (*Only to print infos *)
   mutable initial_tests : test list;
   mutable initial_completions : completion list;
+  mutable attacks : (test * solution) list;
 }
 
 let bijection = 
@@ -492,6 +493,7 @@ let bijection =
   htable_st = Hashtbl.create 5000 ;
   initial_tests = [];
   initial_completions = [];
+  attacks = [];
 }
 
 let show_bijection () =

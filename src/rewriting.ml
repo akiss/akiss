@@ -44,7 +44,7 @@ let rec recompose_term lst =
 	| t1 :: [] -> t1
 	| [] -> Fun({id = Zero; has_variables = false},[])
 
-(* given a sum split the sum in three parts: variables, constants functions, all functions *)
+(* given a sum split the sum in three parts: variables, all functions , constants functions*)
 let rec explode_term t sigma =
   let rec is_constant f =
     match f with

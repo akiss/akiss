@@ -40,7 +40,7 @@ let make_substitution_variant pairlst =
 %token Sharp
 %token EOF
 %token No More Unify Get Variants Reduce Match
-%token In
+%token In Empty Substitution
 %token Ms Cpu Real Second
 %token Unifier Variant Result Solution
 %token Maude Line1
@@ -74,7 +74,7 @@ let make_substitution_variant pairlst =
 
 %%
 main:
- | firstLine result Maude { $2 }
+ | firstLine result Maude { if debug then Printf.printf "done!\n" ; $2 }
  | error { error_message (Parsing.symbol_start_pos ()).Lexing.pos_lnum "Syntax Error in Maude " }
  
      firstLine:
@@ -134,7 +134,7 @@ main:
 
      matchPreamble:
  | Match In Identifier Colon term EqualMatch term Dot
- Decisiontimeline{ }
+ Decisiontimeline{ if debug then Printf.printf "matchPreamble ";  }
      
      matcherList:
  | No Match Dot { [] }
@@ -202,6 +202,7 @@ main:
     }
  | term Plus term { Fun({id=Plus;has_variables=true}, [$1;$3])}
  | Zero {zero}
+ | LeftP term RightP {$2}
 
 termlist:
  | { [] }
@@ -213,6 +214,7 @@ netermlist:
 
 substitution:
  | {if debug then Printf.printf "endsubst "; [] }
+ | Empty Substitution {if debug then Printf.printf "emptysubst "; [] }
  | assignment substitution {if debug then Printf.printf "substitution "; $1 :: $2 }
 
 assignment:

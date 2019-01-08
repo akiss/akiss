@@ -22,6 +22,8 @@
    "result" , Result ;
    "in" , In ;
    "Solution" , Solution ;
+   "empty" , Empty;
+   "substitution" , Substitution ;
    "Bool" ,Bool;
    "Term" , Term ;
    "cpu" , Cpu ;
@@ -62,16 +64,16 @@ let letters = letter (('.'| letter | digit) * )
   | "0" | "zero" { Zero }
   | "-->" {Arrow}
   | "/\\" { Wedge }
-  | "+" { Plus }
-  | "," { Comma }
-  | ":" { Colon }
+  | "+" { if debug then Printf.printf "+"; Plus }
+  | "," { if debug then Printf.printf ","; Comma }
+  | ":" { if debug then Printf.printf ":"; Colon }
   | ">" { Greater }
   | "=" { Equals }
-  | "=?" { EqualUnify }
-  | "<=?" { EqualMatch }
-  | "(" { if debug then Printf.printf "(";LeftP }
-  | ")" { RightP }
-  | "." { Dot }
+  | "=?" { if debug then Printf.printf "=?"; EqualUnify }
+  | "<=?" {  if debug then Printf.printf "<=?"; EqualMatch }
+  | "(" { if debug then Printf.printf "("; LeftP }
+  | ")" { if debug then Printf.printf ")"; RightP }
+  | "." { if debug then Printf.printf "."; Dot }
   | 'w' (letters as n) {Func (n)}
   | 'x' (digits as n) {if debug then Printf.printf "x " ;Var({status = ref Types.Master; n = (int_of_string n)})}
   | 'y' (digits as n) {if debug then Printf.printf "y " ;Var({status = ref Types.Slave; n = (int_of_string n)})}

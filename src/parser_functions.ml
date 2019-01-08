@@ -469,7 +469,7 @@ let rec parse_plain_process procId env (nbloc,nbnonces) = function
         | ChoiceB (l_1,lp1), ChoiceB (l_2,lp2) -> assert false
         | ChoiceB (l_1,lp1), proc2 -> (nbl,nbn,ChoiceB (l_1, proc2 :: lp1))
         | pr1, ChoiceB (l_2,lp2) -> assert false
-        | pr1, pr2 -> let l=(nbl,Some ("?")) in (nbl+1,nbn,ChoiceB(l,[pr1;pr2]))
+        | pr1, pr2 -> let l=(nbl,Some ("+")) in (nbl+1,nbn,ChoiceB(l,[pr1;pr2]))
       end
   | New((s,line),proc) ->
       if Env.mem s env

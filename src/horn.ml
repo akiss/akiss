@@ -80,10 +80,23 @@ let is_solved st =
   List.for_all
     is_solved_atom st.body
     
-let find_unsolved st = 
+(*let find_unsolved st = 
   match List.find_opt (fun a -> not (is_solved_atom a)) st.body  with
   | Some a -> a
-  | None -> Printf.printf "%s" (show_raw_statement st); assert false
+  | None -> Printf.printf "%s" (show_raw_statement st); assert false*)
+  
+(* Extract an unsolved atom from a statement, if possible without a plus or at least a marked one *)  
+let rec find_unsolved best body =
+  match body with
+  | [] -> (match best with
+    | None -> Printf.printf "Looking for unsolved atom of a solved statement\n"; assert false
+    | Some a -> a)
+  | a :: body -> if is_solved_atom a then find_unsolved best body else 
+    (match a.term with
+    | Fun({id = Plus},[l;r]) -> find_unsolved (if a.marked || best = None then Some a else best) body
+    | _ -> a)
+    
+let find_unsolved st = find_unsolved None st.body
   
 (*let rec find_rigid term = 
   match term with
@@ -130,6 +143,8 @@ let rec has_rigid = function
   | [] -> false
 
 let has_rigid t = has_rigid [t]*)
+
+(** {2  Code use in consequence and shift to find a linear combination of body term which provide a given term } **)
 
 exception Not_a_linear_combination
 
@@ -426,7 +441,9 @@ let canonical_form statement =
 
 
 let is_identity_of_theory st =
-  is_equation_st st && Dag.is_empty st.dag.rel
+  match st.head with
+  | Identical(s,t) -> Dag.is_empty st.dag.rel || (!Parser_functions.use_xor && s = t) (* Slow down too much *) 
+  | _ -> false
 
 
 let normalize_identical f = f (*
@@ -517,8 +534,14 @@ let update kb f =
     Some fc
 
 
+    
 
-(** {2 Resolution steps} *)
+(** {! Resolution steps
+    lllllllllllllllllll
+    lllllllllllllllllll} **)
+    
+    
+    
 
 (** [resolution d_kb (master,slave)] attempts to perform a resolution step
   * between clauses [master] and [slave] by matching the head of [slave]
@@ -733,7 +756,12 @@ let equation sigma choices dag fa fb =
       end
           | _ -> invalid_arg("equation")
 
-(** {1 Saturation procedure} *)
+          
+          
+(** {! Trace generation} **)
+
+
+
 let rec concretize inputs term =
    match term with
    | Fun({id=InputVar(l)},[]) -> Inputs.get l inputs
@@ -741,7 +769,7 @@ let rec concretize inputs term =
    | _ -> term  
 
  
-let rec hidden_chan_statement kb  (loc_input , term_input ,ineq_input,st_input,pr_input) (loc_output,  term_output,ineq_output,st_output,pr_output) solved_parent unsolved_parent test_parent  =
+let rec hidden_chan_statement kb  (loc_input , term_input ,ineq_input,st_input,pr_input) (loc_output,  term_output,ineq_output,st_output,pr_output) solved_parent unsolved_parent test_parent  = 
   match term_input,term_output with
   | None, Some term_output -> (
   match Inputs.merge_choices_add_link st_output.choices st_input.choices loc_output loc_input with
@@ -763,9 +791,9 @@ let rec hidden_chan_statement kb  (loc_input , term_input ,ineq_input,st_input,p
     (*Printf.printf "subst %d by %s process : %s\n" loc_input.p (show_term term_output) (show_process_start 3 process_input);*)
     trace_statements kb ineqs solved_parent unsolved_parent test_parent process_input st 
   )
-  else
+  else (
   let sigma = sigma_maker_init st_output.nbvars st_input.nbvars in
-   (*Printf.printf "Computing hiden_chan_statement\n -link %d <-> %d\n" loc_input.p loc_output.p;*)
+  (* Printf.printf "Computing hiden_chan_statement\n -link %d <-> %d\n" loc_input.p loc_output.p; *)
   let sigmas = Inputs.csu sigma st_output.inputs st_input.inputs in
   if sigmas = [] then ()
   else (
@@ -799,7 +827,7 @@ let rec hidden_chan_statement kb  (loc_input , term_input ,ineq_input,st_input,p
     let process_input = Process.apply_subst_process loc_input term_output pr_input in
     (*Printf.printf "subst %d by %s process : %s\n" loc_input.p (show_term term_output) (show_process_start 3 process_input);*)
     trace_statements kb ineqs solved_parent unsolved_parent test_parent process_input st 
-  ) sigmas ))
+  ) sigmas )))
   )
   | _ -> assert false
  
@@ -901,17 +929,17 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
           ChanMap.find { c= chan; io = In; ph =loc.phase} kb.hidden_chans 
           with Not_found -> []))
         kb.hidden_chans 
-    | SeqP(Output({io = Output({visibility = Hidden} as chan, _)} as loc, t), pr) -> (
-      match ChanMap.find_opt { c= chan; io = In; ph =loc.phase} kb.hidden_chans with
-      | None -> ()
-      | Some chans -> 
-        List.iter (fun stin -> 
-          hidden_chan_statement kb stin (loc,Some t,ineqs,st,pr) solved_parent unsolved_parent test_parent) chans);
+    | SeqP(Output({io = Output({visibility = Hidden} as chan, _)} as loc, t), pr) -> ( 
+      begin match ChanMap.find_opt { c= chan; io = In; ph =loc.phase} kb.hidden_chans with
+        | None -> ()
+        | Some chans ->
+          List.iter (fun stin -> 
+            hidden_chan_statement kb stin (loc,Some t,ineqs,st,pr) solved_parent unsolved_parent test_parent) chans end;
       kb.hidden_chans <- ChanMap.add { c = chan; io = Out; ph = loc.phase} 
         ((loc,Some t,ineqs,st,pr):: ( try 
           ChanMap.find { c= chan; io = Out; ph =loc.phase} kb.hidden_chans 
           with Not_found -> []))
-        kb.hidden_chans 
+        kb.hidden_chans )
     | SeqP(Input(loc), pr)
     | SeqP(Output(loc,_), pr) ->
       assert false
@@ -921,7 +949,8 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
       let tterm = concretize st.inputs t in 
       (*Printf.printf "comparing %s == %s\n" (show_term sterm) (show_term tterm);*)
       let unifiers = Rewriting.unifiers st.nbvars sterm tterm (! Parser_functions.rewrite_rules) in 
-      List.iter (fun subst -> trace_statements kb ineqs solved_parent unsolved_parent test_parent pr (apply_subst_statement st subst)) unifiers
+      List.iter (fun subst -> st.binder := Master; 
+        trace_statements kb ineqs solved_parent unsolved_parent test_parent pr (apply_subst_statement st subst)) unifiers
     | SeqP(TestInequal(s, t), pr) ->
       (*Printf.printf "inequal %s %s\n" (show_term s)(show_term t);*)
       if s <> t then 
@@ -1135,7 +1164,7 @@ let saturate procId  =
       end
     else begin 
       let unsolved = Queue.take(kb.ns_todo) in
-      if !debug_saturation then Printf.printf "Start resolutions of #%d\n" unsolved.id;
+      if !debug_saturation then Printf.printf "Start resolutions of #%d\n%!" unsolved.id;
       if !Parser_functions.use_xor then
       List.iter 
         (fun st -> add_statement kb kb.solved_deduction unsolved 

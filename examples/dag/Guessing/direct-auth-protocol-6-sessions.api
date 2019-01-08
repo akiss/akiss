@@ -57,7 +57,7 @@ let Bob(pw) =
 
 
 
-let P(pw) = new skA;( !^2 Alice(pw,skA) | !^2 Bob(pw)) .
+let P(pw) = new skA;( !^3 Alice(pw,skA) | !^3 Bob(pw)) .
 
 let Pw = new pw; (P(pw) | phase 2; out(G,pw)).
 
