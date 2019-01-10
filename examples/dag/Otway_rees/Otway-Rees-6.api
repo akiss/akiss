@@ -5,8 +5,7 @@
    S -> B : M, {Na,Kab}Kas, {Nb,Kab}Kbs
    B -> A : M,{Na,Kab}Kas
 *)
-
-latex orIII.
+latex orVI.
 
 //Channels :
 chan ca,cb,cs.
@@ -58,10 +57,9 @@ let S(ch,ida,idb,kas,kbs,s) =
 let Scenario(s) =
   new kas; new kbs ;
   (
-   A(ca,a,b,kas) | B(cb,b,a,kbs) | S(cs,a,b,kas,kbs,s) 
+   A(ca,a,b,kas) | B(cb,b,a,kbs) | S(cs,a,b,kas,kbs,s) |
 
- 
-
+   (  A(ca,a,b,kas) ) | (  B(cb,b,a,kbs) ) | ( new k; S(cs,a,b,kas,kbs,k) ) 
   ).
 
 let P = Scenario(s1).

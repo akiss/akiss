@@ -51,7 +51,7 @@ let S(ch,ida,idb,kas,kbs,s) =
   let (zna,=zm,=ida,=idb) = sdec(zsenc1,kas) in
   let (znb,=zm,=ida,=idb) = sdec(zsenc2,kbs) in
   new kab;
-  out(cs,(zm,senc((zna,kab),kas),senc((znb,s),kbs))).
+  out(cs,(zm,senc((zna,s),kas),senc((znb,s),kbs))).
 
 
 let Scenario(s) =

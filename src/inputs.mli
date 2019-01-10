@@ -3,6 +3,7 @@ type inputs = { i : Types.term Dag.Dag.t; }
 type choices = { c : int Dag.Dag.t; }
 val show_inputs : inputs -> string
 val show_choices : choices -> string
+val show_verbose_choices : choices -> unit
 val new_inputs : inputs
 val new_choices : choices
 val canonize_inputs : inputs -> inputs

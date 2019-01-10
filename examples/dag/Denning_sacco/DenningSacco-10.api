@@ -7,7 +7,7 @@
   6.  B      ->     : {m}Kab versus {m}K with K fresh
 *)
 
-latex dsXXXI.
+latex dsX.
 
 free a, b, c, d.
 
@@ -47,22 +47,14 @@ let processSProp(ch,ida,kas,idb,kbs,s) =
 
 // Main
 
-
 let Scenario(s) =
   new kas; new kbs; new kds; 
   (
-    processA(ca,a,kas,b) | processB(cb,b,kbs,a) | processSProp(cs,a,kas,b,kbs,s) |
-
-    !^2 processA(ca,a,kas,b) | !^2 processB(cb,b,kbs,a) | !^2 processS(cs,a,kas,b,kbs) |
-
-    !^2 processA(cb,b,kbs,a) | !^2 processB(ca,a,kas,b) | !^2 processS(cs,b,kbs,a,kas) |
-
-    !^2 processA(ca,a,kas,c) | !^2 processS(cs,a,kas,c,kcs) |
-    !^2 processA(cb,b,kbs,c) | !^2 processS(cs,b,kbs,c,kcs) |
-
-    !^2 processB(cb,b,kbs,c) | !^2 processS(cs,c,kcs,b,kbs) |
-    !^2 processB(ca,a,kbs,c) | !^2 processS(cs,c,kcs,a,kas)
-  ).
+    processA(ca,a,kas,b) | processB(cb,b,kbs,a) | processSProp(cs,a,kas,b,kbs,s1) |
+    processA(ca,a,kas,c) | processS(cs,a,kas,c,kcs) |
+    processS(cs,c,kcs,b,kbs) | processB(cb,b,kbs,c) |
+    processA(cb,b,kbs,a) | processB(ca,a,kas,b) | processS(cs,b,kbs,a,kas)
+   ).
 
 
 

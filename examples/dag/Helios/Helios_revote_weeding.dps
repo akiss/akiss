@@ -121,10 +121,13 @@ let VotingSystem_twice1(vote1,vote2) =
 (* Should find an attack. *)
 (*query trace_equiv(VotingSystem(yes,no),VotingSystem(no,no)).*)
 
-let P = VotingSystem_twice1(yes,no).
-let Q = VotingSystem_twice1(no,yes).
-(* Should find an attack. *)
-query trace_equiv(P,Q).
+let P2 = VotingSystem_twice1(yes,no).
+let Q2 = VotingSystem_twice1(no,yes).
+let P = VotingSystem(yes,no).
+let Q = VotingSystem(no,yes).
 
 (* Should not find an attack. *)
-query trace_equiv(VotingSystem(yes,no),VotingSystem(no,yes)).
+query trace_equiv(P,Q).
+
+(* Should find an attack. *)
+query trace_equiv(P2,Q2).

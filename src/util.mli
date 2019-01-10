@@ -19,6 +19,8 @@ val about_location : bool ref
 val use_xml : bool ref
 val about_all_attacks : bool ref
 val about_bench : bool ref
+val do_latex : bool ref
+val latex_identifier : string ref
 val trmap : ('a -> 'b) -> 'a list -> 'b list
 val unique : 'a list -> 'a list
 val create_consecutive : int -> int -> int list

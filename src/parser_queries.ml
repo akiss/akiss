@@ -30,6 +30,7 @@ let parse_query env line = function
 
 let parse_one_declaration = function
  (* | Setting(sem,line) -> parse_setting line sem*)
+  | Latex id -> if !Util.do_latex then latex_identifier := id
   | FuncDecl flst -> List.iter (fun f -> environment := parse_functions !environment f) flst
   | ReducList lst -> rewrite_rules := List.map 
       ( fun r -> parse_rewrite_rule !environment r) lst @ !rewrite_rules
@@ -41,6 +42,7 @@ let parse_one_declaration = function
     processes_list := p :: !processes_list
       (*environment := parse_process_declaration_list !environment prlst*)
   | Query (query,line) -> 
+      if !do_latex && !latex_identifier = "" then raise End_of_file;
       (match !processes_list with
       [] -> ()
       | _ -> 

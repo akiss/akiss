@@ -7,6 +7,7 @@
     List.iter (fun (kwd,tok) -> Hashtbl.add keyword_table kwd tok)
       [
         (* Option declarations *)
+        "latex", LATEX;
         "set", SET;
         "semantics", SEMANTICS;
         "classic", CLASSIC;

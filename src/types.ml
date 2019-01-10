@@ -177,6 +177,8 @@ let root_location i = { p = i; io = Call; name = "root"; phase = 0 ; observable 
 
 let show_varId id = (show_binder !(id.status)) ^ (string_of_int id.n)
 
+(*let show_location l = Format.sprintf "%d: %s %s (%d)" l.p (show_io l.io) l.name l.phase*)
+
 let rec show_term t =
  match t with
  | Fun({id=Regular(f)},args) -> if args = [] then f.name else f.name ^ "(" ^ (show_term_list args) ^ ")"
@@ -196,6 +198,13 @@ and show_term_list = function
   | x :: l -> ( (show_term x) ^ "," ^ (show_term_list l) )
   | [] -> ""
 
+(*let show_io io = match io with
+  | Input(c) -> "in(" ^ c.name ^ ")"
+  | Output(c,t) -> "out(" ^ c.name ^ "," ^ (show_term t) ^ ")"
+  | _ -> "?"*)
+
+  
+  
 let zero = Fun({id=Zero;has_variables=false},[])
 
 (* type of rewrite rules *)

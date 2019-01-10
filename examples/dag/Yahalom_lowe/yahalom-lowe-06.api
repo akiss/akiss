@@ -9,7 +9,7 @@
   3.   S -> A : {B, Kab, Na, Nb}Kas
   4.   S -> B : {A, Kab}Kbs
 *)
-latex ylXVII.
+latex ylVI.
 
 //Channels :
 
@@ -52,14 +52,7 @@ let Scenario(s) =
  (
    A(ca,a,b,kas) | B(cb,b,a,kbs) | S(cs,a,b,kas,kbs,s) |
 
-   (  A(ca,a,b,kas) ) | (  B(cb,b,a,kbs) ) | ( new kab; S(cs,a,b,kas,kbs,kab) ) |
-   (  A(cb,b,a,kbs) ) | (  B(ca,a,b,kas) ) | ( new kab; S(cs,b,a,kbs,kas,kab) ) |
-
-   (  A(ca,a,c,kas) ) | ( new kab; S(cs,a,c,kas,kcs,kab) ) |
-   (  A(cb,b,c,kbs) ) | ( new kab; S(cs,b,c,kbs,kcs,kab) ) |
-
-   (  B(cb,b,c,kbs) ) | ( new kab; S(cs,c,b,kcs,kbs,kab) ) |
-   (  B(ca,a,c,kas) ) | ( new kab; S(cs,c,a,kcs,kas,kab) )
+   (  A(ca,a,b,kas) ) | (  B(cb,b,a,kbs) ) | ( new kab; S(cs,a,b,kas,kbs,kab) ) 
 
 ).
 

@@ -1,0 +1,60 @@
+(*
+  Needham-Schroeder-Lowe asymmetric protocol
+    A -> B: {A,nA,r1}_pkB
+    B -> A: {B,nA,nB,r2}_pkA
+    A -> B: {nB,r3}_pkB
+*)
+
+free a,b,c.
+free s1,s2.
+free kc.
+
+chan ca, cb, cd.
+
+fun pk/1.
+fun aenc/3.
+fun adec/2.
+adec(k, aenc(pk(k), r, m)) -> m.
+
+// Alice
+let A(ch,ida,idb,ka,pkb) =
+  new na;
+  new r1;
+  new r3;
+  out(ch,aenc((ida,na),r1,pkb));
+  in(ch,xenc);
+  let (=idb,=na,x3) = adec(xenc,ka) in
+  out(ch, aenc(x3,r3,pkb)).
+
+// Bob
+let B(ch,idb,ida,kb,pka,n) =
+  new r2;
+  in(ch,z);
+  let (=a,z2) = adec(z,kb) in
+  out(ch,aenc((idb,z2,n),r2,pka));
+  in(ch,x).
+
+let Scenario (s) =
+  new ka; new kb;
+  out(cd,pk(ka));
+  out(cd,pk(kb));
+  (
+    A(ca,a,b,ka,pk(kb)) | B(cb,b,a,kb,pk(ka),s) |
+
+    !^30 A (ca,a,b,ka,pk(kb)) | !^30 new nb; B(cb,b,a,kb,pk(ka),nb) |
+
+    !^30 A (cb,b,a,kb,pk(ka)) | !^30 new nb; B(ca,a,b,ka,pk(kb),nb) |
+
+    !^30 A (ca,a,c,ka,pk(kc)) | 
+    !^30 A (cb,b,c,kb,pk(kc)) |
+
+    !^30 new nb; B(cb,b,c,kb,pk(kc),nb) |	
+    !^30 new nb; B(ca,a,c,ka,pk(kc),nb)
+  ).
+    
+
+let P = Scenario(s1).
+let Q = Scenario(s2).
+
+
+query trace_equiv(P,Q).

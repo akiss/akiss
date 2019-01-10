@@ -53,6 +53,7 @@ type extended2_process =
 
 type declaration =
 (*  | Setting of setting * int *)
+  | Latex of string
   | FuncDecl of functions list
   | ReducList of ( temp_term * temp_term ) list
   | FreeName of ident list

@@ -1,3 +1,4 @@
+val verbose_execution : bool ref
 (*val apply_subst_inputs : Types.term -> Inputs.inputs -> Types.term
 val dispatch :
   ('a list * 'b list * 'c list) list -> 'a list * 'b list * 'c list

@@ -58,6 +58,8 @@ let command_line_options_list = [
     "Print info in xml format");
    ("-all", Arg.Set(about_all_attacks),
     "Find all attacks");
+   ("-latex", Arg.Set(do_latex),
+    "for the paper benchs");
   (*"--extra", Arg.Int (fun i -> extra_output := i),
    "<n>  Display information <n>"*)
   (*("--output-dot", Arg.String (fun s -> dotfile := Some s),
@@ -107,11 +109,13 @@ let reset_global () =
   bijection.initial_tests <- [];
   bijection.attacks <- [];
   (*htable = Hashtbl.create 5000 ;*)
-  Hashtbl.reset bijection.htable_st 
+  Hashtbl.reset bijection.htable_st ;
+  latex_identifier := ""
 
 
 
 let process_file f =
+  if not( Sys.is_directory f) then (
   if !about_bench then Printf.printf "%70s%!" f;
   
   let ch_in = open_in f in
@@ -127,7 +131,7 @@ let process_file f =
       | End_of_file -> () in
   
   close_in ch_in;
-  reset_global ()
+  reset_global ())
   
 let () =
   (*Printf.printf "Akiss starts\n%!" ;*)

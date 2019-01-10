@@ -14,12 +14,12 @@ CMO = cmx
 OBJS = $(ML:.ml=.$(CMO))
 
 akiss: $(OBJS)
-	$(OCAMLC) -linkpkg -o akiss $(OBJS)
+	$(OCAMLC) -linkpkg -o akiss  $(OBJS)
 
 
 
 %.$(CMO): %.ml
-	$(OCAMLC) -c $<
+	$(OCAMLC)  -c $<
 
 %.cmi: %.mli
 	$(OCAMLC) -c $<

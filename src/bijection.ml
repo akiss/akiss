@@ -60,7 +60,10 @@ type extra_thread = {
   }
   
 let show_extra_thread th =
-  Printf.sprintf "%s <| %s ==> %s " (show_loc_set th.before_locs) (Inputs.show_choices th.made_choices) (Process.show_process_start 3 th.thread)
+  Printf.sprintf "%s <| %s ==> %s " (show_loc_set th.before_locs) (Inputs.show_choices th.made_choices) (Process.show_process_start 2 th.thread)
+  
+let show_extra_thread_list lst =
+  List.fold_left (fun str e -> (if str = "" then "" else str ^ "\n ." ) ^ (show_extra_thread e)) "" lst
   
 module rec Run : sig 
   type completion = {
@@ -219,7 +222,7 @@ type test = {
   id : int;
   from : IntegerSet.t;
   nb_actions : int; (* used to order the tests *)
-  mutable new_actions : int; (* compared to the base actions, used to order the tests *)
+  mutable new_actions : int; (* compared to the base actions, used to order the tests in the database *)
   mutable constraints : correspondance; (* Try to pass the test prioritary satisfying the constraints *)
   mutable constraints_back : correspondance; (* Inverse mapping *)
   mutable solutions_todo : Run.solution list;
@@ -288,26 +291,39 @@ module RunSet = Set.Make(PartialRun)
 open Run 
 open Test
 
+let show_ext_extra_thread_lst lst =
+  List.fold_left (fun str (loc,t,extra_thread) -> 
+    (if str = "" then "" else str ^ "\n") 
+    ^ (show_extra_thread extra_thread)) "" lst
+    
+let show_pending_threads pthr =
+  ChanMap.fold (fun chkey lst str -> 
+    (if str = "" then "" else str ^ "\n")
+    ^ (show_chan_key chkey) ^" : " ^(show_ext_extra_thread_lst lst)) pthr ""
+    
 let show_run pr  =
   if !use_xml 
   then 
     show_correspondance pr.corresp
   else
   (*(List.fold_left (fun str (t,t') -> str ^ (show_term t)  ^ " != " ^ (show_term t') ^ ", " )*)
-    (Format.sprintf "{ %s: \n corresp= %s\n"
+    (Format.sprintf "{ %s: \n corresp= %s\n choices= %s\n"
     (show_which_process pr.test.process_name)
-    (show_correspondance pr.corresp))
+    (show_correspondance pr.corresp)
+    (Inputs.show_choices pr.choices))
    (* pr.disequalities) ^"\n" *)
         
 let show_partial_run pr =
-  (List.fold_left (fun str ext_thread -> str ^ "   " ^(show_loc_set ext_thread.before_locs) ^" : "^(Process.show_process_start 3 ext_thread.thread)^"\n")
-  ((List.fold_left (fun str ext_thread -> str ^ "   " ^ (show_loc_set ext_thread.before_locs) ^" : "^(Process.show_process_start 3 ext_thread.thread)^"\n")
-  (((show_run pr)^ (Format.sprintf " frame= %s\n" (Inputs.show_inputs pr.frame))) 
-  ^ " remaining_actions= " ^ (show_loc_set pr.remaining_actions)
-  ^ "\n qthreads= \n") 
-  pr.qthreads) ^ " fthreads=\n") pr.failed_qthreads) 
-  ^ (Format.sprintf "\n action=%d; weird = %d ; score = %d ; restricted = %s;  }\n" 
-  pr.last_exe.p pr.weird_assoc pr.score (show_loc_set pr.restrictions))
+    Format.sprintf 
+    "%s frame= %s\n remaining_actions=%s\n action=%d; weird = %d ; score = %d ; restricted = %s;\n qthreads= %s\n pending_qthreads=%s\n fthreads=%s\n}\n"
+    (show_run pr)
+    (Inputs.show_inputs pr.frame)
+    (show_loc_set pr.remaining_actions)
+    pr.last_exe.p pr.weird_assoc pr.score (show_loc_set pr.restrictions)
+    (show_extra_thread_list pr.qthreads)
+    (show_pending_threads pr.pending_qthreads)
+    (show_extra_thread_list pr.failed_qthreads)
+
   
 (*let show_executions sol =*)
 

@@ -43,7 +43,7 @@ let B(ch,idb,ida,kbs) =
 let S(ch,ida,idb,kas,kbs,s) =
   in(ch,z0);
   let (=ida,zna,znb) = sdec(z0,kbs) in
-  out(cs,(senc((idb,s,zna,znb),kas),senc((ida,s1),kbs))).
+  out(cs,(senc((idb,s,zna,znb),kas),senc((ida,s),kbs))).
 
 
 let Scenario(s) =

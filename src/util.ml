@@ -26,6 +26,8 @@ let about_location = ref false
 let use_xml = ref false
 let about_all_attacks = ref false
 let about_bench = ref false
+let do_latex = ref false
+let latex_identifier = ref ""
 
 
 (* TODO use the standard library:

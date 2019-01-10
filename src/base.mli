@@ -112,6 +112,7 @@ module ChanMap :
     val is_empty : 'a t -> bool
     val mem : key -> 'a t -> bool
     val add : key -> 'a -> 'a t -> 'a t
+    val fold : (key -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
 (*    val update : key -> ('a option -> 'a option) -> 'a t -> 'a t
     val singleton : key -> 'a -> 'a t
     val remove : key -> 'a t -> 'a t
@@ -167,6 +168,7 @@ type base = {
 (*val check_binder_term : Types.statement_role ref -> Types.term -> bool
 val check_binder_head : Types.statement_role ref -> predicate -> bool
 val check_binder_st : raw_statement -> bool*)
+val show_chan_key : chankey -> string
 val show_test_head : test_head -> string
 val show_predicate : predicate -> string
 val show_body_atom : body_atom -> string

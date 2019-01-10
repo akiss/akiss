@@ -1,0 +1,68 @@
+// RFID protocol LAK'06
+
+fun h/1.
+chan C, CR.
+private chan RR1,RW1,TR1,TW1,RR2,RW2,TR2,TW2.
+
+//  Alice-Bob notation
+// R --> T: r0
+// T --> R: <r1, h(r0+r1+k)>
+// R --> T: h(h(r0+r1+k)+k+r0)
+// R and T update their key k with h(k)
+
+
+let Treader(read_r,write_r,kB) = 
+  new r2;
+  out(CR,r2);
+  in(CR,Z);
+  in(read_r,kA);  
+  out(write_r,kA);  
+  let (Z1,Z2) = Z in (
+  if Z2 = h(r2 + Z1 + kA)
+  then 
+    in(read_r,w);  
+    out(write_r,h(kA));  
+    out(CR,h(Z2 + kA + r2)) 
+  + 
+  if Z2 = h(r2+ Z1 + kB)
+  then 
+    out(CR,h(Z2 + kB + r2))).
+
+let CELL_Tread(read_r,write_r,v) =
+  out(read_r,v);
+  in(write_r,x);
+  CELL_Tread(read_r,write_r,x).
+  
+let Ttag(read_t,write_t) = 
+  in(read_t,k);  
+  out(write_t,k);  
+  in(C,X);
+  new r3 ;
+  out(C,(r3,h(X+r3+h(k))));
+  in(C,Y);
+  if Y = h(h(X+r3+h(k))+k+X)
+  then
+    in(read_t,w);  
+    out(write_t,h(k)).
+  
+let CELL_Ttag(read_t,write_t,v) =
+  out(read_t,v);
+  in(write_t,x);
+  CELL_Ttag(read_t,write_t,x).
+  
+
+let Psame = 
+  new kA;
+  new kB;
+  ( !^2 Ttag(TR1,TW1) | !^2 CELL_Ttag(TR1,TW1,kA) | !^2 Treader(RR1,RW1,kB)).
+
+let Pdiff = 
+  new kA;
+  new kB;
+  ( Ttag(TR1,TW1) | CELL_Ttag(TR1,TW1,kA) | Treader(RR1,RW1,kB) 
+  | Ttag(TR2,TW2) | CELL_Ttag(TR2,TW2,kA) | Treader(RR2,RW2,kB) 
+  ).
+
+
+
+query trace_equiv(Psame,Pdiff).

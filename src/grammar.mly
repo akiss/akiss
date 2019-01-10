@@ -7,7 +7,7 @@ open Parser_functions
 %token <string> STRING
 %token <int> INT
 
-%token SET SEMANTICS CLASSIC EAVESDROP PRIVATE
+%token SET SEMANTICS CLASSIC EAVESDROP PRIVATE LATEX
 %token FUN REDUC
 %token FREE CHANS
 %token NEW IF THEN ELSE IN OUT LET PHASE
@@ -39,6 +39,7 @@ open Parser_functions
 main:
   /*| option_setting
       { Setting ($1,(Parsing.symbol_start_pos ()).Lexing.pos_lnum) }*/
+  | LATEX ident DOT { Latex (fst $2) }
   | FUN function_symbol_declaration_list
       { FuncDecl $2 }
   | rewrite_rule_list

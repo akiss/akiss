@@ -1,5 +1,7 @@
 // helios protocol with identities and mixnet - no privacy because of ballot replay attack
 
+latex vanilla.
+
 fun aenc/3,adec/2.
 fun pk/1.
 

@@ -30,6 +30,14 @@ let show_choices choices =
     Format.sprintf "<input><loc>%d</loc>-<map>%d</map></input>" l.p i)) choices.c "" ) ^"</choices>")
   else
   (Dag.fold (fun l i str -> (if str = "" then "[" else str ^ " | ") ^ Format.sprintf "<%d>: %d" l.p  i) choices.c "" ) ^ "]"
+  
+let show_verbose_choices choices =
+  if Dag.is_empty choices.c then ()
+  else
+  Dag.iter (fun l i -> 
+    match l.io with
+    | Output(c,_) -> Printf.printf "    out(%s) -%s[%d]-> in(%s)\n" l.name c.name l.phase ( Dag.fold (fun l _ result -> if l.p = i then l.name else result) choices.c "?")
+    | _ -> ()) choices.c
 
 let new_inputs = { i = Dag.empty } 
 let new_choices = { c = Dag.empty }

@@ -28,6 +28,7 @@ type query =
 type extended2_process =
     ExtendedProcess of ident * ident list * extended_process
 type declaration =
+  | Latex of string
   | FuncDecl of functions list
   | ReducList of (temp_term * temp_term) list
   | FreeName of ident list

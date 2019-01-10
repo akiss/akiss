@@ -786,7 +786,7 @@ let base_to_tests t c process_name base other_process =
   statements_to_tests t c process_name base.rid_solved other_process EqualitiesSet.empty
 
 let equivalence both p q =
-  let time = if !about_bench then Sys.time () else 0. in
+  let time = if !about_bench || !do_latex then Sys.time () else 0. in
   if !use_xml then Printf.printf "<?xml-stylesheet type='text/css' href='style.css' ?><all>" ;
   if !about_progress then Printf.printf "Saturating P\n\n%!";
   let (locP,satP) = Horn.saturate p in
@@ -860,17 +860,26 @@ let equivalence both p q =
       (count_statements bijection.satP.rid_solved + count_statements bijection.satQ.rid_solved)
       (List.length bijection.satP.unreachable_solved + List.length bijection.satQ.unreachable_solved)
       (time_sat -. time)
-    else (
+    else if !do_latex then Printf.printf "\\newcommand{\\%s}{$%3.1f$s}\n" !latex_identifier ((Sys.time() -. time)) else (
       if bijection.attacks = [] 
       then (
           if both 
           then Printf.printf "\nP and Q are trace equivalent. \n" 
           else Printf.printf "\nTraces of P are included in Q. \n")
       else (
-        Printf.printf "\nAn attack has been found:\n";
+        verbose_execution:= true;
+        let nba = List.length bijection.attacks in
+        if nba=1 
+        then Printf.printf "\nAn attack has been found:\n"
+        else Printf.printf "\n%d attacks have been found:\n" nba;
         List.iter (fun (test,sol) -> 
-          Printf.printf "\n-A witness test is %s \n with specific order %s \n" (show_test test)(show_dag sol.restricted_dag))
-        bijection.attacks ));
+          if !about_tests then Printf.printf "\n-A witness is %s \n with specific order %s"(show_test test)(show_dag sol.restricted_dag);
+          Printf.printf "\nTrace of %s which is not possible in %s:\n" (show_which_process test.process_name)(show_which_process (other(test.process_name)));
+          assert (actual_test test.process_name {test.statement with dag = sol.restricted_dag});
+          Printf.printf "Final identities:\n %s\n" (show_test_head (get_test_head(test.statement.head)))
+          )
+        bijection.attacks;
+        verbose_execution:= false; ));
       if ! use_xml then Printf.printf "</all>"
  (* with
   | Attack(test,sol) -> begin 
