@@ -50,6 +50,7 @@ type test_head = {
 type predicate =
     Knows of Types.term * Types.term
   | Reach
+  | ReachTest of (Types.term * Types.term) list  
   | Identical of Types.term * Types.term
   | Tests of test_head
   | Unreachable
@@ -102,7 +103,7 @@ type statement = {
 }
 val null_statement : statement
 type i_o = In | Out
-type chankey = { c : Types.chanId; io : i_o; ph : int; }
+type chankey = { ph : int; c : Types.chanId; io : i_o;  }
 val switch_io : i_o -> i_o
 module ChanMap :
   sig

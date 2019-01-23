@@ -115,7 +115,7 @@ let rec explode_term t =
 
 let rec vars_of_atom = function
   | Knows( r , t) -> vars_of_term_list [r;t]
-  | Reach -> []
+  | Reach | ReachTest _ -> []
   | Identical(r1,r2) -> vars_of_term_list [r1;r2]
   | Tests(_) -> assert false
   | Unreachable -> []
@@ -476,8 +476,7 @@ let normalize_identical f = f (*
   else 
   let f = {f with recipes = Inputs.renormalize f.recipes} in
   match f.head with 
-  | Reach -> Some f
-  | Unreachable -> Some f
+  | Reach | ReachTest _ | Unreachable -> Some f
   | Knows(r,t) -> 
     let t' = Rewriting.normalize t (!Parser_functions.rewrite_rules) in 
     if not (Rewriting.equals_ac t t')
@@ -877,11 +876,11 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
      | SeqP(Output({observable = Public} as loc, t), pr) -> (* the reach part of the output *)
       let next_dag = put_at_end st.dag loc in
       let identity_sigma = Rewriting.identity_subst st.nbvars in
-      let binder = identity_sigma.binder in
+      (*let binder = identity_sigma.binder in*)
       st.binder := Master;
       let st = apply_subst_statement st identity_sigma in
       let st = { st with
-        binder = binder; 
+        (*binder = binder; *)
         dag = next_dag ;
         head = Reach;
         } in
@@ -950,7 +949,9 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
       (*Printf.printf "comparing %s == %s\n" (show_term sterm) (show_term tterm);*)
       let unifiers = Rewriting.unifiers st.nbvars sterm tterm (! Parser_functions.rewrite_rules) in 
       List.iter (fun subst -> st.binder := Master; 
-        trace_statements kb ineqs solved_parent unsolved_parent test_parent pr (apply_subst_statement st subst)) unifiers
+        let new_st = { (apply_subst_statement st subst) with head = ReachTest(ineqs)} in
+        add_statement kb solved_parent unsolved_parent test_parent (Some pr) new_st
+        (*trace_statements kb ineqs solved_parent unsolved_parent test_parent pr new_st*)) unifiers
     | SeqP(TestInequal(s, t), pr) ->
       (*Printf.printf "inequal %s %s\n" (show_term s)(show_term t);*)
       if s <> t then 
@@ -1010,6 +1011,10 @@ and add_statement kb solved_parent unsolved_parent test_parent process st =
             match process with 
            | None -> ()
            | Some process -> trace_statements kb [] solved_parent unsolved_parent st process st.st end
+         | ReachTest(ineqs) -> begin
+            match process with 
+            | None -> assert false
+            | Some process -> trace_statements kb ineqs solved_parent unsolved_parent test_parent process st.st end
          | Tests(_) -> kb.temporary_merge_test_result <- st :: kb.temporary_merge_test_result
          end 
      else begin
@@ -1054,13 +1059,13 @@ let theory_statements kb fname arity =
     
 
 let extra_resolution kb solved unsolved =
-  if !debug_saturation then Printf.printf "Try resolution between #%d and #%d\n%!" solved.id unsolved.id;
+  if !debug_saturation then Printf.printf "Try resolution between #%d and #%d : " solved.id unsolved.id;
   (* Printf.printf "%s \n %s\n" (show_raw_statement solved.st) (show_raw_statement unsolved.st); *)
   match Inputs.merge_choices unsolved.st.choices solved.st.choices with
-    None -> false
+    None -> if !debug_saturation then Printf.printf " incompatible choices\n"; false
   | Some merged_choice ->
   let merged_dag = merge unsolved.st.dag solved.st.dag in
-  if is_cyclic merged_dag then false else
+  if is_cyclic merged_dag then (if !debug_saturation then Printf.printf " cyclic dag\n"; false) else
   let sigma = sigma_maker_init unsolved.st.nbvars solved.st.nbvars in
   solved.st.binder:= Slave;
   unsolved.st.binder:= Master;
@@ -1068,8 +1073,9 @@ let extra_resolution kb solved unsolved =
   | [] -> []
   | [s] -> Inputs.csu s solved.st.inputs unsolved.st.inputs
   | _ -> assert false in 
-  if sigmas = [] then false
+  if sigmas = [] then (if !debug_saturation then Printf.printf " recipes cannot be unified \n"; false )
   else begin 
+    if !debug_saturation then Printf.printf " compatible worlds\n";
     List.iter (fun sigma -> List.iter 
       (fun st -> add_statement kb solved unsolved (if unsolved.test_parent == kb.rid_solved then solved.test_parent else unsolved.test_parent) unsolved.process st )
        (resolution sigma merged_choice merged_dag unsolved.st solved.st)) sigmas;

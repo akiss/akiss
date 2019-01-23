@@ -24,7 +24,7 @@ let show_choices choices =
   if Dag.is_empty choices.c then "" 
   else if !use_xml then 
   ((Dag.fold (fun l i str -> (if str = "" then "<choices>" else str ^ " ") ^ (
-    if l.p > i then "" else 
+    if l.p < i then "" else 
     if i = 0 then Format.sprintf "<input><loc>%d:</loc><cho>F</cho></input>" l.p else 
     if i = 1 then Format.sprintf "<input><loc>%d:</loc><cho>T</cho></input>" l.p else 
     Format.sprintf "<input><loc>%d</loc>-<map>%d</map></input>" l.p i)) choices.c "" ) ^"</choices>")
@@ -68,7 +68,7 @@ let get_output_of_input c l =
   let (l, _) = Dag.find_first (fun l -> compare l.p p >= 0) c.c in
   assert (l.p = p);
   l
-  with Not_found -> assert false
+  with Not_found -> Printf.printf "get_output_of_input %d %s\n" l.p (show_choices c); assert false
 
 let subset_choices c1 c2 =
   (*let exception E in *)

@@ -27,7 +27,7 @@ let negate_statement (st : raw_statement) =
   
 let statement_to_completion process_name (statement : statement) (st : raw_statement) =
   bijection.next_comp_id <- bijection.next_comp_id + 1;
-  let locs = locations_of_dag st.dag in 
+  let locs = locations_of_dag (only_observable st.dag) in 
   {
     id_c = bijection.next_comp_id;
     st_c = st ;
@@ -418,8 +418,14 @@ let filter_atom set a =
   
 let filter_dag set dag =
   {rel = Dag.filter (fun l _ -> LocationSet.mem l set) dag.rel}
+  
 let filter_inputs set (inputs : Inputs.inputs) :Inputs.inputs =
   {i = Dag.filter (fun l _ -> LocationSet.mem l set) inputs.i}
+  
+let filter_choices set (choices : Inputs.choices) : Inputs.choices = 
+  let parent_set = LocationSet.map (fun l -> match l.parent with Some l' -> l' | None -> null_location) set in
+  {c = Dag.filter (fun l i -> match l.parent with  Some l' -> LocationSet.exists (fun ps ->  l' = ps || ps.p = i) parent_set | None -> true) choices.c }
+(* technically, too much choices are preserved due to parallel branching *)  
   
 let trunconj set run =
   let stP = run.test.statement in
@@ -434,7 +440,7 @@ let trunconj set run =
   dag = trunc_map_dag (only_observable run.sol.restricted_dag) set run.corresp;
   inputs =  transpose_inputs identity_sigma (filter_inputs set  st.recipes) run  ;
   recipes = transpose_recipes identity_sigma (filter_inputs set st.recipes) run.corresp ; 
-  choices = Inputs.new_choices ; (* in run.choices some choices should be removed so we under approximate them *)
+  choices = (*filter_choices set*) run.choices; (* in run.choices some choices should be removed but we over approximate them TODO *)
   head = Tests({head_binder = st.binder; equalities=EqualitiesSet.empty; disequalities=EqualitiesSet.empty;});
   body = List.map (fun ba -> {
     loc = LocationSet.map (fun l -> loc_p_to_q l run.corresp) ba.loc;
@@ -444,6 +450,7 @@ let trunconj set run =
     }) (List.filter (filter_atom set) st.body) ;
   involved_copies = BangSet.empty ; (* TODO *)
   } in
+  (*Printf.printf "conjrun = %s\n" (show_raw_statement r);*)
   stP.binder := New;
   (identity_sigma,r)
   
@@ -787,7 +794,7 @@ let unreach_to_completion process_name base =
 let base_to_tests t c process_name base other_process = 
   statements_to_tests t c process_name base.rid_solved other_process EqualitiesSet.empty
   
-let get_time()=(Unix.times()).tms_utime
+let get_time()= Unix.gettimeofday() (*(Unix.times()).tms_utime*)
 
 let equivalence both p q =
   let time = if !about_bench || !do_latex then get_time() else 0. in

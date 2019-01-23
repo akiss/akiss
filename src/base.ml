@@ -19,6 +19,7 @@ type test_head = {
 type predicate =
   | Knows of term * term
   | Reach
+  | ReachTest of (term * term) list
   | Identical of term * term
   | Tests of test_head
   | Unreachable
@@ -95,9 +96,9 @@ let rec null_statement = {
 type i_o = In | Out
 
 type chankey = { 
+  ph : int ;
   c : chanId ; 
   io : i_o ; 
-  ph : int
 }
 
 let switch_io = function In -> Out | Out -> In
@@ -158,6 +159,7 @@ let show_predicate p =
  | Identical(r,r') ->
      (if !use_xml then "<i>identical</i>(" else "identical(" )^ (show_term r) ^ "," ^ (show_term r') ^ ")"
  | Reach -> if !use_xml then "<r>reach</r>" else "reach"
+ | ReachTest _ -> if !use_xml then "<r>reachT</r>" else "reachT"
  | Unreachable -> if !use_xml then "<u>unreach</u>" else "unreach"
  | Tests(h) -> 
     "tests(" ^ (show_test_head h) ^ ")"
@@ -179,7 +181,7 @@ let show_raw_statement st =
     "<raw_st><nbvars>%d</nbvars>\n<statement> %s%s &lt;== %s </statement>%s %s %s\n<recipes>%s</recipes></raw_st>\n" 
     st.nbvars 
     (show_predicate st.head)
-    (if st.head = Reach || st.head = Unreachable then "("^(show_loc_set (last_actions st.dag))^")" else "")
+    (match st.head with Reach | Unreachable | ReachTest(_) -> "("^(show_loc_set (last_actions st.dag))^")" | _ -> "")
     (show_atom_list st.body)
     (show_inputs st.inputs)
     (show_dag st.dag)
@@ -284,6 +286,7 @@ match pred with
   | Identical(r,r') -> 
      Identical(Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)
   | Reach -> Reach
+  | ReachTest(ineqs) -> ReachTest( (*List.map (fun (s,t) -> (Rewriting.apply_subst_term s sigma,Rewriting.apply_subst_term t sigma))*) ineqs)
   | Unreachable -> Unreachable
   | Tests(head) -> Tests(apply_subst_test_head head sigma)
 

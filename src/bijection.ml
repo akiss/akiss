@@ -9,7 +9,7 @@ let recipes_of_head head =
   | Identical(r,r') -> EqualitiesSet.singleton (r,r'),EqualitiesSet.empty
   | Knows(_)
   | Reach -> EqualitiesSet.empty,EqualitiesSet.empty
-  | Unreachable -> assert false
+  | Unreachable | ReachTest(_) -> assert false
   
 let head_predicate_to_test binder pred =
   match pred with
