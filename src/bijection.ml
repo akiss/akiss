@@ -63,7 +63,7 @@ let show_extra_thread th =
   Printf.sprintf "%s <| %s ==> %s " (show_loc_set th.before_locs) (Inputs.show_choices th.made_choices) (Process.show_process_start 2 th.thread)
   
 let show_extra_thread_list lst =
-  List.fold_left (fun str e -> (if str = "" then "" else str ^ "\n ." ) ^ (show_extra_thread e)) "" lst
+  List.fold_left (fun str e -> (if str = "" then "  " else str ^ "\n  " ) ^ (show_extra_thread e)) "" lst
   
 module rec Run : sig 
   type completion = {
@@ -171,13 +171,11 @@ struct
   frame : Inputs.inputs ; (* the frame for outputs *)
   choices : Inputs.choices ; (* the choices on Q that have been made in this trace *)
   phase : int ; (* the current phase *)
-  (*disequalities : (term * term) list;*) (*All the disequalities that have been encountred during the trace, not used *)
   qthreads : extra_thread list ; (* The available action of Q, the constraints *)
   failed_qthreads : extra_thread list ; (* The action that might be availble for a specific substitution, used for debugging *)
   pending_qthreads : ((location * term option * extra_thread) list) Base.ChanMap.t ; (* The threads which is locked by a hidden chan *)
   (*mutable children : partial_run list ; (* once processed, the list of possible continuation of the execution *)*)
   restrictions : LocationSet.t;
-  (*performed_restrictions : LocationSet.t;*)
   parent : partial_run option;
   (* for scoring *)
   last_exe : location ; (* the action whose run lead to this pr *)
@@ -217,13 +215,14 @@ end
 and Test : sig 
 type test = {
   process_name : which_process; (* Is it a test of P or of Q?*)
+  reflexive : bool ; (* the target process is process_name *)
   statement : raw_statement ; (* the solved statement seen as the test to check *)
   origin : Run.origin;
   id : int;
   from : IntegerSet.t;
   nb_actions : int; (* used to order the tests *)
   mutable new_actions : int; (* compared to the base actions, used to order the tests in the database *)
-  mutable constraints : correspondance; (* Try to pass the test prioritary satisfying the constraints *)
+  mutable constraints : correspondance; (* Try to pass the test with these constraints *)
   mutable constraints_back : correspondance; (* Inverse mapping *)
   mutable solutions_todo : Run.solution list;
   mutable solutions_done : Run.solution list;
@@ -234,6 +233,7 @@ end
 = struct
 type test = {
   process_name : which_process; (* Is it a test of P or of Q?*)
+  reflexive : bool ; (* the target process is process_name *)
   statement : raw_statement ; (* the solved statement seen as the test to check *)
   origin : Run.origin;
   id : int;
@@ -293,13 +293,13 @@ open Test
 
 let show_ext_extra_thread_lst lst =
   List.fold_left (fun str (loc,t,extra_thread) -> 
-    (if str = "" then "" else str ^ "\n") 
-    ^ (show_extra_thread extra_thread)) "" lst
+    (if str = "" then "    " else str ^ "\n    ") 
+    ^ (string_of_int loc.p) ^ "::" ^ (show_extra_thread extra_thread)) "" lst
     
 let show_pending_threads pthr =
   ChanMap.fold (fun chkey lst str -> 
-    (if str = "" then "" else str ^ "\n")
-    ^ (show_chan_key chkey) ^" : " ^(show_ext_extra_thread_lst lst)) pthr ""
+    (if str = "" then "\n  " else str ^ "\n  ")
+    ^ (show_chan_key chkey) ^" : \n" ^(show_ext_extra_thread_lst lst)) pthr ""
     
 let show_run pr  =
   if !use_xml 
@@ -315,7 +315,7 @@ let show_run pr  =
         
 let show_partial_run pr =
     Format.sprintf 
-    "%s frame= %s\n remaining_actions=%s\n action=%d; weird = %d ; score = %d ; restricted = %s;\n qthreads= %s\n pending_qthreads=%s\n fthreads=%s\n}\n"
+    "%s frame= %s\n remaining_actions=%s\n action=%d; weird = %d ; score = %d ; restricted = %s;\n qthreads=\n%s\n pending_qthreads=%s\n fthreads=%s\n}\n"
     (show_run pr)
     (Inputs.show_inputs pr.frame)
     (show_loc_set pr.remaining_actions)
@@ -385,6 +385,7 @@ exception Attack of test * solution
 
 let null_test = {
   process_name = P ;
+  reflexive = false;
   statement = null_raw_statement;
   origin = Temporary;
   id = -100;

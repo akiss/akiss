@@ -16,7 +16,10 @@ val subset_choices : choices -> choices -> bool
 val merge_choices : choices -> choices -> choices option
 val merge_choices_add_link :
   choices -> choices -> Dag.Dag.key -> Dag.Dag.key -> choices option
+val merge_choices_with_link :
+  choices -> choices -> Dag.Dag.key -> Dag.Dag.key -> choices option
 val get : Dag.Dag.key -> inputs -> Types.term
+val get_choice_opt : Dag.Dag.key -> choices -> int option
 val map : (Types.term -> Types.term) -> inputs -> inputs
 val csu : Types.subst_maker -> inputs -> inputs -> Types.subst_maker list
 val csu_recipes :

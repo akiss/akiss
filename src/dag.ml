@@ -166,3 +166,7 @@ let preceding_dag dag locs =
 let dag_with_actions_at_end locs lset = 
   { rel = LocationSet.fold (fun l dag -> Dag.add l lset dag) locs (Dag.empty)}
 
+(* For printing *)
+
+let last_actions dag =
+ Dag.fold ( fun k  locs result -> if LocationSet.is_empty locs then LocationSet.add k result else result) dag.rel LocationSet.empty

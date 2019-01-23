@@ -6,9 +6,22 @@ satq unsolved{
   background-color:#ddeedd;
   display:block;
 }
+satq hiddenchans{
+  background-color:#dddd77;
+  display:block;
+  
+}
+satp hiddenchans{
+  background-color:#dd99dd;
+  display:block;
+  
+}
 tests, unreachables{
   display:block;
   margin:20px 0;
+}
+hidden {
+  display:block;
 }
 st {
   display:list-item;
@@ -21,6 +34,10 @@ statement{
 }
 chanset{
   display:block;
+}
+ckey{
+  color:#886600;
+  padding: 0 10px;
 }
 nbvars{
   font-size:0.6em;
@@ -144,4 +161,7 @@ miss{
 }
 wp{
   display:none;
+}
+phase{
+  display:#eeff00;
 }

@@ -16,85 +16,79 @@ let rec apply_subst_inputs term frame =
     | Fun(f, args) -> Fun(f, List.map (fun x -> apply_subst_inputs x frame) args)
     | Var(x) -> Var(x)
 
-let dispatch tuple = List.fold_left (fun (lst1,lst2,lst3) (x,y,z) -> (List.rev_append x lst1 ,List.rev_append y lst2,List.rev_append z lst3)) ([],[],[]) tuple
+(*let dispatch tuple = List.fold_left (fun (lst1,lst2,lst3) (x,y,z) -> 
+  (List.rev_append x lst1 ,List.rev_append y lst2,List.rev_append z lst3)) ([],[],[]) tuple*)
 
-(* return a tuple : 
+(* update the tuple (pending,final,failure) : 
   - the (chan,threads) waiting for a silent action, 
   - the updated threads, 
   - the threads which have failed due to a test (* for debug outputs *)*)
-let rec run_until_io (choices_constraints : Inputs.choices option) process made_choices first frame =
+let rec run_until_io reflexive pending final failure (choices_constraints : Inputs.choices) process first frame =
   (*Printf.printf "run until io %s \n%!" (show_process_start 3 process);*)
   match process with
-  | EmptyP -> ([],[],[])
-  | ParallelP(proclst) -> dispatch (List.map (fun p -> run_until_io choices_constraints p made_choices first frame ) proclst)
+  | EmptyP -> ()
+  | ParallelP(proclst) -> List.iter (fun p -> run_until_io reflexive pending final failure choices_constraints p first frame ) proclst
   | ChoiceP(l,proclst) -> begin
-    match  choices_constraints with
-    None -> dispatch
-      (List.map (fun (i,p) -> run_until_io choices_constraints p (Inputs.add_choice l i made_choices) first frame) proclst)
-    | Some choices -> try 
-        let i = Dag.find l choices.c in
-        run_until_io choices_constraints (List.assoc i proclst) (Inputs.add_choice l i made_choices) first frame with
-      Not_found -> ([],[],[])
-    end
+      match Inputs.get_choice_opt l choices_constraints with
+      | None -> 
+        if not reflexive then 
+          List.iter (fun (i,p) -> run_until_io reflexive pending final failure (Inputs.add_choice l i choices_constraints) p first frame) proclst
+      | Some i -> try 
+          run_until_io reflexive pending final failure choices_constraints (List.assoc i proclst) first frame 
+        with Not_found -> ()
+      end
   | SeqP(Input({io = Input(chanId); observable= Public}) ,p) 
   | SeqP(Output({io = Output(chanId,_); observable= Public},_) ,p) -> 
-    ([],[{ made_choices = made_choices; before_locs = first; thread = process}],[])
+      final := { made_choices = choices_constraints; before_locs = first; thread = process} :: !final
   | SeqP(Input({io = Input(chanId); observable= Hidden; phase = ph} as l),p) -> 
-    ([(l,None, {c = chanId; io = In; ph = ph},{ made_choices = made_choices; before_locs = first; thread = p})],[],[])
+      pending := (l,None,   {c = chanId; io = In;  ph = ph},{ made_choices = choices_constraints; before_locs = first; thread = p}) :: !pending
   | SeqP(Output({io = Output(chanId,_); observable= Hidden; phase = ph} as l,t),p) -> 
-    ([(l,Some t, {c = chanId; io = Out; ph = ph},{ made_choices = made_choices; before_locs = first; thread = p})],[],[])
- (* | SeqP(Output(l,_) as entry,p) -> 
-    let chanId = match l.io with
-    | Output(chanId)
-    | Input(chanId) -> chanId in
-    (match l.observable with
-      | Public -> ([],[{ made_choices = made_choices; before_locs = first; thread = process}],[])
-      | Hidden -> let term,io = 
-        (match entry with
-        | Input(l) -> None,In
-        | Output(l,t) -> Some t, Out
-        | _ -> assert false) in
-          ([(l,term, {c = chanId; io = io; ph = l.phase},{ made_choices = made_choices; before_locs = first; thread = p})],[],[])
-        )
-    | _ -> assert false)*)
+      pending := (l,Some t, {c = chanId; io = Out; ph = ph},{ made_choices = choices_constraints; before_locs = first; thread = p}) :: !pending
   | SeqP(Test(t,t'),p) -> 
-    let t = apply_subst_inputs t frame in
-    let t' = apply_subst_inputs t' frame in
-    if Rewriting.equals_r t t' (! Parser_functions.rewrite_rules) 
-    then run_until_io choices_constraints p made_choices first frame 
-    else begin 
-    (*let t'' = Rewriting.normalize t (! Parser_functions.rewrite_rules) in
-    let t''' = Rewriting.normalize t' (! Parser_functions.rewrite_rules) in
-    Printf.printf "Test fail %s \n    =     %s \n%!" (show_term t'')(show_term t''');*)
-      ([],[],[{ made_choices = made_choices; before_locs = first; (*disequalities = [] ;*) thread = process}]) end
+      let t = apply_subst_inputs t frame in
+      let t' = apply_subst_inputs t' frame in
+      if Rewriting.equals_r t t' (! Parser_functions.rewrite_rules) 
+      then run_until_io reflexive pending final failure choices_constraints p first frame 
+      else begin 
+      (*let t'' = Rewriting.normalize t (! Parser_functions.rewrite_rules) in
+      let t''' = Rewriting.normalize t' (! Parser_functions.rewrite_rules) in
+      Printf.printf "Test fail %s \n    =     %s \n%!" (show_term t'')(show_term t''');*)
+      failure := { made_choices =choices_constraints; before_locs = first; thread = process} :: !failure end
   | SeqP(TestInequal(t,t'),p) ->
     let t = apply_subst_inputs t frame in
     let t' = apply_subst_inputs t' frame in
     if not (Rewriting.equals_r t t' (! Parser_functions.rewrite_rules)) 
-    then (*let (lst1,lst2) =*) run_until_io choices_constraints p made_choices first frame (*in
-      (List.map (fun ext_thread -> {ext_thread with disequalities = (t,t')::ext_thread.disequalities}) lst1, lst2)  *)
-    else ([],[],[{ made_choices = made_choices; before_locs = first; (*disequalities = [] ;*) thread = process}])
-  | CallP(l,n,p,terms,chans) ->
-      dispatch (List.init n (fun i -> 
-        let pr = expand_call l (i+1) p terms chans in
-        run_until_io choices_constraints pr made_choices first frame ))
+    then run_until_io reflexive pending final failure choices_constraints p first frame 
+    else failure := { made_choices = choices_constraints; before_locs = first; thread = process} :: !failure
+  | CallP(l,n,p,terms,chans) -> 
+      for i = 1 to n do
+        let pr = expand_call l i p terms chans in
+        run_until_io reflexive pending final failure choices_constraints pr first frame 
+      done
   | _ -> assert false
   
 (* Given a secret channel communication from a loc_input to a loc_output of a term_output, 
 computes the threads which appears after this reduction *)  
-let reduc_and_run choices_constraints loc_input loc_output term_output thread_input thread_output frame =
+let reduc_and_run reflexive pending final failure (loc_input : location) (loc_output : location) term_output thread_input thread_output frame =
+  (*Printf.printf "  reduc_and_run %d -> %d\n" loc_output.p loc_input.p;*)
   let process_input = Process.apply_subst_process loc_input term_output thread_input.thread in
-  match Inputs.merge_choices_add_link thread_input.made_choices thread_output.made_choices loc_input loc_output with
-  | Some made_choices ->
+  match 
+    if reflexive 
+    then (assert (thread_output.made_choices == thread_input.made_choices);
+      if Inputs.get_choice_opt loc_input thread_output.made_choices = Some loc_output.p then Some thread_input.made_choices else None)
+    else Inputs.merge_choices_with_link thread_input.made_choices thread_output.made_choices loc_input loc_output 
+  with
+  | Some choices_constraints ->
     if ! verbose_execution then
       Printf.printf "    out(%s) -%s[%d]-> in(%s)\n" loc_output.name 
         (match loc_output.io with Input(c) | Output(c,_) -> c.name | _ -> assert false) 
         loc_output.phase loc_input.name;
     let first = LocationSet.union thread_input.before_locs thread_output.before_locs  in
-    dispatch [ run_until_io choices_constraints process_input made_choices first frame; run_until_io choices_constraints thread_output.thread made_choices first frame ]
-  | None -> [],[],[]
+    run_until_io reflexive pending final failure choices_constraints process_input first frame; 
+    run_until_io reflexive pending final failure choices_constraints thread_output.thread first frame 
+  | None -> ()
   
-let merge_pending_lst init lst =
+(*let merge_pending_lst init lst =
   List.fold_left (fun all_p (l,t,c,p)-> ChanMap.add c ((l,t,p)::(try ChanMap.find c all_p with Not_found -> [])) all_p) init lst
 
 (* Once a private action is selected (loc,term,chan_kind,ext_thread), 
@@ -113,62 +107,97 @@ let rec test_reduc_for_one (choices_constraints : Inputs.choices option) (loc,te
       | None, Some t -> reduc_and_run choices_constraints loc l t ext_thread extt  frame
       | Some t, None -> reduc_and_run choices_constraints l loc t extt ext_thread  frame
       | _ -> assert false in
-      let new_pending_set = merge_pending_lst all_pending_set pending in
-      let deeper_call = test_all_internal_communications choices_constraints new_pending_set pending  frame in
+      (*Printf.printf " test_reduc_for_one: %s\n with %s \n%!" 
+        (show_ext_extra_thread_lst (List.map (fun (l,t,c,et) -> (l,t,et)) pending))
+        (show_pending_threads all_pending_set);*)
+      (*let new_pending_set = merge_pending_lst all_pending_set pending in
+      let deeper_call = test_all_internal_communications choices_constraints new_pending_set pending  frame in *)
       let recursive_call = test_reduc_for_one choices_constraints (loc,term,chan_kind,ext_thread) conj_chan q all_pending_set frame in
-      dispatch [(pending,final,failure);deeper_call;recursive_call]
+      dispatch [(pending,final,failure);(*deeper_call;*)recursive_call]
   | [] -> ([],[],[])
 
-(* Try all possible internal communication with one action of end_new_lst (the new ones) and one action 
+(* Try all possible internal communication with one action of new_threads_todo (the new ones) and one action 
    of all_pending_set (all of them). 
-   At the first recursive call, end_new_lst should be included in all_pending_set.
-   Take the first action of end_new_lst, look in all_pending_set for actions which are compatible
+   At the first recursive call, new_threads_todo should be included in all_pending_set.
+   Take the first action of new_threads_todo, look in all_pending_set for actions which are compatible
    (same chan name, and ensure input / output communication).
 *)
-and test_all_internal_communications choices_constraints all_pending_set end_new_lst frame = 
-  match end_new_lst with
+and test_all_internal_communications (choices_constraints : Inputs.choices option) all_pending_set new_threads_todo frame = 
+  (* Printf.printf "test_all_internal_communications\n"; *)
+  match new_threads_todo with
   | (loc,term,chan_kind,ext_thread) :: q -> 
-    let res2 = test_all_internal_communications choices_constraints all_pending_set q frame in
-    let conj_chan = { chan_kind with io = Base.switch_io chan_kind.io} in (
-    match ChanMap.find_opt conj_chan all_pending_set with
-    | Some old_chan_lst -> 
-      (* When a reduction is done between 2 new actions, avoid considering it in both orders *)
-      let old_chan_lst = List.filter (fun (l,t,p) -> 
-              not (List.exists (fun (lo,te,_,th) -> lo == l && te == t && th==p) end_new_lst)
-            ) old_chan_lst in
-      let old_chan_lst = begin
-        match choices_constraints with
-        | None -> old_chan_lst
-        | Some choices -> List.filter (fun ((l : location),_,_) -> 
-          try Dag.find loc choices.c = l.p 
-          with Not_found -> false) old_chan_lst
-      end in
-      let res = test_reduc_for_one choices_constraints (loc,term,chan_kind,ext_thread) conj_chan old_chan_lst all_pending_set frame in
-      dispatch [res;res2] 
-    | None -> res2)
+    let conj_chan = { chan_kind with io = Base.switch_io chan_kind.io} in 
+    let (pending,final,failure) = (
+      match ChanMap.find_opt conj_chan all_pending_set with
+      | Some old_chan_lst -> 
+        (* When a reduction is done between 2 new actions, avoid considering it in both orders *)
+        let old_chan_lst = List.filter (fun (l,t,p) -> 
+                not (List.exists (fun (lo,te,_,th) -> lo == l && te == t && th==p) new_threads_todo)
+              ) old_chan_lst in   
+        (* When testing a statement with actual, discard other choices than the one of the statement *)
+        let old_chan_lst = begin
+          match choices_constraints with
+          | None -> old_chan_lst
+          | Some choices -> List.filter (fun ((l : location),_,_) -> 
+            try Dag.find loc choices.c = l.p 
+            with Not_found -> false) old_chan_lst
+        end in
+        test_reduc_for_one choices_constraints (loc,term,chan_kind,ext_thread) conj_chan old_chan_lst all_pending_set frame 
+      | None -> ([],[],[])) in
+    let new_pending_set = merge_pending_lst all_pending_set pending in
+    let res2 = test_all_internal_communications choices_constraints new_pending_set (pending @ q) frame in
+    dispatch [(pending,final,failure);res2]
   | [] ->  ([],[],[]) 
-
-let run_silent_actions choices_constraints process old_pending first frame =
-  (*Printf.printf "run silent actions of %s \n%!" (show_process_start 3 process);*)
-  let pending,final,failure = run_until_io choices_constraints process (Inputs.new_choices) first frame in
-  let res = test_all_internal_communications choices_constraints (merge_pending_lst old_pending pending) pending frame in
-  dispatch [(pending,final,failure);res]
   
-let internal_choices_of_actual test =
-  if is_empty_correspondance test.constraints
-  then None
-  else 
-    let (k,l) = Dag.choose test.constraints.a in
-    if k=l then 
-      Some test.statement.choices
-    else None
+*)
+  
+let run_silent_actions old_threads reflexive (choices_constraints : Inputs.choices ) process first frame  =
+  let new_threads = ref [] in
+  let final = ref [] in
+  let failure = ref [] in
+  run_until_io reflexive new_threads final failure choices_constraints process first frame ;
+  while !new_threads != [] 
+  do
+    match !new_threads with
+    | [] -> assert false
+    | (new_loc,new_term,chan_kind,new_ext_thread) :: q -> 
+      new_threads := q ;
+      let conj_chan = { chan_kind with io = Base.switch_io chan_kind.io} in 
+      (
+        match ChanMap.find_opt conj_chan !old_threads with
+        | None -> ()
+        | Some old_chan_lst -> List.iter (fun (old_loc,old_term,old_ext_thread) ->
+          match new_term,old_term with
+          | None, Some t -> reduc_and_run reflexive new_threads final failure new_loc old_loc t new_ext_thread old_ext_thread frame
+          | Some t, None -> reduc_and_run reflexive new_threads final failure old_loc new_loc t old_ext_thread new_ext_thread frame
+          | _ -> assert false
+          ) old_chan_lst 
+      );
+      old_threads := ChanMap.add chan_kind ((new_loc,new_term,new_ext_thread)::(try ChanMap.find chan_kind !old_threads with Not_found -> [])) !old_threads 
+  done ;
+  (!final,!failure)
+      
+
+      
+(*let run_silent_actions choices_constraints process old_pending first frame =
+  (*Printf.printf "run silent actions of %s \n%!" (show_process_start 3 process);*)
+  let pending,final,failure = run_until_io pending final failure choices_constraints process (Inputs.new_choices) first frame in
+  (* Printf.printf "run_silent_actions: %s\n %!" (show_ext_extra_thread_lst (List.map (fun (l,t,c,et) -> (l,t,et)) pending)); *)
+  let res = test_all_internal_communications choices_constraints (merge_pending_lst old_pending pending) pending frame in
+  dispatch [(pending,final,failure);res]*)
+  
+let choices_constraints test choice =
+  if test.reflexive
+  then test.statement.choices
+  else choice
   
 let init_sol process_name (statement : raw_statement) processQ test : solution =
-  let (pt,qt,fqt) = run_silent_actions (internal_choices_of_actual test) processQ ChanMap.empty LocationSet.empty Inputs.new_inputs in
+  let old_threads = ref ChanMap.empty in
+  let (final,failure) = run_silent_actions old_threads test.reflexive (choices_constraints test (Inputs.new_choices)) processQ LocationSet.empty Inputs.new_inputs in
   let rec sol = { null_sol with 
     init_run = run;
     partial_runs = [run];
-    partial_runs_todo = Solutions.empty (*singleton run*);
+    partial_runs_todo = Solutions.empty ;
     restricted_dag = only_observable test.statement.dag ;
     sol_test = test;
   }
@@ -177,11 +206,10 @@ let init_sol process_name (statement : raw_statement) processQ test : solution =
      test = test ;
      sol = sol ; 
      remaining_actions = Dag.fold (fun l _ remain -> if l.observable = Public then LocationSet.add l remain else remain ) statement.dag.rel LocationSet.empty ;
-     pending_qthreads = merge_pending_lst ChanMap.empty pt;
-     qthreads = qt ;
-     failed_qthreads = fqt;
+     pending_qthreads = !old_threads;
+     qthreads = final ;
+     failed_qthreads = failure;
    } in
-   if ! debug_execution then Printf.printf "________+__________\nInitial step on %s" (show_partial_run run); 
    sol.partial_runs_todo <- Solutions.singleton run;
    sol
 
@@ -189,16 +217,17 @@ let init_sol process_name (statement : raw_statement) processQ test : solution =
 (* Produce a new partial_run object from already computed elements except the remaining threads *)
 let next_partial_run run (action : location) full_p proc l frame locs choices =
   (*Printf.printf "next_partial_run %s \n dag = %s\n" (show_process_start 3 full_p)(show_dag run.sol.restricted_dag);*)
-  let (pt,qt,fqt) = List.fold_left 
-    (fun (plst,lst,flst) ext_thread -> 
+  let old_threads = ref run.pending_qthreads in
+  let (qthreads,fqthreads) = List.fold_left 
+    (fun (new_qt,flqt) ext_thread -> 
       if ext_thread.thread != full_p 
-      then (plst,ext_thread :: lst,flst)
+      then (ext_thread :: new_qt,flqt)
       else begin
         (*Printf.printf "start run_silent_actions %s \n" (show_process_start 3 proc);*)
-        let (plqt,lqt,flqt)= (run_silent_actions (internal_choices_of_actual run.test) proc run.pending_qthreads (LocationSet.add action ext_thread.before_locs) frame) in 
-        dispatch [(plst,lst,flst);(plqt,lqt,flqt)] end
+        let (lqt,fail) = run_silent_actions old_threads run.test.reflexive (choices_constraints run.test choices) proc (LocationSet.add action ext_thread.before_locs) frame in 
+        (lqt @ new_qt, fail @ flqt) end
     )
-    ([],[],[]) run.qthreads in
+    ([],[]) run.qthreads in
     let restrictions = (*match run.next_action with
     | None ->*) LocationSet.filter (fun loc -> 
       not (LocationSet.mem action (try Dag.find loc run.sol.restricted_dag.rel with Not_found -> assert false))) locs
@@ -215,9 +244,9 @@ let next_partial_run run (action : location) full_p proc l frame locs choices =
       frame = frame;
       choices = choices;
       phase = l.phase;
-      pending_qthreads = merge_pending_lst run.pending_qthreads pt;
-      qthreads = qt ;
-      failed_qthreads = fqt @ run.failed_qthreads ;
+      pending_qthreads = ! old_threads;
+      qthreads = qthreads ;
+      failed_qthreads = fqthreads;
       restrictions = restrictions;
       parent = Some run;
       last_exe = action;
@@ -417,8 +446,9 @@ let rec next_solution solution =
     i current_loc.p (show_partial_run pr) (show_test pr.test)(show_correspondance pr.test.constraints); exit(5)
   end
   else
-    if is_empty_correspondance pr.test.constraints (* When the mapping is set there is no way to have a restricted dag *)
-    then (
+    (*if is_empty_correspondance pr.test.constraints (* When the mapping is set there is no way to have a restricted dag *)
+    then*) (
+    assert (is_empty_correspondance pr.test.constraints); 
     if !debug_execution 
     then Printf.printf "A restricted run is being tested from %s \n which test is \n %s \n" (show_partial_run pr)(show_test pr.test) ;
     let par = match pr.parent with Some par -> par | _ -> assert false in

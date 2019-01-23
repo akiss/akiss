@@ -174,6 +174,7 @@ and Test :
   sig
     type test = {
       process_name : which_process;
+      reflexive : bool;
       statement : Base.raw_statement;
       origin : Run.origin;
       id : int;
@@ -325,6 +326,8 @@ module RunSet :
     val add_seq : elt Seq.t -> t -> t
     val of_seq : elt Seq.t -> t *)
   end
+val show_ext_extra_thread_lst : (Types.location * 'a * extra_thread) list -> string
+val show_pending_threads : (Types.location * 'a * extra_thread) list Base.ChanMap.t -> string
 val show_run : Run.partial_run -> string
 val show_partial_run : Run.partial_run -> string
 val show_origin : Run.origin -> string

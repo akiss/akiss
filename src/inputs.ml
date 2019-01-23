@@ -29,7 +29,7 @@ let show_choices choices =
     if i = 1 then Format.sprintf "<input><loc>%d:</loc><cho>T</cho></input>" l.p else 
     Format.sprintf "<input><loc>%d</loc>-<map>%d</map></input>" l.p i)) choices.c "" ) ^"</choices>")
   else
-  (Dag.fold (fun l i str -> (if str = "" then "[" else str ^ " | ") ^ Format.sprintf "<%d>: %d" l.p  i) choices.c "" ) ^ "]"
+  (Dag.fold (fun l i str -> (if str = "" then "[" else str ^ " |") ^ Format.sprintf "%d>%d" l.p  i) choices.c "" ) ^ "]"
   
 let show_verbose_choices choices =
   if Dag.is_empty choices.c then ()
@@ -82,12 +82,8 @@ let subset_choices c1 c2 =
 let merge_choices c1 c2 =
   try Some
   { c =
-  Dag.merge (fun loc i1 i2 -> 
-    match (i1,i2) with
-    | (Some i1, Some i2) -> if i1 = i2 then Some(i1) else raise Incompatible_choices
-    | (Some i , None)  
-    | (None , Some i) -> Some(i) 
-    | (None,None) -> None) c1.c c2.c 
+  Dag.union (fun loc i1 i2 -> 
+    if i1 = i2 then Some(i1) else raise Incompatible_choices) c1.c c2.c 
   }
   with Incompatible_choices -> None
 
@@ -103,12 +99,27 @@ let merge_choices_add_link c1 c2 l1 l2=
   }
   with Incompatible_choices -> None
 
+let merge_choices_with_link c1 c2 l1 l2=
+  try Some
+  { c = Dag.add l1 l2.p ( Dag.add l2 l1.p (
+  Dag.merge (fun loc i1 i2 -> 
+    match (i1,i2) with
+    | (Some i1, Some i2) -> if i1 = i2 && ((loc <> l1 && loc <> l2)|| loc = l1 && i1 = l2.p || loc = l2 && i1 = l1.p) then Some(i1) else raise Incompatible_choices
+    | (Some i , None)  
+    | (None , Some i) -> if ((loc <> l1 && loc <> l2)|| loc = l1 && i = l2.p || loc = l2 && i = l1.p) then Some(i) else raise Incompatible_choices
+    | (None,None) -> None) c1.c c2.c ))
+  }
+  with Incompatible_choices -> None
+
 (**
   Inputs stuff
 **)
 let get l input =
   try Dag.find l input.i with 
   Not_found -> begin Printf.printf "Error: location %d not found on input %s \n%!" (l.p)(show_inputs input); raise Not_found end
+  
+let get_choice_opt l choice =
+  Dag.find_opt l choice.c
 
 let map f input = 
   { i = Dag.map f input.i}

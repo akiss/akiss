@@ -56,8 +56,8 @@ module Dag :
     val remove : key -> 'a t -> 'a t *)
     val merge :
       (key -> 'a option -> 'b option -> 'c option) -> 'a t -> 'b t -> 'c t
-(*    val union : (key -> 'a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
-    val compare : ('a -> 'a -> int) -> 'a t -> 'a t -> int
+    val union : (key -> 'a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
+(*    val compare : ('a -> 'a -> int) -> 'a t -> 'a t -> int
     val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool *)
     val iter : (key -> 'a -> unit) -> 'a t -> unit 
     val fold : (key -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
@@ -75,7 +75,7 @@ module Dag :
 (*    val choose_opt : 'a t -> (key * 'a) option
     val split : key -> 'a t -> 'a t * 'a option * 'a t *)
     val find : key -> 'a t -> 'a
-(*    val find_opt : key -> 'a t -> 'a option *)
+    val find_opt : key -> 'a t -> 'a option 
     val find_first : (key -> bool) -> 'a t -> key * 'a
 (*    val find_first_opt : (key -> bool) -> 'a t -> (key * 'a) option
     val find_last : (key -> bool) -> 'a t -> key * 'a
@@ -114,3 +114,4 @@ val pick_last_or_null : dag -> LocationSet.t -> LocationSet.elt
 val expurge_dag_after : dag -> LocationSet.t -> dag
 val preceding_dag : dag -> LocationSet.t -> dag
 val dag_with_actions_at_end : LocationSet.t -> LocationSet.t -> dag
+val last_actions : dag -> LocationSet.t

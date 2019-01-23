@@ -176,7 +176,15 @@ let show_raw_statement st =
   let string = 
   if !use_xml then
   Format.sprintf
-    "<raw_st><nbvars>%d</nbvars>\n<statement> %s &lt;== %s </statement>%s %s %s\n<recipes>%s</recipes></raw_st>\n" st.nbvars (show_predicate st.head)(show_atom_list st.body)(show_inputs st.inputs)(show_dag st.dag)(show_choices st.choices)(show_inputs st.recipes)
+    "<raw_st><nbvars>%d</nbvars>\n<statement> %s%s &lt;== %s </statement>%s %s %s\n<recipes>%s</recipes></raw_st>\n" 
+    st.nbvars 
+    (show_predicate st.head)
+    (if st.head = Reach || st.head = Unreachable then "("^(show_loc_set (last_actions st.dag))^")" else "")
+    (show_atom_list st.body)
+    (show_inputs st.inputs)
+    (show_dag st.dag)
+    (show_choices st.choices)
+    (show_inputs st.recipes)
   else
   Format.sprintf
     "(%d%s) %s <== %s \n       %s %s %s\n       %s\n" st.nbvars (show_binder !(st.binder)) (show_predicate st.head)(show_atom_list st.body)(show_inputs st.inputs)(show_dag st.dag)(show_choices st.choices)(show_inputs st.recipes) in 
@@ -184,18 +192,22 @@ let show_raw_statement st =
   
 let show_chan_key chkey =
    if !use_xml then 
-      Format.sprintf "<ckey>%s %s %d</ckey>\n" chkey.c.name (match chkey.io with In -> "in" | Out -> "out") chkey.ph
+      Format.sprintf "<ckey>%s %s %s</ckey>\n" chkey.c.name (match chkey.io with In -> "in" | Out -> "out") 
+      (if chkey.ph <> 0 then "<phase>"^ (string_of_int chkey.ph) ^ "</phase>" else "")
     else
       Format.sprintf "[%s]%s-%d" chkey.c.name (match chkey.io with In -> "in" | Out -> "out") chkey.ph
   
 let show_chan_statements chmap =
-  ChanMap.fold ( fun key lst str -> str ^ "\n<chanset>" ^ (show_chan_key key) ^(List.fold_left (fun str (l,t,terms,st,pr) -> 
+  if !use_xml then 
+    ChanMap.fold ( fun key lst str -> str ^ "\n<chanset>" ^ (show_chan_key key) ^ (List.fold_left (fun str (l,t,terms,st,pr) -> 
     str ^
-    if !use_xml then 
       Format.sprintf "<hidden>%d %s</hidden>\n" l.p (show_raw_statement st)
-    else
-      Format.sprintf "loc %d, %s\n" l.p (show_raw_statement st)
-  ) ": " lst) ^ "</chanset>") chmap ""
+  ) "" lst) ^ "</chanset>") chmap ""
+  else
+  ChanMap.fold ( fun key lst str -> str ^ "\n" ^ (show_chan_key key) ^ (List.fold_left (fun str (l,t,terms,st,pr) -> 
+    str ^ Format.sprintf "loc %d, %s\n" l.p (show_raw_statement st)
+  ) ": \n" lst) ^ "\n") chmap ""
+
 
 let show_hash_test st =
   let string = 

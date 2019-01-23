@@ -84,7 +84,7 @@ let rec show_process_start i pr =
   | EmptyP -> "0"
   | ParallelP(lp) ->( List.fold_left (fun str p -> str ^ "|" ^ (show_process_start i p)) "(" lp ) ^ ")"
   | ChoiceP(l,lp)->( List.fold_left (fun str (j,p) -> str ^ "+" ^ (show_process_start i p)) "(" lp ) ^ ")"
-  | SeqP(a,p) -> (show_action a) ^ ";" ^ (show_process_start (i - 1) p)
+  | SeqP(a,p) -> (show_action a) ^ ";" ^ (show_process_start (match a with Test(_,_) | TestInequal(_,_) -> i | _ -> 0) p)
   | CallP(l,j,procId,args,chans) -> procId.name ^ (if j = 1 then "" else (string_of_int j))
 
 let rec count_type_nb typ pr i =

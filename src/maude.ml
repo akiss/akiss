@@ -3,6 +3,7 @@ open Util
 open Types
 open Parser_functions
 
+let memoize_maude_unify :  (string * bool, subst_maker list) Hashtbl.t=  Hashtbl.create 10
 
 let show_binder_maude = function 
   Master -> "x"
@@ -177,18 +178,28 @@ let run_maude print_query parse_result =
 let acunifiers with_rules pairlst sigma =
   if !about_maude then
     List.iter (fun (s,t) -> Format.printf " %s =? %s /\\\n" (show_term s) (show_term t)) pairlst ;
+  let query_string = print_maude_pairlst with_rules pairlst sigma in
+(*  try 
+  List.map (fun subst -> 
+    let sigma = Rewriting.identity_subst subst.nbvars in
+    Rewriting.compose subst sigma
+  )
+  (Hashtbl.find memoize_maude_unify (query_string,with_rules))
+  with
+  | Not_found -> *)
   if !about_maude then 
     Printf.printf "%s%s%s%!"
       (print_maude_signature ())
       (if with_rules then print_maude_rules () else "") 
-      (print_maude_pairlst with_rules pairlst sigma);
+      query_string;
     (*Format.fprintf chan "unify in AKISS %a =? %a .\n" print s print t ; *)
     (* Format.fprintf chan "quit \n" *)
+  
   let query chan =
     Format.fprintf chan "%s%s%s"
       (print_maude_signature ())
       (if with_rules then print_maude_rules () else "") 
-      (print_maude_pairlst with_rules pairlst sigma)
+      query_string
   in 
   (*query Format.std_formatter*)
   let parse_unifiers ch lexbuf =
@@ -210,9 +221,12 @@ let acunifiers with_rules pairlst sigma =
       query Format.std_formatter ;
       raise e
   in
+  let result_subst =
   run_maude
     (fun chan -> query chan)
-    (fun chan -> parse_unifiers chan)
+    (fun chan -> parse_unifiers chan) in
+(*  Hashtbl.add memoize_maude_unify (query_string,with_rules) result_subst;*)
+  result_subst
       
 let acunifiers with_rules pairlst sigma =
   maude_current_sigma := sigma;

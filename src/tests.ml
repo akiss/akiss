@@ -339,14 +339,16 @@ let actual_test process_name (st : raw_statement) =
   let corr = {a = Dag.mapi (fun k _ -> k) st.dag.rel} in
   let test = { null_test with
     process_name = process_name;
+    reflexive = true;
     statement = st;
     constraints = corr;
     constraints_back = corr;
   } in
+  if !debug_execution || !debug_tests 
+  then Printf.printf "\nChecking actual of %s \nwith dag = %s\n%!" (show_test test)(show_dag st.dag);
   let solution = init_sol process_name st (proc process_name) test in
-  if !debug_execution then Printf.printf "\nChecking actual of %s \nwith dag = %s\n%!" (show_test test)(show_dag st.dag);
   match find_possible_run solution with
-    None ->  false 
+    None -> if !debug_tests then Printf.printf "No execution for this test\n" ; false 
   | Some sol -> true
 
     
@@ -432,7 +434,7 @@ let trunconj set run =
   dag = trunc_map_dag (only_observable run.sol.restricted_dag) set run.corresp;
   inputs =  transpose_inputs identity_sigma (filter_inputs set  st.recipes) run  ;
   recipes = transpose_recipes identity_sigma (filter_inputs set st.recipes) run.corresp ; 
-  choices = run.choices ; (* TODO: some choices should be removed *)
+  choices = Inputs.new_choices ; (* in run.choices some choices should be removed so we under approximate them *)
   head = Tests({head_binder = st.binder; equalities=EqualitiesSet.empty; disequalities=EqualitiesSet.empty;});
   body = List.map (fun ba -> {
     loc = LocationSet.map (fun l -> loc_p_to_q l run.corresp) ba.loc;
@@ -734,7 +736,7 @@ let rec compute_new_completions process_name  =
 (* From solved statements create tests. 
 Opti: when children are identical with same world merge them with the reach parent to reduce number of tests *)  
 let rec statements_to_tests t c process_name (statement : statement) otherProcess equalities =
-  (* Printf.printf "Getting test (%d) %s %s \n%!" statement.id (if t then "oui" else "non") (show_raw_statement statement.st); *)
+  (* Printf.printf "Getting test (%d) %s %s \n%!" statement.id (if t then "yes" else "no") (show_raw_statement statement.st); *)
   let sigma,raw_statement' = Horn.simplify_statement statement.st in
   (*Printf.printf "simplified: %s\n" (show_raw_statement raw_statement');*)
   let equalities = 
@@ -784,10 +786,12 @@ let unreach_to_completion process_name base =
 
 let base_to_tests t c process_name base other_process = 
   statements_to_tests t c process_name base.rid_solved other_process EqualitiesSet.empty
+  
+let get_time()=(Unix.times()).tms_utime
 
 let equivalence both p q =
-  let time = if !about_bench || !do_latex then Sys.time () else 0. in
-  if !use_xml then Printf.printf "<?xml-stylesheet type='text/css' href='style.css' ?><all>" ;
+  let time = if !about_bench || !do_latex then get_time() else 0. in
+  if !use_xml then Printf.printf "<?xml-stylesheet type='text/css' href='../style.css' ?><all>" ;
   if !about_progress then Printf.printf "Saturating P\n\n%!";
   let (locP,satP) = Horn.saturate p in
   if  !about_saturation then
@@ -803,8 +807,8 @@ let equivalence both p q =
   bijection.satP <- satP ;
   bijection.satQ <- satQ ;
   let nb_statements = satP.next_id + satQ.next_id in 
-  let time_sat = if !about_bench then Sys.time () else 0. in
-  if !about_progress then Printf.printf "Building tests\n%!";
+  let time_sat = if !about_bench then get_time() else 0. in
+  if !about_progress then Printf.printf "Building tests from %d statements\n%!" nb_statements;
   base_to_tests true both P satP processQ ; 
   base_to_tests both true Q satQ processP ; 
   unreach_to_completion Q satQ ;
@@ -819,7 +823,7 @@ let equivalence both p q =
   Bijection.reorder_tests () ;
   let nb_tests_init = bijection.next_id in
   let nb_open = ref 0 in
-  let time_start_tests = if !about_bench then Sys.time () else 0. in  
+  let time_start_tests = if !about_bench then get_time() else 0. in  
   let time_ten_tests = ref time_start_tests in (
   try
     while not (Tests.is_empty bijection.tests) do
@@ -828,7 +832,7 @@ let equivalence both p q =
       while not (Tests.is_empty bijection.tests) do
         let test = pop () in
         incr nb_open;
-        if !about_bench && !nb_open = 10 then time_ten_tests := Sys.time ();
+        if !about_bench && !nb_open = 10 then time_ten_tests := get_time();
         if !debug_tests then Printf.printf (if !use_xml then "<opentest>%s" else "Open %s\n%!") (show_test test);
         if !about_progress && (not !debug_tests) 
         then 
@@ -854,13 +858,18 @@ let equivalence both p q =
     if !about_bijection then show_bijection();
     if !about_bench then  Printf.printf 
       " time:%6.2f %s (%3d tests, mg:%3d, 10:%4.3f)%5d sat>%4d ded+%4d ri+%4d unr in%5.2f\n"  
-      (Sys.time() -. time) 
+      (get_time() -. time) 
       (if bijection.attacks = [] then if both then "tr equiv" else "tr incl " else " attack ")
       bijection.next_id (bijection.next_id - nb_tests_init)(!time_ten_tests -. time_start_tests)(nb_statements)  (count_statements bijection.satP.solved_deduction + count_statements bijection.satQ.solved_deduction)
       (count_statements bijection.satP.rid_solved + count_statements bijection.satQ.rid_solved)
       (List.length bijection.satP.unreachable_solved + List.length bijection.satQ.unreachable_solved)
       (time_sat -. time)
-    else if !do_latex then Printf.printf "\\newcommand{\\%s}{$%3.1f$s}\n" !latex_identifier ((Sys.time() -. time)) else (
+    else if !do_latex then (
+      let t = (get_time() -. time) in
+      if  t < 0.9 
+      then Printf.printf "\\newcommand{\\%s}{$< 1$s}\n" !latex_identifier 
+      else Printf.printf "\\newcommand{\\%s}{$%.0f$s}\n" !latex_identifier t)
+    else (
       if bijection.attacks = [] 
       then (
           if both 
