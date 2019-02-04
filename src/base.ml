@@ -203,11 +203,11 @@ let show_chan_statements chmap =
   if !use_xml then 
     ChanMap.fold ( fun key lst str -> str ^ "\n<chanset>" ^ (show_chan_key key) ^ (List.fold_left (fun str (l,t,terms,st,pr) -> 
     str ^
-      Format.sprintf "<hidden>%d %s</hidden>\n" l.p (show_raw_statement st)
+      Format.sprintf "<hidden>%d%s %s</hidden>\n" l.p (match t with None -> "" | Some t -> " ("^(show_term t)^")") (show_raw_statement st)
   ) "" lst) ^ "</chanset>") chmap ""
   else
   ChanMap.fold ( fun key lst str -> str ^ "\n" ^ (show_chan_key key) ^ (List.fold_left (fun str (l,t,terms,st,pr) -> 
-    str ^ Format.sprintf "loc %d, %s\n" l.p (show_raw_statement st)
+    str ^ Format.sprintf "loc %d%s, %s\n" l.p (match t with None -> "" | Some t -> " ("^(show_term t)^")")(show_raw_statement st)
   ) ": \n" lst) ^ "\n") chmap ""
 
 

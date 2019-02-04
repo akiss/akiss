@@ -26,8 +26,8 @@ let rec print_maude_term t sigma =
     then 
       Parser_functions.nonces := (n.n, n) :: !Parser_functions.nonces;   
     Format.sprintf "nonce%d " n.n  
- | Fun({id=InputVar(l)},[]) -> Format.sprintf "i[%d]" l.p  
- | Fun({id=Frame(l)},[]) -> Format.sprintf "w[%d]" l.p
+(* | Fun({id=InputVar(l)},[]) -> Format.sprintf "i[%d]" l.p  
+ | Fun({id=Frame(l)},[]) -> Format.sprintf "w[%d]" l.p*)
  | Var(id) -> (
     match sigma with 
     None -> (show_binder_maude !(id.status)) ^ (string_of_int id.n) ^ ":Term "
@@ -36,7 +36,7 @@ let rec print_maude_term t sigma =
     match (find_sub id sigm).(id.n) with
     | None -> (show_binder_maude !(id.status)) ^ (string_of_int id.n) ^ ":Term "
     | Some t -> print_maude_term t sigma end )
- | _ -> invalid_arg ("Todo")
+ | _ -> invalid_arg ("Todo: recipes for maude")
 and print_maude_term_list args sigma = 
   match args with
   | [x] -> print_maude_term x sigma

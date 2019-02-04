@@ -6,7 +6,7 @@ val merge_tests :
   Bijection.which_process ->
   Base.raw_statement ->
   Base.raw_statement -> (Types.substitution * Base.raw_statement) list
-val actual_test : Bijection.which_process -> Base.raw_statement -> bool
+val actual_test : Bijection.which_process -> Base.raw_statement -> Bijection.Run.partial_run option
 val conj :
   Bijection.Run.partial_run -> Types.substitution * Base.raw_statement
 val trunconj :
@@ -17,7 +17,7 @@ val try_other_runs :
 val statement_to_tests :
   Bijection.which_process ->
   Bijection.Run.origin ->
-  Base.raw_statement -> Process.process -> Bijection.Test.test option
+  Base.raw_statement -> Process.process -> (Types.substitution option * Bijection.Test.test) option
 val add_merged_tests : Bijection.Solutions.elt -> unit
 val find_set_of_runs : Bijection.Test.test -> unit
 val completion_to_test : Bijection.Run.completion -> unit

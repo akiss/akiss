@@ -176,6 +176,7 @@ and Test :
       process_name : which_process;
       reflexive : bool;
       statement : Base.raw_statement;
+      mutable reflexive_run : Run.partial_run ;  
       origin : Run.origin;
       id : int;
       from : IntegerSet.t;

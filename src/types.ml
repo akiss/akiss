@@ -242,6 +242,15 @@ type subst_maker = {
   e : (subst_extra list)
 }
 
+let show_subst_array subst =
+  (Array.fold_left (fun str t -> (if str = "" then "[|" else (str ^ ".")) ^ (match t with None -> "?" | Some t -> show_term t)) "" subst) ^ "|]"
+
+let show_subst_maker subst =
+  "subst_maker \n" ^
+  (show_subst_array subst.m) ^ "\n" ^
+  (show_subst_array subst.s) ^
+  (List.fold_right (fun s str -> str ^ "\n" ^ (show_subst_array s.subst_extra)) subst.e "")
+
 (* type of substitutions when they are applied on terms *)
 (* the function Rewriting.pack cast the first type into this one *)
 type substitution = {

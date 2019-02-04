@@ -217,6 +217,7 @@ type test = {
   process_name : which_process; (* Is it a test of P or of Q?*)
   reflexive : bool ; (* the target process is process_name *)
   statement : raw_statement ; (* the solved statement seen as the test to check *)
+  mutable reflexive_run : Run.partial_run ; (* to know the value of the outputs *)
   origin : Run.origin;
   id : int;
   from : IntegerSet.t;
@@ -235,6 +236,7 @@ type test = {
   process_name : which_process; (* Is it a test of P or of Q?*)
   reflexive : bool ; (* the target process is process_name *)
   statement : raw_statement ; (* the solved statement seen as the test to check *)
+  mutable reflexive_run : Run.partial_run ; (* to know the value of the outputs *)
   origin : Run.origin;
   id : int;
   from : IntegerSet.t;
@@ -383,10 +385,11 @@ let completion_to_hash_completion completion =
 exception Attack of test * solution
 
 
-let null_test = {
+let rec null_test = {
   process_name = P ;
   reflexive = false;
   statement = null_raw_statement;
+  reflexive_run = empty_run ;
   origin = Temporary;
   id = -100;
   from = IntegerSet.empty;
@@ -398,7 +401,7 @@ let null_test = {
   solutions_done = [];
 }
 
-let rec null_sol = {
+and null_sol = {
   init_run = empty_run;
   partial_runs = [];
   partial_runs_todo = Solutions.empty;

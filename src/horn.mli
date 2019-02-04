@@ -53,7 +53,7 @@ val simplify_statement :
   Base.raw_statement -> Types.substitution * Base.raw_statement
 val canonical_form : Base.raw_statement -> Base.raw_statement
 val is_identity_of_theory : Base.raw_statement -> bool
-val normalize_identical : 'a -> 'a
+(*val normalize_identical : 'a -> 'a*)
 val normalize_new_statement : Base.raw_statement -> Base.raw_statement option
 val update : Base.base -> Base.raw_statement -> Base.raw_statement option
 val resolution_plus : Base.raw_statement -> Base.raw_statement list

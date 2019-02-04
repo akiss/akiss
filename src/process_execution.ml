@@ -284,7 +284,7 @@ let show_verbose_action (action : location) run  =
     (match action.parent with Some l -> l.p | None -> 0) 
     action.p 
     (match action.io with 
-    | Input(c) -> "in(" ^ c.name ^ "," ^ action.name ^ "<-" ^ (show_term (Inputs.get action run.test.statement.recipes)) ^ ")"
+    | Input(c) -> "in(" ^ c.name ^ "," ^ action.name ^ (if !use_xml then "&lt;-" else "<-") ^ (show_term (Inputs.get action run.test.statement.recipes)) ^ ")"
     | Output(c,t) -> "out(" ^ c.name ^ ") l." ^ action.name
     | _ -> assert false)
     )

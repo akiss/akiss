@@ -12,6 +12,9 @@ module VariableSet = Set.Make(VarAux)
 module VarMap = Map.Make(VarAux)
 
 
+  
+
+
 exception Not_matchable
 
 let rec var_set_of_term_list vs term_list =
@@ -131,11 +134,6 @@ let copy_subst_add_extra sigma n bind =
   { m = Array.copy sigma.m ; s = Array.copy sigma.s ; e = (List.map (fun e -> {e with subst_extra = Array.copy e.subst_extra}) sigma.e) 
     @ [{binder_extra = bind; nb_extra = n ; subst_extra= Array.make n None}]}
   
-let show_subst_array subst =
-  (Array.fold_left (fun str t -> (if str = "" then "[|" else (str ^ ".")) ^ (match t with None -> "?" | Some t -> show_term t)) "" subst) ^ "|]"
-
-let show_subst_maker subst =
-  Printf.sprintf "Master %s\n Slave %s\n Extra:%d" (show_subst_array subst.m) (show_subst_array subst.s) (List.length subst.e)
   
 let find_sub x sigma =
   match !(x.status) with

@@ -38,8 +38,6 @@ val sigma_maker_init : int -> int -> Types.subst_maker
 val copy_subst : Types.subst_maker -> Types.subst_maker
 val copy_subst_add_extra :
   Types.subst_maker -> int -> Types.statement_role ref -> Types.subst_maker
-val show_subst_array : Types.term option array -> string
-val show_subst_maker : Types.subst_maker -> string
 val find_sub : Types.varId -> Types.subst_maker -> Types.subst_array
 val maude_current_sigma : Types.subst_maker ref
 val maude_current_binder : Types.statement_role ref ref

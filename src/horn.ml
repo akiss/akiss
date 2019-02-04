@@ -233,7 +233,7 @@ let inst_w_t be_complete my_st kb_st =
     if sigmas = [] then raise Bad_World;
     List.concat (List.map (fun sigma ->
       try
-        let (hard,sigma) = Rewriting.match_ac [] [(tkb, myt)] sigma in
+        let (hard,sigma) = Rewriting.match_ac false [] [(tkb, myt)] sigma in
         (* debugOutput "Result %s\n%!" (show_subst sigma); *)
         if hard <> [] 
         then (
@@ -350,7 +350,7 @@ let rule_shift st =
   | _ -> st 
 
 exception No_Eval
-exception Unsound_Statement
+exception Unsound_Statement (* Statement with a premisse which is unsatisfiable *)
   
 let rec eval_recipe choices inputs solved_atom term =
   match term with
@@ -376,12 +376,13 @@ let simplify_statement st =
   let body_maker = ref [] in
   let var_recipe_body,other_body = List.partition (fun b -> is_var b.recipe) st.body in
   let other_body = List.filter (fun b -> 
+    if LocationSet.cardinal b.loc > 1 then true else 
     try 
     let t = eval_recipe st.choices st.inputs var_recipe_body b.recipe in
     if Rewriting.equals_ac (Rewriting.normalize t (!Parser_functions.rewrite_rules))  b.term then
       false
     else (
-      Printf.printf "%s = %s \n %s%!" (show_term t)(show_term b.term) (show_raw_statement st);
+      (*Printf.printf "\n%s = %s \n %s%!" (show_term t)(show_term b.term) (show_raw_statement st);*)
       raise Unsound_Statement )
     with
     No_Eval -> true 
@@ -446,17 +447,14 @@ let is_identity_of_theory st =
   | _ -> false
 
 
-let normalize_identical f = f (*
-  if not (use_xor && normalize_identical) then f else
-    match get_head f with
-      | Predicate("identical", [w;r;Fun("zero",[])])
-      | Predicate("identical", [w;Fun("zero",[]);r]) ->
-          { f with head = Predicate("identical", [w;r;Fun("zero",[])]) }
-      | Predicate("identical", [w;r;r']) ->
-          { f with head =
-              Predicate("identical", [w;Fun("plus",[r;r']);Fun("zero",[])]) }
+let normalize_identical f = 
+  if not !Parser_functions.use_xor then f else
+    match f.head with
+      | Identical(t1, (Fun({id=Plus},_) as t2)) 
+      | Identical((Fun({id=Plus},_) as t1), t2) -> {f with head = Identical(Rewriting.normalize (Fun({id=Plus;has_variables=true},[t1;t2])) [],zero)}
+      | Identical(z,t) when z = zero -> {f with head = Identical(t,zero)}
       | _ -> f
-*)
+
 (** Dealing with normalization aspects of newly deduced clauses.
   * This is called before _and_ after canonization, which may be slightly
   * inefficient but allows canonization to use structural equality rather
@@ -474,7 +472,7 @@ let normalize_identical f = f (*
     f.body)
   then begin (*Printf.printf "terms: %s\n" (show_raw_statement f);*) None end
   else 
-  let f = {f with recipes = Inputs.renormalize f.recipes} in
+  let f = {f with recipes = Inputs.renormalize f.recipes; inputs = (if !Parser_functions.use_xor then Inputs.renormalize f.inputs else f.inputs)} in
   match f.head with 
   | Reach | ReachTest _ | Unreachable -> Some f
   | Knows(r,t) -> 
@@ -508,11 +506,13 @@ let update kb f =
    * order, which eases reading and gives / may give more power to non-AC
    * tests, eg. in consequence. *)
   let f = normalize_identical f in (* do nothing *)
+  try
   let f = canonical_form f in
   match normalize_new_statement f
   with 
     None -> None 
   | Some fc ->
+    if ! about_canonization then Printf.printf "normalized statement :\n%s \n" (show_raw_statement fc);
   if is_identity_of_theory fc then None else
   if is_deduction_st fc && is_solved fc then
     try
@@ -531,6 +531,7 @@ let update kb f =
       Some fc
   else
     Some fc
+  with Unsound_Statement -> None
 
 
     
@@ -769,17 +770,18 @@ let rec concretize inputs term =
 
  
 let rec hidden_chan_statement kb  (loc_input , term_input ,ineq_input,st_input,pr_input) (loc_output,  term_output,ineq_output,st_output,pr_output) solved_parent unsolved_parent test_parent  = 
+  if !about_seed then Printf.printf "Computing hidden_chan_statement\n -link %d <-> %d\n -input %s \n -output %s\n%!" loc_input.p loc_output.p (show_raw_statement st_input)(show_raw_statement st_output);
   match term_input,term_output with
-  | None, Some term_output -> (
+  | None, Some term_output -> 
+  (
   match Inputs.merge_choices_add_link st_output.choices st_input.choices loc_output loc_input with
-    None -> ()
+    None -> if !about_seed then Printf.printf "incompatible choices\n"; ()
   | Some choices ->
   let dag = merge st_output.dag st_input.dag in
-  if is_cyclic dag then () 
+  if is_cyclic dag then (if !about_seed then Printf.printf "incompatible dag\n"; () )
   else (
   st_input.binder := Slave;
   st_output.binder := Master;
-  if !about_seed then Printf.printf "Computing hidden_chan_statement\n -link %d <-> %d\n -input %s \n -output %s\n%!" loc_input.p loc_output.p (show_raw_statement st_input)(show_raw_statement st_output);
   if st_input.binder = st_output.binder then (
     (*Printf.printf "same statement %s and %s\n" (show_raw_statement st_input)(show_raw_statement st_output);*)
     let sig_id = Rewriting.identity_subst st_output.nbvars in
@@ -833,17 +835,24 @@ let rec hidden_chan_statement kb  (loc_input , term_input ,ineq_input,st_input,p
 and trace_statements kb ineqs solved_parent unsolved_parent test_parent process st =
   let rec add_ineqs_statements ineqs idsigma st =
   match ineqs with
-  | [] -> ()
-  | (s,t)::q -> 
+  | [] -> true
+  | (s,t)::q -> begin
     let st = apply_subst_statement {st with head = Unreachable} idsigma in
     st.binder := Master;
     let sterm = concretize st.inputs s in
     let tterm = concretize st.inputs t in 
     let unifiers = Rewriting.unifiers st.nbvars sterm tterm (! Parser_functions.rewrite_rules) in 
-      List.iter (fun subst -> add_statement kb solved_parent unsolved_parent test_parent None (apply_subst_statement st subst)) unifiers
+    (* match unifiers with
+    | [subst ] -> 
+        if Rewriting.is_identity_master subst  st.nbvars
+        then false (* This reach is unconditionally unreachable: just remove it and don't add unreach predicate *)
+        else (add_statement kb solved_parent unsolved_parent test_parent None (apply_subst_statement st subst);true)
+    | _ ->*)
+    List.iter (fun subst -> add_statement kb solved_parent unsolved_parent test_parent None (apply_subst_statement st subst)) unifiers; true
+    end
   in
   if !about_seed then 
-    Format.printf "Computing seed statement for {%s}\n with %s \n%!"  
+    Format.printf "\nComputing seed statement for {%s}\n with %s \n%!"  
         (show_process process)(show_raw_statement st);
   match process with
     | EmptyP -> ()
@@ -885,8 +894,8 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
         head = Reach;
         } in
       begin 
-      add_ineqs_statements ineqs identity_sigma st ;
-      add_statement kb solved_parent unsolved_parent test_parent (Some (ParallelP([SeqP(OutputA(loc, t), pr);pr]))) st
+      if add_ineqs_statements ineqs identity_sigma st 
+      then add_statement kb solved_parent unsolved_parent test_parent (Some (ParallelP([SeqP(OutputA(loc, t), pr);pr]))) st
       end
     | SeqP(Input({observable = Public} as loc), pr) -> 
       let next_dag = put_at_end st.dag loc in
@@ -915,28 +924,32 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
         body = next_body;
         involved_copies = st.involved_copies} in
       begin
-      add_ineqs_statements ineqs identity_sigma st ;
-      add_statement kb solved_parent unsolved_parent test_parent (Some pr) st end
+      if add_ineqs_statements ineqs identity_sigma st ;
+      then add_statement kb solved_parent unsolved_parent test_parent (Some pr) st end
     | SeqP(Input({io = Input({visibility = Hidden} as chan)} as loc), pr) -> (
-      match ChanMap.find_opt { c= chan; io = Out; ph =loc.phase} kb.hidden_chans with
+      begin match ChanMap.find_opt { c= chan; io = Out; ph =loc.phase} kb.hidden_chans with
       | None -> ()
       | Some chans -> 
         List.iter (fun stout -> 
-          hidden_chan_statement kb (loc,None,ineqs,st,pr) stout solved_parent unsolved_parent test_parent) chans);
-      kb.hidden_chans <- ChanMap.add { c = chan; io = In; ph = loc.phase} 
+          hidden_chan_statement kb (loc,None,ineqs,st,pr) stout solved_parent unsolved_parent test_parent) chans end;
+      let ckey = { c = chan; io = In; ph = loc.phase} in
+      if ! about_seed then Printf.printf "Inserting %s for %d\n" (show_chan_key ckey)loc.p;
+      kb.hidden_chans <- ChanMap.add ckey
         ((loc,None,ineqs,st,pr):: ( try 
-          ChanMap.find { c= chan; io = In; ph =loc.phase} kb.hidden_chans 
+          ChanMap.find ckey kb.hidden_chans 
           with Not_found -> []))
-        kb.hidden_chans 
+        kb.hidden_chans )
     | SeqP(Output({io = Output({visibility = Hidden} as chan, _)} as loc, t), pr) -> ( 
       begin match ChanMap.find_opt { c= chan; io = In; ph =loc.phase} kb.hidden_chans with
         | None -> ()
         | Some chans ->
           List.iter (fun stin -> 
             hidden_chan_statement kb stin (loc,Some t,ineqs,st,pr) solved_parent unsolved_parent test_parent) chans end;
-      kb.hidden_chans <- ChanMap.add { c = chan; io = Out; ph = loc.phase} 
+      let ckey = { c = chan; io = Out; ph = loc.phase} in
+      if ! about_seed then Printf.printf "Inserting %s for %d\n" (show_chan_key ckey) loc.p;
+      kb.hidden_chans <- ChanMap.add  ckey
         ((loc,Some t,ineqs,st,pr):: ( try 
-          ChanMap.find { c= chan; io = Out; ph =loc.phase} kb.hidden_chans 
+          ChanMap.find ckey kb.hidden_chans 
           with Not_found -> []))
         kb.hidden_chans )
     | SeqP(Input(loc), pr)
@@ -946,7 +959,7 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
       st.binder := Master;
       let sterm = concretize st.inputs s in
       let tterm = concretize st.inputs t in 
-      (*Printf.printf "comparing %s == %s\n" (show_term sterm) (show_term tterm);*)
+      if !about_seed then Printf.printf "Test:  %s == %s\n" (show_term sterm) (show_term tterm);
       let unifiers = Rewriting.unifiers st.nbvars sterm tterm (! Parser_functions.rewrite_rules) in 
       List.iter (fun subst -> st.binder := Master; 
         let new_st = { (apply_subst_statement st subst) with head = ReachTest(ineqs)} in
@@ -1072,7 +1085,8 @@ let extra_resolution kb solved unsolved =
   let sigmas = match Inputs.csu_recipes sigma solved.st.recipes unsolved.st.recipes with
   | [] -> []
   | [s] -> Inputs.csu s solved.st.inputs unsolved.st.inputs
-  | _ -> assert false in 
+  | lst -> (* List.iter (fun s -> Printf.printf "%s\n" (show_subst_maker s)) lst; *)
+     assert false  in 
   if sigmas = [] then (if !debug_saturation then Printf.printf " recipes cannot be unified \n"; false )
   else begin 
     if !debug_saturation then Printf.printf " compatible worlds\n";
@@ -1095,7 +1109,8 @@ let extra_equation kb solved1 solved2 =
   let sigmas = match Inputs.csu_recipes sigma solved1.st.recipes solved2.st.recipes with
   | [] -> []
   | [s] -> Inputs.csu s solved1.st.inputs solved2.st.inputs
-  | _ -> assert false in 
+  | lst -> (* List.iter (fun s -> Printf.printf "%s\n" (show_subst_maker s)) lst; *)
+     assert false in 
   if sigmas = [] then false
   else begin 
     List.iter (fun sigma -> List.iter 
@@ -1131,6 +1146,7 @@ let rec process_equation kb new_solved old_solved =
 let merge_sat kb = 
   while not (Queue.is_empty(kb.ns_todo)) do
     let unsolved = Queue.take(kb.ns_todo) in
+    unsolved.st.binder := Master;
     if !debug_saturation then Printf.printf "Start merge resolutions of #%d\n" unsolved.id;
     if !Parser_functions.use_xor then 
     List.iter 

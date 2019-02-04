@@ -92,6 +92,7 @@ type subst_maker = {
   s : subst_array;
   e : subst_extra list;
 }
+val show_subst_maker : subst_maker -> string
 type substitution = {
   binder : statement_role ref;
   nbvars : int;
