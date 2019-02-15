@@ -80,10 +80,12 @@ let reset_global () =
   functions_list := [];
   tuple_arity := [] ;
   use_xor := false;
+  nonces := [];
   processes_infos.next_location <- 0;
   processes_infos.next_nonce <- 0;
   processes_infos.processes <- BangDag.empty;
   processes_infos.location_list <- [] ;
+  processes_infos.nonce_list <- [];
   processes_infos.max_phase <- 0;
   Hashtbl.clear memoize_call;
   let nb = Base.new_base () in
@@ -94,6 +96,8 @@ let reset_global () =
   bijection.satQ <- nb ;
   bijection.indexP <- Dag.Dag.empty ;
   bijection.indexQ <- Dag.Dag.empty ;
+  bijection.choices_indexP <- Dag.Dag.empty ;
+  bijection.choices_indexQ <- Dag.Dag.empty ;
   bijection.next_id <- 0 ;
   bijection.next_comp_id <- 0;
   bijection.tests <- Tests.empty;

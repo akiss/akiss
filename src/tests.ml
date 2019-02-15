@@ -133,13 +133,13 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
         kb.temporary_merge_test_result <- [];
         Queue.add st kb.ns_todo;
         Horn.merge_sat kb;
-        if List.length kb.temporary_merge_test_result > 1 then Printf.printf "The init merged test has %d solutions\n %s \n%s\n%!"(List.length kb.temporary_merge_test_result)(show_raw_statement test_merge_init)
+        if List.length kb.temporary_merge_test_result > 1 then Printf.eprintf "The init merged test has %d solutions\n %s \n%s\n%!"(List.length kb.temporary_merge_test_result)(show_raw_statement test_merge_init)
         (List.fold_right (fun st str -> str ^ (show_statement "*" st)) kb.temporary_merge_test_result "");
         List.fold_left (fun lst st -> 
           if !debug_merge then Printf.printf "merge result st matched with: \n%s\n%s\n" (show_statement "" st)(show_raw_statement test_merge_init);
           if st.st.nbvars = 0 then 
             (rho,st.st)::lst
-          else ( Printf.printf "|*|\n%!";
+          else ( Printf.eprintf "|*|\n%!";
             match Inputs.csm test_merge_init.binder test_merge_init.inputs st.st.inputs, Inputs.csm test_merge_init.binder test_merge_init.recipes st.st.recipes with
             | [subst_inputs],[subst_recipes] -> (Rewriting.compose_with_subst_lst rho (subst_inputs @ subst_recipes),st.st)::lst
             | _ -> Printf.eprintf "This unification case has not been implemented yet." ; assert false
@@ -707,7 +707,7 @@ let equivalence both p q =
         let test = pop () in
         incr nb_open;
         if !about_bench && !nb_open = 10 then time_ten_tests := get_time();
-        (*if !debug_tests then Printf.printf (if !use_xml then "<opentest>%s" else "Open %s\n%!") (show_test test);*)
+        if !debug_tests then Printf.printf (if !use_xml then "<opentest>%s" else "Open %s\n%!") (show_test test);
         if !about_progress && (not !debug_tests) 
         then 
           ( 

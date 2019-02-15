@@ -367,7 +367,7 @@ let next_run partial_run : (partial_run list * location)=
 
 
  
-
+(*
 let compatible constraints constraints_back locP locQ = 
   try locQ = Dag.find locP constraints.a
   with Not_found -> begin 
@@ -376,6 +376,7 @@ let compatible constraints constraints_back locP locQ =
           
 let compatible_prun constraints constraints_back (prun : partial_run)=
   Dag.for_all (compatible constraints constraints_back) prun.corresp.a
+  *)
   
 (*let rec get_all_new_roots before after run = 
   if LocationSet.is_empty before then []
