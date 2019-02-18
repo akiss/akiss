@@ -1,4 +1,4 @@
-(*open Parser*)
+(** From processes with relative location and nonces to usable processes *)
 open Types
 open Dag
 open Parser_functions

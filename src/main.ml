@@ -1,3 +1,4 @@
+(** main file *)
 open Util
 open Parser_functions
 open Bijection
@@ -19,7 +20,7 @@ let  set_debug = function
   | _ -> raise (Arg.Bad("Undefined semantics"))
 
 
-    
+(** all available options *)    
 let command_line_options_list = [
   ("-d",
    Arg.Symbol(["progress";"completion";"canon";"seed";"sat";"saturation";"maude";"exec"],set_debug),
@@ -72,7 +73,7 @@ let command_line_options_list = [
    "Disable partial order reduction (por) optimisations")*)
 ]
 
-(******* Parsing *****)
+(** Reset all variables between two distinct files *)
 let reset_global () =
   environment := (Env.empty:env_elt Env.t);
   rewrite_rules := [];

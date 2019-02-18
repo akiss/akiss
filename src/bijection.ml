@@ -1,3 +1,5 @@
+(** Types and basic functions for the mainn algorithm *)
+
 open Types
 open Dag
 open Base
@@ -117,7 +119,8 @@ module rec Run : sig
 and origin = 
   | Initial of statement 
   | Composed of partial_run * partial_run 
-  | Completion 
+  | CompletionUnreach
+  | CompletionIdentity
   | Temporary
   
 
@@ -190,7 +193,8 @@ struct
 and origin = 
   | Initial of statement 
   | Composed of partial_run * partial_run 
-  | Completion 
+  | CompletionUnreach
+  | CompletionIdentity
   | Temporary
 
 (* records which are the partial executions of a test *) 
@@ -251,6 +255,12 @@ type t = test
 let compare (x : Test.test) (y : Test.test)=
            
         match (x.origin , y.origin) with
+     (*   | (CompletionIdentity, CompletionIdentity) -> compare x.id y.id
+        | (CompletionIdentity, _) -> -1
+        | (_, CompletionIdentity ) ->  1
+        | _,_ -> let r = compare (x.new_actions, x.nb_actions) (y.new_actions, y.nb_actions) in
+            if r != 0 then -r
+            else compare x.id y.id *)
           | (Initial st1, Initial st2) ->
             let r = compare (x.new_actions, x.nb_actions) (y.new_actions, y.nb_actions) in
             if r = 0 then begin
@@ -267,11 +277,14 @@ let compare (x : Test.test) (y : Test.test)=
               if r = 0 then 
               compare x.id y.id 
               else -r
-          | (Completion , Completion ) -> compare x.id y.id
-          | (Completion , _) -> -1
-          | (_, Completion ) ->  1
+          | (CompletionIdentity , CompletionIdentity ) -> compare x.id y.id
+          | (CompletionIdentity , _) -> -1
+          | (_, CompletionIdentity ) ->  1
+          | (CompletionUnreach , CompletionUnreach ) -> compare x.id y.id
+          | (CompletionUnreach , _) -> -1
+          | (_, CompletionUnreach ) ->  1
           | (Temporary,_) 
-          | (_,Temporary) -> assert false
+          | (_,Temporary) -> assert false 
 end
 and Solutions : Set.S with type elt = Run.t 
   = Set.Make(Run) 
@@ -292,6 +305,8 @@ module RunSet = Set.Make(PartialRun)
   
 open Run 
 open Test
+
+(** {2 Printers}*)
 
 let show_ext_extra_thread_lst lst =
   List.fold_left (fun str (loc,t,extra_thread) -> 
@@ -326,8 +341,6 @@ let show_partial_run pr =
     (show_pending_threads pr.pending_qthreads)
     (show_extra_thread_list pr.failed_qthreads)
 
-  
-(*let show_executions sol =*)
 
   
 let rec show_origin o =
@@ -335,13 +348,15 @@ let rec show_origin o =
   match o with 
   | Initial(st) -> Format.sprintf "<initial>%d</initial>" (st.id)
   | Composed(run1,run2) -> Format.sprintf "<composed><idtest>%d</idtest>:%s | <idtest>%d</idtest>:%s</composed>"  run1.test.id (show_origin run1.test.origin)  run2.test.id (show_origin run2.test.origin) 
-  | Completion -> "comp"
+  | CompletionUnreach -> "pcU"
+  | CompletionIdentity-> "pcI"
   | Temporary -> "T"
   else    
   match o with 
   | Initial(st) -> Format.sprintf "#%d" (st.id)
   | Composed(run1,run2) -> Format.sprintf "[ %d | %d ]"  run1.test.id  run2.test.id  
-  | Completion -> "comp"
+  | CompletionUnreach -> "pcU"
+  | CompletionIdentity-> "pcI"
   | Temporary -> "T"
   
 and show_test (t : test) =
@@ -371,6 +386,8 @@ let show_all_completions daglst =
 let show_solution_set sol =
   Solutions.iter (fun prun -> Printf.printf "possible run: %s"  (show_run prun)) sol
 
+  
+(** {2 Basic functions}*)
 
 let completion_to_hash_completion completion =
   let hash_test = raw_to_hash_test completion.st_c in
@@ -435,16 +452,7 @@ and empty_run =
      score = 0 ;
      consequences = [];
      completions = [];
-   } 
-
-
-
-
-
-
-
-
-
+   }
 
 
 type record = {
@@ -578,6 +586,8 @@ let show_final_completions () =
     Printf.printf (if !use_xml then "<comproot>(%d)" else "(%d)\n") c.root.from_statement.id;
     show_completion_tree c;
     Printf.printf (if !use_xml then "</comproot>\n" else "\n")) bijection.initial_completions
+    
+(** {2 Interaction with the [bijection] structure } *)
 
 let proc name =
   match name with
@@ -603,7 +613,7 @@ let push (statement : raw_statement) process_name origin init =
   bijection.next_id <- bijection.next_id + 1 ;
   let (int_set,initial) = match origin with 
       | Initial _ -> IntegerSet.singleton (bijection.next_id),true
-      | Completion -> IntegerSet.singleton (bijection.next_id),true;
+      | CompletionUnreach | CompletionIdentity -> IntegerSet.singleton (bijection.next_id),true;
       | Composed(run1,run2) ->  (IntegerSet.union run1.test.from run2.test.from),false
       | Temporary -> assert false
   in
@@ -699,6 +709,7 @@ let register_completion completion =
     false,None
   end
 
+(** When a locations is not in the domain of the mapping *)
 exception LocPtoQ of int
 
 let loc_p_to_q p corr =
@@ -779,8 +790,8 @@ let straight locP locQ =
 let straight pr locP locQ =
   if pr = P then straight locP locQ else straight locQ locP 
 
-
- let compatible partial_run = 
+(** The list of all statement which have to be merged with [partial_run] *)
+let compatible partial_run = 
   let (corresp,corresp_back) = 
     if partial_run.test.process_name = P 
     then (partial_run.corresp,partial_run.corresp_back)

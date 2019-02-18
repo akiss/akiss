@@ -1,3 +1,4 @@
+(** Recipes and inputs types and functions *)
 open Types
 open Dag
 open Term
@@ -12,6 +13,8 @@ type inputs = {
 type choices = {
   c : int Dag.t
 }
+
+(** {2 Printers}*)
 
 let show_inputs inputs =
   if Dag.is_empty inputs.i then "" 
@@ -49,7 +52,7 @@ let canonize_inputs inputs =
 let canonize_choices choices =
  { c = List.fold_left (fun c' (l,i) -> Dag.add l i c') Dag.empty (Dag.bindings choices.c)}
  
-(* when considering a new input *)
+(** when considering a new input *)
 let add_input loc var inputs =
   { i = Dag.add loc (Var(var)) inputs.i }(*(Dag.map (fun t -> new_term binder t) inputs)}*)
 
@@ -60,9 +63,7 @@ let add_to_frame loc term outputs =
   { i = Dag.add loc term outputs.i }
 (*let concretize inputs term = 
 *)
-(**
-  Choice stuff
-**)
+(** {2 Choice stuff} *)
 let get_output_of_input c l = 
   try let p = Dag.find l c.c in
   let (l, _) = Dag.find_first (fun l -> compare l.p p >= 0) c.c in
@@ -111,9 +112,7 @@ let merge_choices_with_link c1 c2 l1 l2=
   }
   with Incompatible_choices -> None
 
-(**
-  Inputs stuff
-**)
+(** {2 Inputs stuff }*)
 let get l input =
   try Dag.find l input.i with 
   Not_found -> begin Printf.printf "Error: location %d not found on input %s \n%!" (l.p)(show_inputs input); raise Not_found end

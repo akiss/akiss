@@ -117,4 +117,5 @@ let Q =
     A(ca2,aa,bb,kas) | S(cs2,aa,bb,kas,kbs) | B(cb2,bb,aa,kbs)
   ).
 
+latex ypVI.
 query trace_equiv (P,Q).

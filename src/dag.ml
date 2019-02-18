@@ -1,3 +1,5 @@
+(** partial ordered sets of locations *)
+
 open Types
 
 module Location =
@@ -17,9 +19,7 @@ type dag = {
 
 let empty_loc = LocationSet.empty
 
-(**
-  Printers
-**)
+(**  {2 Printers} *)
 
 let show_loc_set ls =
   LocationSet.fold (fun l str -> (if str = "" then "" else str ^ "," ) ^ (string_of_int l.p)) ls "" 
@@ -33,6 +33,8 @@ let show_dag dag =
   else
   (Dag.fold (fun l ls str -> str ^(Format.sprintf " %d<" l.p) ^ (show_loc_set ls)) dag.rel "{")^"}"
 
+(** {2 Dag functions}*)
+  
 let compare_loc_set l1 l2 =
   let l1 = LocationSet.elements l1 in
   let l2 = LocationSet.elements l2 in
@@ -44,11 +46,8 @@ let compare_loc_set l1 l2 =
     | [], [] -> 0 in
   aux l1 l2
 
-(**
-  Dag stuff
-**)
 
-(* for hash tables *)
+(** for hash tables *)
 let canonize_dag dag = {rel = List.fold_left (fun dag' (l,ls) -> Dag.add l (LocationSet.of_list (LocationSet.elements ls)) dag') Dag.empty (Dag.bindings dag.rel)}
 
 let empty = {rel = Dag.empty}
@@ -104,8 +103,7 @@ let is_before_all dag l locs =
   with 
   | Not_found -> assert false
 
-(* For truncconj *)
-
+(** For [truncconj] *)
 let restr_set dag dag1 locs2 =
   Dag.fold (fun l1 _ locset ->
   if (List.mem l1 locs2) ||
@@ -116,8 +114,7 @@ let restr_set dag dag1 locs2 =
   else locset 
   ) dag1.rel LocationSet.empty
 
-(* for merge_test*)
-
+(** for [merge_test] *)
 let is_cyclic dag =
   Dag.exists (fun l ls -> LocationSet.exists (fun l' -> l=l') ls) dag.rel
   
@@ -132,12 +129,12 @@ exception Impossible
       if k.phase > l.phase then raise Impossible else true else false) dag.rel in
   {rel = Dag.map (fun _ -> LocationSet.singleton l) final}*)
   
-(* for resolution*)  
+(** for [resolution] *)  
 let put_set_at_end dag locset =
   let minphase= LocationSet.fold (fun l minphase -> min minphase l.phase) locset 1000000 in
   {rel = Dag.mapi (fun loc lset -> if minphase < loc.phase then raise Impossible else LocationSet.union lset locset) dag.rel}
-(* For execution *)
 
+(** For execution *)
 let dag_with_one_action_at_end locs action =
   let set_a = LocationSet.singleton action in 
   { rel = LocationSet.fold (fun l dag -> Dag.add l set_a dag) locs (Dag.singleton action LocationSet.empty)}
@@ -148,10 +145,10 @@ let first_actions_among dag locs =
   not (LocationSet.mem k' locs) || not (LocationSet.mem k locset)) dag.rel) locs in
   first
   
-let only_observable dag =
-  {rel = Dag.fold (fun l lset dag -> if l.observable = Public then Dag.add l (LocationSet.filter (fun l -> l.observable = Public) lset) dag else dag) dag.rel Dag.empty}
+let only_observable dag = dag
+  (*{rel = Dag.fold (fun l lset dag -> if l.observable = Public then Dag.add l (LocationSet.filter (fun l -> l.observable = Public) lset) dag else dag) dag.rel Dag.empty}*)
 
-(* For execution and completions *)  
+(** For execution and completions *)  
 let last_actions_among dag locs =
   let last = LocationSet.filter ( fun k -> LocationSet.equal (LocationSet.diff locs (Dag.find k dag.rel) ) locs) locs in
   last
@@ -166,17 +163,16 @@ let pick_last_or_null dag locs =
   with Not_found -> null_location
   
 (* For finding recipes in test.ml, merge_tests*)
-let expurge_dag_after dag locs =
-  {rel= Dag.filter (fun l lset -> not (LocationSet.is_empty (LocationSet.inter locs lset))) dag.rel}
+(*let expurge_dag_after dag locs =
+  {rel= Dag.filter (fun l lset -> not (LocationSet.is_empty (LocationSet.inter locs lset))) dag.rel}*)
   
 (* The <. operator from the theory *)  
-let preceding_dag dag locs =
-  {rel= Dag.filter (fun l lset ->  (LocationSet.is_empty (LocationSet.diff locs lset))) dag.rel}
+(*let preceding_dag dag locs =
+  {rel= Dag.filter (fun l lset ->  (LocationSet.is_empty (LocationSet.diff locs lset))) dag.rel}*)
   
-let dag_with_actions_at_end locs lset = 
-  { rel = LocationSet.fold (fun l dag -> Dag.add l lset dag) locs (Dag.empty)}
+(*let dag_with_actions_at_end locs lset = 
+  { rel = LocationSet.fold (fun l dag -> Dag.add l lset dag) locs (Dag.empty)}*)
 
-(* For printing *)
-
+(** For printing traces *)
 let last_actions dag =
  Dag.fold ( fun k  locs result -> if LocationSet.is_empty locs then LocationSet.add k result else result) dag.rel LocationSet.empty

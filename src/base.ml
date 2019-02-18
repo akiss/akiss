@@ -1,10 +1,12 @@
+(** Declaration of statement types, printers and basic functions *)
 open Util
 open Types
 open Term
 open Dag
 open Inputs
 open Process
-  
+
+
 module EqualitiesSet = Set.Make(struct
     type t = term * term
       let compare x y = compare x y
@@ -45,7 +47,7 @@ type raw_statement = {
   involved_copies : BangSet.t ;
 }
 
-(*for hash table *)
+(**for hash table *)
 type hash_statement = {
   hbinder : statement_role ref;
   hnbvars : int ;
@@ -80,17 +82,16 @@ let null_raw_statement = {
 
 type statement = {
   id : int ;
-  vip : bool ;
   st : raw_statement ;
   mutable children : statement list ; (* deduction statement: statements derived from rules, other: statements more complex *)
-  process : process option;
-  master_parent : statement;
+  process : process option; (** Process to unfold when a solved statement is derived from it *)
+  master_parent : statement; (** the solved statement from which this statement has been derived *)
   slave_parent : statement; 
-  test_parent : statement; (*the solved statement from which the unsolved statement comes from *)
+  test_parent : statement; (** the solved reach statement from which the unsolved statement comes from *)
 }
 
 let rec null_statement = { 
-  id = -2 ; vip = false ; st = null_raw_statement ; children = [] ; process = None; 
+  id = -2 ; st = null_raw_statement ; children = [] ; process = None; 
   master_parent = null_statement; slave_parent = null_statement; test_parent = null_statement}
 
 type i_o = In | Out
@@ -119,14 +120,16 @@ type base =
    mutable reachable_solved : statement list ;*)
    mutable unreachable_solved : statement list; 
    not_solved : statement ;
-   temporary_merge_test : statement ;
-   mutable temporary_merge_test_result : statement list;
-   mutable s_todo : statement Queue.t ; 
+   temporary_merge_test : statement ; (** to merge two tests put the unsolved test as its child *)
+   mutable temporary_merge_test_result : statement list; (** get the corresponding solved statement here *)
+   mutable s_todo : statement Queue.t ; (** the solved statements which have not been saturated *)
    mutable ns_todo : statement Queue.t ; 
    mutable hidden_chans : ((location * (term option) * ((term*term)list) * raw_statement * process) list) ChanMap.t ;
-   htable : (hash_statement, statement) Hashtbl.t;
+   (** "statements" waiting to be merged with another "statement" relative to private communication  *)
+   htable : (hash_statement, statement) Hashtbl.t; (** To avoid adding twice the same statement *)
 }
 
+(** {2 Assert that all variables of a statement are binded with its binder }*)
 
 let rec check_binder_term binder term =
   match term with
@@ -147,7 +150,8 @@ let check_binder_st st =
   && List.for_all (fun x -> check_binder_term binder x.term && check_binder_term binder x.recipe) st.body
   && check_binder_head binder st.head
 
-(** {3 Printing} *)
+(** {2 Printing} *)
+
 let show_test_head h =
   (EqualitiesSet.fold ( fun (r,r') str -> (if str = "" then "" else str ^ "  °  ") ^ (show_term r) ^ " = " ^ (show_term r') ) h.equalities "" ) 
      ^ (EqualitiesSet.fold ( fun (r,r') str -> (if str = "" then " | " else str ^ ", ") ^ (show_term r) ^ " != " ^ (show_term r') ) h.disequalities "")
@@ -263,14 +267,13 @@ let show_kb kb =
   ^ "\n"
 
   
-(** Getters **)
-
+(** get the test_head strucutre from the head statement of a test *)
 let get_test_head head = 
   match head with
   | Tests(eq) -> eq
   | _ -> assert false
 
-(** Substitutions **)
+(** {2 Substitutions}*)
 
 let apply_subst_test_head head (sigma : substitution) = 
   {
@@ -307,20 +310,19 @@ let apply_subst_statement st (sigma : substitution) =
     Printf.eprintf "Error with substitution on %s \n" (show_raw_statement st); 
     raise (Invalid_argument a)
   
-(** constructor **)
+(**  constructor *)
 let new_statement () = {
-  id = -1 ; vip = false ; st = null_raw_statement; children = []; process = None;
+  id = -1 ; st = null_raw_statement; children = []; process = None;
   master_parent = null_statement; slave_parent = null_statement;test_parent = null_statement
   }
 
+(** create an empty base *)
 let new_base () =
   let kb = 
   {
      next_id = 0;
      solved_deduction = new_statement () ;
      rid_solved = new_statement ();
-     (*identity_solved = [] ;
-     reachable_solved = [];*)
      unreachable_solved = [] ;
      not_solved = new_statement () ;
      temporary_merge_test = new_statement () ;
@@ -332,6 +334,7 @@ let new_base () =
   } in
   kb 
 
+(**{2 Canonical form for Hash table }*)
   
 let canonize_statement st = 
   { st with (*either the head is not a test or the head is a test and hash_test does not consider it *)

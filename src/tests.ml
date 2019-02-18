@@ -1,3 +1,5 @@
+(** The functriosn of the main algorithm*)
+
 open Util
 open Types
 open Dag
@@ -47,7 +49,7 @@ let statement_to_completion process_name (statement : statement) (st : raw_state
   }
   
             
-(* from two statements (ie tests), the function generate the merge of these tests, like equation rule
+(** from two statements (ie tests), the function generate the merge of these tests, like equation rule
  The function returns a list of posible merges with the substitution which has been used *)
 let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
   if ! debug_merge then Printf.printf "Try to merge: %s\n and %s\n%!" (show_raw_statement fa)(show_raw_statement fb);
@@ -122,7 +124,6 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
         let kb = base_of_name process_name in
         let st = {
           id = kb.next_id ; 
-          vip = false ;
           st = test_merge_init ;
           children = [] ;
           process = None ;
@@ -189,8 +190,8 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
 
    
 
-(* This function returns false if the statement is not executable in his own processus
-(due to disequalities) true otherwise *) 
+(** This function returns false if the statement is not executable in his own processus
+(due to disequalities or identities) true otherwise *) 
 let actual_test process_name (st : raw_statement) =
   let corr = {a = Dag.mapi (fun k _ -> k) st.dag.rel} in
   let test = { null_test with
@@ -245,7 +246,7 @@ let transpose_test_head head (sigma :  substitution) corresp =
 let transpose_head head (sigma :  substitution) corresp =
   Tests( transpose_test_head (get_test_head head) sigma corresp)
   
-(* take a run and provide a statement which is the test of the run transposed in the other process *)  
+(** take a run and provide a statement which is the test of the run transposed in the other process *)  
 let conj run =
   let stP = run.test.statement in
   let identity_sigma = Rewriting.identity_subst stP.nbvars in
@@ -434,7 +435,7 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
   with CyclicDag -> None
   
 
-(* Create new tests from prun which is in conflict with all tests in runset *)
+(** Create new tests from [prun] which is in conflict with all tests in [runset] *)
 and add_merged_tests prun =
   (* let (prun,runset)=sol.execution,sol.conflicts in *)
   let runset = Bijection.compatible prun in 
@@ -486,6 +487,7 @@ and find_set_of_runs test =
       Bijection.add_run pr;
       find_set_of_runs test
 
+(** The "completed" rule of the main algorithm *)      
 let completion_to_test comp =
   let test = { null_test with
     process_name = comp.root.from_base;
@@ -502,13 +504,19 @@ let completion_to_test comp =
     test.reflexive_run <- { pr with corresp = { a= Dag.mapi (fun s t -> s) pr.corresp_back.a}};
     let sigma, conjrun = conj pr in 
     begin
-    match statement_to_tests (other comp.root.from_base) (Completion) conjrun (proc (comp.root.from_base )) with
+    let origin =
+      match comp.root.initial_statement.head with 
+      | Tests(_) -> CompletionUnreach
+      | Identical(_,_) -> (*Printf.printf "*" ;*) CompletionIdentity
+      | _ -> assert false in 
+    match statement_to_tests (other comp.root.from_base) origin conjrun (proc (comp.root.from_base )) with
     | Some (_,test) -> if !debug_completion then Printf.printf "Get test from the completion\n %s\n" (show_test test);
       comp.generated_test <- Some (test) 
     | None -> if !debug_completion then Printf.printf "No test from the completion\n"; () end
     
 let nb_comp = ref 0
 
+(** Perform the rule New Comp *)
 let add_to_completion (run : partial_run) (completion : completion) = 
   if !debug_completion then 
     Printf.printf "Try completing a completion between \n run %s \n whose test is %s \n and partial completion %s\n" 
@@ -585,7 +593,7 @@ let add_to_completion (run : partial_run) (completion : completion) =
   with 
   | NonBij -> ()
 
-(* Compute the completions from the base of process_name *)      
+(** Compute the completions from the base of process_name *)      
 let rec compute_new_completions process_name  =
   match if process_name = P then bijection.runs_for_completions_Q else bijection.runs_for_completions_P with
   (* First match all run with all completions *)
@@ -615,7 +623,7 @@ let rec compute_new_completions process_name  =
       (try Dag.find comp.selected_action (if process_name = P then bijection.indexP else bijection.indexQ) with Not_found -> Dag.empty)
     done
 
-(* From solved statements create tests. 
+(** From solved statements create tests. 
 Opti: when children are identical with same world merge them with the reach parent to reduce number of tests *)  
 let rec statements_to_tests t c process_name (statement : statement) otherProcess equalities =
   if !debug_tests then Printf.printf "Getting test (%d) %s %s \n%!" statement.id (if t then "yes" else "no") (show_raw_statement statement.st); 

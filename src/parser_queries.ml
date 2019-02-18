@@ -1,3 +1,4 @@
+ (** Parse file and perform instructions *)
  open Parser_functions
  open Util
  open Types

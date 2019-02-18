@@ -1,3 +1,5 @@
+(** Interface between Akiss and Maude *)
+
 open Term
 open Util
 open Types

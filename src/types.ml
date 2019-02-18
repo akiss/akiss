@@ -1,10 +1,12 @@
+(** all main types *)
+
 let show_array sep f arr =
   Array.fold_left (fun str e -> if str = "" then f e else str ^ sep ^ (f e)) "" arr
 
 
-type visi_type = Public | Hidden (* private or public channels *)
+type visi_type = Public | Hidden (** private or public channels *)
 
-(* type of chans (e.g. c from in(c,x) ) *)
+(** type of chans (e.g. c from in(c,x) ) *)
 type chanId = {
     name : string;
     visibility : visi_type ;
@@ -12,15 +14,15 @@ type chanId = {
 
 let null_chan = { name = "null chan" ; visibility = Public}
 
-(* type of functions signature *)
+(** type of functions signature *)
 type funId = {
    name : string ;
    arity : int ;
 }
 
-(*** Transitional Types from parsed file to processes ***)
+(** {4 Transitional Types from parsed file to processes} *)
 
-(* types of identifiers when "parsing" processes *)
+(** types of identifiers when "parsing" processes *)
 type typ =
   | TermType 
   | ChanType 
@@ -32,7 +34,7 @@ let show_typ t =
   | ChanType -> "chan"
   | Unknown -> "?"
 
-(* Arguments of processes *)
+(** Arguments of processes *)
 type argId = {name : string; th : int }
 type relative_location = int * (string option) (* option for input *)
 type relative_nonce = int * string (* name of the nonce *)
@@ -46,8 +48,10 @@ type relative_temp_term =
   | V of relative_location (* input variable *)
   | A of argId (* argument of the function *)
   | C of chanId (* channel name (the type of expression is not known yet) *)
+  
+(** {4 Types of expanded processes}*)
 
-(* inner structure of declared processes *)  
+(** inner structure of declared processes *)  
 type bounded_process =
   | NilB 
   | NameB of relative_nonce * bounded_process (* new x; P *)
@@ -59,7 +63,7 @@ type bounded_process =
   | CallB of relative_location * int * procId * relative_temp_term list (* process call *)
   | PhaseB of int * bounded_process (* phases (not fully implemented yet *)
   
-(* types of declared processes *)  
+(** types of declared processes *)  
 and procId = { 
    name : string ; 
    arity : int; 
@@ -105,13 +109,13 @@ let rec show_relative_term_list  = function
   | t :: q -> show_relative_term t ^ "," ^ (show_relative_term_list q)
   
 
-(* Type used to know from which statement variables come from *)
+(** Type used to know from which statement variables come from *)
 type statement_role =
-  | Master (* first statement *)
-  | Slave (* second statement *)
-  | New (* second statement should never be set at New when performing substitution *)
-  | Rule (* second statement for rewrite rule *)
-  | Extra of int (* for extra variables when doing ac unification, 
+  | Master (** first statement *)
+  | Slave (** second statement *)
+  | New (** second statement should never be set at New when performing substitution *)
+  | Rule (** second statement for rewrite rule *)
+  | Extra of int (** for extra variables when doing ac unification, 
   the integer denotes which unification when they are done in sequences *)
 
 let show_binder = function 
@@ -122,11 +126,11 @@ let show_binder = function
   | Extra(n) -> "~"
 
 type varId = {
-   n : int ; (* from 0 to nbvars-1 *)
-   status : statement_role ref ; (* ref to the shared status of the statement *)
+   n : int ; (** from 0 to nbvars-1 *)
+   status : statement_role ref ; (** ref to the shared status of the statement *)
 }
 
-(* actual nonce *)
+(** actual nonce *)
 type nonceId = {
   name : string ;
   n : int ;
@@ -134,14 +138,14 @@ type nonceId = {
 
 let null_nonce = {name = "null" ; n= -1}
 
-(* type of indexes, for commodity calls also have index *)
+(** type of indexes, for commodity calls also have index *)
 type io =
    | Input of chanId
    | Output of chanId * term
    | Choice
    | Call
 
-(* type of indexes *)   
+(** type of indexes *)   
 and location = {
  p : int;
  io : io;
@@ -151,16 +155,16 @@ and location = {
  parent : location option; (*the previous i/o of the syntax tree *)
 }
 
-(* type of terms *)
+(** type of terms *)
 and funName = 
-  | Regular of funId (* f,g,h *)
-  | Nonce of nonceId (* new n. P *)
+  | Regular of funId (** f,g,h *)
+  | Nonce of nonceId (** new n. P *)
   | Plus
   | Zero
   | Tuple of int
   | Projection of int * int
-  | Frame of location (*ie w0, w1,.. *)
-  | InputVar of location (* transitional for processes *)
+  | Frame of location (** e.g. w0, w1,.. *)
+  | InputVar of location (** transitional for processes *)
 
 and funInfos = { 
    id : funName;
@@ -207,7 +211,7 @@ and show_term_list = function
   
 let zero = Fun({id=Zero;has_variables=false},[])
 
-(* type of rewrite rules *)
+(** type of rewrite rules *)
 type rewrite_rule = {
   binder_rule : statement_role ref; (* for unifications during normalization etc. *)
   nbvars_rule : int ; (* number of variables involved *)
@@ -219,7 +223,7 @@ let show_rewrite_rule r =
   Format.sprintf
     "(%s:%d) %s ==> %s\n"(show_binder !(r.binder_rule)) r.nbvars_rule (show_term r.lhs)(show_term r.rhs)
 
-(* substitution type for matching *)
+(** substitution type for matching *)
 type subst_lst = (varId * term) list
 
 let show_subst_lst lst =
@@ -228,14 +232,14 @@ let show_subst_lst lst =
 type subst_array =
     (term option) array
     
-(* type for new variables introduced by AC unification *)    
+(** type for new variables introduced by AC unification *)    
 type subst_extra = { 
   binder_extra : statement_role ref; 
   nb_extra : int; 
   subst_extra : subst_array 
 }
 
-(* type of substitutions produced by unification *)
+(** type of substitutions produced by unification *)
 type subst_maker = { 
   m : subst_array ; 
   s : subst_array; 
@@ -251,8 +255,8 @@ let show_subst_maker subst =
   (show_subst_array subst.s) ^
   (List.fold_right (fun s str -> str ^ "\n" ^ (show_subst_array s.subst_extra)) subst.e "")
 
-(* type of substitutions when they are applied on terms *)
-(* the function Rewriting.pack cast the first type into this one *)
+(** type of substitutions when they are applied on terms *)
+(** the function Rewriting.pack cast the first type into this one *)
 type substitution = {
     binder : statement_role ref;
     nbvars : int ;

@@ -24,7 +24,7 @@ let AKA_MS(ch,read_ms,write_ms,K,SUPI,SNname,pkhn) =
   in(ch,msg1);
   let (R,(xCONC,xMAC)) = msg1 in
   let AK = f5(K,R) in
-  let xSQNhn = AK + xCONC in
+  let xSQNhn = AK + xCONC + r in
   let MAC = f1(K,(xSQNhn,R)) in
   if xMAC != MAC
   then 
@@ -117,7 +117,7 @@ let AKA_SN(ch,read_sn,write_sn,K,SUPI,SNname,r)=
     new R;
     let MAC = f1(K,(SQNhn,R)) in
     let AK = f5(K, R) in
-    let CONC = SQNhn + AK in
+    let CONC = SQNhn + AK + r in
     let AUTN = (CONC, MAC) in
     let xRES = Challenge(K,R,SNname) in
     let HXRES = SHA256((R,xRES)) in

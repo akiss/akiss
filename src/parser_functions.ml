@@ -1,3 +1,5 @@
+(** From the syntax trees to expanded processes *)
+
 open Types
 (* Types *)
 
@@ -555,7 +557,7 @@ let parse_process_declaration_list lst =
   (*;Printf.printf "%s\n" (show_environment !environment)*)
 
 
-(* To be accessed by maude.ml and parsemaude.ml *)  
+(** To be accessed by maude.ml and parsemaude.ml *)  
 let nonces : ((int * nonceId) list)ref = ref [] 
 let frames : ((int * location) list)ref = ref []  
     

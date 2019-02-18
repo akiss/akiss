@@ -790,7 +790,7 @@ let rec hidden_chan_statement kb  (loc_input , term_input ,ineq_input,st_input,p
    (* Inputs.csu sigma st_output.inputs st_input.inputs *) in
   if sigmas = [] then ()
   else (
-  let dag = put_at_end (put_at_end dag loc_input) loc_output in
+  (*let dag = put_at_end (put_at_end dag loc_input) loc_output in*)
   List.iter (fun sigma -> 
     let sigma = Rewriting.pack sigma in
     (*Printf.printf "subst %s\n" (show_substitution sigma);*)
@@ -986,7 +986,6 @@ and add_statement kb solved_parent unsolved_parent test_parent process st =
      kb.next_id <- 1 + kb.next_id ;
      let st = {
        id = kb.next_id ; 
-       vip = unsolved_parent.vip ;
        st = new_st ;
        children = [] ;
        process = if is_solved_st then None else process ;

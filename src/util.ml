@@ -1,4 +1,4 @@
-
+(** Global flags and auxiliary functions used mainly in rewriting.ml *)
 exception Bug
 
 (* let bench = ref 0.

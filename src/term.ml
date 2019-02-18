@@ -1,3 +1,4 @@
+(** auxilary functions for terms *)
 open Util
 open Types
 open Dag
@@ -124,7 +125,7 @@ let rec contains_plus t =
 *)
 
 
-(* Rewrite functions use by maude.ml *)
+(** Rewrite functions use by maude.ml *)
 let sigma_maker_init i j = {m=Array.make i None; s=Array.make j None; e=[]}
 
 let copy_subst sigma =
@@ -143,6 +144,7 @@ let find_sub x sigma =
   | Rule -> sigma.s
   | _ -> assert false
 
-let maude_current_sigma = ref (sigma_maker_init 0 0)  
-let maude_current_binder = ref (ref New) (* for matchers only *)
-let maude_current_nbv = ref 0
+(** {2 Global function used in maude's parser an lexer} *)  
+let maude_current_sigma = ref (sigma_maker_init 0 0)  (**binder to use when creating new variables *)
+let maude_current_binder = ref (ref New) (** for matchers only *)
+let maude_current_nbv = ref 0 (**number of new variables generated as far *)

@@ -93,7 +93,6 @@ type hash_test = {
 val null_raw_statement : raw_statement
 type statement = {
   id : int;
-  vip : bool;
   st : raw_statement;
   mutable children : statement list;
   process : Process.process option;

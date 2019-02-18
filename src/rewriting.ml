@@ -1,3 +1,4 @@
+(** Unification and matching *)
 
 open Types
 open Term
@@ -9,7 +10,7 @@ open Maude
   List.filter (function x -> not (List.mem x small))  big*)
 
 
-(** Unification and matching *)
+
 
 exception Not_unifiable
 exception Call_Maude

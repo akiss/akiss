@@ -65,5 +65,5 @@ let Pdiff =
   ).
 
 
-
+latex lakII.
 query trace_equiv(Psame,Pdiff).

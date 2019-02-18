@@ -1,3 +1,4 @@
+(** Execution of traces, computation of complete set of solutions *)
 open Util
 open Types
 open Dag
@@ -7,7 +8,7 @@ open Bijection
 open Bijection.Run
 open Bijection.Test
 
-(* set to true to describe attacks in english *)
+(** set to true to describe attacks in english *)
 let verbose_execution = ref false
 
 let rec apply_subst_inputs term frame =
@@ -19,7 +20,7 @@ let rec apply_subst_inputs term frame =
 (*let dispatch tuple = List.fold_left (fun (lst1,lst2,lst3) (x,y,z) -> 
   (List.rev_append x lst1 ,List.rev_append y lst2,List.rev_append z lst3)) ([],[],[]) tuple*)
 
-(* update the tuple (pending,final,failure) : 
+(** update the tuple (pending,final,failure) : 
   - the (chan,threads) waiting for a silent action, 
   - the updated threads, 
   - the threads which have failed due to a test (* for debug outputs *)*)
@@ -67,7 +68,7 @@ let rec run_until_io reflexive pending final failure (choices_constraints : Inpu
       done
   | _ -> assert false
   
-(* Given a secret channel communication from a loc_input to a loc_output of a term_output, 
+(** Given a secret channel communication from a loc_input to a loc_output of a term_output, 
 computes the threads which appears after this reduction *)  
 let reduc_and_run reflexive pending final failure (loc_input : location) (loc_output : location) term_output thread_input thread_output frame =
   (*Printf.printf "  reduc_and_run %d -> %d\n" loc_output.p loc_input.p;*)
@@ -213,8 +214,8 @@ let init_sol process_name (statement : raw_statement) processQ test : solution =
    sol.partial_runs_todo <- Solutions.singleton run;
    sol
 
-(* Technical function called twice in try_run *)
-(* Produce a new partial_run object from already computed elements except the remaining threads *)
+(** Technical function called twice in try_run *)
+(** Produce a new partial_run object from already computed elements except the remaining threads *)
 let next_partial_run run (action : location) full_p proc l frame locs choices =
   (*Printf.printf "next_partial_run %s \n dag = %s\n" (show_process_start 3 full_p)(show_dag run.sol.restricted_dag);*)
   let old_threads = ref run.pending_qthreads in
@@ -289,7 +290,7 @@ let show_verbose_action (action : location) run  =
     | _ -> assert false)
     )
 
-(* Given a partial_run run, try to execute action on one of the available threads of Q *)        
+(** Given a partial_run run, try to execute action on one of the available threads of Q *)        
 let try_run run (action : location) ext_thread =
   (*Printf.printf "constraints %s \n" (show_correspondance run.test.constraints );*)
   let condition = if is_empty_correspondance run.test.constraints 
@@ -346,7 +347,7 @@ let next_run_with_action current_loc partial_run=
     ) ([],LocationSet.empty) partial_run.qthreads in
   (new_runs, current_loc)
 
-(* Given a partial_run select an action to execute and test this action on available threads of Q *)
+(** Given a partial_run select an action to execute and test this action on available threads of Q *)
 let next_run partial_run : (partial_run list * location)= 
   let first_actions = first_actions_among partial_run.test.statement.dag partial_run.remaining_actions in
   let current_loc = 
