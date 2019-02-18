@@ -1,6 +1,6 @@
 exception Not_unifiable
 exception Call_Maude
-val csu :
+val csu_ac :
   (Types.term * Types.term) list ->
   Types.subst_maker -> Types.subst_maker list
 val csu_xor :
@@ -20,14 +20,17 @@ val is_identity_master : Types.substitution -> int -> bool
 val equals_ac : Types.term -> Types.term -> bool
 (*val list_equals_ac : Types.term list -> Types.term list -> bool*)
 val recompose_term : Types.term list -> Types.term
-val match_ac : bool ->
+(*val match_ac : bool ->
   (Types.term * Types.term) list ->
   (Types.term * Types.term) list ->
   (Types.varId * Types.term) list ->
-  (Types.term * Types.term) list * (Types.varId * Types.term) list
-val csm :
+  (Types.term * Types.term) list * (Types.varId * Types.term) list*)
+val csm : bool ->
   Types.statement_role ref ->
-  (Types.term * Types.term) list -> Types.subst_lst list
+  (Types.term * Types.term) list -> Types.subst_lst -> Types.subst_lst list
+val csm_xor : bool ->
+  Types.statement_role ref ->
+  (Types.term * Types.term) list -> Types.subst_lst -> Types.subst_lst list
 val normalize : Types.term -> Types.rewrite_rule list -> Types.term
 val equals_r : Types.term -> Types.term -> Types.rewrite_rule list -> bool
 val trconcat : 'a list list -> 'a list

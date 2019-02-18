@@ -61,12 +61,22 @@ let singleton l1 l2 =
 let put_at_end dag loc =
   {rel = Dag.add loc (LocationSet.empty)(Dag.map (fun set -> LocationSet.add loc set) dag.rel)}
 
- exception E
+ 
 let subset dag1 dag2 =
-  (*let exception E in *)
+  let exception E in 
   try ignore (Dag.merge (fun loc set1 set2 -> 
     match (set1,set2) with
     | (Some set1, Some set2) -> if not (LocationSet.subset set1 set2) then raise E else None
+    | (Some set1, None) -> raise E
+    | (None,  _) -> None) dag1.rel dag2.rel); true
+  with E -> false
+
+(** Used in conseq: check that dag1 is included in dag2 and do not contain final indexes *)  
+let strict_subset dag1 dag2 =
+  let exception E in 
+  try ignore (Dag.merge (fun loc set1 set2 -> 
+    match (set1,set2) with
+    | (Some set1, Some set2) -> if not (LocationSet.subset set1 set2) || LocationSet.is_empty set2 then raise E else None
     | (Some set1, None) -> raise E
     | (None,  _) -> None) dag1.rel dag2.rel); true
   with E -> false

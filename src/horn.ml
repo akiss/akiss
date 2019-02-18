@@ -6,6 +6,9 @@ open Base
 open Process
 open Dag
 
+(** {1 Saturation procedure}*)
+
+(** {2 Basic functions on statements }*)
 
 let statement_f0 =
   let binder = ref Master in
@@ -98,12 +101,6 @@ let rec find_unsolved best body =
     
 let find_unsolved st = find_unsolved None st.body
   
-(*let rec find_rigid term = 
-  match term with
-  | Var(x) -> None
-  | Fun({id = Plus}, args) -> List.find (fun t -> match find_rigid t with Some _ -> true | None -> false) args  
-  | _ -> Some Term*)
-  
 let rec explode_term t =
     match t with
     | Fun({id = Plus},[l;r]) -> 
@@ -129,22 +126,7 @@ let get_head_term = function
   | _ -> assert(false)
 
 
-
-
-
-
-
-(*
-
-let rec has_rigid = function
-  | Fun ("plus",[a;b]) :: l -> has_rigid (a::b::l)
-  | Fun (_,_) :: _ -> true
-  | Var _ :: l -> has_rigid l
-  | [] -> false
-
-let has_rigid t = has_rigid [t]*)
-
-(** {2  Code use in consequence and shift to find a linear combination of body term which provide a given term } **)
+(** {2  Decompose a sum of variables into sum of body term } *)
 
 exception Not_a_linear_combination
 
@@ -183,17 +165,18 @@ let get_recipe_for_sum sum_var st =
   let var = List.map (fun x -> unbox_var x) sum_var in
   Rewriting.recompose_term (find_xor_sum var st.body [])
 
-(** [first f l e] attempts to call [f] on each element of the list,
-  * in order, and returns the result of the first call that succeeds.
-  * If all calls fail, re-raise the exception raised by the last call. *)
 
-	
+(** {2 Replacing deduction statements by simpler ones }*)  
+  
 (* for conseq: try all statement until one fit*)
 exception Not_a_consequence
 exception Bad_World
 exception Restricted_World
 exception Bad_case
 
+(** [first f l e] attempts to call [f] on each element of the list,
+    in order, and returns the result of the first call that succeeds.
+    If all calls fail, re-raise the exception raised by the last call. *)
 let first kb f =
    let rec first_node st f =
       (* Printf.printf "T%d " st.id; *)
@@ -221,18 +204,18 @@ let rec first_sigma sigma_lst f =
 (** [inst_w_t my_head head_kb exc] attempts to match the world and term
   * arguments of two predicates of arity three, and raises [exc] upon
   * failure. This is used for checking if a clause is in conseq. *)
-let inst_w_t be_complete my_st kb_st =
+let inst_w_t my_st kb_st =
   let myt = get_head_term my_st.head in
   let tkb = get_head_term kb_st.head in
   (* debugOutput "Matching %s against %s\n%!" (show_term t1) (show_term t2); *)
-  if not (subset kb_st.dag my_st.dag) 
+  if not (strict_subset kb_st.dag my_st.dag) 
     || not (Inputs.subset_choices kb_st.choices my_st.choices)
   then begin (*Printf.printf "@";*) raise Bad_World end 
   else
-    let sigmas = Inputs.csm my_st.binder kb_st.inputs my_st.inputs in
+    let sigmas = Inputs.csm true my_st.binder kb_st.inputs my_st.inputs in
     if sigmas = [] then raise Bad_World;
-    List.concat (List.map (fun sigma ->
-      try
+    List.concat (List.map (fun sigma -> Rewriting.csm true my_st.binder [(tkb, myt)] sigma 
+     (* try
         let (hard,sigma) = Rewriting.match_ac false [] [(tkb, myt)] sigma in
         (* debugOutput "Result %s\n%!" (show_subst sigma); *)
         if hard <> [] 
@@ -243,7 +226,7 @@ let inst_w_t be_complete my_st kb_st =
         else
           [ sigma ]
       with
-      | Term.Not_matchable -> (*Printf.printf "-";*) raise Bad_case 
+      | Term.Not_matchable -> (*Printf.printf "-";*) raise Bad_case *)
     ) sigmas)
 
 
@@ -255,15 +238,14 @@ let rec print_trace chan = function
       Format.fprintf chan "#%s(%a)" (show_raw_statement st) (pp_list print_trace ",") traces
 
 (** Check whether a statement is a consequence of a knowledge base, ie.
-  * try to find solved statements deriving the same term from the same
-  * assumptions.
-  * Raise [Not_a_consequence] if there is no such statement.
-  * If there is one, return the associated recipe. An identical statement
-  * will be added to indicate that the two recipes have the same result,
-  * instead of the new useless deduction statement.
-  * See Definition 14 and Lemma 2 in the paper. *)
-let consequence be_complete st kb rules = 
-  if !about_canonization then Printf.printf "Conseq of %s" (show_raw_statement st) ;
+    try to find solved statements deriving the same term from the same
+    assumptions.
+    Raise [Not_a_consequence] if there is no such statement.
+    If there is one, return the associated recipe. An identical statement
+    will be added to indicate that the two recipes have the same result,
+    instead of the new useless deduction statement. *)
+let consequence st kb rules = 
+  (*if !about_canonization then Printf.printf "Conseq of %s" (show_raw_statement st) ;*)
   (*st.binder := Rule;*)
   let apply_subst_list_atom atom sigma  = 
    Knows(zero, apply_subst atom.term sigma) in
@@ -293,7 +275,7 @@ let consequence be_complete st kb rules =
         * instantiated clause [x] is normal. *)
         first kb
           (fun x ->
-            let sigmas = inst_w_t be_complete st x in
+            let sigmas = inst_w_t st x in
             first_sigma sigmas 
               (fun sigma ->
                 (*Printf.printf "\nst: %s\n sigma = %s\n" (show_raw_statement x)(show_subst sigma); *)
@@ -325,20 +307,21 @@ let consequence be_complete st kb rules =
 
 
 
-(** {2 Knowledge base update} *)
+(** {2 Knowledge base canonization rules } *)
 
 let rule_shift st = 
   match st.head with
   | Knows( r , (Fun({ id = Plus}, [ l ; t ]) as pl)) -> (
-    if !about_canonization then Printf.printf "shift on: %s\n"(show_raw_statement st);
     let var,cst = explode_term pl in
     try
+    if var = [] then st else begin
+    if !about_canonization then Printf.printf "shift on: %s\n"(show_raw_statement st);
     let recipe = get_recipe_for_sum var st in
     let stt = {st with head = Knows( Fun({id=Plus;has_variables=true},[r;recipe]), Rewriting.recompose_term cst)} in 
     if !about_canonization then Format.printf "shift + on the statement: %s \n" (show_raw_statement stt); 
-    stt
+    stt end
     with
-    | Not_a_consequence -> assert false )
+    | Not_a_consequence -> assert false)
   | Knows( r , Var(x)) -> st (* (*Bugguy when no xor*)
     begin let stt = {st with head = 
       Knows(Fun({ id = Plus; has_variables = true},[get_recipe (Var(x)) (st.body); r]), 
@@ -437,7 +420,7 @@ let canonical_form statement =
         rule_shift statement
     else 
         statement in
-  if !about_canonization then Format.printf "Canonized: %s\n" (show_raw_statement statement) ;
+  (*if !about_canonization then Format.printf "Canonized: %s\n" (show_raw_statement statement) ;*)
   statement
 
 
@@ -512,11 +495,10 @@ let update kb f =
   with 
     None -> None 
   | Some fc ->
-    if ! about_canonization then Printf.printf "normalized statement :\n%s \n" (show_raw_statement fc);
   if is_identity_of_theory fc then None else
   if is_deduction_st fc && is_solved fc then
     try
-      let recipe = consequence false fc kb.solved_deduction rules in
+      let recipe = consequence fc kb.solved_deduction rules in
       let newhead =
         Identical(get_head_recipe fc.head, recipe)
       in
@@ -536,20 +518,9 @@ let update kb f =
 
     
 
-(** {! Resolution steps
-    lllllllllllllllllll
-    lllllllllllllllllll} **)
+(** {2 Resolution steps} *)
     
     
-    
-
-(** [resolution d_kb (master,slave)] attempts to perform a resolution step
-  * between clauses [master] and [slave] by matching the head of [slave]
-  * against the first premise of [master] that is of the form (knows _ _ t)
-  * where t is not a variable.
-  * This corresponds to the "Resolution" rule in the paper.
-  * Return the list of newly generated clauses. *)
-
 
 let resolution_plus master =
   let atom = find_unsolved master in
@@ -562,6 +533,8 @@ let resolution_plus master =
   let tx1 = { n = 2 ; status = binder; } in
   let tx2 = { n = 3 ; status = binder; } in
   let sigma = sigma_maker_init master.nbvars 4 in
+  match explode_term atom.term with
+  | _, rigid :: _ -> 
  (* (* split a plus into a variables' list and a rigid factors' list *)
   let rec explode_term t =
     match t with
@@ -618,17 +591,22 @@ let resolution_plus master =
 				else addvar x1 x2 rx x11 x12 x (exponential l [([a],[])])
 			| _ ->  failwith "loop" )
   in *)
-  let sigmas =
-    Rewriting.csu [
+  let sigmas = List.concat 
+      (List.map (fun sigm -> Rewriting.csu_ac [(atom.term,Fun({id = Plus; has_variables = true},[Var(tx1);Var(tx2)]) )] sigm) 
+        (Rewriting.csu_xor [(atom.recipe, Fun({id = Plus; has_variables = true},[Var(rx1);Var(rx2)]))] sigma))
+   (* Rewriting.csu [
       (atom.term,Fun({id = Plus; has_variables = true},[Var(tx1);Var(tx2)]) );
-      (atom.recipe, Fun({id = Plus; has_variables = true},[Var(rx1);Var(rx2)]))] sigma
+      (atom.recipe, Fun({id = Plus; has_variables = true},[Var(rx1);Var(rx2)]))] sigma *)
   in
       (* Create results *)
       List.map
         (fun sigma ->
            let sigma = Rewriting.pack sigma in
            let t1 = Rewriting.apply_subst_term (Var (tx1)) sigma in
-           let t1_rigid = not (is_sum_term t1) in
+           let t2 = Rewriting.apply_subst_term (Var (tx2)) sigma in
+           let _, t1s = explode_term t1 in
+           let rigid = Rewriting.apply_subst_term rigid sigma in
+           let t1_rigid = List.exists (fun t -> t = rigid) t1s (* not (is_sum_term t1)*) in
            let result =
            {
            binder = sigma.binder ;
@@ -638,7 +616,7 @@ let resolution_plus master =
            recipes = Inputs.map (fun t -> Rewriting.apply_subst_term t sigma) master.recipes;
            head = apply_subst_pred master.head sigma ;
            body = {loc = atom.loc ; marked = t1_rigid ; recipe = Rewriting.apply_subst_term (Var (rx1)) sigma ; term = t1 }
-               :: {loc = atom.loc ; marked = not (t1_rigid) ; recipe = Rewriting.apply_subst_term (Var (rx2)) sigma ; term =  Rewriting.apply_subst_term (Var (tx2)) sigma }
+               :: {loc = atom.loc ; marked = not (t1_rigid) ; recipe = Rewriting.apply_subst_term (Var (rx2)) sigma ; term = t2}
                :: (List.map (fun x -> { x with recipe = Rewriting.apply_subst_term x.recipe sigma; term = Rewriting.apply_subst_term x.term sigma} )
                  (List.filter (fun x -> (x <> atom)) master.body));
            choices = master.choices;
@@ -649,12 +627,21 @@ let resolution_plus master =
                (show_raw_statement result);*)
            result)
         sigmas
+  | _ -> assert false
 
 let is_tuple term =
   match term with
   | Fun ({id = Tuple _},_) -> true
   | _ -> false
-
+  
+(** [resolution sigma choices dag master slave] attempts to perform a resolution step
+    between clauses [master] and [slave] by matching the head of [slave]
+    against the first premise of [master] which is not solved.
+    sigma is the partial unification of the recipes/inputs only, 
+    choices the merge of choices and dag the merge of dags 
+    which have been computed in extra_resolution
+    This corresponds to the "Resolution" rule in the paper.
+    Return the list of newly generated clauses. *)
 let resolution sigma choices dag master slave =
    let atom = find_unsolved master in
    (* Printf.printf "Slave: %s\n Selected atom %s\n" (show_raw_statement slave)(show_body_atom atom);*)
@@ -669,10 +656,12 @@ let resolution sigma choices dag master slave =
        then begin (*Printf.printf "cyclic dag \n";*) raise Impossible end;
        new_dag )
      else dag in
-   let sigmas =
-    Rewriting.csu [
+   let sigmas = List.concat 
+      (List.map (fun sigm -> Rewriting.csu_ac [(atom.term, get_head_term slave.head)] sigm) 
+        (Rewriting.csu_xor [(atom.recipe, get_head_recipe slave.head)] sigma))
+   (* Rewriting.csu [
       (atom.term, get_head_term slave.head);
-      (atom.recipe, get_head_recipe slave.head)] sigma (*recipes should be modulo xor*)
+      (atom.recipe, get_head_recipe slave.head)] sigma *)(*recipes should be modulo xor*)
     in
    (* Printf.printf "Unifiers %d\n" (List.length sigmas);*)
       (* Create results *)
@@ -700,7 +689,7 @@ let resolution sigma choices dag master slave =
            dag = dag ;
            choices = choices ;
            inputs = Inputs.merge sigma master.inputs slave.inputs;
-           recipes = Inputs.merge(*_recipes*) sigma master.recipes slave.recipes;
+           recipes = Inputs.merge_recipes sigma master.recipes slave.recipes;
            head = (apply_subst_pred master.head sigma) ;
            body = body ;
            involved_copies = BangSet.union master.involved_copies slave.involved_copies ; }
@@ -712,7 +701,7 @@ let resolution sigma choices dag master slave =
   with Impossible -> []
   end
  
-(** [equation fa fb] takes two solved clauses and, when they are solved clauses
+(** [equation sigma choices dag fa fb] takes two solved clauses and, when they are solved clauses
   * concluding "knows", attempts to combine them: if the terms and worlds can be
   * unified, generate a clause concluding that the recipes are "identical".
   * This corresponds to the "Equation" rule in the paper.
@@ -723,7 +712,7 @@ let equation sigma choices dag fa fb =
       if !debug_saturation then Format.printf "Equation:\n %s\n %s\n%!"
          (show_raw_statement fa) (show_raw_statement fb) ;
       if (Rewriting.equals_ac r rp) then [] else
-      let sigmas = Rewriting.csu [(t,tp)] sigma in
+      let sigmas = Rewriting.csu_ac [(t,tp)] sigma in
     List.map
       (fun sigma ->
           let sigma = Rewriting.pack sigma in
@@ -744,7 +733,7 @@ let equation sigma choices dag fa fb =
            dag = dag ;
            choices = choices ;
            inputs = Inputs.merge sigma fa.inputs fb.inputs;
-           recipes = Inputs.merge(*_recipes*) sigma fa.recipes fb.recipes;
+           recipes = Inputs.merge_recipes sigma fa.recipes fb.recipes;
            head = Identical(Rewriting.apply_subst_term r sigma,Rewriting.apply_subst_term rp sigma);
            body = body ;
            involved_copies = BangSet.union fa.involved_copies fb.involved_copies ; }
@@ -758,7 +747,7 @@ let equation sigma choices dag fa fb =
 
           
           
-(** {! Trace generation} **)
+(** {2 Trace generation} *)
 
 
 
@@ -768,7 +757,7 @@ let rec concretize inputs term =
    | Fun(f,args) -> Fun(f,List.map (concretize inputs) args)
    | _ -> term  
 
- 
+(** Compute statements which express private chan communication from two statments ending at a private input and output *) 
 let rec hidden_chan_statement kb  (loc_input , term_input ,ineq_input,st_input,pr_input) (loc_output,  term_output,ineq_output,st_output,pr_output) solved_parent unsolved_parent test_parent  = 
   if !about_seed then Printf.printf "Computing hidden_chan_statement\n -link %d <-> %d\n -input %s \n -output %s\n%!" loc_input.p loc_output.p (show_raw_statement st_input)(show_raw_statement st_output);
   match term_input,term_output with
@@ -795,7 +784,10 @@ let rec hidden_chan_statement kb  (loc_input , term_input ,ineq_input,st_input,p
   else (
   let sigma = sigma_maker_init st_output.nbvars st_input.nbvars in
   (* Printf.printf "Computing hiden_chan_statement\n -link %d <-> %d\n" loc_input.p loc_output.p; *)
-  let sigmas = Inputs.csu sigma st_output.inputs st_input.inputs in
+  let sigmas = List.concat (List.map 
+      (fun sigm -> Inputs.csu sigm st_output.inputs st_input.inputs) 
+      (Inputs.csu_recipes sigma st_output.recipes st_input.recipes))
+   (* Inputs.csu sigma st_output.inputs st_input.inputs *) in
   if sigmas = [] then ()
   else (
   let dag = put_at_end (put_at_end dag loc_input) loc_output in
@@ -818,7 +810,7 @@ let rec hidden_chan_statement kb  (loc_input , term_input ,ineq_input,st_input,p
       dag = dag ;
       choices = choices ;
       inputs = Inputs.merge sigma st_output.inputs st_input.inputs;
-      recipes = Inputs.merge sigma st_output.recipes st_input.recipes;
+      recipes = Inputs.merge_recipes sigma st_output.recipes st_input.recipes;
       head = Reach;
       body = body ;
       involved_copies = BangSet.union st_output.involved_copies st_input.involved_copies ; }
@@ -832,6 +824,7 @@ let rec hidden_chan_statement kb  (loc_input , term_input ,ineq_input,st_input,p
   )
   | _ -> assert false
  
+(** The seed is computed incrementally: this function compute new statements from the trace ([process]) *) 
 and trace_statements kb ineqs solved_parent unsolved_parent test_parent process st =
   let rec add_ineqs_statements ineqs idsigma st =
   match ineqs with
@@ -978,12 +971,13 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
       done
    (* | _ -> invalid_arg ("todo")*)
 
-
+(** Take a solved statement and update the knowledge base with it *)
 and add_statement kb solved_parent unsolved_parent test_parent process st = 
-  if !debug_saturation then Format.printf "Adding statement %s \n%!" (show_raw_statement st);
+  if !debug_saturation || ! about_canonization then Format.printf "Adding statement %s \n%!" (show_raw_statement st);
   match update kb st with
-  | None -> ()
+  | None -> if ! about_canonization then Printf.printf "Statement is dropped\n";()
   | Some new_st -> begin 
+     if ! about_canonization then Printf.printf "Normalized statement: %s\n" (show_raw_statement new_st);
      let is_solved_st = is_solved new_st in
      let new_st = canonize_statement new_st in
      let hash_st = raw_to_hash_statement new_st in
@@ -1001,8 +995,8 @@ and add_statement kb solved_parent unsolved_parent test_parent process st =
        test_parent = test_parent;
        } in 
      (if !debug_saturation 
-     then Printf.printf "Addition of %s \n unsolved: %s solved: %s test: %s process: %s\n\n %!" 
-      (show_statement "" st)(show_raw_statement unsolved_parent.st)(show_raw_statement solved_parent.st)(show_raw_statement test_parent.st)
+     then Printf.printf "Addition of %s \n unsolved: %d solved: %d test: %d process: %s\n\n %!" 
+      (show_statement "" st)(unsolved_parent.id)(solved_parent.id)(test_parent.id)
       (match process with None -> "none" | Some pr -> show_process_start 3 pr)
      else if !about_progress && kb.next_id mod (match st.st.head with Tests(_) -> 5000 | _ -> 500) = 0 then Printf.printf "Addition of %s \n%!" (show_statement "" st));
      Hashtbl.add kb.htable hash_st st;
@@ -1069,7 +1063,7 @@ let theory_statements kb fname arity =
         add_statement kb kb.solved_deduction kb.not_solved kb.rid_solved None
         {st with head = head} ) v
 
-    
+(** {2 Saturation exploration}*)    
 
 let extra_resolution kb solved unsolved =
   if !debug_saturation then Printf.printf "Try resolution between #%d and #%d : " solved.id unsolved.id;
@@ -1085,8 +1079,7 @@ let extra_resolution kb solved unsolved =
   let sigmas = match Inputs.csu_recipes sigma solved.st.recipes unsolved.st.recipes with
   | [] -> []
   | [s] -> Inputs.csu s solved.st.inputs unsolved.st.inputs
-  | lst -> (* List.iter (fun s -> Printf.printf "%s\n" (show_subst_maker s)) lst; *)
-     assert false  in 
+  | lst -> List.concat(List.rev_map (fun s -> Inputs.csu s solved.st.inputs unsolved.st.inputs) lst) in 
   if sigmas = [] then (if !debug_saturation then Printf.printf " recipes cannot be unified \n"; false )
   else begin 
     if !debug_saturation then Printf.printf " compatible worlds\n";
@@ -1143,6 +1136,7 @@ let rec process_equation kb new_solved old_solved =
     then 
       List.iter (fun st -> process_equation kb new_solved st) old_solved.children
 
+(** [merge_sat kb] performs the saturation of kb where an unsolved test have been added, used during the algorithm in tests.ml *)      
 let merge_sat kb = 
   while not (Queue.is_empty(kb.ns_todo)) do
     let unsolved = Queue.take(kb.ns_todo) in
@@ -1156,6 +1150,7 @@ let merge_sat kb =
     List.iter (fun solved -> process_resolution_new_unsolved kb solved unsolved) kb.solved_deduction.children
   done
    
+(** The big saturation algorithm on [procId] *)   
 let saturate procId  =
   let kb = Base.new_base () in
   List.iter (fun f -> theory_statements kb (Regular(f)) f.arity) !Parser_functions.functions_list;

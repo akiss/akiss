@@ -71,7 +71,7 @@ let get_output_of_input c l =
   with Not_found -> Printf.printf "get_output_of_input %d %s\n" l.p (show_choices c); assert false
 
 let subset_choices c1 c2 =
-  (*let exception E in *)
+  let exception E in 
   try ignore (Dag.merge (fun loc i1 i2 -> 
     match (i1,i2) with
     | (Some i1, Some i2) -> if i1 <> i2 then raise E else None
@@ -133,7 +133,7 @@ let to_list inputs1 inputs2 =
   
 let csu sigma inputs1 inputs2 =
   let eq_list = to_list inputs1 inputs2 in
-  Rewriting.csu eq_list sigma
+  Rewriting.csu_ac eq_list sigma
   
 let csu_recipes sigma recipe1 recipe2 =
   let eq_list = to_list recipe1 recipe2 in
@@ -150,18 +150,26 @@ let csu_recipes sigma recipe1 recipe2 =
   with 
   | Rewriting.Not_unifiable -> []*)
 
-let csm binder inputs1 inputs2 = 
+let csm be_lazy binder inputs1 inputs2 = 
   let to_list = Dag.merge (fun loc i1 i2 -> 
     match (i1,i2) with
     | (Some i1, Some i2) -> Some(i1,i2)
     | _ -> None) inputs1.i inputs2.i in
   let pairlst = Dag.fold (fun l pl pairlst -> pl :: pairlst) to_list [] in
-  Rewriting.csm binder pairlst 
+  Rewriting.csm be_lazy binder pairlst []
 (*  if hard = [] 
   then [sigma]
   else Maude.acmatchers binder hard sigma
   with
   | Term.Not_matchable -> [] *)
+  
+let csm_recipes be_lazy binder inputs1 inputs2 = 
+  let to_list = Dag.merge (fun loc i1 i2 -> 
+    match (i1,i2) with
+    | (Some i1, Some i2) -> Some(i1,i2)
+    | _ -> None) inputs1.i inputs2.i in
+  let pairlst = Dag.fold (fun l pl pairlst -> pl :: pairlst) to_list [] in
+  Rewriting.csm_xor be_lazy binder pairlst []
 
 let merge sigma inputs1 inputs2 =
   { i =
@@ -173,8 +181,8 @@ let merge sigma inputs1 inputs2 =
     | (None,None) -> None) inputs1.i inputs2.i 
   }
   
-let merge_recipes sigma inputs1 inputs2 =
-  { i =
+let merge_recipes sigma inputs1 inputs2 = merge sigma inputs1 inputs2 
+(*  { i =
   Dag.merge (fun loc i1 i2 -> 
     match (i1,i2) with
     | (Some i1, Some i2) -> 
@@ -188,7 +196,7 @@ let merge_recipes sigma inputs1 inputs2 =
     | (Some i , None)  
     | (None , Some i) -> Some(Rewriting.apply_subst_term i sigma) 
     | (None,None) -> None) inputs1.i inputs2.i 
-  }  
+  }  *)
   
 let apply_subst_recipes sigma inputs =
   {i = Dag.map (fun  r -> Rewriting.apply_subst_term r sigma) inputs.i}

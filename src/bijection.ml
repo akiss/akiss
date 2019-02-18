@@ -90,29 +90,29 @@ module rec Run : sig
     hash_corresp_c : (location * location) list ;
   }
   and  partial_run = {
-  test : Test.test; (* The test from which the prun come from *)
+  test : Test.test; (** The test from which the prun come from *)
   sol : solution;
-  corresp : correspondance ; (* a mapping from the actions of P to the actions of Q *)
-  corresp_back : correspondance ; (* the reverse mapping from the actions of Q to the actions of P *)
+  corresp : correspondance ; (** a mapping from the actions of P to the actions of Q *)
+  corresp_back : correspondance ; (** the reverse mapping from the actions of Q to the actions of P *)
   remaining_actions : LocationSet.t; 
-  frame : Inputs.inputs ; (* the frame for outputs *)
-  choices : Inputs.choices ; (* the choices on Q that have been made in this trace *)
+  frame : Inputs.inputs ; (** the frame for outputs *)
+  choices : Inputs.choices ; (** the choices on Q that have been made in this trace *)
   phase : int; 
   (*disequalities : (term * term) list;*) (*All the disequalities that have been encountred during the trace *)
-  qthreads : extra_thread list ; (* The available action of Q, the constraints *)
-  failed_qthreads : extra_thread list ; (* The action that might be availble for a specific substitution, used for debugging *)
-  pending_qthreads : ((location * term option * extra_thread) list) Base.ChanMap.t ; (* The threads which is locked by a hidden chan *)
+  qthreads : extra_thread list ; (** The available action of Q, the constraints *)
+  failed_qthreads : extra_thread list ; (** The action that might be availble for a specific substitution, used for debugging *)
+  pending_qthreads : ((location * term option * extra_thread) list) Base.ChanMap.t ; (** The threads which is locked by a hidden chan *)
   (*mutable children : partial_run list ; (* once processed, the list of possible continuation of the execution *)*)
   restrictions : LocationSet.t;
   (*performed_restrictions : LocationSet.t;*)
   parent : partial_run option;
   (* for scoring *)
-  last_exe : location ; (* the action whose run lead to this pr *)
-  weird_assoc : int ; (* when the parent of an action is not associated to the parent of the associated action *)
+  last_exe : location ; (** the action whose run lead to this pr *)
+  weird_assoc : int ; (** when the parent of an action is not associated to the parent of the associated action *)
   score : int ;
-  (* for complete runs *)
-  mutable consequences : (statement_role * substitution * Test.test) list; (* the merged tests from this run, empty if this run is not part of the solution  *)
-  mutable completions :  completion list; (* the completion from this run, empty if this run is not part of the solution  *)
+  (** for complete runs *)
+  mutable consequences : (statement_role * substitution * Test.test) list; (** the merged tests from this run, empty if this run is not part of the solution  *)
+  mutable completions :  completion list; (** the completion from this run, empty if this run is not part of the solution  *)
 }
 and origin = 
   | Initial of statement 
@@ -140,20 +140,20 @@ end
 struct
   type completion = {
     id_c : int;
-    st_c : raw_statement ; (* the current completion g u U_i f_i *)
-    corresp_c : correspondance ; (* the correspondance of the union of f_i *)
+    st_c : raw_statement ; (** the current completion g u U_i f_i *)
+    corresp_c : correspondance ; (** the correspondance of the union of f_i *)
     corresp_back_c : correspondance ;
     (*core_corresp : (location * location) list ;*)
-    missing_actions :  LocationSet.t; (* all the locations which are present on the initial statement but not on the runs *)
-    selected_action : location; (*Among all missing locations the one to complete first *)
+    missing_actions :  LocationSet.t; (** all the locations which are present on the initial statement but not on the runs *)
+    selected_action : location; (**Among all missing locations the one to complete first *)
     root : complement_root;
     mutable further_completions : completion list;
     mutable generated_test : Test.test option;
   }
   and complement_root = {
-    from_base : which_process; (* the saturated base from which the completion come from *)
-    from_statement : statement; (* for debugging to have its id*)
-    initial_statement : raw_statement ; (* the unreach or identity from which the completion is issued: g *) 
+    from_base : which_process; (** the saturated base from which the completion come from *)
+    from_statement : statement; (** for debugging to have its id*)
+    initial_statement : raw_statement ; (** the unreach or identity from which the completion is issued: g *) 
     hash_initial_statement : hash_test ;
     mutable directory : (((hash_completion * completion) list) ref) Dag.t ; (* For each selected missing action, the list of completions so far, to avoid duplicates and not optimal completions *)
   }  
@@ -163,23 +163,23 @@ struct
     hash_corresp_c : (location * location) list ;
   }
   and partial_run = {
-  test : Test.test; (* The test from which the prun come from *)
+  test : Test.test; (** The test from which the prun come from *)
   sol : solution;
-  corresp : correspondance ; (* a mapping from the actions of P to the actions of Q *)
-  corresp_back : correspondance ; (* the reverse mapping from the actions of Q to the actions of P *)
+  corresp : correspondance ; (** a mapping from the actions of P to the actions of Q *)
+  corresp_back : correspondance ; (** the reverse mapping from the actions of Q to the actions of P *)
   remaining_actions : LocationSet.t; 
-  frame : Inputs.inputs ; (* the frame for outputs *)
-  choices : Inputs.choices ; (* the choices on Q that have been made in this trace *)
-  phase : int ; (* the current phase *)
-  qthreads : extra_thread list ; (* The available action of Q, the constraints *)
-  failed_qthreads : extra_thread list ; (* The action that might be availble for a specific substitution, used for debugging *)
-  pending_qthreads : ((location * term option * extra_thread) list) Base.ChanMap.t ; (* The threads which is locked by a hidden chan *)
+  frame : Inputs.inputs ; (** the frame for outputs *)
+  choices : Inputs.choices ; (** the choices on Q that have been made in this trace *)
+  phase : int ; (** the current phase *)
+  qthreads : extra_thread list ; (** The available action of Q, the constraints *)
+  failed_qthreads : extra_thread list ; (** The action that might be availble for a specific substitution, used for debugging *)
+  pending_qthreads : ((location * term option * extra_thread) list) Base.ChanMap.t ; (** The threads which is locked by a hidden chan *)
   (*mutable children : partial_run list ; (* once processed, the list of possible continuation of the execution *)*)
   restrictions : LocationSet.t;
   parent : partial_run option;
   (* for scoring *)
-  last_exe : location ; (* the action whose run lead to this pr *)
-  weird_assoc : int ; (* when the parent of an action is not associated to the parent of the associated action *)
+  last_exe : location ; (** the action whose run lead to this pr *)
+  weird_assoc : int ; (** when the parent of an action is not associated to the parent of the associated action *)
   score : int ;
   (* for selected runs only: the list of merged tests from this run (consequences) and completions from this run (completions) *)
   mutable consequences : (statement_role * substitution * Test.test) list;
@@ -198,9 +198,9 @@ and solution = {
   init_run : partial_run;
   mutable partial_runs : partial_run list;
   mutable partial_runs_todo : Solutions.t; (*partial_run list;*)
-  mutable possible_runs_todo : Solutions.t; (* Queue here before processing *)
-  mutable possible_runs : Solutions.t; (* Run which are not compatible for the current bijection, to test if no other option *)
-  mutable movable : int; (*Number of tests which are merged require to consider changing the partition *) 
+  mutable possible_runs_todo : Solutions.t; (** Queue here before processing *)
+  mutable possible_runs : Solutions.t; (** Run which are not compatible for the current bijection, to test if no other option *)
+  mutable movable : int; (**Number of tests which are merged require to consider changing the partition *) 
   mutable restricted_dag : dag;
   mutable selected_run : partial_run option;
   sol_test : Test.test;
@@ -214,17 +214,17 @@ let compare (x : t) (y : t)=
 end
 and Test : sig 
 type test = {
-  process_name : which_process; (* Is it a test of P or of Q?*)
-  reflexive : bool ; (* the target process is process_name *)
-  statement : raw_statement ; (* the solved statement seen as the test to check *)
-  mutable reflexive_run : Run.partial_run ; (* to know the value of the outputs *)
+  process_name : which_process; (** Is it a test of P or of Q?*)
+  reflexive : bool ; (** the target process is process_name *)
+  statement : raw_statement ; (** the solved statement seen as the test to check *)
+  mutable reflexive_run : Run.partial_run ; (** to know the value of the outputs *)
   origin : Run.origin;
   id : int;
   from : IntegerSet.t;
-  nb_actions : int; (* used to order the tests *)
-  mutable new_actions : int; (* compared to the base actions, used to order the tests in the database *)
-  mutable constraints : correspondance; (* Try to pass the test with these constraints *)
-  mutable constraints_back : correspondance; (* Inverse mapping *)
+  nb_actions : int; (** used to order the tests *)
+  mutable new_actions : int; (** compared to the base actions, used to order the tests in the database *)
+  mutable constraints : correspondance; (** Try to pass the test with these constraints *)
+  mutable constraints_back : correspondance; (** Inverse mapping *)
   mutable solutions_todo : Run.solution list;
   mutable solutions_done : Run.solution list;
 }
@@ -233,17 +233,17 @@ val compare : t -> t -> int
 end
 = struct
 type test = {
-  process_name : which_process; (* Is it a test of P or of Q?*)
-  reflexive : bool ; (* the target process is process_name *)
-  statement : raw_statement ; (* the solved statement seen as the test to check *)
-  mutable reflexive_run : Run.partial_run ; (* to know the value of the outputs *)
+  process_name : which_process; (** Is it a test of P or of Q?*)
+  reflexive : bool ; (** the target process is process_name *)
+  statement : raw_statement ; (** the solved statement seen as the test to check *)
+  mutable reflexive_run : Run.partial_run ; (** to know the value of the outputs *)
   origin : Run.origin;
   id : int;
   from : IntegerSet.t;
-  nb_actions : int; (* used to order the tests *)
-  mutable new_actions : int; (* compared to the base actions, used to order the tests *)
-  mutable constraints : correspondance; (* Try to pass the test prioritary satisfying the constraints *)
-  mutable constraints_back : correspondance; (* Inverse mapping *)
+  nb_actions : int; (** used to order the tests *)
+  mutable new_actions : int; (** compared to the base actions, used to order the tests *)
+  mutable constraints : correspondance; (** Try to pass the test prioritary satisfying the constraints *)
+  mutable constraints_back : correspondance; (** Inverse mapping *)
   mutable solutions_todo : Run.solution list;
   mutable solutions_done : Run.solution list;
 }
@@ -468,16 +468,16 @@ type bijection = {
   mutable choices_indexP : choices_index;
   mutable choices_indexQ : choices_index ;
   mutable next_comp_id : int;
-  mutable next_id : int; (* the index for tests id *)
-  mutable tests : Tests.t; (* The remaining tests to test on the other process *)
+  mutable next_id : int; (** the index for tests id *)
+  mutable tests : Tests.t; (** The remaining tests to test on the other process *)
   (*mutable registered_tests : Tests.t; (* The tests that are set in *)*)
-  mutable runs_for_completions_P : partial_run list; (* the pending runs of P, for completion treatement in Q *)
-  mutable runs_for_completions_Q : partial_run list; (* of Q *)
-  mutable partial_completions_P : (completion list) Dag.t; (* The partial completions from base P *)
-  mutable partial_completions_Q : (completion list) Dag.t; (* The partial completions *)
-  mutable todo_completion_P : completion list; (* new partial completion from base P which should be tested on all runs *)
-  mutable todo_completion_Q : completion list; (* new partial completion which should be tested on all runs *)
-  mutable locs : LocationSet.t; (* the locations already in the tests of the base, for optimization only *)
+  mutable runs_for_completions_P : partial_run list; (** the pending runs of P, for completion treatement in Q *)
+  mutable runs_for_completions_Q : partial_run list; (** of Q *)
+  mutable partial_completions_P : (completion list) Dag.t; (** The partial completions from base P *)
+  mutable partial_completions_Q : (completion list) Dag.t; (** The partial completions *)
+  mutable todo_completion_P : completion list; (** new partial completion from base P which should be tested on all runs *)
+  mutable todo_completion_Q : completion list; (** new partial completion which should be tested on all runs *)
+  mutable locs : LocationSet.t; (** the locations already in the tests of the base, for optimization only *)
   (*htable : (int list , origin) Hashtbl.t;*)
   htable_st : (hash_test, test) Hashtbl.t;
   (*Only to print infos *)
@@ -598,7 +598,7 @@ let reorder_int_set s =
   IntegerSet.fold (fun e set -> IntegerSet.add e s) s IntegerSet.empty
   
 
-(* Add a test to the tests in the queue *)
+(** Add a test to the tests in the queue *)
 let push (statement : raw_statement) process_name origin init =
   bijection.next_id <- bijection.next_id + 1 ;
   let (int_set,initial) = match origin with 
@@ -644,14 +644,14 @@ let reorder_tests () =
       test.statement.dag.rel 0;
     Tests.add test map) bijection.tests Tests.empty
 
-(* Pop the queue of the test to check *)
+(** Pop the queue of the test to check *)
 let pop () = 
   let test = Tests.min_elt bijection.tests in
   bijection.tests <- Tests.remove test bijection.tests ; 
   test
 
-(* add a partial completion to the todo list *) 
-(* return true if a test should be extracted from completion, false otherwise with the actual completion *)
+(** add a partial completion to the todo list *) 
+(** return true if a test should be extracted from completion, false otherwise with the actual completion *)
 let register_completion completion =
   if !debug_completion then Printf.printf "Registering completion: %s\n" (show_completion completion);
   completion.st_c.binder := New ;
@@ -705,7 +705,7 @@ let loc_p_to_q p corr =
   try Dag.find p corr.a
   with Not_found -> raise (LocPtoQ p.p)
 
-(* Register a solution to a test *)
+(** Register a solution to a test *)
 let add_run partial_run =
     (*bijection.registered_tests <- Tests.add partial_run.test bijection.registered_tests;*)
     if partial_run.test.process_name = P 

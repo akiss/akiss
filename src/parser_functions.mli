@@ -95,3 +95,4 @@ val parse_list_argument :
 val get_process_name : extended2_process -> unit
 val parse_process_declaration_list : extended2_process list -> unit
 val nonces : (int * Types.nonceId) list ref
+val frames : (int * Types.location) list ref

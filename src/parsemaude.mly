@@ -48,6 +48,7 @@ let make_substitution_variant pairlst =
 %token <string> Func
 %token <string> Number
 %token <int> Nonce
+%token <int> Fram
 %token <int> Tuple
 %token <int * int> Proj
 %token <Types.varId> Var
@@ -177,6 +178,9 @@ main:
      term:
  | Nonce
      { Fun({id=Nonce(List.assoc $1 !Parser_functions.nonces); has_variables=false},[])
+     }
+ | Fram
+     { Fun({id=Frame(List.assoc $1 !Parser_functions.frames); has_variables=false},[])
      }
  | Var Colon Term {Var($1)}
  | Sharp Number Colon Term {

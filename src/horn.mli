@@ -38,12 +38,12 @@ val inst_w_t :
   bool -> Base.raw_statement -> Base.raw_statement -> Types.subst_lst list
 val print_trace :
   Format.formatter ->
-  ([< `Axiom | `Res of Base.raw_statement * 'a list ] as 'a) -> unit*)
+  ([< `Axiom | `Res of Base.raw_statement * 'a list ] as 'a) -> unit
 val consequence :
   bool ->
   Base.raw_statement ->
   Base.statement -> Types.rewrite_rule list -> Types.term
-val rule_shift : Base.raw_statement -> Base.raw_statement
+val rule_shift : Base.raw_statement -> Base.raw_statement *)
 exception No_Eval
 exception Unsound_Statement
 val eval_recipe :

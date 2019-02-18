@@ -64,7 +64,7 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
     let sigmas = match Inputs.csu_recipes sigma fa.recipes fb.recipes with
   | [] -> []
   | [s] -> Inputs.csu s fa.inputs fb.inputs
-  | _ -> assert false in 
+  | lst -> List.concat (List.rev_map (fun s -> Inputs.csu s fa.inputs fb.inputs) lst ) in 
     if sigmas = [] 
     then begin 
       fa.binder:= New;
@@ -94,7 +94,7 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
             dag = merged_dag ;
             choices = merged_choice ;
             inputs = Inputs.merge sigma fa.inputs fb.inputs;
-            recipes = Inputs.merge sigma fa.recipes fb.recipes;
+            recipes = Inputs.merge_recipes sigma fa.recipes fb.recipes;
             head = Tests({
               head_binder = sigma.binder ;
               equalities= EqualitiesSet.map (fun (r,rp) -> 
@@ -108,6 +108,7 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
         in
         sigma.binder := Master;
         (*let tau = (Array.make sigma.nbvars None) in*)
+        try 
         let (tau,test_merge_init) = Horn.simplify_statement test_merge_init in
         match Horn.normalize_new_statement test_merge_init with
         None -> lst
@@ -135,17 +136,22 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
         Horn.merge_sat kb;
         if List.length kb.temporary_merge_test_result > 1 then Printf.eprintf "The init merged test has %d solutions\n %s \n%s\n%!"(List.length kb.temporary_merge_test_result)(show_raw_statement test_merge_init)
         (List.fold_right (fun st str -> str ^ (show_statement "*" st)) kb.temporary_merge_test_result "");
-        List.fold_left (fun lst st -> 
+        let res = (List.fold_left (fun lst st -> 
           if !debug_merge then Printf.printf "merge result st matched with: \n%s\n%s\n" (show_statement "" st)(show_raw_statement test_merge_init);
           if st.st.nbvars = 0 then 
             (rho,st.st)::lst
           else ( Printf.eprintf "|*|\n%!";
-            match Inputs.csm test_merge_init.binder test_merge_init.inputs st.st.inputs, Inputs.csm test_merge_init.binder test_merge_init.recipes st.st.recipes with
+            match Inputs.csm false test_merge_init.binder test_merge_init.inputs st.st.inputs, 
+              Inputs.csm_recipes false test_merge_init.binder test_merge_init.recipes st.st.recipes with
             | [subst_inputs],[subst_recipes] -> (Rewriting.compose_with_subst_lst rho (subst_inputs @ subst_recipes),st.st)::lst
+            | [], _ -> assert false
+            | _, [] -> lst
             | _ -> Printf.eprintf "This unification case has not been implemented yet." ; assert false
              )
-          ) lst kb.temporary_merge_test_result;
-        )
+          ) lst kb.temporary_merge_test_result
+        ) in
+        assert (res != [] || kb.temporary_merge_test_result= []);
+        res)
         (*let new_dag = ref merged_dag in
         try
           List.iter (fun x ->  
@@ -173,6 +179,8 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
         No_recipe -> 
           if !debug_merge then Printf.printf "No recipe found for some input aborting...\n%!"  ; 
           lst *)
+      with
+      Horn.Unsound_Statement -> lst
       ) [] sigmas
     in
     fa.binder:= New;

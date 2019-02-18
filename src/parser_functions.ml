@@ -557,7 +557,7 @@ let parse_process_declaration_list lst =
 
 (* To be accessed by maude.ml and parsemaude.ml *)  
 let nonces : ((int * nonceId) list)ref = ref [] 
-  
+let frames : ((int * location) list)ref = ref []  
     
     
 (****** Parse setting *******)

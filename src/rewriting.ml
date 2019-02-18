@@ -38,7 +38,7 @@ let subst_one_in_subst x small sigma =
 	| Fun(f,l)-> if is_constant (Fun(f,l)) then ([],[f],[Fun(f,l)]) else ([],[f],[])
 *)
 
-(** Equality modulo pure AC **)
+(** Equality modulo pure AC *)
 let rec sum_to_list t =
 	match t with
 	| Fun({id=Plus},[l;r]) -> (sum_to_list l)@(sum_to_list r)
@@ -80,23 +80,27 @@ let order_plus s =
   list_reduce lst
 
 
-module TermSum = Set.Make(struct
+module TermSum = Map.Make(struct
     type t = term 
     let compare x y = compare_ac x y
   end)
 
 let equals_ac s t = let r = (compare_ac s t) in (*Printf.printf "%d\n" r;*) r = 0
 
+(** {2 Get unifiers} *)
 
 let rec recompose_term_set ts =
-  TermSum.fold (fun t term -> if term = zero then t else Fun({id = Plus; has_variables = true},[t;term])) ts zero
+  TermSum.fold (fun t nb term -> if term = zero then t else Fun({id = Plus; has_variables = true},[t;term])) ts zero
 (*	match lst with
 	| t1 :: t2 :: q -> Fun({id = Plus; has_variables = true},[t1;recompose_term (t2 ::q)])
 	| t1 :: [] -> t1
 	| [] -> Fun({id = Zero; has_variables = false},[])*)
-
-(* given a sum split the sum in three parts: variables, all functions , constants functions*)
-let rec explode_term t sigma =
+	
+let term_sum_union xor ms1 ms2 =
+  TermSum.union (fun t nb1 nb2 -> if xor then if nb1 + nb2 mod 2 = 0 then None else Some 1 else Some (nb1 + nb2)) ms1 ms2
+  
+(** given a term t provide Fct(t)  *)
+let rec explode_term xor t sigma =
   let rec has_var f =
     match f with
     | Var(x) -> let sub = find_sub x sigma in begin
@@ -111,17 +115,28 @@ let rec explode_term t sigma =
         (x,Fun({f with has_variables = x},lst)) in
    match t with
    | Fun({id = Plus; },[l;r]) ->
-          let ts1 = explode_term l sigma in 
-          let ts2 = explode_term r sigma in 
-          TermSum.diff
+          let ts1 = explode_term xor l sigma in 
+          let ts2 = explode_term xor r sigma in 
+          term_sum_union xor ts1 ts2
+          (*TermSum.diff
           (TermSum.union ts1 ts2)
-          (TermSum.inter ts1 ts2)
+          (TermSum.inter ts1 ts2)*)
    | Var(x) -> let sub = find_sub x sigma in begin
           match sub.(x.n) with
-          | None -> TermSum.singleton t
-          | Some t -> explode_term t sigma
+          | None -> TermSum.singleton t 1
+          | Some t -> explode_term xor t sigma
           end 
-   | Fun(f,l)-> let (x,t) = has_var (Fun(f,l)) in TermSum.singleton t
+   | Fun(f,l)-> let (x,t) = has_var (Fun(f,l)) in TermSum.singleton t 1
+   
+let diff_sum_term mset1 mset2 = 
+  TermSum.merge (fun t nb1 nb2 ->
+    match nb1,nb2 with
+    | Some nb1, Some nb2 -> if nb1 > nb2 then Some (nb1-nb2) else None 
+    | Some nb1, None -> Some nb1
+    | None , _ -> None ) mset1 mset2
+    
+let mset_cardinal mset =
+  TermSum.fold (fun t nb nbtot -> nb + nbtot) mset 0
 
 let rec is x t sigma = 
     match t with 
@@ -174,20 +189,21 @@ let rec unify xor hard pairlst sigma =
     | ((Fun({id = Plus}, _) as sa), (Fun({id=Plus}, _) as ta))::q -> may_unify_plus xor hard sa ta q sigma
     | (Fun({id = f}, sa), Fun({id = g}, ta))::q when f = g -> unify xor hard (combine sa ta q) sigma
     | _ ->  raise Not_unifiable
+    
 and may_unify_plus xor hard sa ta pairlst sigma =
   (*Printf.printf "unify xor plus\nsa %s | ta : %s  \n" (show_term sa)(show_term ta);*)
-	let exp_sa' = explode_term sa sigma in 
-	let exp_ta' = explode_term ta sigma in
+	let exp_sa' = explode_term xor sa sigma in 
+	let exp_ta' = explode_term xor ta sigma in
 	(* remove terms that appears both in sa and ta *)
-	let exp_sa = TermSum.diff exp_sa' exp_ta' in
-	let exp_ta = TermSum.diff exp_ta' exp_sa' in
+	let exp_sa = diff_sum_term exp_sa' exp_ta' in
+	let exp_ta = diff_sum_term exp_ta' exp_sa' in
 	(* if now one term is not a + switch to the standard unification *)
-  if TermSum.cardinal exp_sa < 2 then unify xor hard ((recompose_term_set exp_sa,recompose_term_set exp_ta)::pairlst) sigma
-	else if TermSum.cardinal exp_ta < 2 then unify xor hard ((recompose_term_set exp_ta,recompose_term_set exp_sa)::pairlst) sigma
+  if mset_cardinal exp_sa < 2 then unify xor hard ((recompose_term_set exp_sa,recompose_term_set exp_ta)::pairlst) sigma
+	else if mset_cardinal exp_ta < 2 then unify xor hard ((recompose_term_set exp_ta,recompose_term_set exp_sa)::pairlst) sigma
 	else if xor then unify xor ((sa,ta)::hard) pairlst sigma 
 	else
-    let (nbv_sa,ws) = TermSum.fold (fun t (nb,w) -> match t with Var(_) -> (nb+1,w) | _ -> (nb,t)) exp_sa (0,zero) in
-    let (nbv_ta,wt) = TermSum.fold (fun t (nb,w) -> match t with Var(_) -> (nb+1,w) | _ -> (nb,t)) exp_ta (0,zero) in
+    let (nbv_sa,ws) = TermSum.fold (fun t nb'(nb,w) -> match t with Var(_) -> (nb+nb',w) | _ -> (nb,t)) exp_sa (0,zero) in
+    let (nbv_ta,wt) = TermSum.fold (fun t nb'(nb,w) -> match t with Var(_) -> (nb+nb',w) | _ -> (nb,t)) exp_ta (0,zero) in
     if nbv_sa + nbv_ta > 1 then unify xor ((sa,ta)::hard) pairlst sigma (* if there is more than 1 variable ask Maude *)
     else if nbv_sa = 0 then 
       remove_one_factor_both_side hard wt exp_ta exp_sa sa ta pairlst sigma
@@ -199,18 +215,20 @@ and remove_one_factor_both_side hard wt exp_ta exp_sa sa ta pairlst sigma =
         match wt with 
         | Fun({id = f; has_variables = hvf}, _) -> 
           let unifiable =
-            TermSum.filter (fun sa' -> 
+            TermSum.filter (fun sa' nb -> 
               match sa' with 
               Fun({id = g; has_variables = hvg}, _) when f = g -> if hvf && hvg then equals_ac wt sa' else true | _ -> false) exp_sa in
-           let nbunif =  TermSum.cardinal unifiable in
+           let nbunif =  mset_cardinal unifiable in
            if nbunif = 0 then raise Not_unifiable else
            if nbunif = 1 
-           then
-              let sa' = TermSum.choose unifiable in
+           then (
+              let sa', one = TermSum.choose unifiable in
+              assert (one = 1);
               let slimmed_sa = recompose_term_set (TermSum.remove sa' exp_sa) in
               let slimmed_ta = recompose_term_set (TermSum.remove wt exp_ta) in
               (*Printf.printf "reduction+ sa %s -> %s | ta : %s -> %s \n" (show_term sa)(show_term slimmed_sa)(show_term ta)(show_term slimmed_ta);*)
               unify true hard ((sa',wt)::((slimmed_sa,slimmed_ta)::pairlst)) sigma
+          )
           else unify true ((sa,ta)::hard) pairlst sigma
         | _ -> assert false
         
@@ -250,7 +268,7 @@ and remove_one_factor_both_side hard wt exp_ta exp_sa sa ta pairlst sigma =
 *)
 (*let rec mgu nbs nbt s t = unify [(s,t)] (Array.make nbs None,Array.make nbt None) *)
 
-let csu pairlst sigma = 
+let csu xor pairlst sigma = 
   (*Printf.printf "%s \n%!" (show_subst_maker sigma);*)
   let pairlst = ref pairlst in
   let old_length = ref 1000000 in
@@ -260,19 +278,28 @@ let csu pairlst sigma =
       List.fold_left (fun  str (t1,t2) -> str ^
         (show_term t1)^" =? "^(show_term t2) ^"\n")"" !pairlst);*)
       old_length := List.length !pairlst;
-      pairlst := unify false [] !pairlst sigma ;
+      pairlst := unify xor [] !pairlst sigma ;
     done ;
     if !old_length = 0 then [sigma]
-    else acunifiers false !pairlst sigma (*Call Maude on hard with sigma *)
+    else
+      let maude_xor = if xor then XOR else AC in
+      acunifiers maude_xor !pairlst sigma (*Call Maude on hard with sigma *)
   with 
   | Not_unifiable ->  (*Printf.printf "no unif\n";*)[]
   
-let csu_xor pairlst sigma = try ignore(unify true [] pairlst sigma); [sigma] with 
-  | Not_unifiable -> []
+let csu_ac pairlst sigma = csu false pairlst sigma
+  
+let csu_xor pairlst sigma = csu true pairlst sigma
+(*  try ignore(unify true [] pairlst sigma);
+  [sigma] 
+  with 
+  | Not_unifiable -> []*)
+  
+(** {2 Use of unifiers to perform substitutions}*)
 
-(* From a susbt obtained from unification generates a substitution which can be applied to term *)
 let get_option = function None -> assert false | Some t -> t
 
+(** From a susbt obtained from unification generates a substitution which can be applied to term *)
 let pack sigma =
   let master_final = Array.make (Array.length(sigma.m)) None in
   let slave_final = Array.make (Array.length(sigma.s)) None in
@@ -374,7 +401,7 @@ let identity_subst nbv =
     slave = Array.make 0 (Var({status=binder; n=0}))
   }
   
-(* In test.ml to merge test heads *)
+(** In test.ml to merge test heads *)
 let merging_subst nbv binder =
   let master = Array.make nbv (Var({status=binder; n=0})) in
   { binder = binder ;
@@ -388,40 +415,21 @@ let is_identity_master sigma nb =
   if sigma.nbvars <> nb then false
   else Array.for_all (fun t -> is_var t) sigma.master
 
-(* mgm *)
 
 
-(*let rec match_once pattern model pl ml sigma =
-  match (pattern, model) with
-    | (Var(x), t) -> match_list pl ml (new_or_same x t sigma)
-    | (Fun(f, pa), Fun(g, ma)) when ((f = g) && (List.length pa = List.length ma)) ->
-	match_list (List.append pa pl) (List.append ma ml) sigma
-    | (_, _) -> raise Not_matchable
-and match_list pl ml sigma =
-  match (pl, ml) with
-    | ([], []) -> sigma
-    | (p :: pr, m :: mr) -> match_once p m pr mr sigma
-    | _ -> raise Not_matchable
-*)
+(** {2 Most general matcher} *)
 
-
-
-
-
-(** Most general matcher *)
-(*let rec mgm p m = match_once p m [] [] []*)
-
-let rec explode_term_matcher t sigma =
+let rec explode_term_matcher xor t sigma =
    match t with
    | Fun({id = Plus; },[l;r]) ->
-          let ts1 = explode_term_matcher l sigma in 
-          let ts2 = explode_term_matcher r sigma in 
-          TermSum.union ts1 ts2
+          let ts1 = explode_term_matcher xor l sigma in 
+          let ts2 = explode_term_matcher xor r sigma in 
+          term_sum_union xor ts1 ts2
    | Var(x) -> 
       if List.mem_assoc x sigma then
-      explode_term_matcher (List.assoc x sigma) sigma
-      else TermSum.singleton t
-   | Fun(f,l)-> TermSum.singleton t
+      explode_term_matcher xor (List.assoc x sigma) sigma
+      else TermSum.singleton t 1
+   | Fun(f,l)-> TermSum.singleton t 1
 
 
 
@@ -439,13 +447,14 @@ let rec match_ac xor hard pattern_model_list sigma =
     | (Fun(f, pa), Fun(g, ma))::q when (f.id = g.id) ->
 	match_ac xor hard (combine pa ma q) sigma
     | (_, _)::q -> raise Not_matchable
+
 and may_match_plus xor hard pattern model pairlst sigma =
   (*Printf.printf "match plus\npattern %s | model : %s  \n" (show_term pattern)(show_term model);*)
-  let exp_pattern' = explode_term_matcher pattern sigma in 
-  let exp_model' = explode_term_matcher model sigma in
+  let exp_pattern' = explode_term_matcher xor pattern sigma in 
+  let exp_model' = explode_term_matcher xor model sigma in
   (* remove terms that appears both in pattern and model *)
-  let exp_pattern = TermSum.diff exp_pattern' exp_model' in
-  let exp_model = TermSum.diff exp_model' exp_pattern' in
+  let exp_pattern = diff_sum_term exp_pattern' exp_model' in
+  let exp_model = diff_sum_term exp_model' exp_pattern' in
   (* if now one term is not a + switch to the standard unification *)
   if TermSum.cardinal exp_pattern < 2 then match_ac xor hard ((recompose_term_set exp_pattern,recompose_term_set exp_model)::pairlst) sigma
   else 
@@ -460,20 +469,33 @@ and may_match_plus xor hard pattern model pairlst sigma =
 		else raise Not_matchable end
 	else match_ac ((pattern,model)::hard) lst sigma *)
 
-(** Most general matcher *)
-let rec csm binder pmlst = 
+(** Most general matcher modulo AC *)
+let rec csm be_lazy binder pmlst sigma = 
   (*Printf.printf "matching %s against pattern %s \n%!" (show_term m) (show_term p);*)
   try 
-    let (hard,sigma) = match_ac false [] pmlst [] in
+    let (hard,sigma) = match_ac false [] pmlst sigma in
     if hard = [] then [sigma]
-    else [sigma] (*Maude.acmatchers binder hard sigma *) (*TODO recipes for maude*)
+    else 
+      if be_lazy 
+      then []  
+      else Maude.acmatchers binder hard sigma 
+  with Not_matchable -> []
+
+let rec csm_xor be_lazy binder pmlst sigma = 
+  (*Printf.printf "matching %s against pattern %s \n%!" (show_term m) (show_term p);*)
+  try 
+    let (hard,sigma) = match_ac true [] pmlst sigma in
+    if hard = [] then [sigma]
+    else 
+      if be_lazy 
+      then []
+      else Maude.xormatchers binder hard sigma 
   with Not_matchable -> []
 
 
 
 
-
-(** Normalization *)
+(** {2 Normalization} *)
 let rec recompose_term lst =
 	match lst with
 	| t1 :: t2 :: q -> Fun({id = Plus; has_variables = true},[t1;recompose_term (t2 ::q)])
@@ -482,7 +504,7 @@ let rec recompose_term lst =
 
 let rec top_rewrite t rule =
   (*Printf.printf "top rewrite %s \n%!" (show_rewrite_rule rule);*)
-    match csm rule.binder_rule [(rule.lhs, t)] with
+    match csm false rule.binder_rule [(rule.lhs, t)] [] with
     | [sigma] -> [apply_subst rule.rhs sigma]
     | [] -> []
     | sigma :: q -> Printf.printf "> ?/? \n%!"; [apply_subst rule.rhs sigma] (* is it ok ? *)
@@ -543,13 +565,13 @@ let equals_r s t rules =
   let t = normalize t rules in
   equals_ac s t
 
-(** Variants and unification modulo R *)
-(*                                    *)
-(*       ==================           *)
-(*                                    *)
-(*              TODO                  *)
-(*                                    *)
-(**************************************)
+(** {2 Variants and unification modulo R} *)
+(*                                        *)
+(*       ==================               *)
+(*                                        *)
+(*              TODO                      *)
+(*                                        *)
+(******************************************)
 
 
 open Util
@@ -587,14 +609,14 @@ let rec show_configurations c =
 
 let rec prepend n pl =
   trmap (function x -> n :: x) pl
-;;
+
 
 let rec init_pos = function
   | Var(_) -> []
   | Fun(_, tl) -> [] :: (trconcat (List.map2 prepend 
 				  (create_consecutive 0 (List.length tl))
 				  (trmap init_pos tl)))
-;;
+
 
 let rec at_position t p =
   match p with
@@ -604,7 +626,7 @@ let rec at_position t p =
 	  | Var(_) -> invalid_arg("at_position")
 	  | Fun(f, tl) -> at_position (List.nth tl i) rp
       )
-;;
+
 
 let rec repl_position t p s =
   match p with
@@ -621,7 +643,7 @@ let rec repl_position t p s =
 				(create_consecutive 0 (List.length tl))
 				tl)
       )
-;;
+
 
 (* TODO change it *)
 (*let fresh_copy rule =
@@ -635,7 +657,7 @@ let rec one_rule old_sigma t p rule =
   let identity = identity_subst old_sigma.nbvars in
   let (l, r) = (*fresh_copy*) (rule.lhs, rule.rhs) in
   let sigma = {m= (Array.make old_sigma.nbvars None); s=(Array.make rule.nbvars_rule None); e=[]} in
-    match csu [((at_position t p),l)] sigma with
+    match csu_ac [((at_position t p),l)] sigma with
     | [sigma] ->  let sigma = pack sigma in 
       sigma.binder := Master;
       let t'= repl_position t p r in
@@ -646,18 +668,18 @@ let rec one_rule old_sigma t p rule =
         sigma)]
     | [] ->  []
     | _ -> raise Call_Maude
-;;
+
 
 let all_rules old_sigma t p rules =
     trconcat (trmap (function x -> one_rule old_sigma t p x) rules)
-;;
+
 
 let rec is_prefix small big =
   match (small, big) with
     | ([], _) -> true
     | (x :: rs, y :: rb) when x = y -> is_prefix rs rb
     | _ -> false
-;;
+
 
 let rec down positions p =
   List.filter (function x -> not (is_prefix p x)) positions
@@ -690,7 +712,7 @@ let one_step (t, sigma, positions) rules =
 
 let iterate_once configuration rules =
   trconcat (trmap (function x -> one_step x rules) configuration)
-;;
+
 
 let is_renaming sigma1 sigma2 = 
   let r = sigma1 = sigma2 in
@@ -844,7 +866,7 @@ let one_unifier ssigma sigmas tsigma sigmat =
   (*Printf.printf "terms with variants %s -+- %s \n corresponding substitution\n sigma s =  %s \nsigma t = %s\n%!" 
     (show_term ssigma)(show_term tsigma)(show_substitution sigmas)(show_substitution sigmat);*)
   let t1t2 = (ssigma,tsigma) ::Array.to_list( Array.map2 (fun x y -> (x,y)) sigmas.master sigmat.master) in
-  match csu t1t2 sigma_init with
+  match csu_ac t1t2 sigma_init with
   | [sigma] -> let sigma = pack sigma in [ compose sigmas sigma ]
   | [] -> (*Printf.printf "no unif\n\n" ;*)[]
   | _ -> raise Call_Maude
@@ -861,7 +883,7 @@ let unifiers nbv s t rules =
   let w = combine vs vt in
   trconcat (trmap (fun ((x, y, _), (z, t, _)) ->
        one_unifier x y z t) w)
-  with Call_Maude -> List.map pack (Maude.acunifiers true [(s,t)] (sigma_maker_init nbv 0))
+  with Call_Maude -> List.map pack (Maude.acunifiers E [(s,t)] (sigma_maker_init nbv 0))
 
 
 let variants nbv t rules =

@@ -25,7 +25,9 @@ val csu : Types.subst_maker -> inputs -> inputs -> Types.subst_maker list
 val csu_recipes :
   Types.subst_maker -> inputs -> inputs -> Types.subst_maker list
 val csm :
-  Types.statement_role ref -> inputs -> inputs -> Types.subst_lst list
+  bool -> Types.statement_role ref -> inputs -> inputs -> Types.subst_lst list
+val csm_recipes :
+  bool -> Types.statement_role ref -> inputs -> inputs -> Types.subst_lst list
 val merge : Types.substitution -> inputs -> inputs -> inputs
 val merge_recipes : Types.substitution -> inputs -> inputs -> inputs
 val apply_subst_recipes : Types.substitution -> inputs -> inputs
