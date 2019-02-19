@@ -154,8 +154,8 @@ module rec Run :
     and origin =
         Initial of Base.statement
       | Composed of partial_run * partial_run
-      | CompletionUnreach
-      | CompletionIdentity
+      | CompletionUnreach of Base.statement
+      | CompletionIdentity of Base.statement
       | Temporary
     and solution = {
       init_run : partial_run;

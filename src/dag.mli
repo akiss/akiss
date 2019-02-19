@@ -18,8 +18,8 @@ module LocationSet :
 (*    val diff : t -> t -> t
     val compare : t -> t -> int
     val equal : t -> t -> bool
-    val subset : t -> t -> bool
-    val iter : (elt -> unit) -> t -> unit*)
+    val subset : t -> t -> bool*)
+    val iter : (elt -> unit) -> t -> unit
     val map : (elt -> elt) -> t -> t
     val fold : (elt -> 'a -> 'a) -> t -> 'a -> 'a
 (*    val for_all : (elt -> bool) -> t -> bool *)
@@ -27,8 +27,8 @@ module LocationSet :
     val filter : (elt -> bool) -> t -> t
 (*    val partition : (elt -> bool) -> t -> t * t *)
     val cardinal : t -> int
-(*    val elements : t -> elt list
-    val min_elt : t -> elt
+    val elements : t -> elt list
+(*    val min_elt : t -> elt
     val min_elt_opt : t -> elt option
     val max_elt : t -> elt
     val max_elt_opt : t -> elt option *)
@@ -40,8 +40,8 @@ module LocationSet :
     val find_first : (elt -> bool) -> t -> elt
     val find_first_opt : (elt -> bool) -> t -> elt option
     val find_last : (elt -> bool) -> t -> elt
-    val find_last_opt : (elt -> bool) -> t -> elt option
-    val of_list : elt list -> t *)
+    val find_last_opt : (elt -> bool) -> t -> elt option*)
+    val of_list : elt list -> t 
   end
 module Dag :
   sig
@@ -91,7 +91,6 @@ type dag = { rel : LocationSet.t Dag.t; }
 val empty_loc : LocationSet.t
 val show_loc_set : LocationSet.t -> string
 val show_dag : dag -> string
-val compare_loc_set : LocationSet.t -> LocationSet.t -> int
 val canonize_dag : dag -> dag
 val empty : dag
 val is_empty : dag -> bool

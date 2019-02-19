@@ -54,6 +54,7 @@ and location = {
   phase : int;
   observable : visi_type;
   parent : location option;
+  parent_choices : location list;
 }
 and funName =
     Regular of funId
