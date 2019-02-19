@@ -348,6 +348,27 @@ let rec eval_recipe choices inputs solved_atom term =
   | Var(x) -> (try 
      (List.find (fun a -> a.recipe = term) solved_atom).term 
     with Not_found -> raise No_Eval )
+    
+let compare_loc_set recipes l1 l2 =
+  let ls1 = LocationSet.elements l1.loc in
+  let ls2 = LocationSet.elements l2.loc in
+  let exception First of int in
+  let rec is_first t =
+    match t with
+    | Var(x) -> if t = l1.recipe then raise (First(1)) else if t = l2.recipe then raise (First(-1))
+    | Fun(f,args) -> List.iter is_first args in
+  let rec aux l1 l2 = 
+    match l1,l2 with
+    | [] , l1 :: _ -> 1
+    | [l1],[l2] -> if l1.p = l2.p then (is_first (Inputs.get l1 recipes);0) else Pervasives.compare l1.p l2.p
+    | l1 :: q1 ,l2 :: q2 -> if l1.p = l2.p then aux q1 q2 else Pervasives.compare l1.p l2.p
+    | _ :: _ , [] -> -1
+    | [], [] -> 0 in
+  try
+  aux ls1 ls2
+  with
+  | Not_found -> assert false
+  | First(i) -> i
 
 let simplify_statement st =
   try 
@@ -393,7 +414,7 @@ let simplify_statement st =
             else assert false;
             body_maker := (a , ref a.loc ) :: !body_maker
          )
-       (List.sort (fun x y -> compare_loc_set x.loc y.loc) var_recipe_body)
+       (List.sort (fun x y -> compare_loc_set st.recipes x y) var_recipe_body)
   ;
   let body = other_body @ List.map (fun (b,locset) -> {b with loc = !locset}) !body_maker in
   let sigma = { 
@@ -971,7 +992,8 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
       done
    (* | _ -> invalid_arg ("todo")*)
 
-(** Take a solved statement and update the knowledge base with it *)
+(** [add_statement] takes a solved statement [st] and update the knowledge base [kb] with it. 
+Then trigger the generation of seed statements from [process] *)
 and add_statement kb solved_parent unsolved_parent test_parent process st = 
   if !debug_saturation || ! about_canonization then Format.printf "Adding statement %s \n%!" (show_raw_statement st);
   match update kb st with

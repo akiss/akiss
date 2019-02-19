@@ -35,16 +35,7 @@ let show_dag dag =
 
 (** {2 Dag functions}*)
   
-let compare_loc_set l1 l2 =
-  let l1 = LocationSet.elements l1 in
-  let l2 = LocationSet.elements l2 in
-  let rec aux l1 l2 = 
-    match l1,l2 with
-    | [] , l1 :: _ -> 1
-    | l1 :: q1 ,l2 :: q2 -> if l1.p = l2.p then aux q1 q2 else Pervasives.compare l1.p l2.p
-    | _ :: _ , [] -> -1
-    | [], [] -> 0 in
-  aux l1 l2
+
 
 
 (** for hash tables *)

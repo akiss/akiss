@@ -152,7 +152,8 @@ and location = {
  name : string;
  phase : int ;
  observable : visi_type ;
- parent : location option; (*the previous i/o of the syntax tree *)
+ parent : location option; (** the previous i/o of the syntax tree *)
+ parent_choices : location list;
 }
 
 (** type of terms *)
@@ -175,9 +176,9 @@ and term =
   | Fun of funInfos * term list
   | Var of varId
   
-let rec null_location = { p = -1; io = Call; name = "null_loc"; phase = 0 ; observable = Hidden; parent = None}
+let rec null_location = { p = -1; io = Call; name = "null_loc"; phase = 0 ; observable = Hidden; parent = None;  parent_choices=[]}
 
-let root_location i = { p = i; io = Call; name = "root"; phase = 0 ; observable = Hidden; parent = None}
+let root_location i = { p = i; io = Call; name = "root"; phase = 0 ; observable = Hidden; parent = None;  parent_choices=[]}
 
 let show_varId id = (show_binder !(id.status)) ^ (string_of_int id.n)
 

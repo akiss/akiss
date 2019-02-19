@@ -1,4 +1,4 @@
-(** The functriosn of the main algorithm*)
+(** The functions of the main algorithm *)
 
 open Util
 open Types
@@ -10,6 +10,7 @@ open Bijection.Run
 open Bijection.Test
 open Process_execution
 
+(** the negation function from the theory *)
 let negate_statement (st : raw_statement) =
   match st.head with
   | Unreachable -> 
@@ -26,7 +27,7 @@ let negate_statement (st : raw_statement) =
         disequalities = EqualitiesSet.singleton (s,t)})}
   | _ -> Printf.printf "negation of %s " (show_raw_statement st); assert false
 
-  
+(** [statement_to_completion process_name statement st] creates a new empty completion from [st] which comes from [statement] *)  
 let statement_to_completion process_name (statement : statement) (st : raw_statement) =
   bijection.next_comp_id <- bijection.next_comp_id + 1;
   let locs = locations_of_dag (only_observable st.dag) in 
@@ -191,7 +192,8 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
    
 
 (** This function returns false if the statement is not executable in his own processus
-(due to disequalities or identities) true otherwise *) 
+(due to disequalities or identities) true otherwise.
+Correspond to actual reach of the theory *) 
 let actual_test process_name (st : raw_statement) =
   let corr = {a = Dag.mapi (fun k _ -> k) st.dag.rel} in
   let test = { null_test with
@@ -201,7 +203,7 @@ let actual_test process_name (st : raw_statement) =
     constraints = corr;
     constraints_back = corr;
   } in
-  if !debug_execution || !debug_tests 
+  if !debug_execution 
   then Printf.printf "\nChecking actual of %s \nwith dag = %s\n%!" (show_test test)(show_dag st.dag);
   let solution = init_sol process_name st (proc process_name) test in
   let pr = find_possible_run solution in
@@ -282,10 +284,28 @@ let filter_dag set dag =
 let filter_inputs set (inputs : Inputs.inputs) :Inputs.inputs =
   {i = Dag.filter (fun l _ -> LocationSet.mem l set) inputs.i}
   
+  
 let filter_choices set (choices : Inputs.choices) : Inputs.choices = 
-  let parent_set = LocationSet.map (fun l -> match l.parent with Some l' -> l' | None -> null_location) set in
-  {c = Dag.filter (fun l i -> match l.parent with  Some l' -> LocationSet.exists (fun ps ->  l' = ps || ps.p = i) parent_set | None -> true) choices.c }
-(* technically, too much choices are preserved due to parallel branching *)  
+  (*Printf.printf "loc: %s | %s \n" (show_loc_set set)(Inputs.show_choices choices);*)
+  let result = ref LocationSet.empty in
+  let rec parent_set set = 
+    List.iter (fun loc -> 
+    List.iter (fun (l : location) -> 
+      (*Printf.printf "%d-" l.p;*)
+      if not( LocationSet.mem l !result) 
+      then (
+        result := LocationSet.add l !result;
+      match l.io with 
+      | Choice -> ()
+      | _ ->
+          let l' = Inputs.get_output_of_input choices l in
+          result := LocationSet.add l' !result;
+          parent_set l'.parent_choices))
+       loc.parent_choices) set 
+       in
+  parent_set (LocationSet.elements set) ;
+  (*Printf.printf "loc: %s \n" (show_loc_set !result);*)
+  {c = Dag.filter (fun l _ -> LocationSet.mem l !result) choices.c }
   
 let trunconj set run =
   let stP = run.test.statement in
@@ -293,14 +313,15 @@ let trunconj set run =
   (*let binder = identity_sigma.binder in*)
   stP.binder := Master;
   let st = apply_subst_statement stP identity_sigma in
+  let filtered_inputs = filter_inputs set st.recipes in
   let r = 
   {
   binder = st.binder ;
   nbvars = st.nbvars ;
   dag = trunc_map_dag (only_observable run.sol.restricted_dag) set run.corresp;
-  inputs =  transpose_inputs identity_sigma (filter_inputs set  st.recipes) run  ;
-  recipes = transpose_recipes identity_sigma (filter_inputs set st.recipes) run.corresp ; 
-  choices = (*filter_choices set*) run.choices; (* in run.choices some choices should be removed but we over approximate them TODO *)
+  inputs =  transpose_inputs identity_sigma filtered_inputs run  ;
+  recipes = transpose_recipes identity_sigma filtered_inputs  run.corresp ; 
+  choices = filter_choices (LocationSet.map (fun l -> loc_p_to_q l run.corresp) set) run.choices; 
   head = Tests({head_binder = st.binder; equalities=EqualitiesSet.empty; disequalities=EqualitiesSet.empty;});
   body = List.map (fun ba -> {
     loc = LocationSet.map (fun l -> loc_p_to_q l run.corresp) ba.loc;
@@ -313,7 +334,8 @@ let trunconj set run =
   (*Printf.printf "conjrun = %s\n" (show_raw_statement r);*)
   stP.binder := New;
   (identity_sigma,r)
-  
+
+(** When running a test several executions may have been found, look in this set to find a run which satisfies the new head *)  
 let rec try_other_runs head solution =
   if Solutions.is_empty solution.possible_runs_todo then None
   else begin
@@ -337,7 +359,7 @@ let rec add_identities_to_completions head (*process_name*) compl =
   | None -> ()
   | Some (subst,test) -> complete_set_of_identities (transpose_test_head head subst compl.corresp_back_c) (*process_name*) test *)
 
-
+(** [complete_set_of_identities head old_test] add the identities in [head] on [old_test] and its children *)
 and complete_set_of_identities head old_test =
   let old_eq,old_diseq = recipes_of_head old_test.statement.head in
   let new_eq,new_diseq = head.equalities,head.disequalities in
@@ -360,6 +382,7 @@ and complete_set_of_identities head old_test =
           | Some pr ->
           if not (check_identities pr head) then
           begin
+            (*Printf.eprintf "wrong run for %d\n" old_test.id;*)
             Bijection.remove_run pr;
             sol.selected_run <- None ;
             match try_other_runs head sol with
@@ -455,6 +478,7 @@ and add_merged_tests prun =
           (*if false && !debug_tests then Printf.printf "T,";*)
           match statement_to_tests prun.test.process_name (Composed(prun,par)) raw_st (proc (other prun.test.process_name)) with
           | Some (sigm,new_test) -> (
+            if !debug_tests then Printf.printf "From %d\n" par.test.id;
             let sigma = match sigm with
               | None -> sigma 
               | Some sigm -> 
@@ -505,9 +529,9 @@ let completion_to_test comp =
     let sigma, conjrun = conj pr in 
     begin
     let origin =
-      match comp.root.initial_statement.head with 
-      | Tests(_) -> CompletionUnreach
-      | Identical(_,_) -> (*Printf.printf "*" ;*) CompletionIdentity
+      match comp.root.from_statement.st.head with 
+      | Unreachable -> CompletionUnreach(comp.root.from_statement)
+      | Identical(_,_) -> (*Printf.printf "*" ;*) CompletionIdentity(comp.root.from_statement)
       | _ -> assert false in 
     match statement_to_tests (other comp.root.from_base) origin conjrun (proc (comp.root.from_base )) with
     | Some (_,test) -> if !debug_completion then Printf.printf "Get test from the completion\n %s\n" (show_test test);
@@ -638,25 +662,25 @@ let rec statements_to_tests t c process_name (statement : statement) otherProces
         bijection.initial_completions <- compl :: bijection.initial_completions );
         EqualitiesSet.add (s,t) equalities
     | _ -> equalities in
-  let new_eq, children = List.fold_left 
-    (fun (new_eq,children) st -> 
+  let new_eq = List.fold_left 
+    (fun new_eq st -> 
       let is_identical = match st.st.head with Identical _ -> true | _ -> false in
       if is_identical && (st.st.inputs,st.st.dag,st.st.choices,st.st.body) = (statement.st.inputs,statement.st.dag,statement.st.choices,statement.st.body) 
       then begin
         match st.st.head with 
         Identical (s,t) -> 
-          (*Printf.printf "eq %s=%s\n %!" (show_term s)(show_term t);*)
+          (*Printf.eprintf "eq %s=%s\n %!" (show_term s)(show_term t);*)
           (* let _,st' = same_term_same_recipe st.st in
           if c then (
             let compl = statement_to_completion process_name st (negate_statement st') in
             ignore (register_completion compl);
             bijection.initial_completions <- compl :: bijection.initial_completions ); *)
-          (EqualitiesSet.add (s,t) new_eq, children)
+          EqualitiesSet.add (s,t) new_eq
         | _ -> assert false end
       else begin
         (*statements_to_tests process_name st otherProcess; *)
-        (new_eq,st :: children) end)
-    (equalities, []) statement.children in
+        new_eq end)
+    equalities statement.children in
     if t then ignore (statement_to_tests process_name (Initial(statement)) 
       {raw_statement' with head = Tests(apply_subst_test_head {
         head_binder = statement.st.binder;
@@ -677,8 +701,10 @@ let unreach_to_completion process_name base =
 let base_to_tests t c process_name base other_process = 
   statements_to_tests t c process_name base.rid_solved other_process EqualitiesSet.empty
   
+(** for benchmarking *)  
 let get_time()= Unix.gettimeofday() (*(Unix.times()).tms_utime*)
 
+(** [equivalence both p q] checks if [p] is equivalent to [q] when [both] or trace included when [not both] *)
 let equivalence both p q =
   let time = if !about_bench || !do_latex then get_time() else 0. in
   if !use_xml then Printf.printf "<?xml-stylesheet type='text/css' href='../style.css' ?><all>" ;
@@ -716,7 +742,7 @@ let equivalence both p q =
   let time_start_tests = if !about_bench then get_time() else 0. in  
   let time_ten_tests = ref time_start_tests in (
   try
-    while not (Tests.is_empty bijection.tests) do
+    while not (Bijection.Tests.is_empty bijection.tests) do
       (*if !about_progress then Printf.printf "\n\n+++++ New iteration of the big loop +++++\n%!";
       if !about_progress then Printf.printf "Testing %d tests\n%!" (Tests.cardinal bijection.tests);*)
       (*while not (Tests.is_empty bijection.tests) do*)
@@ -727,7 +753,7 @@ let equivalence both p q =
         if !about_progress && (not !debug_tests) 
         then 
           ( 
-          if !nb_open mod 250 = 0 then Printf.printf "Open test #%d (%d in stack)\n" test.id (Tests.cardinal bijection.tests));
+          if !nb_open mod 250 = 0 then Printf.printf "Open test #%d (%d in stack)\n" test.id (Bijection.Tests.cardinal bijection.tests));
         find_set_of_runs test ;
         if !debug_tests && !use_xml then Printf.printf "</opentest>";
       (*done ;

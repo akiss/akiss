@@ -119,8 +119,8 @@ module rec Run : sig
 and origin = 
   | Initial of statement 
   | Composed of partial_run * partial_run 
-  | CompletionUnreach
-  | CompletionIdentity
+  | CompletionUnreach of statement 
+  | CompletionIdentity of statement 
   | Temporary
   
 
@@ -193,8 +193,8 @@ struct
 and origin = 
   | Initial of statement 
   | Composed of partial_run * partial_run 
-  | CompletionUnreach
-  | CompletionIdentity
+  | CompletionUnreach of statement
+  | CompletionIdentity of statement
   | Temporary
 
 (* records which are the partial executions of a test *) 
@@ -255,10 +255,10 @@ type t = test
 let compare (x : Test.test) (y : Test.test)=
            
         match (x.origin , y.origin) with
-     (*   | (CompletionIdentity, CompletionIdentity) -> compare x.id y.id
-        | (CompletionIdentity, _) -> -1
-        | (_, CompletionIdentity ) ->  1
-        | _,_ -> let r = compare (x.new_actions, x.nb_actions) (y.new_actions, y.nb_actions) in
+     (*   | (CompletionIdentity _, CompletionIdentity _) -> compare x.id y.id
+        | (CompletionIdentity _, _) -> -1
+        | (_, CompletionIdentity _) ->  1
+        | _,_ -> let r = compare (x.new_actions, -x.nb_actions) (y.new_actions, -y.nb_actions) in
             if r != 0 then -r
             else compare x.id y.id *)
           | (Initial st1, Initial st2) ->
@@ -277,12 +277,12 @@ let compare (x : Test.test) (y : Test.test)=
               if r = 0 then 
               compare x.id y.id 
               else -r
-          | (CompletionIdentity , CompletionIdentity ) -> compare x.id y.id
-          | (CompletionIdentity , _) -> -1
-          | (_, CompletionIdentity ) ->  1
-          | (CompletionUnreach , CompletionUnreach ) -> compare x.id y.id
-          | (CompletionUnreach , _) -> -1
-          | (_, CompletionUnreach ) ->  1
+          | (CompletionIdentity(_) , CompletionIdentity(_) ) -> compare x.id y.id
+          | (CompletionIdentity(_) , _) -> -1
+          | (_, CompletionIdentity(_) ) ->  1
+          | (CompletionUnreach(_) , CompletionUnreach(_) ) -> compare x.id y.id
+          | (CompletionUnreach(_) , _) -> -1
+          | (_, CompletionUnreach(_) ) ->  1
           | (Temporary,_) 
           | (_,Temporary) -> assert false 
 end
@@ -347,16 +347,16 @@ let rec show_origin o =
   if !use_xml then 
   match o with 
   | Initial(st) -> Format.sprintf "<initial>%d</initial>" (st.id)
-  | Composed(run1,run2) -> Format.sprintf "<composed><idtest>%d</idtest>:%s | <idtest>%d</idtest>:%s</composed>"  run1.test.id (show_origin run1.test.origin)  run2.test.id (show_origin run2.test.origin) 
-  | CompletionUnreach -> "pcU"
-  | CompletionIdentity-> "pcI"
+  | Composed(run1,run2) -> Format.sprintf "<composed>(<idtest>%d</idtest>:%s) | (<idtest>%d</idtest>:%s)</composed>"  run1.test.id (show_origin run1.test.origin)  run2.test.id (show_origin run2.test.origin) 
+  | CompletionUnreach(st) -> Format.sprintf "u<initial>%d</initial>" (st.id)
+  | CompletionIdentity(st)-> Format.sprintf "i<initial>%d</initial>" (st.id)
   | Temporary -> "T"
   else    
   match o with 
   | Initial(st) -> Format.sprintf "#%d" (st.id)
   | Composed(run1,run2) -> Format.sprintf "[ %d | %d ]"  run1.test.id  run2.test.id  
-  | CompletionUnreach -> "pcU"
-  | CompletionIdentity-> "pcI"
+  | CompletionUnreach(st) -> Format.sprintf "pcU #%d" (st.id)
+  | CompletionIdentity(st) -> Format.sprintf "pcI #%d" (st.id)
   | Temporary -> "T"
   
 and show_test (t : test) =
@@ -390,6 +390,7 @@ let show_solution_set sol =
 (** {2 Basic functions}*)
 
 let completion_to_hash_completion completion =
+  if !debug_completion then Printf.printf "equal hashes ?\n %s \n %s\n" (show_raw_statement completion.st_c)(show_raw_statement completion.root.initial_statement);
   let hash_test = raw_to_hash_test completion.st_c in
   { 
     is_opti = (hash_test = completion.root.hash_initial_statement);
@@ -556,7 +557,7 @@ let rec show_all_tests test =
       List.iter (function 
           (Master,sigma,test) -> show_all_tests test
         | (Slave,sigma,test) -> Printf.printf (if !use_xml then "<slv><idtest>%d</idtest></slv>," else "*[%d]") test.id
-        | _ -> assert false)  run.consequences;
+        | _ -> assert false) (List.rev run.consequences);
       List.iter (fun c -> Printf.printf (if !use_xml then "[+<idcomp>%d</idcomp>+]," else "+[%d]") c.id_c)  run.completions);      
     if !use_xml then Printf.printf "</solution>"
   ) test.solutions_done ;
@@ -613,7 +614,7 @@ let push (statement : raw_statement) process_name origin init =
   bijection.next_id <- bijection.next_id + 1 ;
   let (int_set,initial) = match origin with 
       | Initial _ -> IntegerSet.singleton (bijection.next_id),true
-      | CompletionUnreach | CompletionIdentity -> IntegerSet.singleton (bijection.next_id),true;
+      | CompletionUnreach(_) | CompletionIdentity(_) -> IntegerSet.singleton (bijection.next_id),true;
       | Composed(run1,run2) ->  (IntegerSet.union run1.test.from run2.test.from),false
       | Temporary -> assert false
   in
@@ -679,26 +680,26 @@ let register_completion completion =
     (
    match List.find_opt (fun (hash_c,compl) -> hash_c.is_opti && core_corresp = hash_c.hash_corresp_c) !hash_table_loc with
     | None -> (
-    match List.assoc_opt hash_compl !hash_table_loc with
-    | None -> 
-      if !debug_completion then Printf.printf "New completion: %s\n" (show_completion completion);
-      hash_table_loc :=  (hash_compl,completion) :: !hash_table_loc;
-      let new_list = Dag.add loc (completion:: (try Dag.find loc to_be_completed with Not_found -> [])) to_be_completed in
-      if completion.root.from_base = P  then bijection.partial_completions_P <- new_list else bijection.partial_completions_Q <- new_list;
-      if is_consistent && not (LocationSet.is_empty completion.missing_actions) then
-      begin
-          if !debug_completion then Printf.printf "Adding partial completion %s\n" (show_raw_statement completion.st_c);
-          if completion.root.from_base = P then 
-            bijection.todo_completion_P <- completion :: bijection.todo_completion_P
-          else
-            bijection.todo_completion_Q <- completion :: bijection.todo_completion_Q;
-          false,Some completion
-      end
-      else
-        is_consistent,Some completion
-    | Some compl -> 
-      if !debug_completion then Printf.printf "(((%s ----> %d )))\n" (show_completion completion)(compl.id_c) ;
-      false,Some compl (* Todo: add test identities *)
+      match List.assoc_opt hash_compl !hash_table_loc with
+      | None -> 
+        if !debug_completion then Printf.printf "New %scompletion: %s\n" (if hash_compl.is_opti then "optimal " else "") (show_completion completion);
+        hash_table_loc :=  (hash_compl,completion) :: !hash_table_loc;
+        let new_list = Dag.add loc (completion:: (try Dag.find loc to_be_completed with Not_found -> [])) to_be_completed in
+        if completion.root.from_base = P  then bijection.partial_completions_P <- new_list else bijection.partial_completions_Q <- new_list;
+        if is_consistent && not (LocationSet.is_empty completion.missing_actions) then
+        begin
+            if !debug_completion then Printf.printf "Adding partial completion %s\n" (show_raw_statement completion.st_c);
+            if completion.root.from_base = P then 
+              bijection.todo_completion_P <- completion :: bijection.todo_completion_P
+            else
+              bijection.todo_completion_Q <- completion :: bijection.todo_completion_Q;
+            false,Some completion
+        end
+        else
+          is_consistent,Some completion
+      | Some compl -> 
+        if !debug_completion then Printf.printf "(((%s ----> %d )))\n" (show_completion completion)(compl.id_c) ;
+        false,Some compl (* Todo: add test identities *)
     )
   | Some (_,compl) -> 
       if !debug_completion then Printf.printf "  %d is opti\n" (compl.id_c) ;

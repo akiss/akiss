@@ -131,15 +131,15 @@ let new_nonce str n =
     nonce
 
   
-let new_location (pr : procId) p ( io : io ) str parent phase =
+let new_location (pr : procId) p ( io : io ) str parent parent_choices phase =
   try List.find (fun l -> l.p = p) processes_infos.location_list
   with
   | Not_found-> 
     let par = match parent with Some p -> p.p | None -> 0 in
     begin if !about_location then 
       match io with 
-      | Input(chan) -> Printf.printf "%d : in(%s)  > %d[ph:%d] \n" p str par phase
-      | Output(chan,_) -> Printf.printf "%d : out(%s) > %d[ph:%d]\n" p str par phase
+      | Input(chan) -> Printf.printf "%d : in(%s)  > %d[ph:%d]%d \n" p str par phase (match parent_choices with [] -> 0 | l ::_ -> l.p)
+      | Output(chan,_) -> Printf.printf "%d : out(%s) > %d[ph:%d]%d \n" p str par phase (match parent_choices with [] -> 0 | l ::_ -> l.p)
       | Call -> Printf.printf " %d : %s      > %d[ph:%d] \n" p str par phase
       | Choice-> Printf.printf " %d: %s       > %d[ph:%d] \n" p str par phase
       end ;
@@ -149,12 +149,13 @@ let new_location (pr : procId) p ( io : io ) str parent phase =
       name=str; 
       phase=phase; 
       observable = (match io with Input(chan) | Output(chan,_) -> chan.visibility | _ -> Hidden);
-      parent=parent
+      parent=parent;
+      parent_choices= parent_choices
     } in
     processes_infos.location_list <- l :: processes_infos.location_list;
     l
 
-let rec convert_pr infos process parent phase=
+let rec convert_pr infos process parent parent_choices phase=
   let (pr, location, nonce, locations, nonces, args, chans) = infos in
   (*Printf.printf "Converting: %s \n%!" (show_bounded_process process);*)
   try
@@ -162,34 +163,40 @@ let rec convert_pr infos process parent phase=
   | NilB -> EmptyP
   | NameB ((rel_n,str),p) -> 
      nonces.(rel_n) <- new_nonce str (nonce+rel_n); 
-     convert_pr infos p parent phase
+     convert_pr infos p  parent parent_choices phase
   | InputB (ch,(rel_loc,Some str),p) -> 
     let chan = convert_chan pr chans ch in
-    let new_loc = new_location pr (location+rel_loc) (Input(chan))  str parent phase in
+    let new_loc = new_location pr (location+rel_loc) (Input(chan))  str parent parent_choices phase in
      locations.(rel_loc) <- new_loc;
-     SeqP(Input(locations.(rel_loc)),convert_pr infos p (if chan.visibility = Public then Some new_loc else parent) phase)
+     SeqP(Input(locations.(rel_loc)),convert_pr infos p 
+      (if chan.visibility = Public then Some new_loc else parent)
+      (if chan.visibility = Public then [] else new_loc :: parent_choices) phase)
   | OutputB(ch,(rel_loc,Some str),term,p) -> 
     let chan = convert_chan pr chans ch in
     let new_term = convert_term pr locations nonces args term in
-    let new_loc = new_location pr (location+rel_loc) (Output(chan,new_term))  str parent phase in
+    let new_loc = new_location pr (location+rel_loc) (Output(chan,new_term))  str parent parent_choices phase in
      locations.(rel_loc) <- new_loc;
      SeqP(Output(locations.(rel_loc),new_term),
-       convert_pr infos p (if chan.visibility = Public then Some new_loc else parent) phase)
+       convert_pr infos p 
+       (if chan.visibility = Public then Some new_loc else parent)
+       (if chan.visibility = Public then [] else new_loc :: parent_choices) phase)
   | TestIfB((rel_loc,Some str),s,t,p1,p2) -> 
      let s = convert_term pr locations nonces args s in 
      let t = convert_term pr locations nonces args t in 
-     if p2 = NilB then SeqP(Test(s,t),convert_pr infos p1 parent phase) else
-     if p1 = NilB then SeqP(TestInequal(s,t),convert_pr infos p2 parent phase) else
+     if p2 = NilB then SeqP(Test(s,t),convert_pr infos p1 parent parent_choices phase) else
+     if p1 = NilB then SeqP(TestInequal(s,t),convert_pr infos p2 parent parent_choices phase) else
      begin
-       locations.(rel_loc) <- new_location pr (location+rel_loc) Choice str parent phase;
-       ChoiceP(locations.(rel_loc),[(0,SeqP(TestInequal(s,t),convert_pr infos p2 parent phase));
-       (1,SeqP(Test(s,t),convert_pr infos p1 parent phase))])
+       let new_loc = new_location pr (location+rel_loc) Choice str parent parent_choices phase in
+       locations.(rel_loc) <- new_loc;
+       ChoiceP(locations.(rel_loc),[(0,SeqP(TestInequal(s,t),convert_pr infos p2 parent (new_loc :: parent_choices) phase));
+       (1,SeqP(Test(s,t),convert_pr infos p1 parent parent_choices phase))])
      end
   | ParB(prlst) -> 
-     ParallelP(List.map (fun pr -> convert_pr infos pr parent phase)prlst)
+     ParallelP(List.map (fun pr -> convert_pr infos pr parent parent_choices phase)prlst)
   | ChoiceB((rel_loc,Some s),lb) -> 
-     locations.(rel_loc) <- new_location pr (location+rel_loc) Choice s parent phase;
-     ChoiceP(locations.(rel_loc),List.mapi (fun i p -> (i, convert_pr infos p parent phase)) lb)
+     let new_loc = new_location pr (location+rel_loc) Choice s parent parent_choices phase in
+     locations.(rel_loc) <- new_loc;
+     ChoiceP(locations.(rel_loc),List.mapi (fun i p -> (i, convert_pr infos p parent (new_loc :: parent_choices) phase)) lb)
   | CallB((rel_loc,Some s),i,p,arguments) -> 
     (*Printf.printf "call of %s (args length = %d)\n with " (show_procId p) (Array.length args); List.iter (fun t -> Printf.printf "%s," (show_relative_term t))arguments; Printf.printf "\n";*)
      let ar = Array.make (1+(count_type_nb TermType p (p.arity - 1))) zero in
@@ -203,9 +210,9 @@ let rec convert_pr infos process parent phase=
        else if !(p.types.(i)) = ChanType 
        then begin channels.(!nbc) <- convert_chan pr chans x; incr nbc end
      ) arguments;
-     locations.(rel_loc) <- new_location pr (location+rel_loc) Call s parent phase;
+     locations.(rel_loc) <- new_location pr (location+rel_loc) Call s parent parent_choices phase;
      CallP(locations.(rel_loc),i,p,ar,channels)
-  | PhaseB(i,p) -> processes_infos.max_phase <- max processes_infos.max_phase i ; convert_pr infos p parent i
+  | PhaseB(i,p) -> processes_infos.max_phase <- max processes_infos.max_phase i ; convert_pr infos p parent parent_choices i
   | _ -> assert false
   with Invalid_argument(_) -> Printf.eprintf "Error when converting %s \n" (show_bounded_process process);exit 6
   
@@ -234,7 +241,7 @@ let expand_call loc copy (procId : procId) args chans=
   let process = convert_pr (procId, indexes.first_location, indexes.first_nonce, 
       (Array.make procId.nbloc null_location),
       (Array.make procId.nbnonces null_nonce), args, chans) 
-      procId.process loc.parent loc.phase  in
+      procId.process loc.parent loc.parent_choices loc.phase  in
   Hashtbl.add memoize_call (loc,copy,args,chans) process;
   process )
 (*  convert_pr (procId, indexes.first_location, indexes.first_nonce, 
