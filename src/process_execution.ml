@@ -89,68 +89,7 @@ let reduc_and_run reflexive pending final failure (loc_input : location) (loc_ou
     run_until_io reflexive pending final failure choices_constraints thread_output.thread first frame 
   | None -> ()
   
-(*let merge_pending_lst init lst =
-  List.fold_left (fun all_p (l,t,c,p)-> ChanMap.add c ((l,t,p)::(try ChanMap.find c all_p with Not_found -> [])) all_p) init lst
 
-(* Once a private action is selected (loc,term,chan_kind,ext_thread), 
-   try to do a reduction with all pending actions in end_older_canals.
-   For each of them, perform the reduction and see test for new 
-   internal reduction following that one.
-   To get further reductions, older pending thread where stored in 
-   all_pending_set: new unlocked actions are added to that set.
-   (To avoid replication a new reduction can only be performed with 
-   new obtained thread.) *)
-let rec test_reduc_for_one (choices_constraints : Inputs.choices option) (loc,term,chan_kind,ext_thread) conj_chan end_older_canals all_pending_set frame =
-  match end_older_canals with
-  | (l,t,extt)::q ->
-    let pending,final,failure = 
-      match term,t with
-      | None, Some t -> reduc_and_run choices_constraints loc l t ext_thread extt  frame
-      | Some t, None -> reduc_and_run choices_constraints l loc t extt ext_thread  frame
-      | _ -> assert false in
-      (*Printf.printf " test_reduc_for_one: %s\n with %s \n%!" 
-        (show_ext_extra_thread_lst (List.map (fun (l,t,c,et) -> (l,t,et)) pending))
-        (show_pending_threads all_pending_set);*)
-      (*let new_pending_set = merge_pending_lst all_pending_set pending in
-      let deeper_call = test_all_internal_communications choices_constraints new_pending_set pending  frame in *)
-      let recursive_call = test_reduc_for_one choices_constraints (loc,term,chan_kind,ext_thread) conj_chan q all_pending_set frame in
-      dispatch [(pending,final,failure);(*deeper_call;*)recursive_call]
-  | [] -> ([],[],[])
-
-(* Try all possible internal communication with one action of new_threads_todo (the new ones) and one action 
-   of all_pending_set (all of them). 
-   At the first recursive call, new_threads_todo should be included in all_pending_set.
-   Take the first action of new_threads_todo, look in all_pending_set for actions which are compatible
-   (same chan name, and ensure input / output communication).
-*)
-and test_all_internal_communications (choices_constraints : Inputs.choices option) all_pending_set new_threads_todo frame = 
-  (* Printf.printf "test_all_internal_communications\n"; *)
-  match new_threads_todo with
-  | (loc,term,chan_kind,ext_thread) :: q -> 
-    let conj_chan = { chan_kind with io = Base.switch_io chan_kind.io} in 
-    let (pending,final,failure) = (
-      match ChanMap.find_opt conj_chan all_pending_set with
-      | Some old_chan_lst -> 
-        (* When a reduction is done between 2 new actions, avoid considering it in both orders *)
-        let old_chan_lst = List.filter (fun (l,t,p) -> 
-                not (List.exists (fun (lo,te,_,th) -> lo == l && te == t && th==p) new_threads_todo)
-              ) old_chan_lst in   
-        (* When testing a statement with actual, discard other choices than the one of the statement *)
-        let old_chan_lst = begin
-          match choices_constraints with
-          | None -> old_chan_lst
-          | Some choices -> List.filter (fun ((l : location),_,_) -> 
-            try Dag.find loc choices.c = l.p 
-            with Not_found -> false) old_chan_lst
-        end in
-        test_reduc_for_one choices_constraints (loc,term,chan_kind,ext_thread) conj_chan old_chan_lst all_pending_set frame 
-      | None -> ([],[],[])) in
-    let new_pending_set = merge_pending_lst all_pending_set pending in
-    let res2 = test_all_internal_communications choices_constraints new_pending_set (pending @ q) frame in
-    dispatch [(pending,final,failure);res2]
-  | [] ->  ([],[],[]) 
-  
-*)
   
 let run_silent_actions old_threads reflexive (choices_constraints : Inputs.choices ) process first frame  =
   let new_threads = ref [] in
@@ -378,19 +317,6 @@ let compatible constraints constraints_back locP locQ =
 let compatible_prun constraints constraints_back (prun : partial_run)=
   Dag.for_all (compatible constraints constraints_back) prun.corresp.a
   *)
-  
-(*let rec get_all_new_roots before after run = 
-  if LocationSet.is_empty before then []
-  else 
-  match run.parent with
-  | None -> assert false
-  | Some r -> 
-    if LocationSet.mem run.last_exe before
-    then 
-      let before = LocationSet.remove run.last_exe before in
-      let after = LocationSet.add run.last_exe after in
-    (before,after) :: get_all_new_roots before after r
-    else get_all_new_roots before after r*)
     
 let rec get_all_new_roots before after dag =
   if LocationSet.is_empty before then []
@@ -451,29 +377,33 @@ let rec next_solution solution =
     (*if is_empty_correspondance pr.test.constraints (* When the mapping is set there is no way to have a restricted dag *)
     then*) (
     assert (is_empty_correspondance pr.test.constraints); 
-    if !debug_execution 
+    (*Printf.printf "%s of %d \n" (show_loc_set pr.restrictions ) pr.test.id;*)
+    if !debug_execution
     then Printf.printf "A restricted run is being tested from %s \n which test is \n %s \n" (show_partial_run pr)(show_test pr.test) ;
     let par = match pr.parent with Some par -> par | _ -> assert false in
     let roots = get_all_new_roots pr.restrictions LocationSet.empty par.sol.restricted_dag in
     let new_dag = dag_with_one_action_at_end pr.restrictions pr.last_exe in
-    let restr_dag = canonize_dag (merge pr.sol.restricted_dag new_dag) in
+    let restr_dag = merge pr.sol.restricted_dag new_dag in
     pr.sol.restricted_dag <- restr_dag;  
     List.iter (fun (before,after) -> 
       if !debug_execution 
       then Printf.printf "\n**** Starting the restriction for %s  < %d < %s ****\n%s\n" 
         (show_loc_set before) pr.last_exe.p (show_loc_set after)(show_dag pr.sol.restricted_dag);
       let new_dag = { rel = LocationSet.fold (fun l dag -> Dag.add l (LocationSet.singleton pr.last_exe) dag) after (dag_with_one_action_at_end before pr.last_exe).rel } in
-      let restr_dag = canonize_dag (merge pr.sol.restricted_dag new_dag) in
-      if not (List.exists (fun s -> s.restricted_dag == restr_dag) (pr.test.solutions_done @ pr.test.solutions_todo )) 
-      then
-      let new_solution =
-      { null_sol with 
-        init_run = pr.sol.init_run;
-        partial_runs_todo = Solutions.singleton pr.sol.init_run;
-        restricted_dag = restr_dag; 
-        sol_test = pr.sol.sol_test;
-      } in
-      pr.test.solutions_todo <- new_solution :: pr.test.solutions_todo
+      let restr_dag = merge pr.sol.restricted_dag new_dag in
+      if not (List.exists (fun s -> Dag.equal (fun x y -> LocationSet.equal x y) s.restricted_dag.rel restr_dag.rel) (pr.test.solutions_done @ pr.test.solutions_todo )) 
+      then (
+        (*Printf.printf "%s\n" (show_dag restr_dag);
+        List.iter (fun s -> Printf.printf "%s\n" (show_dag s.restricted_dag))(pr.test.solutions_done @ pr.test.solutions_todo )*)
+        let new_solution =
+        { null_sol with 
+          init_run = pr.sol.init_run;
+          partial_runs_todo = Solutions.singleton pr.sol.init_run;
+          restricted_dag = restr_dag; 
+          sol_test = pr.sol.sol_test;
+        } in
+        pr.test.solutions_todo <- new_solution :: pr.test.solutions_todo
+      )
     )  roots 
     )
   

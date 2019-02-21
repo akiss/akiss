@@ -45,14 +45,17 @@ let show_verbose_choices choices =
 let new_inputs = { i = Dag.empty } 
 let new_choices = { c = Dag.empty }
 
-(*hashing...*)
-let canonize_inputs inputs = 
- { i = List.fold_left (fun i' (l,t) -> Dag.add l t i') Dag.empty (Dag.bindings inputs.i)}
+(** {2 Hash} *)
+type hash_inputs = (int * hash_term) list
+type hash_choices = (int * int) list
+
+let inputs_to_hash inputs = 
+ List.map (fun (l,t) -> (l.p,term_to_hash t)) (Dag.bindings inputs.i)
  
-let canonize_choices choices =
- { c = List.fold_left (fun c' (l,i) -> Dag.add l i c') Dag.empty (Dag.bindings choices.c)}
+let choices_to_hash choices =
+ List.map (fun (l,i) -> (l.p, i)) (Dag.bindings choices.c)
  
-(** when considering a new input *)
+(** {2 when considering a new input} *)
 let add_input loc var inputs =
   { i = Dag.add loc (Var(var)) inputs.i }(*(Dag.map (fun t -> new_term binder t) inputs)}*)
 

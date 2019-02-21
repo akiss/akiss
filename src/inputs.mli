@@ -6,8 +6,10 @@ val show_choices : choices -> string
 val show_verbose_choices : choices -> unit
 val new_inputs : inputs
 val new_choices : choices
-val canonize_inputs : inputs -> inputs
-val canonize_choices : choices -> choices
+type hash_inputs 
+type hash_choices = (int * int) list
+val inputs_to_hash : inputs -> hash_inputs
+val choices_to_hash : choices -> hash_choices
 val add_input : Dag.Dag.key -> Types.varId -> inputs -> inputs
 val add_choice : Dag.Dag.key -> int -> choices -> choices
 val add_to_frame : Dag.Dag.key -> Types.term -> inputs -> inputs

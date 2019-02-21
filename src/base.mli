@@ -71,25 +71,10 @@ type raw_statement = {
   recipes : Inputs.inputs;
   involved_copies : Process.BangSet.t;
 }
-type hash_statement = {
-  hbinder : Types.statement_role ref;
-  hnbvars : int;
-  hdag : Dag.dag;
-  hinputs : Inputs.inputs;
-  hrecipes : Inputs.inputs;
-  hchoices : Inputs.choices;
-  hhead : predicate;
-  hbody : body_atom list;
-}
-type hash_test = {
-  htbinder : Types.statement_role ref;
-  htnbvars : int;
-  htdag : Dag.dag;
-  htinputs : Inputs.inputs;
-  htrecipes : Inputs.inputs;
-  htchoices : Inputs.choices;
-  htbody : body_atom list;
-}
+type hash_statement 
+val statement_to_hash : raw_statement -> hash_statement
+val test_to_hash : raw_statement -> hash_statement
+val get_hash_choices : hash_statement -> Inputs.hash_choices
 val null_raw_statement : raw_statement
 type statement = {
   id : int;
@@ -174,7 +159,7 @@ val show_predicate : predicate -> string
 val show_body_atom : body_atom -> string
 val show_atom_list : body_atom list -> string
 val show_raw_statement : raw_statement -> string
-val show_hash_test : hash_test -> string
+(*val show_hash_test : hash_test -> string*)
 val show_statement : string -> statement -> string
 val show_statement_list : string -> statement list -> string
 val show_statements_id : statement list -> string
@@ -187,6 +172,4 @@ val apply_subst_statement :
   raw_statement -> Types.substitution -> raw_statement
 val new_statement : unit -> statement
 val new_base : unit -> base
-val canonize_statement : raw_statement -> raw_statement
-val raw_to_hash_statement : raw_statement -> hash_statement
-val raw_to_hash_test : raw_statement -> hash_test
+

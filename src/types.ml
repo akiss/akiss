@@ -175,6 +175,37 @@ and funInfos = {
 and term =
   | Fun of funInfos * term list
   | Var of varId
+
+
+type hash_term = 
+  | HFun of hash_funName * hash_term list
+  | HVar of int
+  
+and hash_funName = 
+  | HRegular of funId
+  | HNonce of int
+  | Hplus
+  | HZero
+  | HTuple of int
+  | HProj of int * int
+  | HFrame of int
+  
+let fun_to_hash term =
+  match term with
+  | Regular(f) -> HRegular(f)
+  | Nonce(n) -> HNonce(n.n)
+  | Plus -> Hplus
+  | Zero -> HZero
+  | Tuple(n) -> HTuple(n)
+  | Projection(m,n) -> HProj(m,n)
+  | Frame(l) -> HFrame(l.p)
+  | InputVar _ -> assert false
+  
+let rec term_to_hash term =
+  match term with
+  | Fun({id=f},args) -> HFun(( fun_to_hash f),List.map term_to_hash args)
+  | Var(v) -> HVar(v.n)
+
   
 let rec null_location = { p = -1; io = Call; name = "null_loc"; phase = 0 ; observable = Hidden; parent = None;  parent_choices=[]}
 

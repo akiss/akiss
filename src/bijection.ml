@@ -83,12 +83,12 @@ module rec Run : sig
     from_base : which_process; (* the saturated base from which the completion come from *)
     from_statement : statement; (* the unreach or identity test from which the completion is issued*)
     initial_statement : raw_statement ; (* from_statement.st *) 
-    hash_initial_statement : hash_test ; (* the hash of the initial_statement *) 
+    hash_initial_statement : hash_statement ; (* the hash of the initial_statement *) 
     mutable directory : (((hash_completion * completion) list) ref) Dag.t ; (* For each selected missing action, the list of completions so far, to avoid duplicates *)
   } 
   and hash_completion = {
     is_opti : bool;
-    hash_st_c : hash_test ; 
+    hash_st_c : hash_statement ; 
     hash_corresp_c : (location * location) list ;
   }
   and  partial_run = {
@@ -157,12 +157,12 @@ struct
     from_base : which_process; (** the saturated base from which the completion come from *)
     from_statement : statement; (** for debugging to have its id*)
     initial_statement : raw_statement ; (** the unreach or identity from which the completion is issued: g *) 
-    hash_initial_statement : hash_test ;
+    hash_initial_statement : hash_statement ;
     mutable directory : (((hash_completion * completion) list) ref) Dag.t ; (* For each selected missing action, the list of completions so far, to avoid duplicates and not optimal completions *)
   }  
   and hash_completion = {
     is_opti : bool ;
-    hash_st_c : hash_test ; 
+    hash_st_c : hash_statement ; 
     hash_corresp_c : (location * location) list ;
   }
   and partial_run = {
@@ -391,10 +391,10 @@ let show_solution_set sol =
 
 let completion_to_hash_completion completion =
   if !debug_completion then Printf.printf "equal hashes ?\n %s \n %s\n" (show_raw_statement completion.st_c)(show_raw_statement completion.root.initial_statement);
-  let hash_test = raw_to_hash_test completion.st_c in
+  let hash_statement = test_to_hash completion.st_c in
   { 
-    is_opti = (hash_test = completion.root.hash_initial_statement);
-    hash_st_c = hash_test;
+    is_opti = (hash_statement = completion.root.hash_initial_statement);
+    hash_st_c = hash_statement;
     hash_corresp_c = Dag.bindings completion.corresp_c.a;
   }
 
@@ -488,7 +488,7 @@ type bijection = {
   mutable todo_completion_Q : completion list; (** new partial completion which should be tested on all runs *)
   mutable locs : LocationSet.t; (** the locations already in the tests of the base, for optimization only *)
   (*htable : (int list , origin) Hashtbl.t;*)
-  htable_st : (hash_test, test) Hashtbl.t;
+  htable_st : (hash_statement, test) Hashtbl.t;
   (*Only to print infos *)
   mutable initial_tests : test list;
   mutable initial_completions : completion list;
@@ -660,7 +660,24 @@ let pop () =
   let test = Tests.min_elt bijection.tests in
   bijection.tests <- Tests.remove test bijection.tests ; 
   test
-
+  
+(** Optimization: if there already exists an optimal completion do not finish [add_to_completion]  *)  
+let interesting_to_complete loc corr_back (choices : Inputs.choices) completion = 
+  match Dag.find_opt loc completion.root.directory with
+  | None -> true
+  | Some hash_table_loc ->
+  (*let (_,better)= *)
+  not (List.exists (fun (hcomp,comp) -> 
+    hcomp.is_opti 
+    && (List.for_all (fun (p,q) -> Dag.exists (fun q' p' -> p=p' && q=q') corr_back.a) hcomp.hash_corresp_c)
+    && (List.for_all (fun (c,i) -> Dag.exists (fun c' i' -> c=c'.p && i=i') choices.c) (get_hash_choices hcomp.hash_st_c))) !hash_table_loc )
+  (*in
+  (*Printf.printf "better comp %s\n for corr %s\n\n" (show_completion better) (show_correspondance corr_back);*)
+  false
+  with
+  | Not_found -> true*)
+(* Todo optimal is not true when body is K(X,x+y) *)  
+  
 (** add a partial completion to the todo list *) 
 (** return true if a test should be extracted from completion, false otherwise with the actual completion *)
 let register_completion completion =

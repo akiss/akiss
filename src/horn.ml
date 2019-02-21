@@ -908,8 +908,13 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
         head = Reach;
         } in
       begin 
-      if add_ineqs_statements ineqs identity_sigma st 
-      then add_statement kb solved_parent unsolved_parent test_parent (Some (ParallelP([SeqP(OutputA(loc, t), pr);pr]))) st
+      if add_ineqs_statements ineqs identity_sigma st (*if the disequalities can never be satisfied just abort *)
+      then (add_statement kb solved_parent unsolved_parent test_parent (Some (ParallelP([SeqP(OutputA(loc, t), pr);pr])))
+        (match pr with
+        | SeqP(Output({observable = Public} , _), _)
+        | SeqP(Input({observable = Public}), _) -> { st with head = ReachTest([])} (* The next statement subsumes this one: no need to add it *)
+        | _ ->  st)
+      )
       end
     | SeqP(Input({observable = Public} as loc), pr) -> 
       let next_dag = put_at_end st.dag loc in
@@ -938,8 +943,15 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
         body = next_body;
         involved_copies = st.involved_copies} in
       begin
-      if add_ineqs_statements ineqs identity_sigma st ;
-      then add_statement kb solved_parent unsolved_parent test_parent (Some pr) st end
+      if add_ineqs_statements ineqs identity_sigma st 
+      then  (
+        match pr with
+        | SeqP(Output({observable = Public} , _), _)
+        | SeqP(Input({observable = Public}), _) ->
+            trace_statements kb [] solved_parent unsolved_parent test_parent pr st
+        | _ -> add_statement kb solved_parent unsolved_parent test_parent (Some pr) st
+      )
+      end
     | SeqP(Input({io = Input({visibility = Hidden} as chan)} as loc), pr) -> (
       begin match ChanMap.find_opt { c= chan; io = Out; ph =loc.phase} kb.hidden_chans with
       | None -> ()
@@ -1001,8 +1013,7 @@ and add_statement kb solved_parent unsolved_parent test_parent process st =
   | Some new_st -> begin 
      if ! about_canonization then Printf.printf "Normalized statement: %s\n" (show_raw_statement new_st);
      let is_solved_st = is_solved new_st in
-     let new_st = canonize_statement new_st in
-     let hash_st = raw_to_hash_statement new_st in
+     let hash_st = statement_to_hash new_st in
      new_st.binder:=if is_solved_st then Slave else Master;
      if Hashtbl.mem kb.htable hash_st then () else begin 
      kb.next_id <- 1 + kb.next_id ;

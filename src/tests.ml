@@ -43,7 +43,7 @@ let statement_to_completion process_name (statement : statement) (st : raw_state
       from_base = process_name ;
       from_statement = statement ;
       initial_statement = st ;
-      hash_initial_statement = raw_to_hash_test st;
+      hash_initial_statement = test_to_hash st;
       directory = Dag.empty ;};
     further_completions = [];
     generated_test = None;
@@ -64,10 +64,11 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
     let sigma = Term.sigma_maker_init fa.nbvars fb.nbvars in
     fa.binder:= Master;
     fb.binder:= Slave;
-    let sigmas = match Inputs.csu_recipes sigma fa.recipes fb.recipes with
-  | [] -> []
-  | [s] -> Inputs.csu s fa.inputs fb.inputs
-  | lst -> List.concat (List.rev_map (fun s -> Inputs.csu s fa.inputs fb.inputs) lst ) in 
+    let sigmas =
+      match Inputs.csu_recipes sigma fa.recipes fb.recipes with
+      | [] -> []
+      | [s] -> Inputs.csu s fa.inputs fb.inputs
+      | lst -> List.concat (List.rev_map (fun s -> Inputs.csu s fa.inputs fb.inputs) lst ) in 
     if sigmas = [] 
     then begin 
       fa.binder:= New;
@@ -427,9 +428,9 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
         let dag = {rel = Dag.mapi (fun loc lset -> LocationSet.union loc_phase.(loc.phase + 1) lset) statement.dag.rel} in
         if is_cyclic dag then (Printf.printf "cycle on %s\n"(show_dag dag) ;raise CyclicDag) else dag ) (*maybe a bug here: how cycle is found ? *)
     in
-    let statement = canonize_statement { statement with dag = dag } in
+    let statement =  { statement with dag = dag } in
     statement.binder := New;
-    let hash_statement = raw_to_hash_test statement in
+    let hash_statement = test_to_hash statement in
     try 
       let test = Hashtbl.find bijection.htable_st hash_statement in
       let sigma = Rewriting.merging_subst test.statement.nbvars test.statement.binder in
@@ -547,6 +548,16 @@ let add_to_completion (run : partial_run) (completion : completion) =
     (show_run run)(show_raw_statement run.test.statement) (show_completion completion);
   let exception NonBij in
   try
+  let over_corr_back = { a = Dag.union 
+      (fun locQ x y -> if x = y then Some x else raise NonBij) 
+      run.corresp_back.a completion.corresp_back_c.a } in
+  let missing = LocationSet.filter (fun loc -> not (Dag.mem loc over_corr_back.a)) completion.missing_actions in
+  match Inputs.merge_choices completion.st_c.choices run.choices with
+  | None -> ()
+  | Some over_merged_choices -> 
+  if LocationSet.is_empty missing && not(interesting_to_complete null_location over_corr_back over_merged_choices completion) then
+    ()
+  else (
   let llocs, _ = List.split (Dag.bindings completion.root.initial_statement.dag.rel) in
   let set = restr_set run.sol.restricted_dag 
     (only_observable run.test.statement.dag)
@@ -558,13 +569,7 @@ let add_to_completion (run : partial_run) (completion : completion) =
     | Some x, None -> if LocationSet.mem locP set then Some x else None
     | None, Some y -> Some y
     | None, None -> None) run.corresp.a completion.corresp_c.a } in
-  let corr_back = { a = Dag.merge (fun locQ x y -> 
-    match x , y with
-    | Some x, Some y -> if x = y then Some x else raise NonBij
-    | Some x, None -> if LocationSet.mem x set then Some x else None
-    | None, Some y -> Some y
-    | None, None -> None) run.corresp_back.a completion.corresp_back_c.a } in
-  let missing = LocationSet.filter (fun loc -> try ignore (Dag.find loc corr_back.a); false with Not_found -> true) completion.missing_actions in
+  let corr_back = { a= Dag.filter (fun q p -> Dag.mem p corr.a) over_corr_back.a } in
   (*if !debug_completion then Printf.printf "Conj = %s \n" (show_raw_statement conjrun);*)
   if !debug_merge then Printf.printf "Merge run %d with comp %s\n" run.test.id (show_raw_statement completion.root.initial_statement);
   let sts = merge_tests completion.root.from_base conjrun completion.st_c in
@@ -573,7 +578,7 @@ let add_to_completion (run : partial_run) (completion : completion) =
     bijection.next_comp_id <- bijection.next_comp_id + 1;
     let new_comp' = {
         id_c = bijection.next_comp_id;
-        st_c = canonize_statement st;
+        st_c = (*canonize_statement*) st;
         corresp_c = corr;
         corresp_back_c = corr_back;
         missing_actions = missing ;
@@ -613,7 +618,7 @@ let add_to_completion (run : partial_run) (completion : completion) =
         completion_to_test new_comp 
       end
     | _ , None -> ()
-  ) sts
+  ) sts)
   with 
   | NonBij -> ()
 

@@ -47,29 +47,10 @@ type raw_statement = {
   involved_copies : BangSet.t ;
 }
 
-(**for hash table *)
-type hash_statement = {
-  hbinder : statement_role ref;
-  hnbvars : int ;
-  hdag : dag ;
-  hinputs :  inputs ;
-  hrecipes : inputs ;
-  hchoices : choices ;
-  hhead : predicate ;
-  hbody : body_atom list ;
-}
 
-type hash_test = {
-  htbinder : statement_role ref;
-  htnbvars : int ;
-  htdag : dag ;
-  htinputs :  inputs ;
-  htrecipes : inputs ;
-  htchoices : choices ;
-  htbody : body_atom list ;
-}
 
-let null_raw_statement = { 
+
+let null_raw_statement = {
   binder = ref New ;
   nbvars = 0; 
   dag = empty; 
@@ -109,15 +90,41 @@ module ChanMap = Map.Make(struct
       let compare x y = compare x y
   end)
   
-  
+(** {3 Hash types} *)
 
+type hash_statement = {
+  hnbvars : int ;
+  hchoices : hash_choices ;
+(*  hinputs :  hash_inputs ;*)
+  hrecipes : hash_inputs ;
+  hdag : hash_dag ;
+  hhead : predicate ;
+  hbody : (hash_locset * hash_term * hash_term * bool) list ;
+}
+
+let statement_to_hash st = {
+  hnbvars = st.nbvars ;
+  hchoices = choices_to_hash st.choices ;
+  hdag = dag_to_hash st.dag;
+  hhead = st.head ;
+  hrecipes = inputs_to_hash st.recipes ;
+(*  hinputs =  inputs_to_hash st.inputs ;*)
+  hbody = List.map (fun atom -> (locset_to_hash atom.loc,term_to_hash atom.recipe,term_to_hash atom.term,atom.marked)) st.body ;
+}
+
+let test_to_hash st = {
+  (statement_to_hash st) with hhead = Reach
+}
+
+let get_hash_choices hst = hst.hchoices 
+  
+(** {2 The type of the knowledge base}*)
+  
 type base = 
 { 
    mutable next_id : int ;
-   solved_deduction : statement ; (* to preserve structure solved_deduction link to a statement whose children are the actual ones *)
-   rid_solved : statement ; (* to have a tree structure for the tests *)
-   (*mutable identity_solved :  statement list; 
-   mutable reachable_solved : statement list ;*)
+   solved_deduction : statement ; (** to preserve structure solved_deduction link to a statement whose children are the actual ones *)
+   rid_solved : statement ; (** to have a tree structure for the tests *)
    mutable unreachable_solved : statement list; 
    not_solved : statement ;
    temporary_merge_test : statement ; (** to merge two tests put the unsolved test as its child *)
@@ -214,12 +221,6 @@ let show_chan_statements chmap =
     str ^ Format.sprintf "loc %d%s, %s\n" l.p (match t with None -> "" | Some t -> " ("^(show_term t)^")")(show_raw_statement st)
   ) ": \n" lst) ^ "\n") chmap ""
 
-
-let show_hash_test st =
-  let string = 
-  Format.sprintf
-    "(%d%s) T <== %s \n       %s %s %s\n" st.htnbvars (show_binder !(st.htbinder)) (show_atom_list st.htbody)(show_inputs st.htinputs)(show_dag st.htdag)(show_choices st.htchoices) in 
-  string
 
 let rec show_statement prefix st =
   if !use_xml then
@@ -332,18 +333,4 @@ let new_base () =
      ns_todo = Queue.create() ;
      htable = Hashtbl.create 10000 ;
   } in
-  kb 
-
-(**{2 Canonical form for Hash table }*)
-  
-let canonize_statement st = 
-  { st with (*either the head is not a test or the head is a test and hash_test does not consider it *)
-    dag = canonize_dag st.dag;
-    inputs = canonize_inputs st.inputs;
-    recipes = canonize_inputs st.recipes;
-    choices = canonize_choices st.choices
-  }
-
-let raw_to_hash_statement st = { hbinder = st.binder ; hnbvars = st.nbvars; hdag = st.dag; hinputs= st.inputs; hrecipes=st.recipes; hchoices= st.choices; hhead = st.head;hbody=st.body}
-
-let raw_to_hash_test st = { htbinder = st.binder ; htnbvars = st.nbvars; htdag = st.dag; htinputs= st.inputs; htrecipes=st.recipes; htchoices= st.choices; htbody=st.body}
+  kb

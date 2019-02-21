@@ -120,12 +120,12 @@ module rec Run :
       from_base : which_process;
       from_statement : Base.statement;
       initial_statement : Base.raw_statement;
-      hash_initial_statement : Base.hash_test;
+      hash_initial_statement : Base.hash_statement;
       mutable directory : (hash_completion * completion) list ref Dag.Dag.t;
     }
     and hash_completion = {
       is_opti : bool;
-      hash_st_c : Base.hash_test;
+      hash_st_c : Base.hash_statement;
       hash_corresp_c : (Types.location * Types.location) list;
     }
     and partial_run = {
@@ -368,7 +368,7 @@ type bijection = {
   mutable todo_completion_P : Run.completion list;
   mutable todo_completion_Q : Run.completion list;
   mutable locs : Dag.LocationSet.t;
-  htable_st : (Base.hash_test, Test.test) Hashtbl.t;
+  htable_st : (Base.hash_statement, Test.test) Hashtbl.t;
   mutable initial_tests : Test.test list;
   mutable initial_completions : Run.completion list;
   mutable attacks : (Test.test * Run.solution) list;
@@ -390,6 +390,7 @@ val push :
   which_process -> Run.origin -> (Test.test -> Run.solution) -> Test.test
 val reorder_tests : unit -> unit
 val pop : unit -> Tests.elt
+val interesting_to_complete : Types.location -> correspondance -> Inputs.choices -> Run.completion -> bool
 val register_completion : Run.completion -> bool * Run.completion option
 exception LocPtoQ of int
 val loc_p_to_q : Dag.Dag.key -> correspondance -> Types.location

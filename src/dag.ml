@@ -33,14 +33,19 @@ let show_dag dag =
   else
   (Dag.fold (fun l ls str -> str ^(Format.sprintf " %d<" l.p) ^ (show_loc_set ls)) dag.rel "{")^"}"
 
-(** {2 Dag functions}*)
+
   
 
 
 
-(** for hash tables *)
-let canonize_dag dag = {rel = List.fold_left (fun dag' (l,ls) -> Dag.add l (LocationSet.of_list (LocationSet.elements ls)) dag') Dag.empty (Dag.bindings dag.rel)}
+(** {2 for hash tables} *)
+type hash_locset = int list
+type hash_dag = (int * hash_locset) list 
 
+let locset_to_hash ls = List.map (fun l' -> l'.p) (LocationSet.elements ls)
+let dag_to_hash dag = List.map (fun (l,ls) -> (l.p, (locset_to_hash ls))) (Dag.bindings dag.rel)
+
+(** {2 Dag functions}*)
 let empty = {rel = Dag.empty}
 
 let is_empty dag = Dag.is_empty dag.rel

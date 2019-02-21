@@ -16,9 +16,9 @@ module LocationSet :
     val union : t -> t -> t
     val inter : t -> t -> t
 (*    val diff : t -> t -> t
-    val compare : t -> t -> int
+    val compare : t -> t -> int*)
     val equal : t -> t -> bool
-    val subset : t -> t -> bool*)
+(*    val subset : t -> t -> bool*)
     val iter : (elt -> unit) -> t -> unit
     val map : (elt -> elt) -> t -> t
     val fold : (elt -> 'a -> 'a) -> t -> 'a -> 'a
@@ -57,8 +57,8 @@ module Dag :
     val merge :
       (key -> 'a option -> 'b option -> 'c option) -> 'a t -> 'b t -> 'c t
     val union : (key -> 'a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
-(*    val compare : ('a -> 'a -> int) -> 'a t -> 'a t -> int
-    val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool *)
+(*    val compare : ('a -> 'a -> int) -> 'a t -> 'a t -> int*)
+    val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool 
     val iter : (key -> 'a -> unit) -> 'a t -> unit 
     val fold : (key -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
     val for_all : (key -> 'a -> bool) -> 'a t -> bool
@@ -91,7 +91,10 @@ type dag = { rel : LocationSet.t Dag.t; }
 val empty_loc : LocationSet.t
 val show_loc_set : LocationSet.t -> string
 val show_dag : dag -> string
-val canonize_dag : dag -> dag
+type hash_locset
+type hash_dag
+val locset_to_hash : LocationSet.t -> hash_locset
+val dag_to_hash : dag -> hash_dag
 val empty : dag
 val is_empty : dag -> bool
 val singleton : Dag.key -> Dag.key -> dag
