@@ -6,7 +6,6 @@ open Base
 open Process
 open Dag
 
-(** {1 Saturation procedure}*)
 
 (** {2 Basic functions on statements }*)
 
@@ -386,7 +385,7 @@ let simplify_statement st =
     if Rewriting.equals_ac (Rewriting.normalize t (!Parser_functions.rewrite_rules))  b.term then
       false
     else (
-      (*Printf.printf "\n%s = %s \n %s%!" (show_term t)(show_term b.term) (show_raw_statement st);*)
+      if !about_rare then Printf.printf "Unsound statement\n%s = %s \n %s%!" (show_term t)(show_term b.term) (show_raw_statement st);
       raise Unsound_Statement )
     with
     No_Eval -> true 
@@ -481,6 +480,7 @@ let normalize_identical f =
   | Reach | ReachTest _ | Unreachable -> Some f
   | Knows(r,t) -> 
     let t' = Rewriting.normalize t (!Parser_functions.rewrite_rules) in 
+    (*Printf.printf "head normalization: %s -> %s\n" (show_term t)(show_term t');*)
     if not (Rewriting.equals_ac t t')
     then begin (*Printf.printf "hea: %s\n" (show_raw_statement f); *)
       None (*Some {f with head = Reach}*) end (* A knows is also a reach statement but the reach statement has already been processed *)
@@ -542,7 +542,7 @@ let update kb f =
 (** {2 Resolution steps} *)
     
     
-
+(** The rule "res+" of the saturation algorithm *)
 let resolution_plus master =
   let atom = find_unsolved master in
   (* Forbid resolution against f0+ clause if selected atom is marked. *)
@@ -626,8 +626,10 @@ let resolution_plus master =
            let t1 = Rewriting.apply_subst_term (Var (tx1)) sigma in
            let t2 = Rewriting.apply_subst_term (Var (tx2)) sigma in
            let _, t1s = explode_term t1 in
-           let rigid = Rewriting.apply_subst_term rigid sigma in
-           let t1_rigid = List.exists (fun t -> t = rigid) t1s (* not (is_sum_term t1)*) in
+           let rigid' = Rewriting.apply_subst_term rigid sigma in
+           let t1_rigid = List.exists (fun t -> Rewriting.equals_ac t rigid') t1s (* not (is_sum_term t1)*) in
+           (* Printf.printf "rigid : %s becomes %s  %sfound in %s\n" 
+            (show_term rigid)(show_term rigid')(if t1_rigid then "" else "not ")(show_term t1);*)
            let result =
            {
            binder = sigma.binder ;
@@ -674,7 +676,7 @@ let resolution sigma choices dag master slave =
       let new_dag = merge dag (put_set_at_end slave.dag atom.loc) in
        (*Printf.printf "new dag %s\n" (show_dag new_dag);*)
        if is_cyclic new_dag 
-       then begin (*Printf.printf "cyclic dag \n";*) raise Impossible end;
+       then begin if !debug_saturation then Printf.printf "cyclic dag \n"; raise Impossible end;
        new_dag )
      else dag in
    let sigmas = List.concat 
@@ -686,6 +688,7 @@ let resolution sigma choices dag master slave =
     in
    (* Printf.printf "Unifiers %d\n" (List.length sigmas);*)
       (* Create results *)
+    if !debug_saturation && sigmas = [] then Printf.printf "no unifiers between atom =%s and head = %s \n"(show_body_atom atom)(show_predicate slave.head);  
     List.map
       (fun sigma ->
           let sigma = Rewriting.pack sigma in
@@ -793,11 +796,13 @@ let rec hidden_chan_statement kb  (loc_input , term_input ,ineq_input,st_input,p
   st_input.binder := Slave;
   st_output.binder := Master;
   if st_input.binder = st_output.binder then (
-    (*Printf.printf "same statement %s and %s\n" (show_raw_statement st_input)(show_raw_statement st_output);*)
+    if !about_seed then Printf.printf "same statement %s and %s\n" (show_raw_statement st_input)(show_raw_statement st_output);
     let sig_id = Rewriting.identity_subst st_output.nbvars in
     let st = apply_subst_statement { st_output with choices = choices ; dag = dag } sig_id in
     let ineqs = (ineq_output @  ineq_input) in
+    if !about_seed then Printf.printf "seed for the input side\n";
     trace_statements kb ineqs solved_parent unsolved_parent test_parent pr_output st ;
+    if !about_seed then Printf.printf "seed for the input side of link %d <--> %d\n"loc_input.p loc_output.p;
     let process_input = Process.apply_subst_process loc_input term_output pr_input in
     (*Printf.printf "subst %d by %s process : %s\n" loc_input.p (show_term term_output) (show_process_start 3 process_input);*)
     trace_statements kb ineqs solved_parent unsolved_parent test_parent process_input st 
@@ -809,7 +814,7 @@ let rec hidden_chan_statement kb  (loc_input , term_input ,ineq_input,st_input,p
       (fun sigm -> Inputs.csu sigm st_output.inputs st_input.inputs) 
       (Inputs.csu_recipes sigma st_output.recipes st_input.recipes))
    (* Inputs.csu sigma st_output.inputs st_input.inputs *) in
-  if sigmas = [] then ()
+  if sigmas = [] then (if !about_seed then Printf.printf "no unification\n";())
   else (
   (*let dag = put_at_end (put_at_end dag loc_input) loc_output in*)
   List.iter (fun sigma -> 
@@ -896,7 +901,7 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
         let new_head = match new_st.head with Knows(r,t) -> Knows(r,Rewriting.normalize t !Parser_functions.rewrite_rules) | _ -> assert false in
         add_statement kb solved_parent unsolved_parent test_parent (Some EmptyP)
           ({new_st with head = new_head})) v 
-     | SeqP(Output({observable = Public} as loc, t), pr) -> (* the reach part of the output *)
+     | SeqP(Output({observable = Public} as loc, t) as tid, pr) -> (* the reach part of the output *)
       let next_dag = put_at_end st.dag loc in
       let identity_sigma = Rewriting.identity_subst st.nbvars in
       (*let binder = identity_sigma.binder in*)
@@ -912,7 +917,9 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
       then (add_statement kb solved_parent unsolved_parent test_parent (Some (ParallelP([SeqP(OutputA(loc, t), pr);pr])))
         (match pr with
         | SeqP(Output({observable = Public} , _), _)
-        | SeqP(Input({observable = Public}), _) -> { st with head = ReachTest([])} (* The next statement subsumes this one: no need to add it *)
+        | SeqP(Input({observable = Public}), _) -> 
+            if !about_seed then Printf.printf "output;input : no need for statement\n";
+            { st with head = ReachTest(tid,[])} (* The next statement subsumes this one: no need to add it *)
         | _ ->  st)
       )
       end
@@ -947,7 +954,8 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
       then  (
         match pr with
         | SeqP(Output({observable = Public} , _), _)
-        | SeqP(Input({observable = Public}), _) ->
+        | SeqP(Input({observable = Public}), _) -> 
+            if !about_seed then Printf.printf "input;output : no need for statement\n";
             trace_statements kb [] solved_parent unsolved_parent test_parent pr st
         | _ -> add_statement kb solved_parent unsolved_parent test_parent (Some pr) st
       )
@@ -959,7 +967,7 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
         List.iter (fun stout -> 
           hidden_chan_statement kb (loc,None,ineqs,st,pr) stout solved_parent unsolved_parent test_parent) chans end;
       let ckey = { c = chan; io = In; ph = loc.phase} in
-      if ! about_seed then Printf.printf "Inserting %s for %d\n" (show_chan_key ckey)loc.p;
+      if ! about_seed then Printf.printf "Inserting %s for %d:\n%s\n" (show_chan_key ckey)loc.p(show_raw_statement st);
       kb.hidden_chans <- ChanMap.add ckey
         ((loc,None,ineqs,st,pr):: ( try 
           ChanMap.find ckey kb.hidden_chans 
@@ -972,7 +980,7 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
           List.iter (fun stin -> 
             hidden_chan_statement kb stin (loc,Some t,ineqs,st,pr) solved_parent unsolved_parent test_parent) chans end;
       let ckey = { c = chan; io = Out; ph = loc.phase} in
-      if ! about_seed then Printf.printf "Inserting %s for %d\n" (show_chan_key ckey) loc.p;
+      if ! about_seed then Printf.printf "Inserting %s for %d\n%s\n" (show_chan_key ckey) loc.p(show_raw_statement st);
       kb.hidden_chans <- ChanMap.add  ckey
         ((loc,Some t,ineqs,st,pr):: ( try 
           ChanMap.find ckey kb.hidden_chans 
@@ -981,14 +989,14 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
     | SeqP(Input(loc), pr)
     | SeqP(Output(loc,_), pr) ->
       assert false
-    | SeqP(Test(s, t), pr) ->
+    | SeqP(Test(s, t) as tst, pr) ->
       st.binder := Master;
       let sterm = concretize st.inputs s in
       let tterm = concretize st.inputs t in 
       if !about_seed then Printf.printf "Test:  %s == %s\n" (show_term sterm) (show_term tterm);
       let unifiers = Rewriting.unifiers st.nbvars sterm tterm (! Parser_functions.rewrite_rules) in 
       List.iter (fun subst -> st.binder := Master; 
-        let new_st = { (apply_subst_statement st subst) with head = ReachTest(ineqs)} in
+        let new_st = { (apply_subst_statement st subst) with head = ReachTest(tst,ineqs)} in
         add_statement kb solved_parent unsolved_parent test_parent (Some pr) new_st
         (*trace_statements kb ineqs solved_parent unsolved_parent test_parent pr new_st*)) unifiers
     | SeqP(TestInequal(s, t), pr) ->
@@ -1015,7 +1023,10 @@ and add_statement kb solved_parent unsolved_parent test_parent process st =
      let is_solved_st = is_solved new_st in
      let hash_st = statement_to_hash new_st in
      new_st.binder:=if is_solved_st then Slave else Master;
-     if Hashtbl.mem kb.htable hash_st then () else begin 
+     if Hashtbl.mem kb.htable hash_st then 
+      (if ! about_canonization then 
+        let st = Hashtbl.find kb.htable hash_st in
+        Printf.printf "in database as %s\n"(show_statement "" st);()) else begin 
      kb.next_id <- 1 + kb.next_id ;
      let st = {
        id = kb.next_id ; 
@@ -1050,7 +1061,7 @@ and add_statement kb solved_parent unsolved_parent test_parent process st =
             match process with 
            | None -> ()
            | Some process -> trace_statements kb [] solved_parent unsolved_parent st process st.st end
-         | ReachTest(ineqs) -> begin
+         | ReachTest(_,ineqs) -> begin
             match process with 
             | None -> assert false
             | Some process -> trace_statements kb ineqs solved_parent unsolved_parent test_parent process st.st end

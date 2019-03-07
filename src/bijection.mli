@@ -133,7 +133,7 @@ module rec Run :
       sol : solution;
       corresp : correspondance;
       corresp_back : correspondance;
-      remaining_actions : Dag.LocationSet.t;
+      remaining_actions : Types.location list;
       frame : Inputs.inputs;
       choices : Inputs.choices;
       phase : int;
@@ -159,14 +159,15 @@ module rec Run :
       | Temporary
     and solution = {
       init_run : partial_run;
-      mutable partial_runs : partial_run list;
+      (*mutable partial_runs : partial_run list;*)
       mutable partial_runs_todo : Solutions.t;
       mutable possible_runs_todo : Solutions.t;
-      mutable possible_runs : Solutions.t;
+      (*mutable possible_runs : Solutions.t;*)
       mutable movable : int;
       mutable restricted_dag : Dag.dag;
+      sequence : Types.location list;
       mutable selected_run : partial_run option;
-      sol_test : Test.test;
+      (*sol_test : Test.test;*)
     }
     type t = partial_run
     val compare : t -> t -> int
@@ -334,6 +335,7 @@ val show_run : Run.partial_run -> string
 val show_partial_run : Run.partial_run -> string
 val show_origin : Run.origin -> string
 val show_test : Test.test -> string
+val show_test_set: Tests.t -> string
 val show_completion : Run.completion -> string
 val show_all_completions : Run.completion list Dag.Dag.t -> unit
 val show_solution_set : Solutions.t -> unit

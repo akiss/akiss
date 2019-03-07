@@ -441,12 +441,17 @@ let rec match_ac xor hard pattern_model_list sigma =
     | (h1::q1,h2::q2) -> (h1,h2)::(combine q1 q2 l)
     | ([],[]) -> l
     | _ -> raise Not_matchable in
+  (*(match pattern_model_list with
+  | [] -> ()
+  | (p,t)::_ -> Printf.printf "match %s with %s\n" (show_term t)(show_term p));*)
   match pattern_model_list with
     | [] -> (hard,sigma)
-    | (Var(x), t)::q -> match_ac xor hard q (new_or_same x t sigma)
-    | ((Fun({id=Plus},pa)as pattern), (Fun({id=Plus},ma) as model))::q -> may_match_plus xor hard pattern model q sigma
+    | (Var(x), t)::q -> 
+        match_ac xor hard q (new_or_same x t sigma)
+    | ((Fun({id=Plus},pa)as pattern), (Fun({id=Plus},ma) as model))::q -> 
+        may_match_plus xor hard pattern model q sigma
     | (Fun(f, pa), Fun(g, ma))::q when (f.id = g.id) ->
-	match_ac xor hard (combine pa ma q) sigma
+        match_ac xor hard (combine pa ma q) sigma
     | (_, _)::q -> raise Not_matchable
 
 and may_match_plus xor hard pattern model pairlst sigma =
@@ -472,7 +477,6 @@ and may_match_plus xor hard pattern model pairlst sigma =
 
 (** Most general matcher modulo AC *)
 let rec csm be_lazy binder pmlst sigma = 
-  (*Printf.printf "matching %s against pattern %s \n%!" (show_term m) (show_term p);*)
   try 
     let (hard,sigma) = match_ac false [] pmlst sigma in
     if hard = [] then [sigma]
@@ -497,6 +501,8 @@ let rec csm_xor be_lazy binder pmlst sigma =
 
 
 (** {2 Normalization} *)
+
+
 let rec recompose_term lst =
 	match lst with
 	| t1 :: t2 :: q -> Fun({id = Plus; has_variables = true},[t1;recompose_term (t2 ::q)])
@@ -504,20 +510,21 @@ let rec recompose_term lst =
 	| [] -> Fun({id = Zero; has_variables = false},[])
 
 let rec top_rewrite t rule =
-  (*Printf.printf "top rewrite %s \n%!" (show_rewrite_rule rule);*)
+    (*Printf.printf "top rewrite %s \n%!" (show_rewrite_rule rule);*)
     match csm false rule.binder_rule [(rule.lhs, t)] [] with
     | [sigma] -> [apply_subst rule.rhs sigma]
     | [] -> []
     | sigma :: q -> Printf.printf "> ?/? \n%!"; [apply_subst rule.rhs sigma] (* is it ok ? *)
 
 let rec compare_term t1 t2 =
-	match (t1,t2) with
-	| (Fun(f,a),Var(x)) -> 1
-	| Var(x),(Fun(f,a)) -> -1
-	| (Var(x),Var(y)) -> compare x y
-	| (Fun(f,a),Fun(g,b)) -> let c = compare f g in
-		if c <> 0 then c
-		else compare_term_list a b 
+  match (t1,t2) with
+  | (Fun(f,a),Var(x)) -> 1
+  | Var(x),(Fun(f,a)) -> -1
+  | (Var(x),Var(y)) -> compare x y
+  | (Fun(f,a),Fun(g,b)) -> let c = compare f g in
+    if c <> 0 then c
+    else compare_term_list a b 
+
 and compare_term_list l1 l2 =
 	match (l1,l2) with
 	| (t1::q1,t2::q2) -> let c = compare_term t1 t2 in

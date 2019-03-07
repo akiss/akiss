@@ -15,6 +15,7 @@ val debug_merge : bool ref
 val about_maude : bool ref
 val about_canonization : bool ref
 val about_progress : bool ref
+val about_rare : bool ref
 val about_location : bool ref
 val use_xml : bool ref
 val about_all_attacks : bool ref

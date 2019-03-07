@@ -137,8 +137,15 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
         kb.temporary_merge_test_result <- [];
         Queue.add st kb.ns_todo;
         Horn.merge_sat kb;
-        if List.length kb.temporary_merge_test_result > 1 then Printf.eprintf "The init merged test has %d solutions\n %s \n%s\n%!"(List.length kb.temporary_merge_test_result)(show_raw_statement test_merge_init)
-        (List.fold_right (fun st str -> str ^ (show_statement "*" st)) kb.temporary_merge_test_result "");
+        if !about_rare 
+        then ( 
+          Printf.printf "Saturation triggered for %s \n" (show_raw_statement test_merge_init);
+          if List.length kb.temporary_merge_test_result > 1 
+          then 
+            Printf.printf "%d solutions have been found:\n%s\n%!"
+              (List.length kb.temporary_merge_test_result)
+            (List.fold_right (fun st str -> str ^ (show_statement " *" st)) kb.temporary_merge_test_result "")
+        );
         let res = (List.fold_left (fun lst st -> 
           if !debug_merge then Printf.printf "merge result st matched with: \n%s\n%s\n" (show_statement "" st)(show_raw_statement test_merge_init);
           if st.st.nbvars = 0 then 
@@ -335,20 +342,9 @@ let trunconj set run =
   (*Printf.printf "conjrun = %s\n" (show_raw_statement r);*)
   stP.binder := New;
   (identity_sigma,r)
+  
+let is_complex_xor_statement st = !Parser_functions.use_xor && List.exists (fun a -> match a.term with Fun(_) -> true | _ -> false) st.body
 
-(** When running a test several executions may have been found, look in this set to find a run which satisfies the new head *)  
-let rec try_other_runs head solution =
-  if Solutions.is_empty solution.possible_runs_todo then None
-  else begin
-    let pr =  Solutions.min_elt solution.possible_runs_todo in
-    solution.possible_runs_todo <- Solutions.remove pr solution.possible_runs_todo ;
-    if check_identities pr head then begin
-      if !debug_execution then Printf.printf "New selected execution:\n %s\n"(show_run pr) ;
-      solution.selected_run <- Some pr;
-      Some pr end
-    else
-      try_other_runs head solution
-  end
 
 (*
 let rec add_identities_to_completions head (*process_name*) compl = 
@@ -359,9 +355,10 @@ let rec add_identities_to_completions head (*process_name*) compl =
   match compl.generated_test with
   | None -> ()
   | Some (subst,test) -> complete_set_of_identities (transpose_test_head head subst compl.corresp_back_c) (*process_name*) test *)
+  
 
 (** [complete_set_of_identities head old_test] add the identities in [head] on [old_test] and its children *)
-and complete_set_of_identities head old_test =
+let rec complete_set_of_identities head old_test =
   let old_eq,old_diseq = recipes_of_head old_test.statement.head in
   let new_eq,new_diseq = head.equalities,head.disequalities in
   let diff_eq = EqualitiesSet.diff new_eq old_eq in
@@ -375,25 +372,18 @@ and complete_set_of_identities head old_test =
     h.equalities <- EqualitiesSet.union (diff_eq)(old_eq);
     h.disequalities <- EqualitiesSet.union (diff_diseq)(old_diseq) ;
     if !debug_merge then Printf.printf " the new head is %s\n"(show_test_head h);
-    (*try *)
-      List.iter 
-        (fun sol ->
-          match sol.selected_run with
-          | None -> assert !about_all_attacks
-          | Some pr ->
+    List.iter (fun sol ->
+      match sol.selected_run with
+      | None -> if not !about_all_attacks then (Printf.printf "Test %d has no solution\n" old_test.id;assert false)
+      | Some pr ->
           if not (check_identities pr head) then
           begin
-            (*Printf.eprintf "wrong run for %d\n" old_test.id;*)
+            if !about_rare || !debug_tests then Printf.printf "Wrong run for %s\n%s\n caused by %s\n%!" (show_test old_test)(show_run pr) (show_test_head head);
             Bijection.remove_run pr;
             sol.selected_run <- None ;
-            match try_other_runs head sol with
-            | Some pr -> 
-              sol.selected_run <- Some pr;
-              add_merged_tests pr;
-              Bijection.add_run pr
-            | None ->
-              old_test.solutions_todo <- sol :: old_test.solutions_todo;
-              find_set_of_runs old_test
+            old_test.solutions_todo <- sol :: old_test.solutions_todo; 
+            (*todo remove sol from done*)
+            find_set_of_runs old_test
           end ;
           let head' = {head with equalities=diff_eq;disequalities=diff_diseq} in
           List.iter (fun (status,sigma,derived_test) -> 
@@ -406,8 +396,6 @@ and complete_set_of_identities head old_test =
           List.iter (fun (sigma,compl) -> add_identities_to_completions (transpose_test_head (head') sigma compl.corresp_c) (*process_name*) compl) pr.completions;*)
           head.head_binder := New;
         ) old_test.solutions_done
-    (*with
-    Not_found -> () (* the old test is still waiting to be processed: nothing to do *)*)
   end
 
 and statement_to_tests process_name origin (statement : raw_statement) otherProcess =
@@ -438,10 +426,12 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
       statement.binder := Master;
       let head' = apply_subst_test_head head_t sigma in
       if !debug_tests then 
-        Printf.printf "Updating an existing test which is \n%s\nwith %s \n subst %s \n"
-          (show_test test)(show_raw_statement statement)(show_substitution sigma);
+        Printf.printf "Updating an existing test which is \n%s\nwith %s \n"
+          (show_test test)(show_predicate statement.head)(*show_substitution sigma*);
       statement.binder := New ;
       complete_set_of_identities head' test ;
+      if !debug_tests then 
+        Printf.printf "End of update of %d\n" (test.id);
       Some (Some sigma,test)
     with 
     Not_found -> 
@@ -460,14 +450,18 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
   
 
 (** Create new tests from [prun] which is in conflict with all tests in [runset] *)
+(** Correspond to the "New Test" rule applied once with all tests in conflict *)
 and add_merged_tests prun =
   (* let (prun,runset)=sol.execution,sol.conflicts in *)
   let runset = Bijection.compatible prun in 
   (* if false && !debug_tests && not (RunSet.is_empty runset) then Printf.printf "Conflicts with " ; *)
   RunSet.iter (fun par ->
-  (*  if false && !debug_tests then Printf.printf "[%d] " (par.test.id); *)
-    if prun.test.process_name = par.test.process_name 
-    then
+    (*Printf.printf "is merge between < %d + %d >?\n" prun.test.id par.test.id; *)
+    (* Check that we are merging test which have not been discarded before in the loop *)
+    if Rewriting.get_option (par.sol.selected_run) == par
+    || Rewriting.get_option (prun.sol.selected_run) == prun
+    && prun.test.process_name = par.test.process_name
+    then begin
         if !debug_merge then Printf.printf "Try merge between < %d + %d >" prun.test.id par.test.id; 
         let merged_statements = merge_tests prun.test.process_name 
           { prun.test.statement with dag = prun.sol.restricted_dag } 
@@ -475,11 +469,11 @@ and add_merged_tests prun =
         (* if false && merged_statements = [] then (if !debug_tests then Printf.printf "i,")
         else *)
         List.iter (fun ((sigma : substitution),raw_st) -> 
+          if !debug_tests && not(!debug_merge) then Printf.printf "Merge of %d with %d corresp %s\n" prun.test.id par.test.id (show_correspondance prun.corresp);
           assert (sigma.binder == raw_st.binder);
           (*if false && !debug_tests then Printf.printf "T,";*)
           match statement_to_tests prun.test.process_name (Composed(prun,par)) raw_st (proc (other prun.test.process_name)) with
           | Some (sigm,new_test) -> (
-            if !debug_tests then Printf.printf "From %d\n" par.test.id;
             let sigma = match sigm with
               | None -> sigma 
               | Some sigm -> 
@@ -493,24 +487,48 @@ and add_merged_tests prun =
             if not (List.exists (fun (_,_,t) -> t==new_test) par.consequences) then
               par.consequences <-  (Slave,sigma,new_test) :: par.consequences )
           | None -> ()
-        ) merged_statements
-      (*end*)
+        ) merged_statements 
+      
+    end
   ) runset;
-  (*if false && !debug_tests  then Printf.printf "\n"*)
+  (*if false && !debug_tests then Printf.printf "\n"*)
 
+(*(** When running a test several executions may have been found, look in this set to find a run which satisfies the new head *)  
+and try_other_runs head solution =
+  if Solutions.is_empty solution.possible_runs_todo then None
+  else begin
+    let pr =  Solutions.min_elt solution.possible_runs_todo in
+    solution.possible_runs_todo <- Solutions.remove pr solution.possible_runs_todo ;
+    if check_identities pr head then begin
+      if !debug_execution || !debug_tests then Printf.printf "New selected execution:\n %s\n"(show_run pr) ;
+      solution.selected_run <- Some pr;
+      Some pr end
+    else
+      try_other_runs head solution
+  end*)
+
+(** Correspond to the "New Sol" rule of the algorithm *)  
 and find_set_of_runs test =
+  (*Printf.printf "find_set_of_runs %d\n" test.id ;
+  List.iter (fun sol -> Printf.printf ">%s\n" (show_partial_run sol.init_run) ) test.solutions_todo;
+  List.iter (fun sol -> Printf.printf "}%s\n" (show_run (match sol.selected_run with Some x -> x | None -> sol.init_run)) ) test.solutions_done;*)
   match test.solutions_todo with
-  | [] -> if ! debug_tests then Printf.printf "Success of test %d\n\n" test.id 
-  | sol :: queue -> 
+  | [] -> if ! debug_tests then Printf.printf "Success for all solutions of test %d\n\n" test.id 
+  | sol :: queue -> (
     test.solutions_todo <- queue;
-    match find_possible_run sol with
-    | None -> bijection.attacks <- (test,sol):: bijection.attacks; if not !about_all_attacks then raise (Attack(test,sol))
+    ignore (find_possible_run sol );
+    match sol.selected_run with
+    | None -> 
+        bijection.attacks <- (test,sol):: bijection.attacks; 
+        if not !about_all_attacks 
+        then raise (Attack(test,sol))
     | Some pr -> 
       test.solutions_done <- sol :: test.solutions_done; 
-      if ! debug_tests then Printf.printf "Execution of test %d: %s \n" test.id (show_correspondance pr.corresp);
-      add_merged_tests pr;
+      if ! debug_tests then Printf.printf "Execution of test %d \n with %s\n" test.id (show_run pr);
       Bijection.add_run pr;
+      add_merged_tests pr;
       find_set_of_runs test
+    )
 
 (** The "completed" rule of the main algorithm *)      
 let completion_to_test comp =
@@ -535,13 +553,13 @@ let completion_to_test comp =
       | Identical(_,_) -> (*Printf.printf "*" ;*) CompletionIdentity(comp.root.from_statement)
       | _ -> assert false in 
     match statement_to_tests (other comp.root.from_base) origin conjrun (proc (comp.root.from_base )) with
-    | Some (_,test) -> if !debug_completion then Printf.printf "Get test from the completion\n %s\n" (show_test test);
+    | Some (_,test) -> if !debug_completion || !debug_tests then Printf.printf "Got test from the completion\n %s\n" (show_test test);
       comp.generated_test <- Some (test) 
     | None -> if !debug_completion then Printf.printf "No test from the completion\n"; () end
     
 let nb_comp = ref 0
 
-(** Perform the rule New Comp *)
+(** Perform the rule "New Comp" *)
 let add_to_completion (run : partial_run) (completion : completion) = 
   if !debug_completion then 
     Printf.printf "Try completing a completion between \n run %s \n whose test is %s \n and partial completion %s\n" 
@@ -615,7 +633,8 @@ let add_to_completion (run : partial_run) (completion : completion) =
       if add_test then 
       begin
         if !debug_completion then Printf.printf "Completion complete, checking test %s\n" (show_raw_statement st)(*todo*);
-        completion_to_test new_comp 
+        completion_to_test new_comp ;
+        if !debug_completion then Printf.printf "Completion complete, end of %s\n" (show_raw_statement st)(*todo*);
       end
     | _ , None -> ()
   ) sts)
@@ -711,7 +730,7 @@ let get_time()= Unix.gettimeofday() (*(Unix.times()).tms_utime*)
 
 (** [equivalence both p q] checks if [p] is equivalent to [q] when [both] or trace included when [not both] *)
 let equivalence both p q =
-  let time = if !about_bench || !do_latex then get_time() else 0. in
+  let time = get_time() in
   if !use_xml then Printf.printf "<?xml-stylesheet type='text/css' href='../style.css' ?><all>" ;
   if !about_progress then Printf.printf "Saturating P\n\n%!";
   let (locP,satP) = Horn.saturate p in
@@ -743,6 +762,7 @@ let equivalence both p q =
     show_all_completions bijection.partial_completions_Q end ;
   Bijection.reorder_tests () ;
   let nb_tests_init = bijection.next_id in
+  if !about_progress then Printf.printf "Testing %d tests\n%!" bijection.next_id;
   let nb_open = ref 0 in
   let time_start_tests = if !about_bench then get_time() else 0. in  
   let time_ten_tests = ref time_start_tests in (
@@ -754,11 +774,16 @@ let equivalence both p q =
         let test = pop () in
         incr nb_open;
         if !about_bench && !nb_open = 10 then time_ten_tests := get_time();
-        if !debug_tests then Printf.printf (if !use_xml then "<opentest>%s" else "Open %s\n%!") (show_test test);
+        if !debug_tests then Printf.printf (if !use_xml then "<opentest>%s" else "\nApply \"New Sol\" on %s\n%!") (show_test test);
         if !about_progress && (not !debug_tests) 
         then 
           ( 
-          if !nb_open mod 250 = 0 then Printf.printf "Open test #%d (%d in stack)\n" test.id (Bijection.Tests.cardinal bijection.tests));
+          if !nb_open mod 125 = 0 then 
+            let nbstack = (Bijection.Tests.cardinal bijection.tests) in 
+            Printf.printf "%d> Open test #%d (%d in stack%s), comp: %d, at %.1f\n%!" !nb_open test.id nbstack (if nbstack < 50 then Bijection.show_test_set bijection.tests else "") bijection.next_comp_id (get_time() -. time);
+          if !nb_open mod 5000 = 0 && !about_bijection then Bijection.show_bijection()  
+          );
+        if is_complex_xor_statement test.statement then begin Printf.eprintf "To be implemented %s\n" (show_raw_statement test.statement); exit 1 end;
         find_set_of_runs test ;
         if !debug_tests && !use_xml then Printf.printf "</opentest>";
       (*done ;

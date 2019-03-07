@@ -23,6 +23,7 @@ let about_maude = ref false
 let about_canonization = ref false
 let about_progress = ref false
 let about_location = ref false
+let about_rare = ref false
 let use_xml = ref false
 let about_all_attacks = ref false
 let about_bench = ref false

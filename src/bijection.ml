@@ -96,7 +96,7 @@ module rec Run : sig
   sol : solution;
   corresp : correspondance ; (** a mapping from the actions of P to the actions of Q *)
   corresp_back : correspondance ; (** the reverse mapping from the actions of Q to the actions of P *)
-  remaining_actions : LocationSet.t; 
+  remaining_actions : location list; 
   frame : Inputs.inputs ; (** the frame for outputs *)
   choices : Inputs.choices ; (** the choices on Q that have been made in this trace *)
   phase : int; 
@@ -127,14 +127,15 @@ and origin =
 (* records which are the partial executions of a test *) 
 and solution = {
   init_run : partial_run;
-  mutable partial_runs : partial_run list;
+  (*mutable partial_runs : partial_run list;*)
   mutable partial_runs_todo : Solutions.t; (*partial_run list;*)
   mutable possible_runs_todo : Solutions.t; (* Queue here before processing *)
-  mutable possible_runs : Solutions.t; (* Run which are not compatible for the current bijection, to test if no other option *)
+  (*mutable possible_runs : Solutions.t; (* Run which are not compatible for the current bijection, to test if no other option *)*)
   mutable movable : int; (*Number of Test.tests which are merged require to consider changing the partition *) 
   mutable restricted_dag : dag;
+  sequence : location list;
   mutable selected_run : partial_run option;
-  sol_test : Test.test;
+  (*sol_test : Test.test;*)
 }
 type t = partial_run
 val compare : t -> t -> int 
@@ -167,10 +168,10 @@ struct
   }
   and partial_run = {
   test : Test.test; (** The test from which the prun come from *)
-  sol : solution;
+  sol : solution; (** The solution of the [test] to which it belongs to *)
   corresp : correspondance ; (** a mapping from the actions of P to the actions of Q *)
   corresp_back : correspondance ; (** the reverse mapping from the actions of Q to the actions of P *)
-  remaining_actions : LocationSet.t; 
+  remaining_actions : location list; 
   frame : Inputs.inputs ; (** the frame for outputs *)
   choices : Inputs.choices ; (** the choices on Q that have been made in this trace *)
   phase : int ; (** the current phase *)
@@ -199,15 +200,15 @@ and origin =
 
 (* records which are the partial executions of a test *) 
 and solution = {
-  init_run : partial_run;
-  mutable partial_runs : partial_run list;
-  mutable partial_runs_todo : Solutions.t; (*partial_run list;*)
-  mutable possible_runs_todo : Solutions.t; (** Queue here before processing *)
-  mutable possible_runs : Solutions.t; (** Run which are not compatible for the current bijection, to test if no other option *)
-  mutable movable : int; (**Number of tests which are merged require to consider changing the partition *) 
-  mutable restricted_dag : dag;
-  mutable selected_run : partial_run option;
-  sol_test : Test.test;
+  init_run : partial_run; (** the inital run, required to generate new restricted run *)
+  mutable partial_runs_todo : Solutions.t; (** Set of strictly-partial runs which has not been processed yet *)
+  mutable possible_runs_todo : Solutions.t; (** Set of complete runs which may be selected to be the solution *)
+  (*mutable possible_runs : Solutions.t; (** Run which are not compatible for the current bijection, to test if no other option *)*)
+  mutable movable : int; (**Number of tests which are merged require to consider changing the partition, not used *) 
+  mutable restricted_dag : dag; (** The partial order which is considered, may be more restricted than the test's one *)
+  sequence : location list;
+  mutable selected_run : partial_run option; (** The actual solution in use in the algorithm, None when the solution has not been computed yet *)
+  (*sol_test : Test.test; (** the test from which this solution is part of *)*)
 }
 type t = partial_run
 let compare (x : t) (y : t)= 
@@ -236,20 +237,21 @@ type t = test
 val compare : t -> t -> int
 end
 = struct
+(** A statement with additional information like its solution if any *)
 type test = {
   process_name : which_process; (** Is it a test of P or of Q?*)
   reflexive : bool ; (** the target process is process_name *)
   statement : raw_statement ; (** the solved statement seen as the test to check *)
   mutable reflexive_run : Run.partial_run ; (** to know the value of the outputs *)
-  origin : Run.origin;
-  id : int;
-  from : IntegerSet.t;
+  origin : Run.origin; (** Historic of how this test has been created for the first time (for debugging) *)
+  id : int; (** a unique identifier *)
+  from : IntegerSet.t; (** For debugging information *)
   nb_actions : int; (** used to order the tests *)
   mutable new_actions : int; (** compared to the base actions, used to order the tests *)
   mutable constraints : correspondance; (** Try to pass the test prioritary satisfying the constraints *)
   mutable constraints_back : correspondance; (** Inverse mapping *)
-  mutable solutions_todo : Run.solution list;
-  mutable solutions_done : Run.solution list;
+  mutable solutions_todo : Run.solution list; (** restricted orders which have not been satisfied *)
+  mutable solutions_done : Run.solution list; (** restricted orders with their solution *)
 }
 type t = test
 let compare (x : Test.test) (y : Test.test)=
@@ -306,6 +308,22 @@ module RunSet = Set.Make(PartialRun)
 open Run 
 open Test
 
+  type lrec = InLabel of hash_term | OutLabel
+  type label = { lloc: location ; lrec: lrec }
+(*  type t = label
+  let compare x y = Pervasives.compare (x.lloc.p,x.lrec) (y.lloc.p,y.lrec)
+end
+module Labels = Map.Make(Label)*)
+
+
+type trace_tree = {
+  mutable head_tr : predicate ;
+  mutable corr_tr : correspondance ;
+  mutable corr_back_tr : correspondance ;
+  mutable tests_tr : Tests.t ;
+  next_tr : (label,trace_tree) Hashtbl.t ;
+}
+
 (** {2 Printers}*)
 
 let show_ext_extra_thread_lst lst =
@@ -329,13 +347,18 @@ let show_run pr  =
     (show_correspondance pr.corresp)
     (Inputs.show_choices pr.choices))
    (* pr.disequalities) ^"\n" *)
+   
+let rec show_loc_list l =
+  match l with
+  [] -> ""
+  | loc :: l -> (string_of_int loc.p) ^ ", " ^ (show_loc_list l)
         
 let show_partial_run pr =
     Format.sprintf 
     "%s frame= %s\n remaining_actions=%s\n action=%d; weird = %d ; score = %d ; restricted = %s;\n qthreads=\n%s\n pending_qthreads=%s\n fthreads=%s\n}\n"
     (show_run pr)
     (Inputs.show_inputs pr.frame)
-    (show_loc_set pr.remaining_actions)
+    (show_loc_list pr.remaining_actions)
     pr.last_exe.p pr.weird_assoc pr.score (show_loc_set pr.restrictions)
     (show_extra_thread_list pr.qthreads)
     (show_pending_threads pr.pending_qthreads)
@@ -364,6 +387,8 @@ and show_test (t : test) =
   (if !use_xml then "<test>{<idtest>%d</idtest>}<origin>%s</origin><infos>%s %d,%d</infos><prname>%s</prname>%s</test>"
   else "Test[%d]: %s %s {%d,%d} %s\n%s\n") t.id (show_origin t.origin) (show_int_set t.from) t.new_actions t.nb_actions (show_which_process t.process_name) (show_raw_statement t.statement)
 
+let show_test_set tests =
+  Tests.fold (fun t str -> if str = "" then " :" else str ^ "," ^ (string_of_int t.id)) tests ""
   
 let show_completion completion = 
   Format.sprintf (
@@ -421,14 +446,12 @@ let rec null_test = {
 
 and null_sol = {
   init_run = empty_run;
-  partial_runs = [];
   partial_runs_todo = Solutions.empty;
   possible_runs_todo = Solutions.empty;
-  possible_runs = Solutions.empty;
   movable = 0; (*Number of tests which are merged require to consider changing the partition *) 
   restricted_dag = empty;
+  sequence = [];
   selected_run = None;
-  sol_test = null_test;
 }
 
 and empty_run =
@@ -437,7 +460,7 @@ and empty_run =
      sol = null_sol ;
      corresp = empty_correspondance ;
      corresp_back = empty_correspondance ;
-     remaining_actions = LocationSet.empty ;
+     remaining_actions = [] ;
      frame = Inputs.new_inputs; (* inputs maps to received terms and outputs maps to sent terms *)
      choices = Inputs.new_choices;
      phase = 0 ;
@@ -618,10 +641,6 @@ let push (statement : raw_statement) process_name origin init =
       | Composed(run1,run2) ->  (IntegerSet.union run1.test.from run2.test.from),false
       | Temporary -> assert false
   in
-  (*let int_lst = IntegerSet.elements int_set in*)
-  (*if origin != Completion && Hashtbl.mem bijection.htable int_lst then ()  else begin
-  Hashtbl.add bijection.htable int_lst origin;*)
-  (*if bijection.next_id = 2000 then show_hashtbl ();*)
   let nb = Dag.cardinal statement.dag.rel in
   let test = { null_test with
     nb_actions = nb;
@@ -637,7 +656,6 @@ let push (statement : raw_statement) process_name origin init =
   } in
   let solution = init test in
   test.solutions_todo <- [solution];
-  (*Hashtbl.add bijection.htable_st hash_statement test;*)
   if !Util.debug_tests || (!about_progress && bijection.next_id mod 250 = 0) then Printf.printf "\nAdding new test: %s\n%!" (show_test test);
   (*if bijection.next_id mod 10000 = 0 then (*Hashtbl.iter (fun k v -> Printf.printf "%s" (show_raw_statement k)) bijection.htable;*)show_bijection ();*)
   bijection.tests <- Tests.add test bijection.tests;
@@ -745,10 +763,10 @@ let add_run partial_run =
     Dag.iter (fun lp lq -> 
     (*let r = {locP = lp; locQ = lq; partial_run = partial_run;} in*)
     let recintP = try Dag.find lp bijection.indexP with Not_found -> Dag.empty in 
-    let reclstP = try Dag.find lq recintP with Not_found -> RunSet.empty in
+    let reclstP = try Dag.find lq recintP with Not_found -> if !about_rare && Dag.cardinal recintP > 3 then Printf.printf "%d:(%d) %s\n" lp.p (Dag.cardinal recintP)(show_run partial_run) ; RunSet.empty in
     bijection.indexP <- Dag.add lp (Dag.add lq (RunSet.add partial_run reclstP) recintP) bijection.indexP;
     let recintQ = try Dag.find lq bijection.indexQ with Not_found -> Dag.empty in 
-    let reclstQ = try Dag.find lp recintQ with Not_found -> RunSet.empty in
+    let reclstQ = try Dag.find lp recintQ with Not_found -> if !about_rare && Dag.cardinal recintP > 3 then Printf.printf "%d:(%d) %s\n" lp.p (Dag.cardinal recintP)(show_run partial_run) ; RunSet.empty in
     bijection.indexQ <- Dag.add lq (Dag.add lp (RunSet.add partial_run reclstQ) recintQ) bijection.indexQ;
     ) 
     (if partial_run.test.process_name = P then partial_run.corresp.a else partial_run.corresp_back.a) ;
@@ -803,7 +821,7 @@ let straight locP locQ =
   with Not_found -> false
   with Not_found -> 
     try ignore (Dag.find locQ bijection.indexQ); false
-    with Not_found -> true
+    with Not_found -> true  
     
 let straight pr locP locQ =
   if pr = P then straight locP locQ else straight locQ locP 

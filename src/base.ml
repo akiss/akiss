@@ -21,7 +21,7 @@ type test_head = {
 type predicate =
   | Knows of term * term
   | Reach
-  | ReachTest of (term * term) list
+  | ReachTest of action *  (term * term) list (** action is to avoid overwriting for hashes *)
   | Identical of term * term
   | Tests of test_head
   | Unreachable
@@ -92,29 +92,44 @@ module ChanMap = Map.Make(struct
   
 (** {3 Hash types} *)
 
+type hash_predicate = 
+  | HKnows of hash_term * hash_term
+  | HReach
+  | HReachTest of action 
+  | HIdentical of hash_term * hash_term
+  | HTests (** In Bijection tests with different equalities are merged *)
+  | HUnreachable
+
 type hash_statement = {
   hnbvars : int ;
   hchoices : hash_choices ;
 (*  hinputs :  hash_inputs ;*)
   hrecipes : hash_inputs ;
   hdag : hash_dag ;
-  hhead : predicate ;
+  hhead : hash_predicate ;
   hbody : (hash_locset * hash_term * hash_term * bool) list ;
 }
+
+let predicate_to_hash p = 
+  match p with
+ | Knows(r,t) -> HKnows(term_to_hash r,term_to_hash t)
+ | Identical(r,r') -> HIdentical(term_to_hash r,term_to_hash r')
+ | Reach -> HReach
+ | ReachTest(a,_) -> HReachTest(a)
+ | Unreachable -> HUnreachable
+ | Tests(h) -> HTests
 
 let statement_to_hash st = {
   hnbvars = st.nbvars ;
   hchoices = choices_to_hash st.choices ;
   hdag = dag_to_hash st.dag;
-  hhead = st.head ;
+  hhead = predicate_to_hash st.head ;
   hrecipes = inputs_to_hash st.recipes ;
 (*  hinputs =  inputs_to_hash st.inputs ;*)
   hbody = List.map (fun atom -> (locset_to_hash atom.loc,term_to_hash atom.recipe,term_to_hash atom.term,atom.marked)) st.body ;
 }
 
-let test_to_hash st = {
-  (statement_to_hash st) with hhead = Reach
-}
+let test_to_hash = statement_to_hash
 
 let get_hash_choices hst = hst.hchoices 
   
@@ -160,8 +175,8 @@ let check_binder_st st =
 (** {2 Printing} *)
 
 let show_test_head h =
-  (EqualitiesSet.fold ( fun (r,r') str -> (if str = "" then "" else str ^ "  °  ") ^ (show_term r) ^ " = " ^ (show_term r') ) h.equalities "" ) 
-     ^ (EqualitiesSet.fold ( fun (r,r') str -> (if str = "" then " | " else str ^ ", ") ^ (show_term r) ^ " != " ^ (show_term r') ) h.disequalities "")
+  (EqualitiesSet.fold ( fun (r,r') str -> (if str = "" then "" else str ^ "  ~  ") ^ (show_term r) ^ " = " ^ (show_term r') ) h.equalities "" ) 
+     ^ (EqualitiesSet.fold ( fun (r,r') str -> (if str = "" then " | " else str ^ " ~ ") ^ (show_term r) ^ " != " ^ (show_term r') ) h.disequalities "")
 
 let show_predicate p = 
  match p with
@@ -290,7 +305,7 @@ match pred with
   | Identical(r,r') -> 
      Identical(Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)
   | Reach -> Reach
-  | ReachTest(ineqs) -> ReachTest( (*List.map (fun (s,t) -> (Rewriting.apply_subst_term s sigma,Rewriting.apply_subst_term t sigma))*) ineqs)
+  | ReachTest(tid,ineqs) -> ReachTest(tid, (*List.map (fun (s,t) -> (Rewriting.apply_subst_term s sigma,Rewriting.apply_subst_term t sigma))*) ineqs)
   | Unreachable -> Unreachable
   | Tests(head) -> Tests(apply_subst_test_head head sigma)
 

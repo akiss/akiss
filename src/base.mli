@@ -50,7 +50,7 @@ type test_head = {
 type predicate =
     Knows of Types.term * Types.term
   | Reach
-  | ReachTest of (Types.term * Types.term) list  
+  | ReachTest of Process.action * ((Types.term * Types.term) list)  
   | Identical of Types.term * Types.term
   | Tests of test_head
   | Unreachable

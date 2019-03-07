@@ -53,15 +53,19 @@ let rec apply_var_set_subst term sigma  =
     Fun(symbol, trmap (function x -> apply_var_set_subst x sigma) list)
 
 
-let is_ground t = vars_of_term t = []
+(*let is_ground t = vars_of_term t = []*)
 
-let occurs var term =
-  List.mem var (vars_of_term term)
+(*let occurs var term =
+  List.mem var (vars_of_term term)*)
 
+let rec equals s t =
+  match (s,t) with
+  | (Fun(f,args),Fun(g,args')) when f.id = g.id -> List.fold_left2 (fun r f g -> r && (equals f g)) true args args' 
+  | (x,y) -> x = y
 
 let rec new_or_same x t sigma =
   try
-    if (List.assoc x sigma) = t then
+    if equals (List.assoc x sigma) t then
       sigma
     else
       raise Not_matchable
@@ -78,8 +82,8 @@ let rec apply_subst term (sigma : subst_lst) =
     | Fun(symbol, list) ->
 	Fun(symbol, trmap (function x -> apply_subst x sigma) list)
 
-let bound variable sigma =
-  List.mem_assoc variable sigma
+(*let bound variable sigma =
+  List.mem_assoc variable sigma *)
 
 let apply_subst_term_list tl sigma =
   trmap (fun x -> apply_subst x sigma) tl

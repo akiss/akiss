@@ -51,6 +51,8 @@ let command_line_options_list = [
     "Show information about merging tests");
    ("-maude", Arg.Set(about_maude), 
     "Show information about maude interface");
+   ("-rare", Arg.Set(about_rare),
+    "Print info in about rare events");
    ("-progress", Arg.Set(about_progress),
     "Print info in about progression of Akiss");
    ("-bench", Arg.Set(about_bench),

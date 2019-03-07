@@ -18,11 +18,11 @@ val is_sum_term : Types.term -> bool
 val vars_of_term_list : Types.term list -> Types.varId list
 val vars_of_term : Types.term -> Types.varId list
 val apply_var_set_subst : Types.term -> Types.term VarMap.t -> Types.term
-val is_ground : Types.term -> bool
-val occurs : Types.varId -> Types.term -> bool
-val new_or_same : 'a -> 'b -> ('a * 'b) list -> ('a * 'b) list
+(*val is_ground : Types.term -> bool
+val occurs : Types.varId -> Types.term -> bool*)
+val new_or_same : 'a -> Types.term -> ('a * Types.term) list -> ('a * Types.term) list
 val apply_subst : Types.term -> Types.subst_lst -> Types.term
-val bound : 'a -> ('a * 'b) list -> bool
+(*val bound : 'a -> ('a * 'b) list -> bool*)
 val apply_subst_term_list :
   Types.term list -> Types.subst_lst -> Types.term list
 val show_subst : (Types.varId * Types.term) list -> string
