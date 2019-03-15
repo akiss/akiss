@@ -5,18 +5,36 @@ open Util
 open Types
 open Parser_functions
 
-let memoize_maude_unify :  (string * bool, subst_maker list) Hashtbl.t=  Hashtbl.create 10
-
 
 type maude_mode = E | AC | XOR
+
+let memoize_maude_unify :  (string * maude_mode * int * int * subst_maker,(statement_role ref * statement_role ref *  subst_maker list * (term*term) list)) Hashtbl.t=  Hashtbl.create 10
+
+let maude_calls = ref 0
+let maude_memoize = ref 0
 
 let show_binder_maude = function 
   Master -> "x"
  | Slave | Rule -> "y"
- | Extra(0) -> "z"
+ | Extra(i) -> "z" ^ (string_of_int i)
  | New -> "_"
- | _ -> "?"
  
+let get_binders pairlst =
+  let exception E in
+  let mnull = (ref Types.Master) in
+  let snull = (ref Types.Slave) in
+  let mbinder = ref mnull in 
+  let sbinder = ref snull in 
+  let rec get_b_term  = function
+  | Fun(f,args) -> List.iter get_b_term args
+  | Var(x) -> (
+      match !(x.status) with
+      | Master -> (mbinder := x.status ; if !sbinder != snull then raise E)
+      | Slave -> (sbinder := x.status ; if !mbinder != mnull then raise E) 
+      | _ -> () ) in
+  try List.iter (fun (s,t) -> get_b_term t;get_b_term s) pairlst;
+  (!mbinder,!sbinder)
+  with E -> (!mbinder,!sbinder)
  
 let rec print_maude_term t sigma =
  match t with
@@ -36,15 +54,15 @@ let rec print_maude_term t sigma =
     if not (List.mem_assoc l.p !Parser_functions.frames) 
     then 
       Parser_functions.frames := (l.p, l) :: !Parser_functions.frames;   
-    Format.sprintf "frame%d" l.p
+    Format.sprintf "frame%d " l.p
  | Var(id) -> (
     match sigma with 
-    None -> (show_binder_maude !(id.status)) ^ (string_of_int id.n) ^ ":Term "
-    | Some sigm -> 
-    begin
-    match (find_sub id sigm).(id.n) with
     | None -> (show_binder_maude !(id.status)) ^ (string_of_int id.n) ^ ":Term "
-    | Some t -> print_maude_term t sigma end )
+    | Some sigm -> 
+      begin
+      match (find_sub id sigm).(id.n) with
+      | None -> (show_binder_maude !(id.status)) ^ (string_of_int id.n) ^ ":Term "
+      | Some t -> print_maude_term t sigma end )
  | _ -> invalid_arg ("Invalid term for maude")
 and print_maude_term_list args sigma = 
   match args with
@@ -158,6 +176,7 @@ let get_chans =
     if !chans <> dummy then begin
       (* Maude doesn't seem to return 0 on clean termination. *)
       ignore (Unix.close_process !chans) ;
+      Printf.printf "maude :%d mem %d\n%!" !maude_calls !maude_memoize;
       (* Reset chans to dummy to avoid closing twice. *)
       chans := dummy
     end
@@ -196,20 +215,56 @@ let run_maude print_query parse_result =
 
 (** Unification mod AC + R*)
 
+let rec repl_binder_term m s e term =
+  match term with
+  | Fun(f,args) -> Fun(f, List.map (repl_binder_term m s e) args)
+  | Var(x) -> Var({x with status = match !(x.status) with 
+    | Master -> m
+    | Slave -> s
+    | Extra i -> e.(i)
+    | _ -> assert false})
 
+let replace_binder m s subst_maker = 
+  let repl m s e = Array.map (function None -> None | Some t ->  Some (repl_binder_term m s e t)) in 
+  let size = List.length subst_maker.e in
+  let ebinder = Array.init size (fun i -> ref(Types.Extra i)) in
+{
+  m = repl m s ebinder subst_maker.m ;
+  s = repl m s ebinder subst_maker.s ;
+  e = List.mapi (fun i se -> 
+    { binder_extra = ebinder.(size - i - 1);
+      nb_extra = se.nb_extra; 
+      subst_extra = repl m s ebinder se.subst_extra}) subst_maker.e
+}
 
 let acunifiers with_rules pairlst sigma =
-  if !about_maude then
+  if !about_maude then (
     List.iter (fun (s,t) -> Format.printf " %s =? %s /\\\n" (show_term s) (show_term t)) pairlst ;
+    Printf.printf "sig: %s \n%!" (show_subst_maker sigma));
   let query_string = print_maude_pairlst with_rules pairlst sigma in
-(*  try 
+  let mbinder,sbinder = get_binders pairlst in
+  try 
+  let oldm,olds,mem,oldpl = Hashtbl.find memoize_maude_unify (query_string,with_rules,Array.length sigma.m,Array.length sigma.s,sigma) in
+  let oldms = !oldm in
+  let oldss = !olds in
+  oldm := Master;
+  olds := Slave;
+  incr maude_memoize;
+  (*Printf.printf "- %s\n%!" query_string;
+  List.iter (fun (s,t) -> Format.printf "| %s =? %s /\\\n" (show_term s) (show_term t)) oldpl ;*)
+  let substs =
   List.map (fun subst -> 
-    let sigma = Rewriting.identity_subst subst.nbvars in
-    Rewriting.compose subst sigma
-  )
-  (Hashtbl.find memoize_maude_unify (query_string,with_rules))
+    (*Printf.printf "* %s\n" (show_subst_maker subst);*)
+    let subs = replace_binder mbinder sbinder subst in
+    (*Printf.printf "> %s\n" (show_subst_maker subs);*)
+    subs
+  ) mem in
+  oldm := oldms;
+  olds := oldss;
+  substs
   with
-  | Not_found -> *)
+  | Not_found -> 
+  incr maude_calls;
   if !about_maude then 
     Printf.printf "%s%s%s%!"
       (print_maude_signature ())
@@ -248,7 +303,7 @@ let acunifiers with_rules pairlst sigma =
   run_maude
     (fun chan -> query chan)
     (fun chan -> parse_unifiers chan) in
-(*  Hashtbl.add memoize_maude_unify (query_string,with_rules) result_subst;*)
+  Hashtbl.add memoize_maude_unify (query_string,with_rules,Array.length sigma.m,Array.length sigma.s,sigma) (mbinder,sbinder,result_subst,pairlst);
   result_subst
       
 let acunifiers with_rules pairlst sigma =
@@ -256,7 +311,7 @@ let acunifiers with_rules pairlst sigma =
   let v = acunifiers with_rules pairlst sigma in
   (* let v = rename_in_subst v in *)
   if !about_maude then begin
-    List.iter (fun s -> Format.printf " %s\n" (show_subst_maker s)) v
+    List.iter (fun s -> Format.printf "- %s\n%!" (show_subst_maker s)) v
   end ;
   v
 

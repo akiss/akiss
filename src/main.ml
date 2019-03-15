@@ -91,32 +91,7 @@ let reset_global () =
   processes_infos.nonce_list <- [];
   processes_infos.max_phase <- 0;
   Hashtbl.clear memoize_call;
-  let nb = Base.new_base () in
   (*records = [];*)
-  bijection.p <- Process.EmptyP ; 
-  bijection.q <- Process.EmptyP ;
-  bijection.satP <- nb ;
-  bijection.satQ <- nb ;
-  bijection.indexP <- Dag.Dag.empty ;
-  bijection.indexQ <- Dag.Dag.empty ;
-  bijection.choices_indexP <- Dag.Dag.empty ;
-  bijection.choices_indexQ <- Dag.Dag.empty ;
-  bijection.next_id <- 0 ;
-  bijection.next_comp_id <- 0;
-  bijection.tests <- Tests.empty;
-  (*registered_tests <- Tests.empty;*)
-  bijection.runs_for_completions_P <- [];
-  bijection.runs_for_completions_Q <- [];
-  bijection.partial_completions_P <- Dag.Dag.empty;
-  bijection.partial_completions_Q <- Dag.Dag.empty;
-  bijection.todo_completion_P <- [];
-  bijection.todo_completion_Q <- [];
-  bijection.locs <- Dag.LocationSet.empty;
-  bijection.initial_completions <- [];
-  bijection.initial_tests <- [];
-  bijection.attacks <- [];
-  (*htable = Hashtbl.create 5000 ;*)
-  Hashtbl.reset bijection.htable_st ;
   latex_identifier := ""
 
 

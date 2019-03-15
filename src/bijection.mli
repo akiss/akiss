@@ -1,7 +1,7 @@
 val recipes_of_head :
   Base.predicate -> Base.EqualitiesSet.t * Base.EqualitiesSet.t
-val head_predicate_to_test :
-  Types.statement_role ref -> Base.predicate -> Base.predicate
+(*val head_predicate_to_test :
+  Types.statement_role ref -> Base.predicate -> Base.predicate*)
 type which_process = P | Q
 val show_which_process : which_process -> string
 type correspondance = { a : Types.location Dag.Dag.t; }
@@ -166,9 +166,17 @@ module rec Run :
       mutable movable : int;
       mutable restricted_dag : Dag.dag;
       sequence : Types.location list;
-      mutable selected_run : partial_run option;
-      (*sol_test : Test.test;*)
-    }
+      mutable selected_run : partial_run option;  
+      mutable bundle : bundle option;
+}
+and bundle =  { 
+  mutable eq_hash : (Types.hash_term * Types.hash_term) list;
+  mutable diseq_hash : (Types.hash_term * Types.hash_term) list;
+  mutable corr_bundle : correspondance ;
+  mutable corr_back_bundle : correspondance ;
+  mutable sts : (Base.hash_body * (Test.test * solution)) list
+}
+
     type t = partial_run
     val compare : t -> t -> int
   end
@@ -344,6 +352,104 @@ exception Attack of Test.test * Run.solution
 val null_test : Test.test
 val null_sol : Run.solution
 val empty_run : Run.partial_run
+type lrec = InLabel of Types.hash_term | OutLabel
+
+module TraceNode :
+  sig
+    type t = Inputs.hash_choices * Dag.hash_dag
+    val compare : 'a -> 'a -> int
+  end
+module TraceNodes :
+  sig
+    type key = TraceNode.t
+    type 'a t = 'a Map.Make(TraceNode).t
+    val empty : 'a t
+    val is_empty : 'a t -> bool
+    val mem : key -> 'a t -> bool
+    val add : key -> 'a -> 'a t -> 'a t
+    val update : key -> ('a option -> 'a option) -> 'a t -> 'a t
+    val singleton : key -> 'a -> 'a t
+    val remove : key -> 'a t -> 'a t
+    val merge :
+      (key -> 'a option -> 'b option -> 'c option) -> 'a t -> 'b t -> 'c t
+    val union : (key -> 'a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
+    val compare : ('a -> 'a -> int) -> 'a t -> 'a t -> int
+    val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
+    val iter : (key -> 'a -> unit) -> 'a t -> unit
+    val fold : (key -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
+    val for_all : (key -> 'a -> bool) -> 'a t -> bool
+    val exists : (key -> 'a -> bool) -> 'a t -> bool
+    val filter : (key -> 'a -> bool) -> 'a t -> 'a t
+    val partition : (key -> 'a -> bool) -> 'a t -> 'a t * 'a t
+    val cardinal : 'a t -> int
+    val bindings : 'a t -> (key * 'a) list
+    val min_binding : 'a t -> key * 'a
+    val min_binding_opt : 'a t -> (key * 'a) option
+    val max_binding : 'a t -> key * 'a
+    val max_binding_opt : 'a t -> (key * 'a) option
+    val choose : 'a t -> key * 'a
+    val choose_opt : 'a t -> (key * 'a) option
+    val split : key -> 'a t -> 'a t * 'a option * 'a t
+    val find : key -> 'a t -> 'a
+    val find_opt : key -> 'a t -> 'a option
+    val find_first : (key -> bool) -> 'a t -> key * 'a
+    val find_first_opt : (key -> bool) -> 'a t -> (key * 'a) option
+    val find_last : (key -> bool) -> 'a t -> key * 'a
+    val find_last_opt : (key -> bool) -> 'a t -> (key * 'a) option
+    val map : ('a -> 'b) -> 'a t -> 'b t
+    val mapi : (key -> 'a -> 'b) -> 'a t -> 'b t
+  end
+type test_class =
+    Impossible
+  | Simple of Test.test * Run.solution
+  | Bundle of Run.bundle
+module Trace :
+  sig type t = Types.location * lrec val compare : 'a -> 'a -> int end
+module Traces :
+  sig
+    type key = Trace.t
+    type 'a t = 'a Map.Make(Trace).t
+    val empty : 'a t
+    val is_empty : 'a t -> bool
+    val mem : key -> 'a t -> bool
+    val add : key -> 'a -> 'a t -> 'a t
+    val update : key -> ('a option -> 'a option) -> 'a t -> 'a t
+    val singleton : key -> 'a -> 'a t
+    val remove : key -> 'a t -> 'a t
+    val merge :
+      (key -> 'a option -> 'b option -> 'c option) -> 'a t -> 'b t -> 'c t
+    val union : (key -> 'a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
+    val compare : ('a -> 'a -> int) -> 'a t -> 'a t -> int
+    val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
+    val iter : (key -> 'a -> unit) -> 'a t -> unit
+    val fold : (key -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
+    val for_all : (key -> 'a -> bool) -> 'a t -> bool
+    val exists : (key -> 'a -> bool) -> 'a t -> bool
+    val filter : (key -> 'a -> bool) -> 'a t -> 'a t
+    val partition : (key -> 'a -> bool) -> 'a t -> 'a t * 'a t
+    val cardinal : 'a t -> int
+    val bindings : 'a t -> (key * 'a) list
+    val min_binding : 'a t -> key * 'a
+    val min_binding_opt : 'a t -> (key * 'a) option
+    val max_binding : 'a t -> key * 'a
+    val max_binding_opt : 'a t -> (key * 'a) option
+    val choose : 'a t -> key * 'a
+    val choose_opt : 'a t -> (key * 'a) option
+    val split : key -> 'a t -> 'a t * 'a option * 'a t
+    val find : key -> 'a t -> 'a
+    val find_opt : key -> 'a t -> 'a option
+    val find_first : (key -> bool) -> 'a t -> key * 'a
+    val find_first_opt : (key -> bool) -> 'a t -> (key * 'a) option
+    val find_last : (key -> bool) -> 'a t -> key * 'a
+    val find_last_opt : (key -> bool) -> 'a t -> (key * 'a) option
+    val map : ('a -> 'b) -> 'a t -> 'b t
+    val mapi : (key -> 'a -> 'b) -> 'a t -> 'b t
+  end
+type trace_tree = {
+  mutable node : test_class TraceNodes.t;
+  mutable next_tr : trace_tree Traces.t;
+}
+
 type record = {
   locP : Types.location;
   locQ : Types.location;
@@ -370,12 +476,14 @@ type bijection = {
   mutable todo_completion_P : Run.completion list;
   mutable todo_completion_Q : Run.completion list;
   mutable locs : Dag.LocationSet.t;
-  htable_st : (Base.hash_statement, Test.test) Hashtbl.t;
+  (*htable_st : (Base.hash_statement, Test.test) Hashtbl.t;*)
+  traces_tree : trace_tree;
   mutable initial_tests : Test.test list;
   mutable initial_completions : Run.completion list;
   mutable attacks : (Test.test * Run.solution) list;
 }
 val bijection : bijection
+val clean_bijection : unit -> unit
 val show_bijection : unit -> unit
 val show_hashtbl : unit -> unit
 val hash_view : (Test.test, unit) Hashtbl.t
@@ -383,6 +491,7 @@ val hash_comp_view : (Run.completion, unit) Hashtbl.t
 val show_completion_tree : Run.completion -> unit
 val show_all_tests : unit -> unit
 val show_final_completions : unit -> unit
+val get_trace_tree : Base.raw_statement -> Types.location list -> trace_tree * int option array
 val proc : which_process -> Process.process
 val other : which_process -> which_process
 val base_of_name : which_process -> Base.base

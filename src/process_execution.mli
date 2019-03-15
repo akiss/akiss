@@ -47,10 +47,11 @@ val run_silent_actions :
   Inputs.inputs ->
   (Types.location * Types.term option * Base.chankey * Bijection.extra_thread)
   list * Bijection.extra_thread list * Bijection.extra_thread list *)
+val dag_to_sequence : Dag.dag -> Types.location list
 val init_sol :
   'a ->
   Base.raw_statement ->
-  Process.process -> Bijection.Test.test -> Bijection.Run.solution
+  Process.process -> Types.location list -> Bijection.Test.test -> Bijection.Run.solution
 val next_partial_run :
   Bijection.Run.partial_run ->
   Dag.LocationSet.elt ->

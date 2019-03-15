@@ -24,7 +24,7 @@ let negate_statement (st : raw_statement) =
       head = Tests({
         head_binder = st.binder;
         equalities = EqualitiesSet.empty ; 
-        disequalities = EqualitiesSet.singleton (s,t)})}
+        disequalities = EqualitiesSet.singleton ([],s,t)})}
   | _ -> Printf.printf "negation of %s " (show_raw_statement st); assert false
 
 (** [statement_to_completion process_name statement st] creates a new empty completion from [st] which comes from [statement] *)  
@@ -101,11 +101,11 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
             recipes = Inputs.merge_recipes sigma fa.recipes fb.recipes;
             head = Tests({
               head_binder = sigma.binder ;
-              equalities= EqualitiesSet.map (fun (r,rp) -> 
-               Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term rp sigma)
+              equalities= EqualitiesSet.map (fun (b,r,rp) -> 
+               b,Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term rp sigma)
                 (EqualitiesSet.union fa_head_equal fb_head_equal);
-              disequalities = EqualitiesSet.map (fun (r,rp) -> 
-               Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term rp sigma)
+              disequalities = EqualitiesSet.map (fun (b,r,rp) -> 
+               b,Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term rp sigma)
                 (EqualitiesSet.union fa_head_diseq fb_head_diseq)});
             body = body;
             involved_copies = BangSet.union fa.involved_copies fb.involved_copies}
@@ -202,7 +202,7 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
 (** This function returns false if the statement is not executable in his own processus
 (due to disequalities or identities) true otherwise.
 Correspond to actual reach of the theory *) 
-let actual_test process_name (st : raw_statement) =
+let actual_test process_name sequence (st : raw_statement) =
   let corr = {a = Dag.mapi (fun k _ -> k) st.dag.rel} in
   let test = { null_test with
     process_name = process_name;
@@ -213,7 +213,7 @@ let actual_test process_name (st : raw_statement) =
   } in
   if !debug_execution 
   then Printf.printf "\nChecking actual of %s \nwith dag = %s\n%!" (show_test test)(show_dag st.dag);
-  let solution = init_sol process_name st (proc process_name) test in
+  let solution = init_sol process_name st (proc process_name) sequence test in
   let pr = find_possible_run solution in
   if !debug_tests then (
     match pr with
@@ -250,8 +250,8 @@ let transpose_recipes sigma (recipes : Inputs.inputs) corresp : Inputs.inputs =
 let transpose_test_head head (sigma :  substitution) corresp =
   {
     head_binder = sigma.binder ;
-    equalities = EqualitiesSet.map (fun (s,t) -> (transpose_recipe sigma s corresp,transpose_recipe sigma t corresp)) head.equalities;
-    disequalities = EqualitiesSet.map (fun (s,t) -> (transpose_recipe sigma s corresp,transpose_recipe sigma t corresp)) head.disequalities}
+    equalities = EqualitiesSet.map (fun (b,s,t) -> (b,transpose_recipe sigma s corresp,transpose_recipe sigma t corresp)) head.equalities;
+    disequalities = EqualitiesSet.map (fun (b,s,t) -> (b,transpose_recipe sigma s corresp,transpose_recipe sigma t corresp)) head.disequalities}
   
 let transpose_head head (sigma :  substitution) corresp =
   Tests( transpose_test_head (get_test_head head) sigma corresp)
@@ -345,6 +345,9 @@ let trunconj set run =
   
 let is_complex_xor_statement st = !Parser_functions.use_xor && List.exists (fun a -> match a.term with Fun(_) -> true | _ -> false) st.body
 
+(*let identities_to_hash eqset vars=
+  let next_id = ref 0 in
+  term_to_hash_cano false next_id vars term*)
 
 (*
 let rec add_identities_to_completions head (*process_name*) compl = 
@@ -375,7 +378,9 @@ let rec complete_set_of_identities head old_test =
     List.iter (fun sol ->
       match sol.selected_run with
       | None -> if not !about_all_attacks then (Printf.printf "Test %d has no solution\n" old_test.id;assert false)
-      | Some pr ->
+      | Some pr -> (
+        match sol.bundle with
+        | None ->
           if not (check_identities pr head) then
           begin
             if !about_rare || !debug_tests then Printf.printf "Wrong run for %s\n%s\n caused by %s\n%!" (show_test old_test)(show_run pr) (show_test_head head);
@@ -385,7 +390,7 @@ let rec complete_set_of_identities head old_test =
             (*todo remove sol from done*)
             find_set_of_runs old_test
           end ;
-          let head' = {head with equalities=diff_eq;disequalities=diff_diseq} in
+          let head' = {head with equalities=diff_eq; disequalities=diff_diseq} in
           List.iter (fun (status,sigma,derived_test) -> 
               head.head_binder := status;
               let tau = apply_subst_test_head head' sigma in
@@ -395,6 +400,8 @@ let rec complete_set_of_identities head old_test =
           (*head.head_binder := Master;
           List.iter (fun (sigma,compl) -> add_identities_to_completions (transpose_test_head (head') sigma compl.corresp_c) (*process_name*) compl) pr.completions;*)
           head.head_binder := New;
+        | Some bundle -> assert false
+          )
         ) old_test.solutions_done
   end
 
@@ -418,9 +425,14 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
     in
     let statement =  { statement with dag = dag } in
     statement.binder := New;
-    let hash_statement = test_to_hash statement in
-    try 
-      let test = Hashtbl.find bijection.htable_st hash_statement in
+    let sequence = dag_to_sequence dag in
+    let hash_trace = (Inputs.choices_to_hash statement.choices,dag_to_hash statement.dag) in
+    let trace_node, vars = get_trace_tree statement sequence in
+    let is_complex_xor = is_complex_xor_statement statement in
+    match  TraceNodes.find_opt hash_trace trace_node.node with
+    | Some Impossible -> None
+    | Some (Simple(test,sol)) ->
+      assert (not is_complex_xor);
       let sigma = Rewriting.merging_subst test.statement.nbvars test.statement.binder in
       let head_t = get_test_head statement.head in
       statement.binder := Master;
@@ -433,17 +445,57 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
       if !debug_tests then 
         Printf.printf "End of update of %d\n" (test.id);
       Some (Some sigma,test)
-    with 
-    Not_found -> 
-      match actual_test process_name statement with
-      Some pr -> 
-        let init = init_sol process_name statement otherProcess in 
+    | Some(Bundle(lst)) -> (
+        assert is_complex_xor;
+        let hash_body = Base.body_to_hash statement.body in 
+        match List.assoc_opt hash_body lst.sts with
+        | Some (test,sol) ->
+              let sigma = Rewriting.merging_subst test.statement.nbvars test.statement.binder in
+              let head_t = get_test_head statement.head in
+              statement.binder := Master;
+              let head' = apply_subst_test_head head_t sigma in
+              if !debug_tests then 
+                Printf.printf "Updating an existing test which is \n%s\nwith %s \n"
+                  (show_test test)(show_predicate statement.head)(*show_substitution sigma*);
+              statement.binder := New ;
+              complete_set_of_identities head' test ;
+              if !debug_tests then 
+                Printf.printf "End of update of %d\n" (test.id);
+              Some (Some sigma,test)
+        | None -> (
+            match actual_test process_name sequence statement with
+            | Some pr -> 
+              let init = init_sol process_name statement otherProcess sequence in 
+              let new_test = push statement process_name origin init in
+              new_test.reflexive_run <- pr;
+              lst.sts <- (hash_body,(new_test,List.hd new_test.solutions_todo)) :: lst.sts;
+              Some (None,new_test)
+            | None -> assert false
+            )
+        )
+    | None -> (
+      match actual_test process_name sequence statement with
+      | Some pr -> 
+        let init = init_sol process_name statement otherProcess sequence in 
         (* init is a partial function to allow cycle reference between test and partial run *)
         let new_test = push statement process_name origin init in
         new_test.reflexive_run <- pr;
-        Hashtbl.add bijection.htable_st hash_statement new_test;
-        Some (None,new_test)
-      | None -> None
+        if is_complex_xor 
+        then (
+          trace_node.node <- TraceNodes.add hash_trace (
+            Bundle({
+              eq_hash = [];
+              diseq_hash = [];
+              corr_bundle = empty_correspondance;
+              corr_back_bundle = empty_correspondance;
+              sts =[Base.body_to_hash new_test.statement.body,( new_test,List.hd new_test.solutions_todo)]})
+            )trace_node.node)
+        else (
+          trace_node.node <- TraceNodes.add hash_trace (Simple(new_test,List.hd new_test.solutions_todo))trace_node.node);
+      Some (None,new_test)
+      | None -> 
+          trace_node.node <- TraceNodes.add hash_trace Impossible trace_node.node;
+          None )
   end
   else None
   with CyclicDag -> None
@@ -538,7 +590,8 @@ let completion_to_test comp =
     constraints = comp.corresp_back_c;
     constraints_back = comp.corresp_c;
   } in
-  let solution = init_sol comp.root.from_base comp.st_c (proc (other comp.root.from_base )) test in
+  let sequence = dag_to_sequence comp.st_c.dag in
+  let solution = init_sol comp.root.from_base comp.st_c (proc (other comp.root.from_base )) sequence test in
   match find_possible_run solution with
     None -> 
       if !debug_completion then Printf.printf "The completion is not executable \n" 
@@ -675,7 +728,7 @@ let rec compute_new_completions process_name  =
 Opti: when children are identical with same world merge them with the reach parent to reduce number of tests *)  
 let rec statements_to_tests t c process_name (statement : statement) otherProcess equalities =
   if !debug_tests then Printf.printf "Getting test (%d) %s %s \n%!" statement.id (if t then "yes" else "no") (show_raw_statement statement.st); 
-  let sigma,raw_statement' = Horn.simplify_statement statement.st in
+  let sigma,raw_statement' = Horn.simplify_statement statement.st in (*sigma should be useless *)
   (*Printf.printf "simplified: %s\n" (show_raw_statement raw_statement');*)
   let equalities = 
     match statement.st.head with
@@ -684,32 +737,23 @@ let rec statements_to_tests t c process_name (statement : statement) otherProces
         let compl = statement_to_completion process_name statement (negate_statement raw_statement') in
         ignore (register_completion compl);
         bijection.initial_completions <- compl :: bijection.initial_completions );
-        EqualitiesSet.add (s,t) equalities
+      EqualitiesSet.add ([],s,t) equalities
     | _ -> equalities in
   let new_eq = List.fold_left 
     (fun new_eq st -> 
-      let is_identical = match st.st.head with Identical _ -> true | _ -> false in
-      if is_identical && (st.st.inputs,st.st.dag,st.st.choices,st.st.body) = (statement.st.inputs,statement.st.dag,statement.st.choices,statement.st.body) 
-      then begin
-        match st.st.head with 
-        Identical (s,t) -> 
-          (*Printf.eprintf "eq %s=%s\n %!" (show_term s)(show_term t);*)
-          (* let _,st' = same_term_same_recipe st.st in
-          if c then (
-            let compl = statement_to_completion process_name st (negate_statement st') in
-            ignore (register_completion compl);
-            bijection.initial_completions <- compl :: bijection.initial_completions ); *)
-          EqualitiesSet.add (s,t) new_eq
-        | _ -> assert false end
-      else begin
-        (*statements_to_tests process_name st otherProcess; *)
-        new_eq end)
+      match st.st.head with
+      | Identical (s,t) -> 
+          if (st.st.inputs,st.st.dag,st.st.choices,st.st.body) = (statement.st.inputs,statement.st.dag,statement.st.choices,statement.st.body)
+          then EqualitiesSet.add ([],s,t) new_eq
+          else new_eq
+      | _ -> new_eq )
     equalities statement.children in
     if t then ignore (statement_to_tests process_name (Initial(statement)) 
-      {raw_statement' with head = Tests(apply_subst_test_head {
-        head_binder = statement.st.binder;
-        equalities= new_eq; 
-        disequalities = EqualitiesSet.empty} sigma)} 
+      {raw_statement' with 
+        head = Tests(apply_subst_test_head {
+          head_binder = statement.st.binder;
+          equalities= new_eq; 
+          disequalities = EqualitiesSet.empty} sigma)} 
       otherProcess);
     List.iter (fun st -> statements_to_tests t c process_name st otherProcess new_eq) statement.children
    
@@ -783,7 +827,6 @@ let equivalence both p q =
             Printf.printf "%d> Open test #%d (%d in stack%s), comp: %d, at %.1f\n%!" !nb_open test.id nbstack (if nbstack < 50 then Bijection.show_test_set bijection.tests else "") bijection.next_comp_id (get_time() -. time);
           if !nb_open mod 5000 = 0 && !about_bijection then Bijection.show_bijection()  
           );
-        if is_complex_xor_statement test.statement then begin Printf.eprintf "To be implemented %s\n" (show_raw_statement test.statement); exit 1 end;
         find_set_of_runs test ;
         if !debug_tests && !use_xml then Printf.printf "</opentest>";
       (*done ;
@@ -829,9 +872,10 @@ let equivalence both p q =
         List.iter (fun (test,sol) -> 
           if !about_tests then Printf.printf "\n-A witness is %s \n with specific order %s"(show_test test)(show_dag sol.restricted_dag);
           Printf.printf "\nTrace of %s which is not possible in %s:\n" (show_which_process test.process_name)(show_which_process (other(test.process_name)));
-          assert (None != actual_test test.process_name {test.statement with dag = sol.restricted_dag});
+          assert (None != actual_test test.process_name sol.sequence {test.statement with dag = sol.restricted_dag});
           Printf.printf "Final identities:\n %s\n" (show_test_head (get_test_head(test.statement.head)))
           )
         bijection.attacks;
         verbose_execution:= false; ));
+      clean_bijection();
       if ! use_xml then Printf.printf "</all>"

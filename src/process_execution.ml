@@ -75,8 +75,14 @@ let reduc_and_run reflexive pending final failure (loc_input : location) (loc_ou
   let process_input = Process.apply_subst_process loc_input term_output thread_input.thread in
   match 
     if reflexive 
-    then (assert (thread_output.made_choices == thread_input.made_choices);
-      if Inputs.get_choice_opt loc_input thread_output.made_choices = Some loc_output.p then Some thread_input.made_choices else None)
+    then (
+      assert (thread_output.made_choices == thread_input.made_choices);
+      if Inputs.get_choice_opt loc_input thread_output.made_choices = Some loc_output.p 
+      then 
+        Some thread_input.made_choices 
+      else 
+        None
+    )
     else Inputs.merge_choices_with_link thread_input.made_choices thread_output.made_choices loc_input loc_output 
   with
   | Some choices_constraints ->
@@ -142,10 +148,10 @@ let rec dag_to_sequence dag set =
 let dag_to_sequence dag = 
   dag_to_sequence dag (Dag.fold (fun l _ remain ->  LocationSet.add l remain) dag.rel LocationSet.empty )
   
-let init_sol process_name (statement : raw_statement) processQ test : solution =
+let init_sol process_name (statement : raw_statement) processQ sequence test : solution =
   let old_threads = ref ChanMap.empty in
   let (final,failure) = run_silent_actions old_threads test.reflexive (choices_constraints test (Inputs.new_choices)) processQ LocationSet.empty Inputs.new_inputs in
-  let sequence = dag_to_sequence statement.dag  in
+  (*let sequence = dag_to_sequence statement.dag  in*)
   let rec sol = { null_sol with 
     init_run = run;
     partial_runs_todo = Solutions.empty ;
@@ -398,7 +404,7 @@ let rec next_solution solution =
     )  roots 
     )
     
-let check_recipes partial_run (r,r')=
+let check_recipes partial_run (b,r,r')=
   (*Printf.printf "checking %s = %s\n with %s\n" (show_term r)(show_term r')(show_correspondance partial_run.corresp);*)
   let r = apply_frame r partial_run in
   let r' = apply_frame r' partial_run in

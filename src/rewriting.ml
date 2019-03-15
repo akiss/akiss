@@ -270,7 +270,7 @@ and remove_one_factor_both_side hard wt exp_ta exp_sa sa ta pairlst sigma =
 (*let rec mgu nbs nbt s t = unify [(s,t)] (Array.make nbs None,Array.make nbt None) *)
 
 let csu xor pairlst sigma = 
-  (*Printf.printf "%s \n%!" (show_subst_maker sigma);*)
+  (*Printf.printf "++ %s \n%!" (show_subst_maker sigma);*)
   let pairlst = ref pairlst in
   let old_length = ref 1000000 in
   try
@@ -302,6 +302,7 @@ let get_option = function None -> assert false | Some t -> t
 
 (** From a susbt obtained from unification generates a substitution which can be applied to term *)
 let pack sigma =
+  (*Printf.printf "pack %s\n%!" (show_subst_maker sigma);*)
   let master_final = Array.make (Array.length(sigma.m)) None in
   let slave_final = Array.make (Array.length(sigma.s)) None in
   let extra_final = List.map (fun e -> Array.make (e.nb_extra)  None) sigma.e in
@@ -319,8 +320,9 @@ let pack sigma =
     | Var(x) -> begin
       let indexes = 
         match !(x.status) with 
-        Master -> master_final 
-        | Slave | Rule -> slave_final 
+        | Master -> master_final 
+        | Slave 
+        | Rule -> slave_final 
         | Extra n -> (List.nth extra_final n) 
         | _ -> assert false in
       match indexes.(x.n) with 
@@ -340,12 +342,15 @@ let pack sigma =
   in
   doit master_final (sigma.m);
   doit slave_final (sigma.s);
+  let substitution =
   { 
     binder = binder; 
     master =  Array.map get_option master_final;
     slave = Array.map get_option slave_final;
     nbvars = !nbv;
-  }
+  } in
+  (*Printf.printf  "= %s\n%!" (show_substitution substitution);*)
+  substitution
 
 let rec apply_subst_term term sigma =
   try

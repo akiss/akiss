@@ -92,7 +92,9 @@ main:
      
      unifierPreamble:
  | Variant Unify In Identifier Colon term EqualUnify term Dot {
-  if debug then Printf.printf "unifierPreamble "}
+  if debug then Printf.printf "unifierPreamble ";
+    current_binder := ref (Extra (List.length !maude_current_sigma.e));
+    current_max_var := 0;}
 
      unifierList:
  | No Unifiers Dot Rewritesline {[]}  

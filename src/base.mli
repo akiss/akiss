@@ -1,6 +1,12 @@
+type body_atom = {
+  loc : Dag.LocationSet.t;
+  recipe : Types.term;
+  term : Types.term;
+  marked : bool;
+}
 module EqualitiesSet :
   sig
-    type elt = Types.term * Types.term
+    type elt = body_atom list * Types.term * Types.term
     type t
     val empty : t
     val is_empty : t -> bool
@@ -54,12 +60,7 @@ type predicate =
   | Identical of Types.term * Types.term
   | Tests of test_head
   | Unreachable
-type body_atom = {
-  loc : Dag.LocationSet.t;
-  recipe : Types.term;
-  term : Types.term;
-  marked : bool;
-}
+
 type raw_statement = {
   binder : Types.statement_role ref;
   nbvars : int;
@@ -71,7 +72,9 @@ type raw_statement = {
   recipes : Inputs.inputs;
   involved_copies : Process.BangSet.t;
 }
+type hash_body
 type hash_statement 
+val body_to_hash : body_atom list -> hash_body
 val statement_to_hash : raw_statement -> hash_statement
 val test_to_hash : raw_statement -> hash_statement
 val get_hash_choices : hash_statement -> Inputs.hash_choices

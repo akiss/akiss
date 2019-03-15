@@ -69,6 +69,7 @@ and funInfos = { id : funName; has_variables : bool; }
 and term = Fun of funInfos * term list | Var of varId
 type hash_term
 val term_to_hash : term -> hash_term
+val term_to_hash_cano : bool -> int ref -> int option array -> term -> hash_term
 val null_location : location
 val root_location : int -> location
 val show_varId : varId -> string

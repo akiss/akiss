@@ -8,12 +8,13 @@ open Util
 let recipes_of_head head = 
   match head with
   | Tests({equalities=equal; disequalities=diseq}) -> equal , diseq
+  | _ -> assert false (*
   | Identical(r,r') -> EqualitiesSet.singleton (r,r'),EqualitiesSet.empty
   | Knows(_)
   | Reach -> EqualitiesSet.empty,EqualitiesSet.empty
-  | Unreachable | ReachTest(_) -> assert false
+  | Unreachable | ReachTest(_) -> assert false *)
   
-let head_predicate_to_test binder pred =
+(*let head_predicate_to_test binder pred =
   match pred with
   | Identical(s,t) -> Tests({
     head_binder = binder;
@@ -24,7 +25,7 @@ let head_predicate_to_test binder pred =
     equalities = EqualitiesSet.empty ; 
     disequalities = EqualitiesSet.empty})
   | _ -> assert false
-
+*)
 
 type which_process = P | Q
 
@@ -136,6 +137,14 @@ and solution = {
   sequence : location list;
   mutable selected_run : partial_run option;
   (*sol_test : Test.test;*)
+  mutable bundle : bundle option;
+}
+and bundle =  { 
+  mutable eq_hash : (hash_term * hash_term) list;
+  mutable diseq_hash : (hash_term * hash_term) list;
+  mutable corr_bundle : correspondance ;
+  mutable corr_back_bundle : correspondance ;
+  mutable sts : (hash_body * (Test.test * solution)) list
 }
 type t = partial_run
 val compare : t -> t -> int 
@@ -208,7 +217,15 @@ and solution = {
   mutable restricted_dag : dag; (** The partial order which is considered, may be more restricted than the test's one *)
   sequence : location list;
   mutable selected_run : partial_run option; (** The actual solution in use in the algorithm, None when the solution has not been computed yet *)
+  mutable bundle : bundle option;
   (*sol_test : Test.test; (** the test from which this solution is part of *)*)
+}
+and bundle =  { 
+  mutable eq_hash : (hash_term * hash_term) list;
+  mutable diseq_hash : (hash_term * hash_term) list;
+  mutable corr_bundle : correspondance ;
+  mutable corr_back_bundle : correspondance ;
+  mutable sts : (hash_body * (Test.test * solution)) list
 }
 type t = partial_run
 let compare (x : t) (y : t)= 
@@ -308,21 +325,46 @@ module RunSet = Set.Make(PartialRun)
 open Run 
 open Test
 
-  type lrec = InLabel of hash_term | OutLabel
-  type label = { lloc: location ; lrec: lrec }
-(*  type t = label
-  let compare x y = Pervasives.compare (x.lloc.p,x.lrec) (y.lloc.p,y.lrec)
+type lrec = InLabel of hash_term | OutLabel
+
+module TraceNode = struct 
+  type t = (Inputs.hash_choices * hash_dag)
+let compare = Pervasives.compare 
 end
-module Labels = Map.Make(Label)*)
+module TraceNodes = Map.Make(TraceNode)
 
 
+type test_class =  Impossible | Simple of test * solution | Bundle of bundle
+
+module Trace = struct 
+  type t = (location * lrec)
+  let compare = Pervasives.compare 
+end
+module Traces = Map.Make(Trace)
+
+  
 type trace_tree = {
-  mutable head_tr : predicate ;
-  mutable corr_tr : correspondance ;
-  mutable corr_back_tr : correspondance ;
-  mutable tests_tr : Tests.t ;
-  next_tr : (label,trace_tree) Hashtbl.t ;
+  mutable node : test_class TraceNodes.t ;
+  mutable next_tr : trace_tree Traces.t ;
 }
+
+let rec get_trace_tree trace_tree next_id vars test (sequence : location list) =
+  match sequence with
+  | loc :: seq -> (
+    let lbl =
+      match loc.io with
+      | Input(_) -> (loc,InLabel(term_to_hash_cano true next_id vars (Inputs.get loc test.recipes)))
+      | Output(_) -> (loc,OutLabel) 
+      | _ -> assert false in
+    match Traces.find_opt lbl trace_tree.next_tr with
+    | Some tree -> get_trace_tree tree next_id vars test seq
+    | None -> 
+        let empty_node = {node = TraceNodes.empty; next_tr = Traces.empty} in
+        trace_tree.next_tr <- Traces.add lbl empty_node trace_tree.next_tr;
+        get_trace_tree empty_node next_id vars test seq
+    )
+  | [] -> trace_tree
+  
 
 (** {2 Printers}*)
 
@@ -452,6 +494,7 @@ and null_sol = {
   restricted_dag = empty;
   sequence = [];
   selected_run = None;
+  bundle = None;
 }
 
 and empty_run =
@@ -511,7 +554,8 @@ type bijection = {
   mutable todo_completion_Q : completion list; (** new partial completion which should be tested on all runs *)
   mutable locs : LocationSet.t; (** the locations already in the tests of the base, for optimization only *)
   (*htable : (int list , origin) Hashtbl.t;*)
-  htable_st : (hash_statement, test) Hashtbl.t;
+  (*htable_st : (hash_statement, test) Hashtbl.t;*)
+  traces_tree : trace_tree;
   (*Only to print infos *)
   mutable initial_tests : test list;
   mutable initial_completions : completion list;
@@ -542,25 +586,54 @@ let bijection =
   todo_completion_Q = [];
   locs = LocationSet.empty;
   (*htable = Hashtbl.create 5000 ;*)
-  htable_st = Hashtbl.create 5000 ;
+  (*htable_st = Hashtbl.create 5000 ;*)
+  traces_tree = {node = TraceNodes.empty; next_tr =Traces.empty};
   initial_tests = [];
   initial_completions = [];
   attacks = [];
 }
 
-let show_bijection () =
+let clean_bijection () = 
+  let nb = Base.new_base () in
+  bijection.p <- Process.EmptyP ; 
+  bijection.q <- Process.EmptyP ;
+  bijection.satP <- nb ;
+  bijection.satQ <- nb ;
+  bijection.indexP <- Dag.empty ;
+  bijection.indexQ <- Dag.empty ;
+  bijection.choices_indexP <- Dag.empty ;
+  bijection.choices_indexQ <- Dag.empty ;
+  bijection.next_id <- 0 ;
+  bijection.next_comp_id <- 0;
+  bijection.tests <- Tests.empty;
+  (*registered_tests <- Tests.empty;*)
+  bijection.runs_for_completions_P <- [];
+  bijection.runs_for_completions_Q <- [];
+  bijection.partial_completions_P <- Dag.empty;
+  bijection.partial_completions_Q <- Dag.empty;
+  bijection.todo_completion_P <- [];
+  bijection.todo_completion_Q <- [];
+  bijection.locs <- LocationSet.empty;
+  bijection.initial_completions <- [];
+  bijection.initial_tests <- [];
+  bijection.attacks <- [];
+  (*htable = Hashtbl.create 5000 ;*)
+  bijection.traces_tree.next_tr <- Traces.empty;
+  bijection.traces_tree.node <- TraceNodes.empty
+
+let show_bijection () = () (*
   Printf.printf "Bijection of %d tests:\n" (Hashtbl.length bijection.htable_st);
   Dag.iter (fun kp ind2 -> Printf.printf "\n- %d =>" kp.p;
     Dag.iter (fun kq recordlist ->
       let nb = RunSet.cardinal recordlist in
       Printf.printf " %d (%d%s),"  kq.p nb
       (if nb < 6 then RunSet.fold (fun pr str -> str ^ " [" ^ (string_of_int  pr.test.id) ^ "]") recordlist ":" else "")) ind2 )  bijection.indexP ;
-  Printf.printf "\n"
+  Printf.printf "\n"*)
   
 open Run 
 
-let show_hashtbl () =
-  Hashtbl.iter (fun h s -> Printf.printf "-- %s  \n\n" (show_test s)) bijection.htable_st
+let show_hashtbl () = () (*
+  Hashtbl.iter (fun h s -> Printf.printf "-- %s  \n\n" (show_test s)) bijection.htable_st*)
 
 let hash_view : (test, unit) Hashtbl.t = Hashtbl.create 2000
 let hash_comp_view : (completion,unit) Hashtbl.t = Hashtbl.create 5000
@@ -612,6 +685,11 @@ let show_final_completions () =
     Printf.printf (if !use_xml then "</comproot>\n" else "\n")) bijection.initial_completions
     
 (** {2 Interaction with the [bijection] structure } *)
+
+let get_trace_tree raw_st sequence =
+  let vars= Array.make (raw_st.nbvars) None in
+  (get_trace_tree bijection.traces_tree (ref 0) vars raw_st sequence),vars
+
 
 let proc name =
   match name with

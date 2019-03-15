@@ -123,7 +123,7 @@ let show_binder = function
   | Slave -> "$"
   | New -> "*"
   | Rule -> "§"
-  | Extra(n) -> "~"
+  | Extra(n) -> "~" ^ (string_of_int n) 
 
 type varId = {
    n : int ; (** from 0 to nbvars-1 *)
@@ -180,6 +180,7 @@ and term =
 type hash_term = 
   | HFun of hash_funName * hash_term list
   | HVar of int
+  | HBVar of int
   
 and hash_funName = 
   | HRegular of funId
@@ -205,6 +206,15 @@ let rec term_to_hash term =
   match term with
   | Fun({id=f},args) -> HFun(( fun_to_hash f),List.map term_to_hash args)
   | Var(v) -> HVar(v.n)
+
+let rec term_to_hash_cano free next_id vars term =
+  match term with
+  | Fun({id=f},args) -> HFun(( fun_to_hash f),List.map (term_to_hash_cano free next_id vars) args)
+  | Var(v) -> (
+      match vars.(v.n) with 
+      | Some i -> if free then HVar(i) else HBVar(i)
+      | None -> incr next_id; vars.(v.n)<-Some(!next_id); if free then HVar(!next_id) else assert false (* to be implemented *)
+      )
 
   
 let rec null_location = { p = -1; io = Call; name = "null_loc"; phase = 0 ; observable = Hidden; parent = None;  parent_choices=[]}
@@ -279,13 +289,14 @@ type subst_maker = {
 }
 
 let show_subst_array subst =
-  (Array.fold_left (fun str t -> (if str = "" then "[|" else (str ^ ".")) ^ (match t with None -> "?" | Some t -> show_term t)) "" subst) ^ "|]"
+  (Array.fold_left (fun str t -> (if str = "[|" then "[|" else (str ^ ".")) ^ (match t with None -> "?" | Some t -> show_term t)) "[|" subst) ^ "|]"
 
 let show_subst_maker subst =
   "subst_maker \n" ^
   (show_subst_array subst.m) ^ "\n" ^
   (show_subst_array subst.s) ^
-  (List.fold_right (fun s str -> str ^ "\n" ^ (show_subst_array s.subst_extra)) subst.e "")
+  (List.fold_right (fun s str -> str ^ "\n" ^ 
+    (show_binder !(s.binder_extra))^(show_subst_array s.subst_extra)) subst.e "")
 
 (** type of substitutions when they are applied on terms *)
 (** the function Rewriting.pack cast the first type into this one *)

@@ -162,8 +162,11 @@ let rec find_xor_sum vars body rows =
     
 let get_recipe_for_sum sum_var st =
   let var = List.map (fun x -> unbox_var x) sum_var in
+  try
   Rewriting.recompose_term (find_xor_sum var st.body [])
-
+  with Not_a_linear_combination -> 
+    List.iter (fun v -> Printf.printf "%s+" (show_varId v)) var;
+    Printf.printf "\n%s\n" (show_raw_statement st); assert false
 
 (** {2 Replacing deduction statements by simpler ones }*)  
   
@@ -492,9 +495,9 @@ let normalize_identical f =
       head = Tests({
         hd with 
         equalities= 
-          EqualitiesSet.map (fun (r,r') -> Rewriting.normalize r (!Parser_functions.rewrite_rules),
+          EqualitiesSet.map (fun (b,r,r') -> b, Rewriting.normalize r (!Parser_functions.rewrite_rules),
             Rewriting.normalize r' (!Parser_functions.rewrite_rules))hd.equalities;
-        disequalities = EqualitiesSet.map (fun (r,r') -> Rewriting.normalize r (!Parser_functions.rewrite_rules),
+        disequalities = EqualitiesSet.map (fun (b,r,r') -> b, Rewriting.normalize r (!Parser_functions.rewrite_rules),
             Rewriting.normalize r' (!Parser_functions.rewrite_rules)) hd.disequalities })}
 
 
@@ -511,11 +514,11 @@ let update kb f =
    * tests, eg. in consequence. *)
   let f = normalize_identical f in (* do nothing *)
   try
-  let f = canonical_form f in
+  (*let f = canonical_form f in *)
   match normalize_new_statement f
   with 
     None -> None 
-  | Some fc ->
+  | Some fc -> let fc = canonical_form fc in
   if is_identity_of_theory fc then None else
   if is_deduction_st fc && is_solved fc then
     try
@@ -1145,8 +1148,7 @@ let extra_equation kb solved1 solved2 =
   let sigmas = match Inputs.csu_recipes sigma solved1.st.recipes solved2.st.recipes with
   | [] -> []
   | [s] -> Inputs.csu s solved1.st.inputs solved2.st.inputs
-  | lst -> (* List.iter (fun s -> Printf.printf "%s\n" (show_subst_maker s)) lst; *)
-     assert false in 
+  | lst ->  List.concat(List.rev_map (fun s -> Inputs.csu s solved1.st.inputs solved2.st.inputs) lst) in 
   if sigmas = [] then false
   else begin 
     List.iter (fun sigma -> List.iter 

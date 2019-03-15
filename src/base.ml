@@ -6,10 +6,16 @@ open Dag
 open Inputs
 open Process
 
+type body_atom = {
+   loc : LocationSet.t;
+   recipe : term ;
+   term : term ;
+   marked : bool; (* for xor *)
+}
 
 module EqualitiesSet = Set.Make(struct
-    type t = term * term
-      let compare x y = compare x y
+    type t = (body_atom list) * term * term
+    let compare x y = let b1,x1,x2 = x in let b2,y1,y2 = y in compare (x1,x2) (y1,y2)
   end)
   
 type test_head = {
@@ -26,12 +32,7 @@ type predicate =
   | Tests of test_head
   | Unreachable
 
-type body_atom = {
-   loc : LocationSet.t;
-   recipe : term ;
-   term : term ;
-   marked : bool; (* for xor *)
-}
+
 
 (*let null_atom = {loc = None; pred= Reach;marked=false} *)
 
@@ -100,6 +101,8 @@ type hash_predicate =
   | HTests (** In Bijection tests with different equalities are merged *)
   | HUnreachable
 
+type hash_body = (hash_locset * hash_term * hash_term * bool) list
+  
 type hash_statement = {
   hnbvars : int ;
   hchoices : hash_choices ;
@@ -107,7 +110,7 @@ type hash_statement = {
   hrecipes : hash_inputs ;
   hdag : hash_dag ;
   hhead : hash_predicate ;
-  hbody : (hash_locset * hash_term * hash_term * bool) list ;
+  hbody : hash_body ;
 }
 
 let predicate_to_hash p = 
@@ -118,6 +121,9 @@ let predicate_to_hash p =
  | ReachTest(a,_) -> HReachTest(a)
  | Unreachable -> HUnreachable
  | Tests(h) -> HTests
+ 
+let body_to_hash body = 
+  List.map (fun atom -> (locset_to_hash atom.loc,term_to_hash atom.recipe,term_to_hash atom.term,atom.marked)) body
 
 let statement_to_hash st = {
   hnbvars = st.nbvars ;
@@ -126,7 +132,7 @@ let statement_to_hash st = {
   hhead = predicate_to_hash st.head ;
   hrecipes = inputs_to_hash st.recipes ;
 (*  hinputs =  inputs_to_hash st.inputs ;*)
-  hbody = List.map (fun atom -> (locset_to_hash atom.loc,term_to_hash atom.recipe,term_to_hash atom.term,atom.marked)) st.body ;
+  hbody = body_to_hash st.body ;
 }
 
 let test_to_hash = statement_to_hash
@@ -160,7 +166,7 @@ let rec check_binder_term binder term =
   
 let check_binder_head binder head = 
   match head with
-  | Tests({equalities= e;disequalities = d;head_binder = b}) -> b == binder && EqualitiesSet.for_all (fun (s,t) -> check_binder_term binder s && check_binder_term binder t) e && EqualitiesSet.for_all (fun (s,t) -> check_binder_term binder s && check_binder_term binder t) d
+  | Tests({equalities= e;disequalities = d;head_binder = b}) -> b == binder && EqualitiesSet.for_all (fun (_,s,t) -> check_binder_term binder s && check_binder_term binder t) e && EqualitiesSet.for_all (fun (_,s,t) -> check_binder_term binder s && check_binder_term binder t) d
   | Identical(s,t)
   | Knows(s,t) -> check_binder_term binder s && check_binder_term binder t
   | _ -> true
@@ -175,8 +181,8 @@ let check_binder_st st =
 (** {2 Printing} *)
 
 let show_test_head h =
-  (EqualitiesSet.fold ( fun (r,r') str -> (if str = "" then "" else str ^ "  ~  ") ^ (show_term r) ^ " = " ^ (show_term r') ) h.equalities "" ) 
-     ^ (EqualitiesSet.fold ( fun (r,r') str -> (if str = "" then " | " else str ^ " ~ ") ^ (show_term r) ^ " != " ^ (show_term r') ) h.disequalities "")
+  (EqualitiesSet.fold ( fun (b,r,r') str -> (if str = "" then "" else str ^ "  ~  ") ^ (show_term r) ^ " = " ^ (show_term r') ) h.equalities "" ) 
+     ^ (EqualitiesSet.fold ( fun (b,r,r') str -> (if str = "" then " | " else str ^ " ~ ") ^ (show_term r) ^ " != " ^ (show_term r') ) h.disequalities "")
 
 let show_predicate p = 
  match p with
@@ -294,8 +300,8 @@ let get_test_head head =
 let apply_subst_test_head head (sigma : substitution) = 
   {
     head_binder = sigma.binder;
-    equalities=EqualitiesSet.map (fun (r,r') -> (Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)) head.equalities;
-    disequalities=EqualitiesSet.map (fun (r,r') -> (Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)) head.disequalities
+    equalities=EqualitiesSet.map (fun (b,r,r') -> (b,Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)) head.equalities;
+    disequalities=EqualitiesSet.map (fun (b,r,r') -> (b,Rewriting.apply_subst_term r sigma, Rewriting.apply_subst_term r' sigma)) head.disequalities
   }
      
 let apply_subst_pred pred sigma  = 
