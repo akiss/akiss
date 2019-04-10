@@ -139,6 +139,9 @@ let csu sigma inputs1 inputs2 =
   
 let csu_recipes sigma recipe1 recipe2 =
   let eq_list = to_list recipe1 recipe2 in
+  let eq_list = if !Parser_functions.use_xor 
+      && List.exists (function Fun({id=Plus},_) as s,(Fun({id=Plus},_)as t) -> not (Rewriting.equals_ac s t) | _ -> false ) eq_list
+    then [] else eq_list in
   Rewriting.csu_xor eq_list sigma
 (*  let to_list = Dag.merge (fun loc i1 i2 -> 
     match (i1,i2) with

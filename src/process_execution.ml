@@ -353,19 +353,19 @@ let rec next_solution solution =
   if LocationSet.is_empty pr.restrictions then begin
     let current_loc = List.hd pr.remaining_actions in
     try
-    let (new_runs,new_loc) = next_run_with_action current_loc pr in 
-    if !debug_execution && new_runs = [] then Printf.printf "No possible run from this trace \n"  ;
-    List.iter (fun partial_run -> 
-      (* if !debug_execution then Printf.printf "New p. run %s \n\n" (show_partial_run partial_run); *)
-      if partial_run.remaining_actions = []
-      then
-        solution.possible_runs_todo <- Solutions.add partial_run solution.possible_runs_todo 
-      else 
-        solution.partial_runs_todo <- Solutions.add partial_run solution.partial_runs_todo 
-    ) new_runs 
-  with
-  | LocPtoQ i -> Printf.eprintf "error loc_p_to_q %d while executing on %d %s \n %s \n constraints %s\n" 
-    i current_loc.p (show_partial_run pr) (show_test pr.test)(show_correspondance pr.test.constraints); exit(5)
+      let (new_runs,new_loc) = next_run_with_action current_loc pr in 
+      if !debug_execution && new_runs = [] then Printf.printf "No possible run from this trace \n"  ;
+      List.iter (fun partial_run -> 
+        (* if !debug_execution then Printf.printf "New p. run %s \n\n" (show_partial_run partial_run); *)
+        if partial_run.remaining_actions = []
+        then
+          solution.possible_runs_todo <- Solutions.add partial_run solution.possible_runs_todo 
+        else 
+          solution.partial_runs_todo <- Solutions.add partial_run solution.partial_runs_todo 
+      ) new_runs 
+    with
+    | LocPtoQ i -> Printf.eprintf "error loc_p_to_q %d while executing on %d %s \n %s \n constraints %s\n" 
+      i current_loc.p (show_partial_run pr) (show_test pr.test)(show_correspondance pr.test.constraints); exit(5)
   end
   else
     (
@@ -378,29 +378,32 @@ let rec next_solution solution =
     let new_dag = dag_with_one_action_at_end pr.restrictions pr.last_exe in
     let restr_dag = merge pr.sol.restricted_dag new_dag in
     pr.sol.restricted_dag <- restr_dag;  
-    List.iter (fun (before,after) -> 
-      if !debug_execution 
-      then Printf.printf "\n**** Starting the restriction for %s  < %d < %s ****\n%s\n" 
-        (show_loc_set before) pr.last_exe.p (show_loc_set after)(show_dag pr.sol.restricted_dag);
-      let new_dag = { rel = LocationSet.fold 
-        (fun l dag -> Dag.add l (LocationSet.singleton pr.last_exe) dag) 
-        after (dag_with_one_action_at_end before pr.last_exe).rel } in
-      let restr_dag = merge pr.sol.restricted_dag new_dag in
-      if not (List.exists (fun s -> 
-          Dag.equal (fun x y -> LocationSet.equal x y) s.restricted_dag.rel restr_dag.rel) 
-        (pr.test.solutions_done @ pr.test.solutions_todo )) 
-      then (
-        (*Printf.printf "%s\n" (show_dag restr_dag);
-        List.iter (fun s -> Printf.printf "%s\n" (show_dag s.restricted_dag))(pr.test.solutions_done @ pr.test.solutions_todo )*)
-        let new_solution =
-        { null_sol with 
-          init_run = pr.sol.init_run;
-          partial_runs_todo = Solutions.singleton pr.sol.init_run;
-          sequence = dag_to_sequence restr_dag ;
-          restricted_dag = restr_dag; 
-        } in
-        pr.test.solutions_todo <- new_solution :: pr.test.solutions_todo
-      )
+    List.iter (
+      fun (before,after) -> 
+        if !debug_execution 
+        then 
+          Printf.printf "\n**** Starting the restriction for %s  < %d < %s ****\n%s\n" 
+            (show_loc_set before) pr.last_exe.p (show_loc_set after)(show_dag pr.sol.restricted_dag);
+        let new_dag = { rel = LocationSet.fold 
+          (fun l dag -> Dag.add l (LocationSet.singleton pr.last_exe) dag) 
+          after (dag_with_one_action_at_end before pr.last_exe).rel } in
+        let restr_dag = merge pr.sol.restricted_dag new_dag in
+        if not (List.exists (fun s -> 
+            Dag.equal (fun x y -> LocationSet.equal x y) s.restricted_dag.rel restr_dag.rel) 
+          (pr.test.solutions_done @ pr.test.solutions_todo )) 
+        then (
+          (*Printf.printf "%s\n" (show_dag restr_dag);
+          List.iter (fun s -> Printf.printf "%s\n" (show_dag s.restricted_dag))(pr.test.solutions_done @ pr.test.solutions_todo )*)
+          let sequence = dag_to_sequence restr_dag in
+          let new_solution =
+          { null_sol with 
+            init_run = pr.sol.init_run;
+            partial_runs_todo = Solutions.singleton pr.sol.init_run;
+            sequence = sequence ;
+            restricted_dag = restr_dag; 
+          } in
+          pr.test.solutions_todo <- new_solution :: pr.test.solutions_todo
+        )
     )  roots 
     )
     
@@ -419,14 +422,14 @@ let check_identities run head =
   && (EqualitiesSet.for_all ( fun dis -> not (check_recipes run dis)) head.disequalities)
   
   
-let rec find_possible_run solution =
+let rec find_possible_run reachable solution =
   if Solutions.is_empty solution.possible_runs_todo 
   then begin
       if (Solutions.is_empty solution.partial_runs_todo) 
-      then None
+      then reachable
       else begin 
         next_solution solution; 
-        find_possible_run solution 
+        find_possible_run reachable solution 
       end
   end
   else begin
@@ -436,10 +439,10 @@ let rec find_possible_run solution =
     then (
       if !debug_execution then Printf.printf "\nSelected execution: \n %s \n"(show_run run) ;
       solution.selected_run <- Some run;
-      Some run )
+      reachable )
     else (
       if !debug_execution then Printf.printf "\nSolution fails the tests: \n %s \n" (show_run run) ;
-      find_possible_run solution )
+      find_possible_run true solution )
   end
   
-    
+let find_possible_run solution =  find_possible_run false solution 

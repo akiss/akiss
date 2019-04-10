@@ -13,7 +13,7 @@ val apply_subst_term : Types.term -> Types.substitution -> Types.term
   Types.substitution -> Types.substitution -> Types.substitution*)
 val compose : Types.substitution -> Types.substitution -> Types.substitution
 val compose_with_subst_lst :
-  Types.substitution -> (Types.varId * Types.term) list -> Types.substitution
+  Types.statement_role ref -> int -> Types.substitution -> (Types.varId * Types.term) list -> Types.substitution
 val identity_subst : int -> Types.substitution
 val merging_subst : int -> Types.statement_role ref -> Types.substitution
 val is_identity_master : Types.substitution -> int -> bool
@@ -32,6 +32,7 @@ val csm_xor : bool ->
   Types.statement_role ref ->
   (Types.term * Types.term) list -> Types.subst_lst -> Types.subst_lst list
 val normalize : Types.term -> Types.rewrite_rule list -> Types.term
+val normalize_xor_order : Types.term -> Types.term
 val equals_r : Types.term -> Types.term -> Types.rewrite_rule list -> bool
 val trconcat : 'a list list -> 'a list
 val unifiers :

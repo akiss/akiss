@@ -388,12 +388,13 @@ let simplify_statement st =
     if Rewriting.equals_ac (Rewriting.normalize t (!Parser_functions.rewrite_rules))  b.term then
       false
     else (
-      if !about_rare then Printf.printf "Unsound statement\n%s = %s \n %s%!" (show_term t)(show_term b.term) (show_raw_statement st);
+      if !about_rare then Printf.printf "Unsound statement\n%s > %s = %s \n %s%!"
+        (show_term b.recipe) (show_term t) (show_term b.term) (show_raw_statement st);
       raise Unsound_Statement )
     with
     No_Eval -> true 
   ) other_body in 
-    List.iter
+  List.iter
       (fun a ->
         List.iter (fun (x : varId) -> 
           if sigma_repl.(x.n) = None
@@ -412,12 +413,24 @@ let simplify_statement st =
         | None ->
             if sigma_repl.(recipe_var.n) = None 
             then (
-              sigma_repl.(recipe_var.n) <- Some(Var({n = !nbv ; status = binder})) ;incr nbv) 
-            else assert false;
+              sigma_repl.(recipe_var.n) <- Some(Var({n = !nbv ; status = binder})) ;
+              incr nbv) 
+            else (
+              if !about_rare then Printf.printf "Statement with twice the same recipe variable:\n%s\n" (show_raw_statement st)
+            );
             body_maker := (a , ref a.loc ) :: !body_maker
          )
        (List.sort (fun x y -> compare_loc_set st.recipes x y) var_recipe_body)
   ;
+  List.iter
+      (fun a -> List.iter 
+        (fun (r : varId) -> 
+          if sigma_repl.(r.n) = None 
+          then (
+              sigma_repl.(r.n) <- Some(Var({n = !nbv ; status = binder})) ;
+              incr nbv) 
+        )(vars_of_term a.recipe)
+      ) other_body ;
   let body = other_body @ List.map (fun (b,locset) -> {b with loc = !locset}) !body_maker in
   let sigma = { 
     binder = binder; 
@@ -426,6 +439,12 @@ let simplify_statement st =
     nbvars = !nbv;
   } in
   let r = apply_subst_statement { st with body = body; } sigma in
+  let r = if !Parser_functions.use_xor then
+    { r with 
+    body = List.map (fun a -> {a with recipe = Rewriting.normalize_xor_order a.recipe;term=Rewriting.normalize_xor_order a.term}) r.body ;
+    inputs = Inputs.map Rewriting.normalize_xor_order r.inputs;
+    recipes = Inputs.map Rewriting.normalize_xor_order r.recipes} 
+    else r in
   (* Printf.printf "result: %s\n" (show_raw_statement r); *)
   (*st.binder := New;*)
   (sigma,r)
@@ -469,16 +488,27 @@ let normalize_identical f =
   * This version of the function checks that the skeleton of the clause is
   * normal, and drops the clause otherwise. Non-normal recipes are allowed
   * and are re-normalized. *)
-  let normalize_new_statement f = (* This opti slow down the algo a bit much*)
+let normalize_new_statement f = (* This opti slow down the algo a bit much*)
+  let exception E in
   if not (Inputs.are_normal f.inputs) 
   then begin (*Printf.printf "input: %s\n" (show_raw_statement f);*) None end
   else
-  if not (List.for_all 
+  try
+  let body = List.map (fun a -> 
+    let t = Rewriting.normalize a.term (!Parser_functions.rewrite_rules) in
+    if not (Rewriting.equals_ac a.term t) then raise E;
+    {a with 
+    term = t ; 
+    recipe = (Rewriting.normalize a.recipe (!Parser_functions.rewrite_rules))}) f.body in
+  (*if not (List.for_all 
     (fun a -> let t' = Rewriting.normalize a.term (!Parser_functions.rewrite_rules) in Rewriting.equals_ac a.term t')
     f.body)
   then begin (*Printf.printf "terms: %s\n" (show_raw_statement f);*) None end
-  else 
-  let f = {f with recipes = Inputs.renormalize f.recipes; inputs = (if !Parser_functions.use_xor then Inputs.renormalize f.inputs else f.inputs)} in
+  else *)
+  let f = {f with 
+    recipes = Inputs.renormalize f.recipes; 
+    inputs = (if !Parser_functions.use_xor then Inputs.renormalize f.inputs else f.inputs);
+    body = body} in
   match f.head with 
   | Reach | ReachTest _ | Unreachable -> Some f
   | Knows(r,t) -> 
@@ -487,7 +517,7 @@ let normalize_identical f =
     if not (Rewriting.equals_ac t t')
     then begin (*Printf.printf "hea: %s\n" (show_raw_statement f); *)
       None (*Some {f with head = Reach}*) end (* A knows is also a reach statement but the reach statement has already been processed *)
-    else Some {f with head = Knows(Rewriting.normalize r (!Parser_functions.rewrite_rules),t)}
+    else Some {f with head = Knows(Rewriting.normalize r (!Parser_functions.rewrite_rules),t')}
   | Identical(r,r') -> Some {f with 
       head = Identical(Rewriting.normalize r (!Parser_functions.rewrite_rules),
             Rewriting.normalize r' (!Parser_functions.rewrite_rules))}
@@ -499,7 +529,7 @@ let normalize_identical f =
             Rewriting.normalize r' (!Parser_functions.rewrite_rules))hd.equalities;
         disequalities = EqualitiesSet.map (fun (b,r,r') -> b, Rewriting.normalize r (!Parser_functions.rewrite_rules),
             Rewriting.normalize r' (!Parser_functions.rewrite_rules)) hd.disequalities })}
-
+  with E -> None
 
 (*let remove_marking f = {f with body = List.map (fun a -> {a with marked = false}) f.body }*)
 
@@ -557,8 +587,6 @@ let resolution_plus master =
   let tx1 = { n = 2 ; status = binder; } in
   let tx2 = { n = 3 ; status = binder; } in
   let sigma = sigma_maker_init master.nbvars 4 in
-  match explode_term atom.term with
-  | _, rigid :: _ -> 
  (* (* split a plus into a variables' list and a rigid factors' list *)
   let rec explode_term t =
     match t with
@@ -615,22 +643,27 @@ let resolution_plus master =
 				else addvar x1 x2 rx x11 x12 x (exponential l [([a],[])])
 			| _ ->  failwith "loop" )
   in *)
+  let rigid =
+    match explode_term atom.term with
+    | _, rigid :: _ -> Some rigid
+    | _,_ -> if !about_rare then Printf.printf "no rigid factor for %s" (show_raw_statement master); None in
   let sigmas = List.concat 
-      (List.map (fun sigm -> Rewriting.csu_ac [(atom.term,Fun({id = Plus; has_variables = true},[Var(tx1);Var(tx2)]) )] sigm) 
-        (Rewriting.csu_xor [(atom.recipe, Fun({id = Plus; has_variables = true},[Var(rx1);Var(rx2)]))] sigma))
-   (* Rewriting.csu [
-      (atom.term,Fun({id = Plus; has_variables = true},[Var(tx1);Var(tx2)]) );
-      (atom.recipe, Fun({id = Plus; has_variables = true},[Var(rx1);Var(rx2)]))] sigma *)
+          (List.map (fun sigm -> Rewriting.csu_ac [(atom.term,Fun({id = Plus; has_variables = true},[Var(tx1);Var(tx2)]) )] sigm) 
+            (Rewriting.csu_xor [(atom.recipe, Fun({id = Plus; has_variables = true},[Var(rx1);Var(rx2)]))] sigma))
   in
-      (* Create results *)
-      List.map
+        (* Create results *)
+  List.map
         (fun sigma ->
            let sigma = Rewriting.pack sigma in
            let t1 = Rewriting.apply_subst_term (Var (tx1)) sigma in
            let t2 = Rewriting.apply_subst_term (Var (tx2)) sigma in
            let _, t1s = explode_term t1 in
-           let rigid' = Rewriting.apply_subst_term rigid sigma in
-           let t1_rigid = List.exists (fun t -> Rewriting.equals_ac t rigid') t1s (* not (is_sum_term t1)*) in
+           let t1_rigid,t2_rigid = match rigid with 
+           Some rigid ->
+              let rigid' = Rewriting.apply_subst_term rigid sigma in
+              let t1_rigid = List.exists (fun t -> Rewriting.equals_ac t rigid') t1s (* not (is_sum_term t1)*) in
+              t1_rigid, not (t1_rigid)
+           | None -> false,false in
            (* Printf.printf "rigid : %s becomes %s  %sfound in %s\n" 
             (show_term rigid)(show_term rigid')(if t1_rigid then "" else "not ")(show_term t1);*)
            let result =
@@ -642,7 +675,7 @@ let resolution_plus master =
            recipes = Inputs.map (fun t -> Rewriting.apply_subst_term t sigma) master.recipes;
            head = apply_subst_pred master.head sigma ;
            body = {loc = atom.loc ; marked = t1_rigid ; recipe = Rewriting.apply_subst_term (Var (rx1)) sigma ; term = t1 }
-               :: {loc = atom.loc ; marked = not (t1_rigid) ; recipe = Rewriting.apply_subst_term (Var (rx2)) sigma ; term = t2}
+               :: {loc = atom.loc ; marked = t2_rigid ; recipe = Rewriting.apply_subst_term (Var (rx2)) sigma ; term = t2}
                :: (List.map (fun x -> { x with recipe = Rewriting.apply_subst_term x.recipe sigma; term = Rewriting.apply_subst_term x.term sigma} )
                  (List.filter (fun x -> (x <> atom)) master.body));
            choices = master.choices;
@@ -653,7 +686,7 @@ let resolution_plus master =
                (show_raw_statement result);*)
            result)
         sigmas
-  | _ -> assert false
+  (*| _ -> Printf.eprintf "invalid statement %s\n%!" (show_raw_statement master);assert false*)
 
 let is_tuple term =
   match term with

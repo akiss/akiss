@@ -137,15 +137,8 @@ and solution = {
   sequence : location list;
   mutable selected_run : partial_run option;
   (*sol_test : Test.test;*)
-  mutable bundle : bundle option;
 }
-and bundle =  { 
-  mutable eq_hash : (hash_term * hash_term) list;
-  mutable diseq_hash : (hash_term * hash_term) list;
-  mutable corr_bundle : correspondance ;
-  mutable corr_back_bundle : correspondance ;
-  mutable sts : (hash_body * (Test.test * solution)) list
-}
+
 type t = partial_run
 val compare : t -> t -> int 
 end
@@ -217,16 +210,16 @@ and solution = {
   mutable restricted_dag : dag; (** The partial order which is considered, may be more restricted than the test's one *)
   sequence : location list;
   mutable selected_run : partial_run option; (** The actual solution in use in the algorithm, None when the solution has not been computed yet *)
-  mutable bundle : bundle option;
+  (* mutable bundle : bundle option;*)
   (*sol_test : Test.test; (** the test from which this solution is part of *)*)
 }
-and bundle =  { 
+(*and bundle =  { 
   mutable eq_hash : (hash_term * hash_term) list;
   mutable diseq_hash : (hash_term * hash_term) list;
   mutable corr_bundle : correspondance ;
   mutable corr_back_bundle : correspondance ;
   mutable sts : (hash_body * (Test.test * solution)) list
-}
+}*)
 type t = partial_run
 let compare (x : t) (y : t)= 
       compare (LocationSet.cardinal x.restrictions,x.weird_assoc,-x.score,x)
@@ -249,6 +242,8 @@ type test = {
   mutable constraints_back : correspondance; (** Inverse mapping *)
   mutable solutions_todo : Run.solution list;
   mutable solutions_done : Run.solution list;
+  mutable xor_class : (hash_body * ( substitution * raw_statement)) list;
+  hash_body_xor : hash_body;
 }
 type t = test
 val compare : t -> t -> int
@@ -269,6 +264,8 @@ type test = {
   mutable constraints_back : correspondance; (** Inverse mapping *)
   mutable solutions_todo : Run.solution list; (** restricted orders which have not been satisfied *)
   mutable solutions_done : Run.solution list; (** restricted orders with their solution *)
+  mutable xor_class : (hash_body * ( substitution * raw_statement)) list;
+  hash_body_xor : hash_body;
 }
 type t = test
 let compare (x : Test.test) (y : Test.test)=
@@ -334,7 +331,7 @@ end
 module TraceNodes = Map.Make(TraceNode)
 
 
-type test_class =  Impossible | Simple of test * solution | Bundle of bundle
+type test_class =  Impossible | Possible of int * (int option array) * test
 
 module Trace = struct 
   type t = (location * lrec)
@@ -364,6 +361,28 @@ let rec get_trace_tree trace_tree next_id vars test (sequence : location list) =
         get_trace_tree empty_node next_id vars test seq
     )
   | [] -> trace_tree
+  
+  
+let show_alpha_subst subst =
+  Array.fold_left (fun str v -> str ^ (match v with None -> "-" | Some i -> string_of_int i)) "" subst
+  
+let subst_from_trace_subst sbst1 sbst2 binder nbv =
+  (*Printf.printf "subst_from_trace_subst\n %s \n %s %d\n%!" (show_alpha_subst sbst1)(show_alpha_subst sbst2)nbv;*)
+  { binder = binder ;
+    nbvars = nbv ;
+    master = Array.map (
+      fun x -> 
+      match x with 
+      | None -> zero 
+      | Some i -> let exception E of int in
+        try
+        Array.iteri (fun j k -> match k with Some k -> if k = i then raise (E(j)) | _ -> ()) sbst2;
+        assert false
+        with E(i) -> Var({status=binder; n=i})
+    ) sbst1 ; 
+    slave = Array.make 0 (Var({status=binder; n=0}))
+  } 
+
   
 
 (** {2 Printers}*)
@@ -457,7 +476,10 @@ let show_solution_set sol =
 (** {2 Basic functions}*)
 
 let completion_to_hash_completion completion =
-  if !debug_completion then Printf.printf "equal hashes ?\n %s \n %s\n" (show_raw_statement completion.st_c)(show_raw_statement completion.root.initial_statement);
+  if !debug_completion then 
+    Printf.printf "equal hashes ?\n %s \n %s\n" 
+      (show_raw_statement completion.st_c)
+      (show_raw_statement completion.root.initial_statement);
   let hash_statement = test_to_hash completion.st_c in
   { 
     is_opti = (hash_statement = completion.root.hash_initial_statement);
@@ -484,6 +506,8 @@ let rec null_test = {
   constraints_back= empty_correspondance;
   solutions_todo = [];
   solutions_done = [];
+  xor_class = [] ;
+  hash_body_xor = [];
 }
 
 and null_sol = {
@@ -494,7 +518,6 @@ and null_sol = {
   restricted_dag = empty;
   sequence = [];
   selected_run = None;
-  bundle = None;
 }
 
 and empty_run =
@@ -621,19 +644,17 @@ let clean_bijection () =
   bijection.traces_tree.next_tr <- Traces.empty;
   bijection.traces_tree.node <- TraceNodes.empty
 
-let show_bijection () = () (*
-  Printf.printf "Bijection of %d tests:\n" (Hashtbl.length bijection.htable_st);
+let show_bijection () = 
+  Printf.printf "Bijection:\n";
   Dag.iter (fun kp ind2 -> Printf.printf "\n- %d =>" kp.p;
     Dag.iter (fun kq recordlist ->
       let nb = RunSet.cardinal recordlist in
       Printf.printf " %d (%d%s),"  kq.p nb
       (if nb < 6 then RunSet.fold (fun pr str -> str ^ " [" ^ (string_of_int  pr.test.id) ^ "]") recordlist ":" else "")) ind2 )  bijection.indexP ;
-  Printf.printf "\n"*)
+  Printf.printf "\n"
   
 open Run 
 
-let show_hashtbl () = () (*
-  Hashtbl.iter (fun h s -> Printf.printf "-- %s  \n\n" (show_test s)) bijection.htable_st*)
 
 let hash_view : (test, unit) Hashtbl.t = Hashtbl.create 2000
 let hash_comp_view : (completion,unit) Hashtbl.t = Hashtbl.create 5000
@@ -688,7 +709,8 @@ let show_final_completions () =
 
 let get_trace_tree raw_st sequence =
   let vars= Array.make (raw_st.nbvars) None in
-  (get_trace_tree bijection.traces_tree (ref 0) vars raw_st sequence),vars
+  let nb = ref 0 in
+  (get_trace_tree bijection.traces_tree nb vars raw_st sequence),vars,!nb
 
 
 let proc name =
@@ -728,6 +750,7 @@ let push (statement : raw_statement) process_name origin init =
     origin = origin;
     id = bijection.next_id;
     from = int_set;
+    hash_body_xor = Base.body_to_hash statement.body;
     (*constraints = empty_correspondance;
     constraints_back = empty_correspondance;
     consequences = [];*)

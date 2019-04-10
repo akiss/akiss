@@ -74,13 +74,14 @@ let rec new_or_same x t sigma =
 
 let rec apply_subst term (sigma : subst_lst) =
   match term with
-    | Var(x) ->
-	if List.mem_assoc x sigma then
-	  List.assoc x sigma
-	else
-	  term
-    | Fun(symbol, list) ->
-	Fun(symbol, trmap (function x -> apply_subst x sigma) list)
+  | Var(x) ->
+    if List.mem_assoc x sigma 
+    then
+      List.assoc x sigma
+    else
+      term
+  | Fun(symbol, list) ->
+      Fun(symbol, trmap (function x -> apply_subst x sigma) list)
 
 (*let bound variable sigma =
   List.mem_assoc variable sigma *)

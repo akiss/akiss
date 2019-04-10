@@ -10,14 +10,14 @@ let debug = false
 let current_max_var = ref 0
 let current_binder = ref (ref Master)
 
-let update_subst pairlst =
+let update_subst pairlst = !current_binder, !current_max_var, pairlst (*
   let subst = copy_subst_add_extra !maude_current_sigma !current_max_var !current_binder in
   List.iter (fun (x,t) -> 
     let sigm = find_sub x subst in 
     try
     sigm.(x.n) <- Some t
     with Invalid_argument a -> Printf.printf "%s index %s %d\n" (show_subst_maker subst)(show_binder !(x.status)) x.n; raise (Invalid_argument a)) pairlst;
-  subst
+  subst*)
   
 let make_substitution_variant pairlst =
   (*Printf.printf "cur nbv %d\n" (!current_max_var);*)
@@ -71,7 +71,7 @@ let make_substitution_variant pairlst =
 
 %start main
 
-%type < [ `Variants of ( (Types.term * Types.substitution) list) | `Unify of (Types.subst_maker list) | `Match of (Types.subst_lst list) | `Norm of Types.term | `Equal of bool ] > main
+%type < [ `Variants of ( (Types.term * Types.substitution) list) | `Unify of ((Types.statement_role ref * int * (Types.varId * Types.term) list) list) | `Match of (Types.subst_lst list) | `Norm of Types.term | `Equal of bool ] > main
 
 %%
 main:
@@ -185,6 +185,7 @@ main:
      { Fun({id=Frame(List.assoc $1 !Parser_functions.frames); has_variables=false},[])
      }
  | Var Colon Term {Var($1)}
+ | Var {Var($1)}
  | Sharp Number Colon Term {
     let n = int_of_string $2 in
     current_max_var := max !current_max_var n ;

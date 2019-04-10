@@ -88,4 +88,4 @@ val check_recipes :
 val check_identities : Bijection.Run.partial_run -> Base.test_head -> bool 
 val next_solution : Bijection.Run.solution -> unit
 val find_possible_run :
-  Bijection.Run.solution -> Bijection.Solutions.elt option
+  Bijection.Run.solution -> bool

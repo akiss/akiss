@@ -92,7 +92,8 @@ let reset_global () =
   processes_infos.max_phase <- 0;
   Hashtbl.clear memoize_call;
   (*records = [];*)
-  latex_identifier := ""
+  latex_identifier := "";
+  Maude.clean_maude ()
 
 
 

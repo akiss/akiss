@@ -27,3 +27,4 @@ val acmatchers :
 val xormatchers :
   Types.statement_role ref ->
   (Types.term * Types.term) list -> Types.subst_lst -> Types.subst_lst list
+val clean_maude : unit -> unit

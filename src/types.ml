@@ -307,8 +307,26 @@ type substitution = {
     master : term array ;
 }
 
+let rec check_binder_term binder term =
+  match term with
+  | Var(x) -> 
+    if x.status != binder 
+    then (Printf.printf "\nBINDER ERROR at %s\n" (show_term term);false)
+    else true
+  | Fun(_,lst) -> List.for_all (check_binder_term binder) lst
+
 let show_substitution subst =
+  let str =
   Array.fold_left (fun str t -> str ^  ", " ^(show_term t))
   ((Array.fold_left (fun str t -> str ^ ", " ^ (show_term t)) 
     (Printf.sprintf "substitution  (%d%s) : \nmaster: " subst.nbvars (show_binder !(subst.binder))) 
   subst.master) ^ "\nslave: ") subst.slave
+  in
+  if
+  Array.for_all (check_binder_term subst.binder)subst.master &&
+  Array.for_all (check_binder_term subst.binder)subst.slave
+  then 
+    str
+  else (Printf.printf "\nbad substitution %s\n" str; assert false)
+    
+  

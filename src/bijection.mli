@@ -167,14 +167,6 @@ module rec Run :
       mutable restricted_dag : Dag.dag;
       sequence : Types.location list;
       mutable selected_run : partial_run option;  
-      mutable bundle : bundle option;
-}
-and bundle =  { 
-  mutable eq_hash : (Types.hash_term * Types.hash_term) list;
-  mutable diseq_hash : (Types.hash_term * Types.hash_term) list;
-  mutable corr_bundle : correspondance ;
-  mutable corr_back_bundle : correspondance ;
-  mutable sts : (Base.hash_body * (Test.test * solution)) list
 }
 
     type t = partial_run
@@ -196,6 +188,8 @@ and Test :
       mutable constraints_back : correspondance;
       mutable solutions_todo : Run.solution list;
       mutable solutions_done : Run.solution list;
+      mutable xor_class :(Base.hash_body * (Types.substitution * Base.raw_statement)) list;
+      hash_body_xor : Base.hash_body;
     }
     type t = test
     val compare : t -> t -> int
@@ -401,8 +395,7 @@ module TraceNodes :
   end
 type test_class =
     Impossible
-  | Simple of Test.test * Run.solution
-  | Bundle of Run.bundle
+  | Possible of int * int option array * Test.test
 module Trace :
   sig type t = Types.location * lrec val compare : 'a -> 'a -> int end
 module Traces :
@@ -485,13 +478,13 @@ type bijection = {
 val bijection : bijection
 val clean_bijection : unit -> unit
 val show_bijection : unit -> unit
-val show_hashtbl : unit -> unit
 val hash_view : (Test.test, unit) Hashtbl.t
 val hash_comp_view : (Run.completion, unit) Hashtbl.t
 val show_completion_tree : Run.completion -> unit
 val show_all_tests : unit -> unit
 val show_final_completions : unit -> unit
-val get_trace_tree : Base.raw_statement -> Types.location list -> trace_tree * int option array
+val get_trace_tree : Base.raw_statement -> Types.location list -> trace_tree * int option array * int
+val subst_from_trace_subst : int option array -> int option array -> Types.statement_role ref -> int -> Types.substitution
 val proc : which_process -> Process.process
 val other : which_process -> which_process
 val base_of_name : which_process -> Base.base

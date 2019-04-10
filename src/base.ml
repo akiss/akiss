@@ -159,24 +159,37 @@ type base =
 
 (** {2 Assert that all variables of a statement are binded with its binder }*)
 
-let rec check_binder_term binder term =
+
+let rec check_binder_term binder good_vars bad_vars term =
   match term with
-  | Var(x) -> if x.status == binder then true else (Printf.printf "\nBINDER ERROR at %s\n" (show_term term);true)
-  | Fun(_,lst) -> List.for_all (check_binder_term binder) lst
+  | Var(x) -> 
+    if x.status == binder 
+    then (
+      if List.mem x !bad_vars 
+      then (Printf.printf "\nType ERROR at %s\n" (show_term term);false)
+      else ((
+        if not (List.mem x !good_vars)
+        then good_vars := x :: !good_vars);
+        true)
+    )
+    else (Printf.printf "\nBINDER ERROR at %s\n" (show_term term);false)
+  | Fun(_,lst) -> List.for_all (check_binder_term binder good_vars bad_vars) lst
   
-let check_binder_head binder head = 
+let check_binder_head binder rec_var term_var head = 
   match head with
-  | Tests({equalities= e;disequalities = d;head_binder = b}) -> b == binder && EqualitiesSet.for_all (fun (_,s,t) -> check_binder_term binder s && check_binder_term binder t) e && EqualitiesSet.for_all (fun (_,s,t) -> check_binder_term binder s && check_binder_term binder t) d
-  | Identical(s,t)
-  | Knows(s,t) -> check_binder_term binder s && check_binder_term binder t
+  | Tests({equalities= e;disequalities = d;head_binder = b}) -> b == binder && EqualitiesSet.for_all (fun (_,s,t) -> check_binder_term binder rec_var term_var s && check_binder_term binder rec_var term_var t) e && EqualitiesSet.for_all (fun (_,s,t) -> check_binder_term binder rec_var term_var s && check_binder_term binder rec_var term_var t) d
+  | Identical(s,t)-> check_binder_term binder rec_var term_var s && check_binder_term binder rec_var term_var t
+  | Knows(s,t) -> check_binder_term binder rec_var term_var s && check_binder_term binder term_var rec_var t
   | _ -> true
   
 let check_binder_st st =
+  let rec_var = ref [] in
+  let term_var = ref [] in
   let binder = st.binder in
-  Dag.for_all (fun _ t -> check_binder_term binder t) st.inputs.i
-  && Dag.for_all (fun _ t -> check_binder_term binder t) st.recipes.i
-  && List.for_all (fun x -> check_binder_term binder x.term && check_binder_term binder x.recipe) st.body
-  && check_binder_head binder st.head
+  Dag.for_all (fun _ t -> check_binder_term binder term_var rec_var t) st.inputs.i
+  && Dag.for_all (fun _ t -> check_binder_term binder rec_var term_var t) st.recipes.i
+  && List.for_all (fun x -> check_binder_term binder term_var rec_var x.term && check_binder_term binder rec_var term_var x.recipe) st.body
+  && check_binder_head binder rec_var term_var st.head
 
 (** {2 Printing} *)
 

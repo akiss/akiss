@@ -8,7 +8,7 @@ open Parser_functions
 
 type maude_mode = E | AC | XOR
 
-let memoize_maude_unify :  (string * maude_mode * int * int * subst_maker,(statement_role ref * statement_role ref *  subst_maker list * (term*term) list)) Hashtbl.t=  Hashtbl.create 10
+let memoize_maude_unify :  (string * maude_mode ,statement_role ref *statement_role ref *(statement_role ref * int * (varId * term) list) list) Hashtbl.t=  Hashtbl.create 10
 
 let maude_calls = ref 0
 let maude_memoize = ref 0
@@ -35,13 +35,15 @@ let get_binders pairlst =
   try List.iter (fun (s,t) -> get_b_term t;get_b_term s) pairlst;
   (!mbinder,!sbinder)
   with E -> (!mbinder,!sbinder)
+  
+let temporary_terms = ref []
  
-let rec print_maude_term t sigma =
+let rec print_maude_term freeze t sigma =
  match t with
- | Fun({id=Regular(f)},args) -> "w" ^ f.name ^(if args = [] then " " else  "(" ^ (print_maude_term_list args sigma) ^ ")")
- | Fun({id=Tuple(n)},args) -> "tuple"^(string_of_int n)^"(" ^ (print_maude_term_list args sigma ) ^ ")"
- | Fun({id=Projection(m,n)},args) -> "proj"^(string_of_int m)^"o"^(string_of_int n)^"(" ^ (print_maude_term_list args sigma) ^ ")"
- | Fun({id=Plus},[l;r]) ->  (print_maude_term l sigma) ^ " + " ^ (print_maude_term r sigma) 
+ | Fun({id=Regular(f)},args) -> "w" ^ f.name ^(if args = [] then " " else  "(" ^ (print_maude_term_list freeze args sigma) ^ ")")
+ | Fun({id=Tuple(n)},args) -> "tuple"^(string_of_int n)^"(" ^ (print_maude_term_list freeze args sigma ) ^ ")"
+ | Fun({id=Projection(m,n)},args) -> "proj"^(string_of_int m)^"o"^(string_of_int n)^"(" ^ (print_maude_term_list freeze args sigma) ^ ")"
+ | Fun({id=Plus},[l;r]) ->  (print_maude_term freeze l sigma) ^ " + " ^ (print_maude_term freeze r sigma) 
  | Fun({id=Plus},args) ->   "+?" ^ (string_of_int (List.length args)) 
  | Fun({id=Zero},[]) ->   " zero " 
  | Fun({id=Nonce(n)},[]) -> 
@@ -56,18 +58,21 @@ let rec print_maude_term t sigma =
       Parser_functions.frames := (l.p, l) :: !Parser_functions.frames;   
     Format.sprintf "frame%d " l.p
  | Var(id) -> (
-    match sigma with 
-    | None -> (show_binder_maude !(id.status)) ^ (string_of_int id.n) ^ ":Term "
-    | Some sigm -> 
-      begin
-      match (find_sub id sigm).(id.n) with
+    if freeze then (
+      (show_binder_maude !(id.status)) ^ (string_of_int id.n))
+    else
+      match sigma with 
       | None -> (show_binder_maude !(id.status)) ^ (string_of_int id.n) ^ ":Term "
-      | Some t -> print_maude_term t sigma end )
+      | Some sigm -> 
+        begin
+        match (find_sub id sigm).(id.n) with
+        | None -> (show_binder_maude !(id.status)) ^ (string_of_int id.n) ^ ":Term "
+        | Some t -> print_maude_term freeze t sigma end )
  | _ -> invalid_arg ("Invalid term for maude")
-and print_maude_term_list args sigma = 
+and print_maude_term_list freeze args sigma = 
   match args with
-  | [x] -> print_maude_term x sigma
-  | x :: l -> ( (print_maude_term x sigma) ^ "," ^ (print_maude_term_list l sigma) )
+  | [x] -> print_maude_term freeze x sigma
+  | x :: l -> ( (print_maude_term freeze x sigma) ^ "," ^ (print_maude_term_list freeze l sigma) )
   | [] -> ""
   
 let print_maude_pairlst with_rules pairlst sigma=
@@ -75,7 +80,7 @@ let print_maude_pairlst with_rules pairlst sigma=
   Parser_functions.frames := [] ;
   let terms = List.fold_left (fun str (s,t) -> 
     ( if str = "" then (if with_rules = E then "variant " else "")^"unify in Current : " else  str ^ " /\\ ") 
-     ^ (print_maude_term s (Some sigma)) ^ " =? " ^ (print_maude_term t (Some sigma))) "" pairlst in
+     ^ (print_maude_term false s (Some sigma)) ^ " =? " ^ (print_maude_term false t (Some sigma))) "" pairlst in
   "mod Current is\nincluding "^(match with_rules with E -> "Theory" | XOR -> "Xor" | AC -> "AKISS")^" .\n" ^
   (List.fold_left (fun str (n,_) -> 
      str ^ "op nonce"^(string_of_int n) ^" : -> Term .\n") "" !Parser_functions.nonces) ^
@@ -86,7 +91,7 @@ let print_maude_pairlst with_rules pairlst sigma=
 let print_maude_variants term =
   Parser_functions.nonces := [] ;
   Parser_functions.frames := [] ;
-  let term = print_maude_term term None in
+  let term = print_maude_term false term None in
   "mod Current is\nincluding Theory .\n" ^
   (List.fold_left (fun str (n,_) -> 
      str ^ "op nonce"^(string_of_int n) ^" : -> Term .\n") "" !Parser_functions.nonces) ^
@@ -102,8 +107,8 @@ let op name arity = Format.sprintf "op %s : %s-> Term .\n" name (times arity "Te
 let print_maude_matchers xor p t =
   Parser_functions.nonces := [] ;
   Parser_functions.frames := [] ;
-  let term = "tuple"^(string_of_int (List.length t))^"(" ^ (print_maude_term_list t None ) ^ ")" in
-  let pattern = "tuple"^(string_of_int (List.length p))^"(" ^ (print_maude_term_list p None ) ^ ")" in 
+  let term = "tuple"^(string_of_int (List.length t))^"(" ^ (print_maude_term_list false t None ) ^ ")" in
+  let pattern = "tuple"^(string_of_int (List.length p))^"(" ^ (print_maude_term_list false p None ) ^ ")" in 
   "mod Current is\nincluding "^(if xor then "Xor" else "AKISS")^" .\n" ^
   (op ("tuple"^(string_of_int (List.length t))) (List.length t)) ^
   (List.fold_left (fun str (n,_) -> 
@@ -115,7 +120,7 @@ let print_maude_matchers xor p t =
 let print_maude_rules () =
   "mod Theory is\nincluding AKISS .\n" ^
   (List.fold_left
-    (fun str rule -> str ^ "eq "^(print_maude_term rule.lhs None )^" = "^(print_maude_term rule.rhs None)^" [variant] .\n")
+    (fun str rule -> str ^ "eq "^(print_maude_term false rule.lhs None )^" = "^(print_maude_term false rule.rhs None)^" [variant] .\n")
     ""
     !Parser_functions.rewrite_rules)
   ^ "endm\n\n"
@@ -123,7 +128,7 @@ let print_maude_rules () =
 let print_maude_xor () =
   "mod Xor is\nincluding AKISS .\n" ^
   (List.fold_left
-    (fun str rule -> str ^ "eq "^(print_maude_term rule.lhs None )^" = "^(print_maude_term rule.rhs None)^" [variant] .\n")
+    (fun str rule -> str ^ "eq "^(print_maude_term false rule.lhs None )^" = "^(print_maude_term false rule.rhs None)^" [variant] .\n")
     "" [Parser_functions.rewrite_rule_xor_1 ; Parser_functions.rewrite_rule_xor_2 ; Parser_functions.rewrite_rule_xor_3 ]
   )
   ^ "endm\n\n"
@@ -168,15 +173,16 @@ let maude_command = lazy (
   maude_binary ^ " -batch -no-banner -no-ansi-color -no-advise"
 )
 
-let get_chans =
+let countdown = ref 0 
+
+let rec get_chans =
   let dummy = stdin,stdout in
   let chans = ref dummy in
-  let countdown = ref 0 in
   let close () =
     if !chans <> dummy then begin
       (* Maude doesn't seem to return 0 on clean termination. *)
       ignore (Unix.close_process !chans) ;
-      Printf.printf "maude :%d mem %d\n%!" !maude_calls !maude_memoize;
+      if !about_maude then Printf.printf "maude :%d mem %d\n%!" !maude_calls !maude_memoize;
       (* Reset chans to dummy to avoid closing twice. *)
       chans := dummy
     end
@@ -191,11 +197,13 @@ let get_chans =
       let pair = Unix.open_process (Lazy.force maude_command) in
       chans := pair ;
       countdown := 10000 ;
+      let print_query chan = Format.fprintf chan "%s%s%s" (print_maude_signature ()) (print_maude_rules ())(print_maude_xor ()) in
+      ignore (run_maude print_query (fun _ -> []));
       pair
     end
 
       
-let run_maude print_query parse_result =
+and run_maude print_query parse_result =
   if false then
     Format.printf "<< maude command: %s\n"  (Lazy.force maude_command);
   let chan_out,chan_in = get_chans () in
@@ -214,16 +222,22 @@ let run_maude print_query parse_result =
 
 
 (** Unification mod AC + R*)
-
-let rec repl_binder_term m s e term =
+let rec repl_binder_term e e' term =
   match term with
-  | Fun(f,args) -> Fun(f, List.map (repl_binder_term m s e) args)
-  | Var(x) -> Var({x with status = match !(x.status) with 
-    | Master -> m
-    | Slave -> s
-    | Extra i -> e.(i)
-    | _ -> assert false})
+  | Fun(f,args) -> Fun(f, List.map (repl_binder_term e e') args)
+  | Var(x) -> assert (x.status = e); Var({x with status = e'})
 
+let complete_subst_maker e' (binder,nbv,pairlst) sigma =
+  let subst = copy_subst_add_extra sigma nbv binder in
+  List.iter (fun (x,t) -> 
+    let sigm = find_sub x subst in 
+    try
+    sigm.(x.n) <- Some (if binder = e' then t else repl_binder_term binder e' t )
+    with Invalid_argument a -> Printf.printf "%s index %s %d\n" (show_subst_maker subst)(show_binder !(x.status)) x.n; raise (Invalid_argument a)) pairlst;
+  subst
+
+
+(*  
 let replace_binder m s subst_maker = 
   let repl m s e = Array.map (function None -> None | Some t ->  Some (repl_binder_term m s e t)) in 
   let size = List.length subst_maker.e in
@@ -232,19 +246,19 @@ let replace_binder m s subst_maker =
   m = repl m s ebinder subst_maker.m ;
   s = repl m s ebinder subst_maker.s ;
   e = List.mapi (fun i se -> 
-    { binder_extra = ebinder.(size - i - 1);
+    { binder_extra = ebinder.(i);
       nb_extra = se.nb_extra; 
       subst_extra = repl m s ebinder se.subst_extra}) subst_maker.e
-}
+}*)
 
 let acunifiers with_rules pairlst sigma =
-  if !about_maude then (
+  (*if !about_maude then (
     List.iter (fun (s,t) -> Format.printf " %s =? %s /\\\n" (show_term s) (show_term t)) pairlst ;
-    Printf.printf "sig: %s \n%!" (show_subst_maker sigma));
+    Printf.printf "sig: %s \n%!" (show_subst_maker sigma));*)
   let query_string = print_maude_pairlst with_rules pairlst sigma in
   let mbinder,sbinder = get_binders pairlst in
   try 
-  let oldm,olds,mem,oldpl = Hashtbl.find memoize_maude_unify (query_string,with_rules,Array.length sigma.m,Array.length sigma.s,sigma) in
+  let oldm,olds,sublst = Hashtbl.find memoize_maude_unify (query_string,with_rules) in
   let oldms = !oldm in
   let oldss = !olds in
   oldm := Master;
@@ -252,13 +266,14 @@ let acunifiers with_rules pairlst sigma =
   incr maude_memoize;
   (*Printf.printf "- %s\n%!" query_string;
   List.iter (fun (s,t) -> Format.printf "| %s =? %s /\\\n" (show_term s) (show_term t)) oldpl ;*)
-  let substs =
-  List.map (fun subst -> 
+  let i = List.length sigma.e in
+  let substs = List.map (fun sub -> complete_subst_maker (ref (Extra i)) sub sigma) sublst in
+  (*List.map (fun subst -> 
     (*Printf.printf "* %s\n" (show_subst_maker subst);*)
     let subs = replace_binder mbinder sbinder subst in
     (*Printf.printf "> %s\n" (show_subst_maker subs);*)
     subs
-  ) mem in
+  ) mem in*)
   oldm := oldms;
   olds := oldss;
   substs
@@ -266,17 +281,15 @@ let acunifiers with_rules pairlst sigma =
   | Not_found -> 
   incr maude_calls;
   if !about_maude then 
-    Printf.printf "%s%s%s%!"
-      (print_maude_signature ())
-      (match with_rules with E -> print_maude_rules () | XOR -> print_maude_xor () | AC -> "") 
+    Printf.printf "%s\n%!"
       query_string;
     (*Format.fprintf chan "unify in AKISS %a =? %a .\n" print s print t ; *)
     (* Format.fprintf chan "quit \n" *)
   
   let query chan =
-    Format.fprintf chan "%s%s%s"
-      (print_maude_signature ())
-      (match with_rules with E -> print_maude_rules () | XOR -> print_maude_xor () | AC -> "") 
+    Format.fprintf chan "%s"
+     (* (print_maude_signature ())
+      (match with_rules with E -> print_maude_rules () | XOR -> print_maude_xor () | AC -> "") *)
       query_string
   in 
   (*query Format.std_formatter*)
@@ -284,9 +297,7 @@ let acunifiers with_rules pairlst sigma =
     match Parsemaude.main Lexmaude.token lexbuf with
     | `Unify substs ->
       if !about_maude then
-        List.iter
-          (fun s -> Printf.printf "Result> %s\n" (show_subst_maker s))
-          substs ;
+          Printf.printf "%d substitutions\n"(List.length substs);
       substs
     | _ -> assert false
   in
@@ -303,16 +314,17 @@ let acunifiers with_rules pairlst sigma =
   run_maude
     (fun chan -> query chan)
     (fun chan -> parse_unifiers chan) in
-  Hashtbl.add memoize_maude_unify (query_string,with_rules,Array.length sigma.m,Array.length sigma.s,sigma) (mbinder,sbinder,result_subst,pairlst);
+  Hashtbl.add memoize_maude_unify (query_string,with_rules) (mbinder,sbinder,result_subst);
+  List.map (fun (b,n,sub) -> complete_subst_maker b (b,n,sub) sigma)
   result_subst
       
 let acunifiers with_rules pairlst sigma =
   maude_current_sigma := sigma;
   let v = acunifiers with_rules pairlst sigma in
   (* let v = rename_in_subst v in *)
-  if !about_maude then begin
+  (*if !about_maude then begin
     List.iter (fun s -> Format.printf "- %s\n%!" (show_subst_maker s)) v
-  end ;
+  end ;*)
   v
 
 
@@ -325,7 +337,7 @@ let variants t =
   if !about_maude then 
     Printf.printf  "%s%s%s%!" (print_maude_signature ()) (print_maude_rules ())(print_maude_variants t);
   let query chan =
-    Format.fprintf chan "%s%s%s" (print_maude_signature ()) (print_maude_rules ())(print_maude_variants t)
+    Format.fprintf chan "%s" (*(print_maude_signature ()) (print_maude_rules ())*)(print_maude_variants t)
     (* Format.fprintf chan "%a\n" (print_module rules esig) () ;
     Format.fprintf chan "get variants %a .\n" print t ;*)
     (* Format.fprintf chan "quit \n" *)
@@ -370,12 +382,12 @@ let variants t  =
 
 let matchers xor pairlst sigma =
   let pattern,matching = List.split pairlst in
-  let pattern = List.map (fun p ->  apply_subst p sigma) pattern in
-  let matching = List.map (fun p ->  apply_subst p sigma) matching in
+  let pattern = List.map (fun p -> let t = apply_subst p sigma in (*Printf.printf ":%s>%s," (show_term p)(show_term t);*) t) pattern in
+  let matching = List.map (fun p -> let t= apply_subst p sigma in (*Printf.printf ";%s>%s," (show_term p)(show_term t);*) t) matching in
   if !about_maude then 
     Printf.printf  "%s%s%s%!" (print_maude_signature ())(print_maude_xor ())(print_maude_matchers xor pattern matching);
   let query chan =
-    Format.fprintf chan "%s%s%s" (print_maude_signature ())(print_maude_xor ())(print_maude_matchers xor pattern matching)
+    Format.fprintf chan "%s" (*(print_maude_signature ())(print_maude_xor ())*)(print_maude_matchers xor pattern matching)
   in
   let parse_matchers ch =
     match Parsemaude.main Lexmaude.token (Lexing.from_channel ch) with
@@ -409,7 +421,7 @@ let acmatchers binder pairlst sigma =
     if !about_maude then begin
       Format.printf "matchers (%d solutions):\n%!"
         (List.length v) ;
-      List.iter (fun s -> Format.printf " %s\n" "?") v
+      List.iter (fun s -> Format.printf " %s\n" (show_subst_list v)) v
     end ;
     v
 
@@ -418,10 +430,13 @@ let xormatchers binder pairlst sigma =
   let v = matchers true pairlst sigma in
   (* let v = rename_in_subst v in *)
     if !about_maude then begin
-      Format.printf "xor matchers (%d solutions):\n%!"
-        (List.length v) ;
-      List.iter (fun s -> Format.printf " %s\n" "?") v
+      Format.printf "xor matchers (%d solutions):\n%!" 
+        (List.length v);
+      List.iter (fun s -> Format.printf " %s\n"  (show_subst_list v)) v
     end ;
     v
 
 
+let clean_maude () =
+  Hashtbl.reset memoize_maude_unify;
+  countdown := 0

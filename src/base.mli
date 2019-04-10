@@ -72,7 +72,7 @@ type raw_statement = {
   recipes : Inputs.inputs;
   involved_copies : Process.BangSet.t;
 }
-type hash_body
+type hash_body = (Dag.hash_locset * Types.hash_term * Types.hash_term * bool) list
 type hash_statement 
 val body_to_hash : body_atom list -> hash_body
 val statement_to_hash : raw_statement -> hash_statement
