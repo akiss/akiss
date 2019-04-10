@@ -13,6 +13,7 @@ val debug_execution : bool ref
 val about_theory : bool ref
 val debug_merge : bool ref
 val about_maude : bool ref
+val debug_xor : bool ref
 val about_canonization : bool ref
 val about_progress : bool ref
 val about_rare : bool ref

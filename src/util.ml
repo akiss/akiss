@@ -20,6 +20,7 @@ let debug_execution = ref false
 let about_theory = ref false
 let debug_merge = ref false
 let about_maude = ref false
+let debug_xor = ref false
 let about_canonization = ref false
 let about_progress = ref false
 let about_location = ref false

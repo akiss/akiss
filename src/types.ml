@@ -310,9 +310,9 @@ type substitution = {
 let rec check_binder_term binder term =
   match term with
   | Var(x) -> 
-    if x.status != binder 
-    then (Printf.printf "\nBINDER ERROR at %s\n" (show_term term);false)
-    else true
+    if x.status == binder 
+    then true
+    else (Printf.printf "\nBINDER ERROR at %s\n" (show_term term);false)
   | Fun(_,lst) -> List.for_all (check_binder_term binder) lst
 
 let show_substitution subst =
@@ -327,6 +327,6 @@ let show_substitution subst =
   Array.for_all (check_binder_term subst.binder)subst.slave
   then 
     str
-  else (Printf.printf "\nbad substitution %s\n" str; assert false)
+  else (Printf.printf "\nbad substitution %s\n" str; subst.binder := Rule; str)
     
   

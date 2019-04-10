@@ -161,7 +161,8 @@ let rec find_xor_sum vars body rows =
     xor_var r (find_xor_sum (xor_var vars vs) (List.filter (fun b' -> b != b') body) ((v,r,vs)::rows))
     
 let get_recipe_for_sum sum_var st =
-  let var = List.map (fun x -> unbox_var x) sum_var in
+  let rec aux x = function y :: l -> if x = y then l else y :: (aux x l) | [] -> [x] in  
+  let var = List.fold_left (fun lst x -> let x = unbox_var x in aux x lst ) [] sum_var in
   try
   Rewriting.recompose_term (find_xor_sum var st.body [])
   with Not_a_linear_combination -> 

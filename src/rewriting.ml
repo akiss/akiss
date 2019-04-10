@@ -415,22 +415,20 @@ let rec apply_subst_new_binder binder term (sigma : subst_lst) =
     then
       List.assoc x sigma
     else
-      Var({x with status = binder})
+     zero
   | Fun(symbol, list) ->
       Fun(symbol, trmap (function x -> apply_subst_new_binder binder x sigma) list)
 
 let rec compose_with_subst_lst binder nbv sigma subst =
-  (*let rec repl = function
-    | Var(x) -> let v = Var({n = !nbvars; status = binder}) in incr nbvars; v
-    | Fun(symbol, args ) -> Fun(symbol, List.map repl args ) in
-  let subst = List.map (fun (x,t) -> (x,repl t)) subst in*)
-  Array.iteri (fun i term -> sigma.master.(i) <- apply_subst_new_binder binder term subst) sigma.master ;
-  Array.iteri (fun i term -> sigma.slave.(i) <- apply_subst_new_binder binder term subst) sigma.slave ;
+  let master = Array.make (Array.length(sigma.master)) zero in
+  let slave = Array.make (Array.length(sigma.slave)) zero in
+  Array.iteri (fun i term -> master.(i) <- apply_subst_new_binder binder term subst) sigma.master ;
+  Array.iteri (fun i term -> slave.(i) <- apply_subst_new_binder binder term subst) sigma.slave ;
   { 
     binder = binder; 
     nbvars = nbv;
-    master = sigma.master;
-    slave  = sigma.slave;
+    master = master;
+    slave  = slave;
   }
 
 let identity_subst nbv =

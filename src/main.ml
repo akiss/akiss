@@ -51,6 +51,8 @@ let command_line_options_list = [
     "Show information about merging tests");
    ("-maude", Arg.Set(about_maude), 
     "Show information about maude interface");
+   ("-xor", Arg.Set(debug_xor), 
+    "Show information about specific xor process");
    ("-rare", Arg.Set(about_rare),
     "Print info in about rare events");
    ("-progress", Arg.Set(about_progress),

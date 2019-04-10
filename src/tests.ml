@@ -117,11 +117,12 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
         if !debug_merge then Printf.printf "The init merged test from subst %s \nis %s\n%!"(show_substitution sigma)(show_raw_statement test_merge_init);
         match Horn.normalize_new_statement test_merge_init with
         | None -> lst
-        | Some test_merge_init ->
+        | Some test_merge_init -> 
+          (*Printf.printf "\n * \n%s\n *\n" (show_raw_statement test_merge_init);*)
           let (tau,test_merge_init) = Horn.simplify_statement test_merge_init in
           let rho = Rewriting.compose sigma tau in
-          if !debug_merge then Printf.printf "The canonized init merged test from subst %s:\n %s \n%!"
-            (show_substitution tau)(show_raw_statement test_merge_init);
+          if !debug_merge then Printf.printf "The canonized init merged test from subst %s:\n %s \n\n rho = %s\n%!"
+            (show_substitution tau)(show_raw_statement test_merge_init)(show_substitution rho);
           if Horn.is_solved test_merge_init then 
             (rho,test_merge_init)::lst
           else (
@@ -155,15 +156,15 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
             else 
               if Dag.cardinal st.st.inputs.i <>  Dag.cardinal test_merge_init.inputs.i
               then (if !about_rare then Printf.printf "The saturation have involved new actions in %s.\n%!" (show_raw_statement st.st); lst)
-              else ( 
-                if !about_rare then Printf.printf "Need to merge variables after saturation.\n%!";
+              else ( rho.binder := Master;
+                if !about_rare then Printf.printf "Need to merge variables after saturation.\nrho'= %s\n%!"(show_substitution rho);
                 let match_terms = Inputs.csm false test_merge_init.binder test_merge_init.inputs st.st.inputs in
                 let match_recipes = Inputs.csm_recipes false test_merge_init.binder test_merge_init.recipes st.st.recipes in
                 match match_terms, match_recipes with
                 | [subst_inputs],[subst_recipes] -> 
                     rho.binder := Master;
                     let new_sigma = Rewriting.compose_with_subst_lst st.st.binder st.st.nbvars rho (subst_inputs @ subst_recipes) in
-                    Printf.printf "new sub is %s \nfrom %s \n and %s\n%!" (show_substitution new_sigma)(show_substitution rho)(show_subst_lst (subst_inputs @ subst_recipes));
+                    (*Printf.printf "new sub is %s \nfrom %s \n and %s\n%!" (show_substitution new_sigma)(show_substitution rho)(show_subst_lst (subst_inputs @ subst_recipes));*)
                     (new_sigma,st.st)::lst
                 | [], _ -> if !about_rare then Printf.printf "No term matcher\n%!"; lst
                 | _, [] -> if !about_rare then Printf.printf "No recipe matcher\n%!"; lst
@@ -216,7 +217,7 @@ let get_xor_variant_frame run st =
     constraints = run.corresp;
     constraints_back = run.corresp_back;
   } in
-  if true 
+  if !debug_xor 
   then Printf.printf "\nChecking frame variant of %s \nwith dag = %s\n%!" (show_test test)(show_dag st.dag);
   let solution = init_sol run.test.process_name st (proc (other run.test.process_name)) run.sol.sequence test in
   ignore (find_possible_run solution );
@@ -284,8 +285,10 @@ let conj run =
   recipes = transpose_recipes identity_sigma st.recipes run.corresp ; 
   involved_copies = BangSet.empty ; (* TODO *)
   } in
+  let sigm, r = Horn.simplify_statement r in
   stP.binder := New;
-  (identity_sigma,r)
+  (*Printf.printf "conjrun %s => %s\n"(show_raw_statement stP) (show_raw_statement r);*)
+  (Rewriting.compose identity_sigma sigm,r)
   
 let filter_atom set a =
   LocationSet.exists (fun l -> LocationSet.mem l set) a.loc
@@ -344,6 +347,7 @@ let trunconj set run =
     }) (List.filter (filter_atom set) st.body) ;
   involved_copies = BangSet.empty ; (* TODO *)
   } in
+  (*let sigm, r = Horn.simplify_statement r in*)
   (*Printf.printf "conjrun %s => %s\n"(show_raw_statement stP) (show_raw_statement r);*)
   stP.binder := New;
   (identity_sigma,r)
@@ -353,7 +357,7 @@ let is_complex_xor_statement st = !Parser_functions.use_xor && List.exists (fun 
 let gen_alt_tests p test1 dag1 test2 dag2 =
   let lst = ref [] in
   List.iter (fun (_,(sigm1,st1)) -> 
-    if !debug_tests then Printf.printf "Merge xor variants %s\n%!" (show_raw_statement st1);
+    if !debug_xor then Printf.printf "Merge xor variants %s\n%!" (show_raw_statement st1);
     test1.statement.binder := Master;
     let head1 = apply_subst_pred  test1.statement.head sigm1 in 
     let st1 = {st1 with head = head1 ; dag = dag1} in
@@ -457,8 +461,9 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
               if test.solutions_done <> [] then (
                 Printf.printf "xor test %s\n" (show_test test);
                 List.iter (fun (h,(s,st)) -> Printf.printf ">> %s\n" (show_raw_statement st)) test.xor_class;
-                assert false);
+                (*assert false*));
                 (* because all elements of a class are created in the same step by init merge or completion except for net rounds... *)
+                (* problem knows_13(x7,x3+x5),knows_12(x6,x2+x5),knows_11(x4,x2+x3) and knows_13(x7,x2+x5),knows_12(x6,x3+x5),knows_11(x4,x2+x3) *)
               if !about_rare then 
                 Printf.printf "New variation for test %d : %s\n" test.id (show_raw_statement statement);
         );
@@ -532,7 +537,7 @@ and add_merged_tests prun =
               match sigm with
               | None -> sigma 
               | Some sigm -> 
-                Printf.printf "composition \n%s\n%s\n%!" (show_substitution sigma) (show_substitution sigm); 
+                (*Printf.printf "composition \n%s\n%s\n%!" (show_substitution sigma) (show_substitution sigm); *)
                 sigma.binder := Master;
                 let s = Rewriting.compose sigma sigm in
                 s 
@@ -639,7 +644,7 @@ let add_to_completion (run : partial_run) (completion : completion) =
   let _, conjrun = trunconj set run in
   let sts = List.fold_left (fun lst (_,(sigma,st)) -> 
     run.test.statement.binder := Master;
-    if !debug_completion then Printf.printf "A xor variant: %s\n" (show_raw_statement st);
+    if !debug_completion || !debug_xor then Printf.printf "A xor variant: %s\n" (show_raw_statement st);
     let frame = get_xor_variant_frame run st in
     let _, conjrun = trunconj set {run with 
       test = {run.test with statement = {st with head = apply_subst_pred run.test.statement.head sigma}};
