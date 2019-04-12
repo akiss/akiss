@@ -46,16 +46,16 @@ val consequence :
 val rule_shift : Base.raw_statement -> Base.raw_statement *)
 exception No_Eval
 exception Unsound_Statement
-val eval_recipe :
+(*val eval_recipe :
   Inputs.choices ->
-  Inputs.inputs -> Base.body_atom list -> Types.term -> Types.term
+  Inputs.inputs -> Base.body_atom list -> Types.term -> Types.term*)
 val simplify_statement :
   Base.raw_statement -> Types.substitution * Base.raw_statement
 val canonical_form : Base.raw_statement -> Base.raw_statement
 val is_identity_of_theory : Base.raw_statement -> bool
 (*val normalize_identical : 'a -> 'a*)
 val normalize_new_statement : Base.raw_statement -> Base.raw_statement option
-val update : Base.base -> Base.raw_statement -> Base.raw_statement option
+(*val update : Base.base -> Base.raw_statement -> Base.raw_statement option
 val resolution_plus : Base.raw_statement -> Base.raw_statement list
 val is_tuple : Types.term -> bool
 val resolution :
@@ -94,6 +94,6 @@ val process_resolution_new_solved :
   Base.base -> Base.statement -> Base.statement -> unit
 val process_resolution_new_unsolved :
   Base.base -> Base.statement -> Base.statement -> unit
-val process_equation : Base.base -> Base.statement -> Base.statement -> unit
+val process_equation : Base.base -> Base.statement -> Base.statement -> unit*)
 val merge_sat : Base.base -> unit
 val saturate : Types.procId -> int * Base.base

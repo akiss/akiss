@@ -399,13 +399,15 @@ let rec compose_master sigma tau =
   }
 
 let rec compose sigma tau =
-  Array.iteri (fun i term -> sigma.master.(i)<- apply_subst_term term tau)sigma.master ;
-  Array.iteri (fun i term -> sigma.slave.(i) <- apply_subst_term term tau)sigma.slave ;
+  let master = Array.make (Array.length(sigma.master)) zero in
+  let slave = Array.make (Array.length(sigma.slave)) zero in
+  Array.iteri (fun i term -> master.(i)<- apply_subst_term term tau)sigma.master ;
+  Array.iteri (fun i term -> slave.(i) <- apply_subst_term term tau)sigma.slave ;
   { 
     binder = tau.binder; 
     nbvars = tau.nbvars;
-    master = sigma.master;
-    slave  = sigma.slave;
+    master = master;
+    slave  = slave;
   }
   
 let rec apply_subst_new_binder binder term (sigma : subst_lst) =

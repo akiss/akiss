@@ -75,6 +75,7 @@ val root_location : int -> location
 val show_varId : varId -> string
 val show_term : term -> string
 val show_term_list : term list -> string
+val fun_error : term
 val zero : term
 type rewrite_rule = {
   binder_rule : statement_role ref;

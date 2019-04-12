@@ -72,15 +72,24 @@ let is_test_st st =
   | Tests(_) -> true
   | _ -> false
   
+exception Grr  
+  
 let is_solved_atom a =
-  if not (is_var a.recipe) then false else ( 
-  if a.marked 
-  then is_var a.term 
-  else is_sum_term a.term )
+  let solved_term =
+    if a.marked 
+    then is_var a.term 
+    else is_sum_term a.term in
+  if solved_term then 
+    if is_var a.recipe
+    then true
+    else false
+  else false
 
 let is_solved st = 
+  try
   List.for_all
     is_solved_atom st.body
+  with Grr -> (Printf.printf "%s\n%!"(show_raw_statement st);assert false)
     
 (*let find_unsolved st = 
   match List.find_opt (fun a -> not (is_solved_atom a)) st.body  with
@@ -91,14 +100,17 @@ let is_solved st =
 let rec find_unsolved best body =
   match body with
   | [] -> (match best with
-    | None -> Printf.printf "Looking for unsolved atom of a solved statement\n"; assert false
+    | None -> Printf.printf "Looking for unsolved atom of a solved statement\n"; raise Grr
     | Some a -> a)
-  | a :: body -> if is_solved_atom a then find_unsolved best body else 
+  | a :: body -> 
+    if is_solved_atom a || (*not (is_var a.recipe)*) (is_sum_term a.term && not a.marked)
+    then find_unsolved best body 
+    else 
     (match a.term with
     | Fun({id = Plus},[l;r]) -> find_unsolved (if a.marked || best = None then Some a else best) body
     | _ -> a)
     
-let find_unsolved st = find_unsolved None st.body
+let find_unsolved st = try find_unsolved None st.body with Grr -> (Printf.printf "- %s\n%!"(show_raw_statement st);assert false)
   
 let rec explode_term t =
     match t with
@@ -338,19 +350,66 @@ let rule_shift st =
 exception No_Eval
 exception Unsound_Statement (* Statement with a premisse which is unsatisfiable *)
   
-let rec eval_recipe choices inputs solved_atom term =
+let rec eval_recipe top choices inputs solved_atom term =
   match term with
-  | Fun({id=Frame({io = Output(_,t)})},[]) -> eval_recipe choices inputs solved_atom t 
-  | Fun({id=InputVar({observable = Public} as l)},[]) -> Inputs.get l inputs
+  | Fun({id=Plus; has_variables = h},[l;r]) when top -> 
+    let v1,t1 = eval_recipe true choices inputs solved_atom l in
+    let v2,t2 = eval_recipe true choices inputs solved_atom r in
+    v1 @ v2, Fun({id=Plus;has_variables = h},[t1;t2])
+  | Fun({id=Frame({io = Output(_,t)})},[]) -> 
+    eval_recipe false choices inputs solved_atom t 
+  | Fun({id=InputVar({observable = Public} as l)},[]) -> [],Inputs.get l inputs
   | Fun({id=InputVar({observable = Hidden} as l)},[]) -> 
-    eval_recipe choices inputs solved_atom (
+    eval_recipe false choices inputs solved_atom (
       match (Inputs.get_output_of_input choices l).io with 
       Output(_,t)-> t 
       | _ -> assert false) 
-  | Fun(f,args) -> Fun(f,List.map (eval_recipe choices inputs solved_atom) args)
+  | Fun(f,args) -> [],Fun(f,List.map (fun t -> snd(eval_recipe false choices inputs solved_atom t)) args)
   | Var(x) -> (try 
-     (List.find (fun a -> a.recipe = term) solved_atom).term 
-    with Not_found -> raise No_Eval )
+     [],(List.find (fun a -> a.recipe = term) solved_atom).term 
+    with Not_found -> 
+      if top then ([term],zero)
+      else (
+        if !about_rare then Printf.printf "no eval for %s\n" (show_term term); 
+        raise No_Eval ))
+        
+let clean_no_var_recipes st other_body var_recipe_body =
+  List.fold_left (fun (vrp,ob) b -> 
+    if LocationSet.cardinal b.loc > 1 
+    then (vrp,b::ob) 
+    else 
+      try 
+      let v,t = eval_recipe true st.choices st.inputs vrp b.recipe in
+      match v with
+      | [] ->
+        if Rewriting.equals_ac (Rewriting.normalize t (!Parser_functions.rewrite_rules))  b.term then
+          (vrp,ob)
+        else (
+          if !about_canonization then Printf.printf "Unsound statement\n%s > %s = %s \n%!"
+            (show_term b.recipe) (show_term t) (show_term b.term);
+          raise Unsound_Statement )
+      | [v1] -> 
+        if !about_canonization then Printf.printf "deduce that %s is %s\n" (show_term v1) (show_term t);
+        let b' = {b with recipe= v1;term = (Rewriting.normalize (Fun({id=Plus;has_variables=true}, [t;b.term])) (!Parser_functions.rewrite_rules))} in
+        (b'::vrp,ob)
+      | v1 :: vs -> 
+        let recip = List.fold_left (fun t v -> Fun({id=Plus;has_variables = true},[v;t])) v1 vs in
+        let term = (Rewriting.normalize (Fun({id=Plus;has_variables=true}, [t;b.term])) (!Parser_functions.rewrite_rules)) in
+        if !about_canonization then Printf.printf "Deduce that %s is %s\n" (show_term recip) (show_term term);
+        let b' = {b with recipe= recip ;term = term} in
+        (vrp,b'::ob)
+        (*
+        match term with 
+        | Fun({id=Plus},[]) ->
+          let b' = {b with recipe= recip ;term = term} in
+          (vrp,b'::ob)
+        | _ -> raise Unsound_Statement
+        *)
+      with
+      No_Eval -> 
+        if !about_rare then Printf.printf "No way to check %s\n%!" (show_term b.recipe);
+        (vrp,b::ob)  
+  ) (var_recipe_body, []) other_body
     
 let compare_loc_set recipes l1 l2 =
   let ls1 = LocationSet.elements l1.loc in
@@ -380,27 +439,18 @@ let simplify_statement st =
   st.binder := Master;
   let binder = ref New in
   let nbv = ref 0 in
-  let body_maker = ref [] in
-  let var_recipe_body,other_body = List.partition (fun b -> is_var b.recipe) st.body in
-  let other_body = List.filter (fun b -> 
-    if LocationSet.cardinal b.loc > 1 then true else 
-    try 
-    let t = eval_recipe st.choices st.inputs var_recipe_body b.recipe in
-    if Rewriting.equals_ac (Rewriting.normalize t (!Parser_functions.rewrite_rules))  b.term then
-      false
-    else (
-      if !about_rare then Printf.printf "Unsound statement\n%s > %s = %s \n %s%!"
-        (show_term b.recipe) (show_term t) (show_term b.term) (show_raw_statement st);
-      raise Unsound_Statement )
-    with
-    No_Eval -> true 
-  ) other_body in 
-  List.iter
-      (fun a ->
-        List.iter (fun (x : varId) -> 
+  let update_term term = 
+    List.iter (fun (x : varId) -> 
           if sigma_repl.(x.n) = None
           then (sigma_repl.(x.n) <- Some(Var({n = !nbv ; status = binder})) ;incr nbv);
-        ) (vars_of_term a.term);
+        ) (vars_of_term term) in
+  let body_maker = ref [] in
+  let var_recipe_body,other_body = List.partition (fun b -> is_var b.recipe) st.body in
+  let var_recipe_body,other_body = clean_no_var_recipes st other_body var_recipe_body in
+  let var_recipe_body,other_body = clean_no_var_recipes st other_body var_recipe_body in
+  List.iter
+      (fun a ->
+        update_term a.term;
         let recipe_var = unbox_var a.recipe in
         let t = a.term in
         match List.find_opt (fun (a',lset) -> Rewriting.equals_ac t (a'.term)) !body_maker with
@@ -424,18 +474,12 @@ let simplify_statement st =
        (List.sort (fun x y -> compare_loc_set st.recipes x y) var_recipe_body)
   ;
   List.iter
-      (fun a -> List.iter 
-        (fun (r : varId) -> 
-          if sigma_repl.(r.n) = None 
-          then (
-              sigma_repl.(r.n) <- Some(Var({n = !nbv ; status = binder})) ;
-              incr nbv) 
-        )(vars_of_term a.recipe)
+      (fun a ->  update_term a.term; update_term a.recipe
       ) other_body ;
   let body = other_body @ List.map (fun (b,locset) -> {b with loc = !locset}) !body_maker in
   let sigma = { 
     binder = binder; 
-    master =  Array.map (function Some x -> x | None -> zero) sigma_repl;
+    master =  Array.map (function Some x -> x | None -> fun_error) sigma_repl;
     slave = Array.make 0 zero;
     nbvars = !nbv;
   } in

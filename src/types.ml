@@ -249,7 +249,7 @@ and show_term_list = function
   | Output(c,t) -> "out(" ^ c.name ^ "," ^ (show_term t) ^ ")"
   | _ -> "?"*)
 
-  
+let fun_error =  Fun({id=Projection(-1,-1);has_variables=false},[]) 
   
 let zero = Fun({id=Zero;has_variables=false},[])
 

@@ -118,7 +118,7 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
         match Horn.normalize_new_statement test_merge_init with
         | None -> lst
         | Some test_merge_init -> 
-          (*Printf.printf "\n * \n%s\n *\n" (show_raw_statement test_merge_init);*)
+          if !debug_merge then Printf.printf "after normalization %s\n%!" (show_raw_statement test_merge_init);
           let (tau,test_merge_init) = Horn.simplify_statement test_merge_init in
           let rho = Rewriting.compose sigma tau in
           if !debug_merge then Printf.printf "The canonized init merged test from subst %s:\n %s \n\n rho = %s\n%!"
@@ -139,15 +139,18 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
           kb.temporary_merge_test.children <- [st];
           kb.temporary_merge_test_result <- [];
           Queue.add st kb.ns_todo;
+          if !about_rare 
+            then Printf.printf "Saturation triggered for %s \nfrom fa = %s\n and fb = %s\nwith subst %s\n%!" 
+              (show_raw_statement test_merge_init)(show_raw_statement fa)(show_raw_statement fb)(show_substitution rho);
           Horn.merge_sat kb;
           if !about_rare 
           then ( 
-            Printf.printf "Saturation triggered for %s \n" (show_raw_statement test_merge_init);
             if List.length kb.temporary_merge_test_result > 1 
             then 
               Printf.printf "%d solutions have been found:\n%s\n%!"
                 (List.length kb.temporary_merge_test_result)
               (List.fold_right (fun st str -> str ^ (show_statement " *" st)) kb.temporary_merge_test_result "")
+            else Printf.printf "No soluTion\n"
           );
           let res = (List.fold_left (fun lst st -> 
             if !debug_merge then Printf.printf "merge result st matched with: \n%s\n%s\n" (show_statement "" st)(show_raw_statement test_merge_init);
@@ -178,7 +181,9 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
           (* assert (res != [] || kb.temporary_merge_test_result= []);*) (* assertion is false when doing overapproximation with recipes *)
           res)
       with
-      Horn.Unsound_Statement -> lst
+      Horn.Unsound_Statement -> 
+        if !debug_merge then Printf.printf "Unsound statement %s\n%!" (show_raw_statement test_merge_init);
+        lst
       ) [] sigmas
     in
     fa.binder:= New;
