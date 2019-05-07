@@ -77,7 +77,7 @@ exception Grr
 let is_solved_atom a =
   let solved_term =
     if a.marked 
-    then is_var a.term 
+    then (*is_var a.term*) false 
     else is_sum_term a.term in
   if solved_term then 
     if is_var a.recipe
@@ -142,18 +142,26 @@ let get_head_term = function
 exception Not_a_linear_combination
 
 let xor_var v1 v2 = list_diff (v1 @ v2) (list_intersect v1 v2)
+
+let show_row (x,recipe,var_lst) = 
+(Printf.sprintf "(%s=%s|%s)" (show_varId x) (show_term_list recipe)(List.fold_left (fun str v -> str ^ "+" ^ (show_varId v)) "" var_lst))
+
+let show_rows rows = 
+  List.fold_left (fun str row -> str ^ (show_row row)) "" rows
   
+(** remove  *)  
 let remove_rows var recip vars rows =
   List.fold_right (fun (x,recipe,var_lst) (var,recipe',vars') -> 
-    if List.mem x vars 
-    then (var,xor_var recipe' recipe, xor_var vars' var_lst )
+    if List.mem x vars' 
+    then ((*Printf.printf "- %s\n" (show_row (x,recipe,var_lst));*)(var,xor_var recipe' recipe, xor_var vars' var_lst ))
     else (var,recipe',vars')
     ) rows (var,recip,vars)
 
 let rec find_var x body rows  =
   match body with
   | [] -> raise Not_a_linear_combination
-  | b :: body -> let vars = vars_of_term b.term in
+  | b :: body ->
+    let vars = vars_of_term b.term in
     if List.mem x vars 
     then 
       let row = (remove_rows x [b.recipe] vars rows)  in
@@ -163,23 +171,25 @@ let rec find_var x body rows  =
   
 let rec find_xor_sum vars body rows =
   (*Printf.printf "\nvars: ";
-  List.iter (fun v -> Printf.printf "%s" (show_varId v)) vars;*)
+  List.iter (fun v -> Printf.printf "%s" (show_varId v)) vars;
+  Printf.printf "\nbody: %s\nrows: %s\n" (show_atom_list body) (show_rows rows);*)
   match vars with
   | [] -> []
   | x :: _ -> 
     let (v,r,vs), b = find_var x body rows in
-    (*Printf.printf "new row : %s=%s,%s, " (show_varId v)(show_term_list r)"";
-    List.iter (fun x -> Printf.printf "%s " (show_varId x))vs;*)
+    (*Printf.printf "new row : %s" (show_row (v,r,vs)) ;*)
     xor_var r (find_xor_sum (xor_var vars vs) (List.filter (fun b' -> b != b') body) ((v,r,vs)::rows))
-    
+ 
+(** find a recipe which provies sum_var according to st *) 
 let get_recipe_for_sum sum_var st =
   let rec aux x = function y :: l -> if x = y then l else y :: (aux x l) | [] -> [x] in  
   let var = List.fold_left (fun lst x -> let x = unbox_var x in aux x lst ) [] sum_var in
   try
   Rewriting.recompose_term (find_xor_sum var st.body [])
   with Not_a_linear_combination -> 
+    Printf.printf "No way to get: ";
     List.iter (fun v -> Printf.printf "%s+" (show_varId v)) var;
-    Printf.printf "\n%s\n" (show_raw_statement st); assert false
+    Printf.printf "\nfrom %s\n" (show_raw_statement st); assert false
 
 (** {2 Replacing deduction statements by simpler ones }*)  
   
@@ -195,6 +205,7 @@ exception Bad_case
 let first kb f =
    let rec first_node st f =
       (* Printf.printf "T%d " st.id; *)
+     (*if empty <> st.st.dag then raise Bad_World ;*)
      try f st.st with 
      Bad_case -> first_list st.children f  
    and first_list sts f =
@@ -274,7 +285,9 @@ let consequence st kb rules =
           if cst != [] then raise Not_a_linear_combination
           else
             (* Base case: Axiom rule of conseq *)
-          `Axiom, get_recipe_for_sum var st
+            (match List.find_opt (fun b -> Rewriting.equals_ac b.term t) st.body with
+            | Some b -> `Axiom,b.recipe
+            | None -> `Axiom, get_recipe_for_sum var st)
     with
     | Not_a_linear_combination ->
       (* Inductive case: Res rule
@@ -324,32 +337,18 @@ let consequence st kb rules =
 
 (** {2 Knowledge base canonization rules } *)
 
-let rule_shift st = 
-  match st.head with
-  | Knows( r , (Fun({ id = Plus}, [ l ; t ]) as pl)) -> (
-    let var,cst = explode_term pl in
-    try
-    if var = [] then st else begin
-    if !about_canonization then Printf.printf "shift on: %s\n"(show_raw_statement st);
-    let recipe = get_recipe_for_sum var st in
-    let stt = {st with head = Knows( Fun({id=Plus;has_variables=true},[r;recipe]), Rewriting.recompose_term cst)} in 
-    if !about_canonization then Format.printf "shift + on the statement: %s \n" (show_raw_statement stt); 
-    stt end
-    with
-    | Not_a_consequence -> assert false)
-  | Knows( r , Var(x)) -> st (* (*Bugguy when no xor*)
-    begin let stt = {st with head = 
-      Knows(Fun({ id = Plus; has_variables = true},[get_recipe (Var(x)) (st.body); r]), 
-        Fun({ id = Zero; has_variables = false},[]))} in 
-      if !debug_output 
-      then Format.printf "shift 0 on the statement: %s \n" (show_raw_statement stt); 
-      stt
-    end *)
-  | _ -> st 
+
 
 exception No_Eval
 exception Unsound_Statement (* Statement with a premisse which is unsatisfiable *)
   
+let rec nb_root_variables r =
+  match r with
+  | Fun({id=Plus},[l;r]) -> (nb_root_variables l) + (nb_root_variables r)
+  | Var(x) -> 1
+  | _ -> 0
+  
+(* TODO add location check *)
 let rec eval_recipe top choices inputs solved_atom term =
   match term with
   | Fun({id=Plus; has_variables = h},[l;r]) when top -> 
@@ -392,7 +391,7 @@ let clean_no_var_recipes st other_body var_recipe_body =
         if !about_canonization then Printf.printf "deduce that %s is %s\n" (show_term v1) (show_term t);
         let b' = {b with recipe= v1;term = (Rewriting.normalize (Fun({id=Plus;has_variables=true}, [t;b.term])) (!Parser_functions.rewrite_rules))} in
         (b'::vrp,ob)
-      | v1 :: vs -> 
+      | v1 :: vs -> assert false;
         let recip = List.fold_left (fun t v -> Fun({id=Plus;has_variables = true},[v;t])) v1 vs in
         let term = (Rewriting.normalize (Fun({id=Plus;has_variables=true}, [t;b.term])) (!Parser_functions.rewrite_rules)) in
         if !about_canonization then Printf.printf "Deduce that %s is %s\n" (show_term recip) (show_term term);
@@ -434,6 +433,8 @@ let compare_loc_set recipes l1 l2 =
 
 let simplify_statement st =
   try 
+  (*if is_solved st then
+  Dag.iter (fun _ r -> if nb_root_variables r > 1 then (Printf.printf "aie %s%!\n" (show_raw_statement st);assert false)) st.recipes.i;*)
   (*Printf.printf "simplification of %s\n" (show_raw_statement st);*)
   let sigma_repl = Array.make st.nbvars None in
   st.binder := Master;
@@ -496,11 +497,72 @@ let simplify_statement st =
   with 
     Invalid_argument _ -> 
       Printf.eprintf "Error when simplify_statement %s \n" (show_raw_statement st);
-      exit 6
+      assert false
     
-
+let rule_no_plus_var st = 
+  let nbv = ref st.nbvars in
+  let body = ref st.body in
+  let rec get_sum_vars loc term =
+    match term with
+    | Fun({id=Plus;has_variables = z},args) -> 
+      let var,cst = explode_term term in 
+      if List.length var > 1
+      then (
+        let to_merge_var,not_to_merge = List.partition (fun x -> List.exists (fun b -> b.recipe = x && (not b.marked)) st.body) var in
+        if List.length to_merge_var > 1
+        then (
+          if !about_canonization then Printf.printf "no plus var rule applied on: %s\n"(show_raw_statement st);
+          let args' = List.map (get_sum_vars loc) cst in
+          let new_var = Var({status=st.binder;n=(!nbv)}) in
+          incr nbv ;
+          let new_term = Rewriting.normalize_xor_order (Rewriting.recompose_term (List.map (fun v -> (List.find (fun b -> b.recipe = v && (not b.marked)) st.body).term) to_merge_var)) in
+          body := {loc = loc ; recipe = new_var; term = new_term; marked = false} :: !body;
+          Rewriting.recompose_term (new_var :: not_to_merge @ args')
+        )
+        else
+         Rewriting.recompose_term (List.map (get_sum_vars loc) (var@cst) )
+      )else Rewriting.recompose_term (List.map (get_sum_vars loc) (var@cst) )
+    | Fun(f,args) ->Fun(f,List.map (get_sum_vars loc) args )
+    | _ -> term
+  in
+  let new_st =
+  { st with 
+    recipes = {i = Dag.mapi (fun l r -> get_sum_vars (LocationSet.singleton l) r) st.recipes.i};
+    nbvars = !nbv;
+    body = !body;
+  } in
+  if !nbv = st.nbvars then st
+  else new_st
+    
+let rule_shift st = 
+  match st.head with
+  | Knows( r , (Fun({ id = Plus}, [ l ; t ]) as pl)) -> (
+    let var,cst = explode_term pl in
+    try
+    if var = [] then st else begin
+    if !about_canonization then Printf.printf "shift rule applied on: %s\n"(show_raw_statement st);
+    (*let recipe = get_recipe_for_sum var st in*)
+    let recipe = Var({status=st.binder;n=st.nbvars}) in
+    let _,stt = simplify_statement {st with 
+      nbvars = st.nbvars+1 ;
+      body = {loc= empty_loc; recipe=recipe;term=Rewriting.recompose_term(var);marked=false}:: st.body ;
+      head = Knows( Fun({id=Plus;has_variables=true},[r;recipe]), Rewriting.recompose_term cst)} in 
+    if !about_canonization then Format.printf "shift + on the statement: %s \n" (show_raw_statement stt); 
+     stt end
+    with
+    | Not_a_consequence -> assert false)
+  | Knows( r , Var(x)) -> st (* (*Bugguy when no xor*)
+    begin let stt = {st with head = 
+      Knows(Fun({ id = Plus; has_variables = true},[get_recipe (Var(x)) (st.body); r]), 
+        Fun({ id = Zero; has_variables = false},[]))} in 
+      if !debug_output 
+      then Format.printf "shift 0 on the statement: %s \n" (show_raw_statement stt); 
+      stt
+    end *)
+  | _ -> st 
+  
 let canonical_form statement =
-  let _,statement = simplify_statement statement in
+  let _,statement = simplify_statement (rule_no_plus_var statement) in
   let statement = 
     if is_deduction_st statement && is_solved statement 
     then
@@ -1204,7 +1266,7 @@ let extra_resolution kb solved unsolved =
   | [] -> []
   | [s] -> Inputs.csu s solved.st.inputs unsolved.st.inputs
   | lst -> List.concat(List.rev_map (fun s -> Inputs.csu s solved.st.inputs unsolved.st.inputs) lst) in 
-  if sigmas = [] then (if !debug_saturation then Printf.printf " recipes cannot be unified \n"; false )
+  if sigmas = [] then (if !debug_saturation then Printf.printf " incompatible worlds \n"; false )
   else begin 
     if !debug_saturation then Printf.printf " compatible worlds\n";
     List.iter (fun sigma -> List.iter 
@@ -1314,3 +1376,35 @@ let saturate procId  =
     end
   done ;
   (ind,kb)  
+  
+(*Test stuff *)
+  
+let clean_recipe_variable st =
+  let vars = Dag.fold (fun l r vars -> unique (List.rev_append (Term.vars_of_term r) vars)) st.recipes.i [] in
+  let head = get_test_head st.head in
+  let head_vars = 
+    EqualitiesSet.fold (fun (_,s,t) vars -> unique (List.concat [(Term.vars_of_term s);(Term.vars_of_term t);vars])) head.equalities 
+    (EqualitiesSet.fold (fun (_,s,t) vars -> unique (List.concat [(Term.vars_of_term s);(Term.vars_of_term t);vars])) head.disequalities []) in
+  let useful_body,useless_body = List.partition (fun b -> List.mem (Term.unbox_var b.recipe) vars) st.body in
+  let sigma = List.fold_left (fun sigma rx -> if List.mem rx vars 
+    then sigma
+    else
+      match List.find_opt (fun b -> (Term.unbox_var b.recipe) = rx) useless_body with
+      | None -> assert false
+      | Some b -> 
+        let (var,cst) = explode_term b.term in
+        let r = get_recipe_for_sum var {st with body = useful_body} in
+        (rx,r)::sigma
+    ) [] head_vars in
+  if sigma = [] then st
+  else (
+  let st' = 
+  { st with head = Tests(
+  {
+    head_binder = st.binder;
+    equalities= EqualitiesSet.map (fun (b,r,r') -> (b,Term.apply_subst r sigma, Term.apply_subst r' sigma)) head.equalities;
+    disequalities=EqualitiesSet.map (fun (b,r,r') -> (b,Term.apply_subst r sigma, Term.apply_subst r' sigma)) head.disequalities
+  });
+  body = useful_body;} in
+  (*Printf.printf "statement %s \n becomes %s\n" (show_raw_statement st)(show_raw_statement st');*)
+  st')

@@ -97,3 +97,4 @@ val process_resolution_new_unsolved :
 val process_equation : Base.base -> Base.statement -> Base.statement -> unit*)
 val merge_sat : Base.base -> unit
 val saturate : Types.procId -> int * Base.base
+val clean_recipe_variable : Base.raw_statement -> Base.raw_statement

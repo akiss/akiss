@@ -91,7 +91,7 @@ main:
  | equalsPreamble Rewritesline Result Bool Colon bool { `Equal true }
      
      unifierPreamble:
- | Variant Unify In Identifier Colon term EqualUnify term Dot {
+ | Variant Unify In Identifier Colon setequationsPreamble Dot {
   if debug then Printf.printf "unifierPreamble ";
     current_binder := ref (Extra (List.length !maude_current_sigma.e));
     current_max_var := 0;}

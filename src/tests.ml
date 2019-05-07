@@ -10,6 +10,9 @@ open Bijection.Run
 open Bijection.Test
 open Process_execution
 
+
+        
+
 (** the negation function from the theory *)
 let negate_statement (st : raw_statement) =
   match st.head with
@@ -161,13 +164,16 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
               then (if !about_rare then Printf.printf "The saturation have involved new actions in %s.\n%!" (show_raw_statement st.st); lst)
               else ( rho.binder := Master;
                 if !about_rare then Printf.printf "Need to merge variables after saturation.\nrho'= %s\n%!"(show_substitution rho);
-                let match_terms = Inputs.csm false test_merge_init.binder test_merge_init.inputs st.st.inputs in
-                let match_recipes = Inputs.csm_recipes false test_merge_init.binder test_merge_init.recipes st.st.recipes in
+                (*st.st.binder := Extra(5);*)
+                let match_terms = Inputs.csm false st.st.binder test_merge_init.inputs st.st.inputs in
+                let match_recipes = Inputs.csm_recipes false st.st.binder test_merge_init.recipes st.st.recipes in
                 match match_terms, match_recipes with
                 | [subst_inputs],[subst_recipes] -> 
                     rho.binder := Master;
                     let new_sigma = Rewriting.compose_with_subst_lst st.st.binder st.st.nbvars rho (subst_inputs @ subst_recipes) in
-                    (*Printf.printf "new sub is %s \nfrom %s \n and %s\n%!" (show_substitution new_sigma)(show_substitution rho)(show_subst_lst (subst_inputs @ subst_recipes));*)
+                    (*st.st.binder := Rule;
+                    Printf.printf "new sub is %s \nfrom %s \n and %s\n%!" (show_substitution new_sigma)(show_substitution rho)(show_subst_lst (subst_inputs @ subst_recipes));
+                    st.st.binder := New;*)
                     (new_sigma,st.st)::lst
                 | [], _ -> if !about_rare then Printf.printf "No term matcher\n%!"; lst
                 | _, [] -> if !about_rare then Printf.printf "No recipe matcher\n%!"; lst
@@ -227,7 +233,7 @@ let get_xor_variant_frame run st =
   let solution = init_sol run.test.process_name st (proc (other run.test.process_name)) run.sol.sequence test in
   ignore (find_possible_run solution );
   match solution.selected_run with
-    | None ->  assert false 
+    | None ->  Printf.printf "%s\n%s\n%s\n%!" (show_run run)(show_test run.test)(show_raw_statement st);assert false 
     | Some pr -> pr.frame
 
 
@@ -443,7 +449,7 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
         let dag = {rel = Dag.mapi (fun loc lset -> LocationSet.union loc_phase.(loc.phase + 1) lset) statement.dag.rel} in
         if is_cyclic dag then (Printf.printf "cycle on %s\n"(show_dag dag) ;raise CyclicDag) else dag ) (*maybe a bug here: how cycle is found ? *)
     in
-    let statement =  { statement with dag = dag } in
+    let statement = Horn.clean_recipe_variable { statement with dag = dag } in
     statement.binder := New;
     let sequence = dag_to_sequence dag in
     let hash_trace = (Inputs.choices_to_hash statement.choices,dag_to_hash statement.dag) in
@@ -464,13 +470,13 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
               let sigm = subst_from_trace_subst vars2 vars1 statement.binder statement.nbvars in
               test.xor_class<- (hash_body,(sigm,statement))::test.xor_class ;
               if test.solutions_done <> [] then (
-                Printf.printf "xor test %s\n" (show_test test);
+                Printf.printf "Suspect behavior: new xor test while main test already done\n%s\n" (show_test test);
                 List.iter (fun (h,(s,st)) -> Printf.printf ">> %s\n" (show_raw_statement st)) test.xor_class;
                 (*assert false*));
                 (* because all elements of a class are created in the same step by init merge or completion except for net rounds... *)
                 (* problem knows_13(x7,x3+x5),knows_12(x6,x2+x5),knows_11(x4,x2+x3) and knows_13(x7,x2+x5),knows_12(x6,x3+x5),knows_11(x4,x2+x3) *)
               if !about_rare then 
-                Printf.printf "New variation for test %d : %s\n" test.id (show_raw_statement statement);
+                Printf.printf "New variation for test %d : %s\n%s\n" test.id (show_raw_statement statement)(show_substitution sigm);
         );
         (*let sigma = Rewriting.merging_subst test.statement.nbvars test.statement.binder in*)
         let sigma = subst_from_trace_subst vars1 vars2 test.statement.binder test.statement.nbvars in
@@ -542,7 +548,7 @@ and add_merged_tests prun =
               match sigm with
               | None -> sigma 
               | Some sigm -> 
-                (*Printf.printf "composition \n%s\n%s\n%!" (show_substitution sigma) (show_substitution sigm); *)
+                (*Printf.printf "composition \n%s\n%s\n%!" (show_substitution sigma) (show_substitution sigm);*) 
                 sigma.binder := Master;
                 let s = Rewriting.compose sigma sigm in
                 s 
@@ -749,7 +755,7 @@ let rec statements_to_tests t c process_name (statement : statement) otherProces
   if eq_vars <> [] then (Printf.eprintf "To be implemented: presence of free variables in tests"; assert false);
   let equalities = EqualitiesSet.map (fun (b,s,t) -> (b,Rewriting.apply_subst_term s sigma,Rewriting.apply_subst_term t sigma)) equalities in
   let equalities = 
-    match statement.st.head with
+    match raw_statement'.head with
     | Identical (s,t) -> 
       if c then (
         let compl = statement_to_completion process_name statement (negate_statement raw_statement') in
@@ -769,7 +775,7 @@ let rec statements_to_tests t c process_name (statement : statement) otherProces
     if t then ignore (statement_to_tests process_name (Initial(statement)) 
       {raw_statement' with 
         head = Tests( {
-          head_binder = statement.st.binder;
+          head_binder = raw_statement'.binder;
           equalities= new_eq; 
           disequalities = EqualitiesSet.empty} )} 
       otherProcess);

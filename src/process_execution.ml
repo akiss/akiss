@@ -441,7 +441,7 @@ let rec find_possible_run reachable solution =
       solution.selected_run <- Some run;
       reachable )
     else (
-      if !debug_execution then Printf.printf "\nSolution fails the tests: \n %s \n" (show_run run) ;
+      if !debug_execution then Printf.printf "\nSolution fails the tests: \n %s \n" (show_partial_run run) ;
       find_possible_run true solution )
   end
   

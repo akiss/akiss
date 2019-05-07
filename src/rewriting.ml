@@ -66,7 +66,7 @@ and list_compare_ac l1 l2 =
 	
 let rec list_reduce l =
   match l with
-	| z :: q when z = zero -> list_reduce q
+	| Fun({id=Zero},_) :: q -> list_reduce q
 	| t1 :: t2 :: q when compare_ac t1 t2 = 0 -> list_reduce q
 	| t :: q -> t :: (list_reduce q)
 	| [] -> []
@@ -211,6 +211,8 @@ let rec unify xor hard pairlst sigma =
           end
     | (t, (Var(y) as s))::q -> unify xor hard ((s,t)::q) sigma
     | ((Fun({id = Plus}, _) as sa), (Fun({id=Plus}, _) as ta))::q -> may_unify_plus xor hard sa ta q sigma
+    | ((Fun({id = Plus}, _) as sa), ta)::q -> if xor then may_unify_plus xor hard sa ta q sigma else raise Not_unifiable
+    | (ta, (Fun({id = Plus}, _) as sa))::q -> if xor then may_unify_plus xor hard sa ta q sigma else raise Not_unifiable
     | (Fun({id = f}, sa), Fun({id = g}, ta))::q when f = g -> unify xor hard (combine sa ta q) sigma
     | _ ->  raise Not_unifiable
     
@@ -222,18 +224,19 @@ and may_unify_plus xor hard sa ta pairlst sigma =
 	let exp_sa = diff_sum_term exp_sa' exp_ta' in
 	let exp_ta = diff_sum_term exp_ta' exp_sa' in
 	(* if now one term is not a + switch to the standard unification *)
-  if mset_cardinal exp_sa < 2 then unify xor hard ((recompose_term_set exp_sa,recompose_term_set exp_ta)::pairlst) sigma
-	else if mset_cardinal exp_ta < 2 then unify xor hard ((recompose_term_set exp_ta,recompose_term_set exp_sa)::pairlst) sigma
-	else if xor then unify xor ((recompose_term_set exp_sa,recompose_term_set exp_ta)::hard) pairlst sigma 
+	if xor then unify xor ((recompose_term_set exp_sa,recompose_term_set exp_ta)::hard) pairlst sigma 
 	else
-    let (nbv_sa,ws) = TermSum.fold (fun t nb'(nb,w) -> match t with Var(_) -> (nb+nb',w) | _ -> (nb,t)) exp_sa (0,zero) in
-    let (nbv_ta,wt) = TermSum.fold (fun t nb'(nb,w) -> match t with Var(_) -> (nb+nb',w) | _ -> (nb,t)) exp_ta (0,zero) in
-    if nbv_sa + nbv_ta > 1 then unify xor ((recompose_term_set exp_sa,recompose_term_set exp_ta)::hard) pairlst sigma (* if there is more than 1 variable ask Maude *)
-    else if nbv_sa = 0 then 
-      remove_one_factor_both_side hard wt exp_ta exp_sa sa ta pairlst sigma
-    else if nbv_ta = 0 then
-      remove_one_factor_both_side hard ws exp_sa exp_ta sa ta pairlst sigma
-    else assert false
+    if mset_cardinal exp_sa < 2 then unify xor hard ((recompose_term_set exp_sa,recompose_term_set exp_ta)::pairlst) sigma
+    else if mset_cardinal exp_ta < 2 then unify xor hard ((recompose_term_set exp_ta,recompose_term_set exp_sa)::pairlst) sigma
+    else 
+      let (nbv_sa,ws) = TermSum.fold (fun t nb'(nb,w) -> match t with Var(_) -> (nb+nb',w) | _ -> (nb,t)) exp_sa (0,zero) in
+      let (nbv_ta,wt) = TermSum.fold (fun t nb'(nb,w) -> match t with Var(_) -> (nb+nb',w) | _ -> (nb,t)) exp_ta (0,zero) in
+      if nbv_sa + nbv_ta > 1 then unify xor ((recompose_term_set exp_sa,recompose_term_set exp_ta)::hard) pairlst sigma (* if there is more than 1 variable ask Maude *)
+      else if nbv_sa = 0 then 
+        remove_one_factor_both_side hard wt exp_ta exp_sa sa ta pairlst sigma
+      else if nbv_ta = 0 then
+        remove_one_factor_both_side hard ws exp_sa exp_ta sa ta pairlst sigma
+      else assert false
     
 and remove_one_factor_both_side hard wt exp_ta exp_sa sa ta pairlst sigma =    
         match wt with 
@@ -382,7 +385,12 @@ let rec apply_subst_term term sigma =
   try
    match term with
   | Fun(f,args) -> Fun(f, List.map (fun t -> apply_subst_term t sigma) args )
-  | Var(x) -> let the_sigma = if !(x.status) = Master then sigma.master else sigma.slave in
+  | Var(x) -> 
+      let the_sigma = 
+        match !(x.status) with
+        | Master -> sigma.master
+        | New -> assert false
+        | _ -> sigma.slave in
      the_sigma.(x.n)
   with
   | Invalid_argument a -> Printf.eprintf "Error when subst of %s with %s \n" (show_term term)(show_substitution sigma);
@@ -417,7 +425,7 @@ let rec apply_subst_new_binder binder term (sigma : subst_lst) =
     then
       List.assoc x sigma
     else
-     zero
+     fun_error
   | Fun(symbol, list) ->
       Fun(symbol, trmap (function x -> apply_subst_new_binder binder x sigma) list)
 

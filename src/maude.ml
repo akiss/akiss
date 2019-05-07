@@ -79,7 +79,7 @@ let print_maude_pairlst with_rules pairlst sigma=
   Parser_functions.nonces := [] ;
   Parser_functions.frames := [] ;
   let terms = List.fold_left (fun str (s,t) -> 
-    ( if str = "" then (if with_rules = E then "variant " else "")^"unify in Current : " else  str ^ " /\\ ") 
+    ( if str = "" then (match with_rules with E | XOR -> "variant " | AC -> "")^"unify in Current : " else  str ^ " /\\ ") 
      ^ (print_maude_term false s (Some sigma)) ^ " =? " ^ (print_maude_term false t (Some sigma))) "" pairlst in
   "mod Current is\nincluding "^(match with_rules with E -> "Theory" | XOR -> "Xor" | AC -> "AKISS")^" .\n" ^
   (List.fold_left (fun str (n,_) -> 
@@ -415,7 +415,9 @@ let matchers xor pairlst sigma =
     (fun chan -> parse_matchers chan)
 
 let acmatchers binder pairlst sigma =
+  let status = !binder in
   maude_current_binder := binder;
+  binder := New; (*Trick to get good binder in terms *)
   let v = matchers false pairlst sigma in
   (* let v = rename_in_subst v in *)
     if !about_maude then begin
@@ -423,10 +425,13 @@ let acmatchers binder pairlst sigma =
         (List.length v) ;
       List.iter (fun s -> Format.printf " %s\n" (show_subst_list v)) v
     end ;
+    binder := status;
     v
 
 let xormatchers binder pairlst sigma =
+  let status = !binder in
   maude_current_binder := binder;
+  binder := New; (*Trick to get good binder in terms *)
   let v = matchers true pairlst sigma in
   (* let v = rename_in_subst v in *)
     if !about_maude then begin
@@ -434,6 +439,7 @@ let xormatchers binder pairlst sigma =
         (List.length v);
       List.iter (fun s -> Format.printf " %s\n"  (show_subst_list v)) v
     end ;
+    binder := status;
     v
 
 

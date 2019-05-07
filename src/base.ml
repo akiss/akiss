@@ -173,6 +173,7 @@ let rec check_binder_term binder good_vars bad_vars term =
         true)
     )
     else (Printf.printf "\nBINDER ERROR at %s\n" (show_term term);false)
+  | x when x = fun_error -> Printf.printf "\nFUN ERROR at %s\n" (show_term term); false
   | Fun(_,lst) -> List.for_all (check_binder_term binder good_vars bad_vars) lst
   
 let check_binder_head binder rec_var term_var head = 
@@ -235,7 +236,7 @@ let show_raw_statement st =
   else
   Format.sprintf
     "(%d%s) %s <== %s \n       %s %s %s\n       %s\n" st.nbvars (show_binder !(st.binder)) (show_predicate st.head)(show_atom_list st.body)(show_inputs st.inputs)(show_dag st.dag)(show_choices st.choices)(show_inputs st.recipes) in 
-  string ^ if not (check_binder_st st) then (st.binder := Rule;  " BINDER ERROR " ) else ""
+  string ^ if not (check_binder_st st) then (Printf.printf "BINDER ERROR: \n%s\n" string; assert false; st.binder := Rule;  " BINDER ERROR " ) else ""
   
 let show_chan_key chkey =
    if !use_xml then 

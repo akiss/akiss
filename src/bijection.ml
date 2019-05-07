@@ -368,20 +368,24 @@ let show_alpha_subst subst =
   
 let subst_from_trace_subst sbst1 sbst2 binder nbv =
   (*Printf.printf "subst_from_trace_subst\n %s \n %s %d\n%!" (show_alpha_subst sbst1)(show_alpha_subst sbst2)nbv;*)
+  let sub =
   { binder = binder ;
     nbvars = nbv ;
     master = Array.map (
       fun x -> 
       match x with 
-      | None -> zero 
-      | Some i -> let exception E of int in
+      | None -> fun_error 
+      | Some i -> 
+        let exception E of int in
         try
         Array.iteri (fun j k -> match k with Some k -> if k = i then raise (E(j)) | _ -> ()) sbst2;
         assert false
         with E(i) -> Var({status=binder; n=i})
     ) sbst1 ; 
     slave = Array.make 0 (Var({status=binder; n=0}))
-  } 
+  } in
+  (*Printf.printf " give %s\n%!" (show_substitution sub);*)
+  sub
 
   
 
@@ -445,8 +449,8 @@ let rec show_origin o =
   
 and show_test (t : test) =
   Format.sprintf 
-  (if !use_xml then "<test>{<idtest>%d</idtest>}<origin>%s</origin><infos>%s %d,%d</infos><prname>%s</prname>%s</test>"
-  else "Test[%d]: %s %s {%d,%d} %s\n%s\n") t.id (show_origin t.origin) (show_int_set t.from) t.new_actions t.nb_actions (show_which_process t.process_name) (show_raw_statement t.statement)
+  (if !use_xml then "<test>{<idtest>%d</idtest>}<origin>%s</origin><infos>%s %d,%d</infos><prname>%s</prname><xor>%d</xor>%s</test>"
+  else "Test[%d]: %s %s {%d,%d} %s <%dvar>\n%s\n") t.id (show_origin t.origin) (show_int_set t.from) t.new_actions t.nb_actions (show_which_process t.process_name) (List.length t.xor_class)(show_raw_statement t.statement)
 
 let show_test_set tests =
   Tests.fold (fun t str -> if str = "" then " :" else str ^ "," ^ (string_of_int t.id)) tests ""
