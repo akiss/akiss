@@ -480,13 +480,15 @@ let show_solution_set sol =
 (** {2 Basic functions}*)
 
 let completion_to_hash_completion completion =
+  let hash_statement = test_to_hash completion.st_c in
+  let is_opti = (hash_statement = completion.root.hash_initial_statement) in
   if !debug_completion then 
-    Printf.printf "equal hashes ?\n %s \n %s\n" 
+    Printf.printf "equal hashes ? - %b \n %s \n %s\n" 
+      is_opti
       (show_raw_statement completion.st_c)
       (show_raw_statement completion.root.initial_statement);
-  let hash_statement = test_to_hash completion.st_c in
   { 
-    is_opti = (hash_statement = completion.root.hash_initial_statement);
+    is_opti = is_opti;
     hash_st_c = hash_statement;
     hash_corresp_c = Dag.bindings completion.corresp_c.a;
   }

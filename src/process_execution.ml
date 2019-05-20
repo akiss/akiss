@@ -369,8 +369,10 @@ let rec next_solution solution =
   end
   else
     (
-    assert (is_empty_correspondance pr.test.constraints); 
+    if not (is_empty_correspondance pr.test.constraints)
+    then  (Printf.printf "error with %s\n" (show_partial_run pr); assert false)
     (*Printf.printf "%s of %d \n" (show_loc_set pr.restrictions ) pr.test.id;*)
+    else
     if !debug_execution || !about_rare
     then Printf.printf "A restricted run is being tested from %s \n which test is \n %s \n" (show_partial_run pr)(show_test pr.test) ;
     let par = match pr.parent with Some par -> par | _ -> assert false in
