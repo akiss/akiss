@@ -39,6 +39,7 @@ let statement_to_completion process_name (statement : statement) (st : raw_state
     st_c = st ;
     corresp_c = empty_correspondance ;
     corresp_back_c = empty_correspondance ;
+    choices_c = Inputs.new_choices ;
     (*core_corresp = [] ;*)
     missing_actions = locs ;
     selected_action = pick_last_or_null st.dag locs ;
@@ -233,7 +234,8 @@ let get_xor_variant_frame run st =
   let solution = init_sol run.test.process_name st (proc (other run.test.process_name)) run.sol.sequence test in
   ignore (find_possible_run solution );
   match solution.selected_run with
-    | None ->  Printf.printf "%s\n%s\n%s\n%!" (show_run run)(show_test run.test)(show_raw_statement st);assert false 
+    | None ->  Printf.printf "A xor variant of a running trace does not run:\n%s\n%s\n%s\n%!"
+        (show_run run)(show_test run.test)(show_raw_statement st);assert false 
     | Some pr -> pr.frame
 
 
@@ -310,7 +312,7 @@ let filter_dag set dag =
 let filter_inputs set (inputs : Inputs.inputs) :Inputs.inputs =
   {i = Dag.filter (fun l _ -> LocationSet.mem l set) inputs.i}
   
-  
+(** remove choice indexes from [choices] which are not before [set] *)  
 let filter_choices set (choices : Inputs.choices) : Inputs.choices = 
   (*Printf.printf "loc: %s | %s \n" (show_loc_set set)(Inputs.show_choices choices);*)
   let result = ref LocationSet.empty in
@@ -367,8 +369,27 @@ let is_complex_xor_statement st = !Parser_functions.use_xor && List.exists (fun 
 
 let gen_alt_tests p test1 dag1 test2 dag2 =
   let lst = ref [] in
+  lst := merge_tests p 
+          { test1.statement with dag = dag1 } 
+          { test2.statement with dag = dag2 };
   List.iter (fun (_,(sigm1,st1)) -> 
-    if !debug_xor then Printf.printf "Merge xor variants %s\n%!" (show_raw_statement st1);
+    if !debug_xor then Printf.printf "Merge (1) xor variants %s\n%!" (show_raw_statement st1);
+    test1.statement.binder := Master;
+    let head1 = apply_subst_pred test1.statement.head sigm1 in 
+    let st1 = {st1 with head = head1 ; dag = dag1} in
+    let new_tests = List.map (fun (sigma,st) -> (Rewriting.compose_merge sigm1 (Rewriting.identity_subst test2.statement.nbvars) sigma,st)) (merge_tests p st1 { test2.statement with dag = dag2 }) in
+    lst := List.rev_append new_tests !lst
+  ) test1.xor_class;
+  List.iter (fun (_,(sigm2,st2)) -> 
+    if !debug_xor then Printf.printf "Merge (2) xor variants %s\n%!" (show_raw_statement st2);
+    test2.statement.binder := Master;
+    let head2 = apply_subst_pred test2.statement.head sigm2 in 
+    let st2 = {st2 with head = head2 ; dag = dag2} in
+    let new_tests = List.map (fun (sigma,st) -> (Rewriting.compose_merge (Rewriting.identity_subst test1.statement.nbvars) sigm2 sigma,st)) (merge_tests p { test1.statement with dag = dag1 } st2) in
+    lst := List.rev_append new_tests !lst
+  ) test2.xor_class;
+  List.iter (fun (_,(sigm1,st1)) -> 
+    if !debug_xor then Printf.printf "Merge (3) xor variants %s\n%!" (show_raw_statement st1);
     test1.statement.binder := Master;
     let head1 = apply_subst_pred  test1.statement.head sigm1 in 
     let st1 = {st1 with head = head1 ; dag = dag1} in
@@ -376,7 +397,8 @@ let gen_alt_tests p test1 dag1 test2 dag2 =
       test2.statement.binder := Master;
       let head2 = apply_subst_pred test2.statement.head sigm2 in 
       let st2 = {st2 with head = head2 ; dag = dag2} in
-      lst := List.rev_append (merge_tests p st1 st2)  !lst
+      let new_tests = List.map (fun (sigma,st) -> (Rewriting.compose_merge sigm1 sigm2 sigma,st)) (merge_tests p st1 st2) in
+      lst := List.rev_append new_tests  !lst
     ) test2.xor_class
   ) test1.xor_class;
   !lst
@@ -407,7 +429,7 @@ let rec complete_set_of_identities head old_test =
     if !debug_merge then Printf.printf "The following test is upgraded with %s test\n %s\n" (show_test_head head)(show_test old_test);
     h.equalities <- EqualitiesSet.union (diff_eq)(old_eq);
     h.disequalities <- EqualitiesSet.union (diff_diseq)(old_diseq) ;
-    if !debug_merge then Printf.printf " the new head is %s\n"(show_test_head h);
+    if !debug_merge then Printf.printf " the new head is %s\n" (show_test_head h);
     List.iter (fun sol -> 
         match sol.selected_run with
         | None -> if not !about_all_attacks then (Printf.printf "Test %d has no solution\n" old_test.id;assert false)
@@ -423,6 +445,7 @@ let rec complete_set_of_identities head old_test =
           end ;
           let head' = {head with equalities=diff_eq; disequalities=diff_diseq} in
           List.iter (fun (status,sigma,derived_test) -> 
+              (*Printf.printf "apply subt %s\non %s\n%!" (show_substitution sigma)(show_test_head head');*)
               head.head_binder := status;
               let nhead = apply_subst_test_head head' sigma in
               head.head_binder := New;              
@@ -467,16 +490,20 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
           match List.assoc_opt hash_body test.xor_class with
           | Some (sigma,rawst) -> ()
           | None -> 
-              let sigm = subst_from_trace_subst vars2 vars1 statement.binder statement.nbvars in
-              test.xor_class<- (hash_body,(sigm,statement))::test.xor_class ;
-              if test.solutions_done <> [] then (
-                Printf.printf "Suspect behavior: new xor test while main test already done\n%s\n" (show_test test);
+              if test.solutions_done = [] 
+              then (
+                let sigm = subst_from_trace_subst vars2 vars1 statement.binder statement.nbvars in
+                test.xor_class <- (hash_body,(sigm,statement))::test.xor_class ;
+                if !debug_xor then 
+                Printf.printf "New variation for test %d : %s\n%s\n" test.id (show_raw_statement statement)(show_substitution sigm);
+              )
+              else  
+              ( if !debug_xor then
+                Printf.printf "New xor test while main test already done\n%s\n" (show_test test);
                 List.iter (fun (h,(s,st)) -> Printf.printf ">> %s\n" (show_raw_statement st)) test.xor_class;
                 (*assert false*));
                 (* because all elements of a class are created in the same step by init merge or completion except for net rounds... *)
                 (* problem knows_13(x7,x3+x5),knows_12(x6,x2+x5),knows_11(x4,x2+x3) and knows_13(x7,x2+x5),knows_12(x6,x3+x5),knows_11(x4,x2+x3) *)
-              if !about_rare then 
-                Printf.printf "New variation for test %d : %s\n%s\n" test.id (show_raw_statement statement)(show_substitution sigm);
         );
         (*let sigma = Rewriting.merging_subst test.statement.nbvars test.statement.binder in*)
         let sigma = subst_from_trace_subst vars1 vars2 test.statement.binder test.statement.nbvars in
@@ -484,12 +511,11 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
         statement.binder := Master;
         let head' = apply_subst_test_head head_t sigma in
         if !debug_tests then 
-          Printf.printf "Updating an existing test which is \n%s\nwith %s \nand subst %s\n%!"
-            (show_test test)(show_predicate statement.head)(show_substitution sigma);
+          Printf.printf "Start update of %d with subst %s\n%!" test.id (show_substitution sigma);
         statement.binder := New ;
         complete_set_of_identities head' test ;
         if !debug_tests then 
-          Printf.printf "End of update of %d\n" (test.id);
+          Printf.printf "End of update of %d\n%!" (test.id);
           Some (Some sigma,test)
        (* | None -> (
             match actual_test process_name sequence statement with
@@ -534,10 +560,11 @@ and add_merged_tests prun =
     && prun.test.process_name = par.test.process_name
     then begin
         if !debug_merge then Printf.printf "Try merge between < %d + %d >" prun.test.id par.test.id; 
-        let merged_statements = merge_tests prun.test.process_name 
+        (*let merged_statements = merge_tests prun.test.process_name 
           { prun.test.statement with dag = prun.sol.restricted_dag } 
-          { par.test.statement with dag = par.sol.restricted_dag } in 
-        let merged_statements = List.rev_append merged_statements (gen_alt_tests prun.test.process_name prun.test prun.sol.restricted_dag par.test par.sol.restricted_dag) in
+          { par.test.statement with dag = par.sol.restricted_dag } in *)
+        let merged_statements = gen_alt_tests prun.test.process_name prun.test prun.sol.restricted_dag par.test par.sol.restricted_dag in
+        if !debug_xor then Printf.printf "Got %d variants from %d and %d\n" (List.length merged_statements) prun.test.id par.test.id;
         List.iter (fun ((sigma : substitution),raw_st) -> 
           if !debug_tests then Printf.printf "Merge of %d with %d corresp %s\n" prun.test.id par.test.id (show_correspondance prun.corresp);
           assert (sigma.binder == raw_st.binder);
@@ -548,12 +575,15 @@ and add_merged_tests prun =
               match sigm with
               | None -> sigma 
               | Some sigm -> 
-                (*Printf.printf "composition \n%s\n%s\n%!" (show_substitution sigma) (show_substitution sigm);*) 
+                (* Printf.printf "composition \n%s\n%s\n%!" (show_substitution sigma) (show_substitution sigm);*)
                 sigma.binder := Master;
                 let s = Rewriting.compose sigma sigm in
                 s 
             in
-            assert (sigma.binder == new_test.statement.binder) ;           
+            (*Printf.printf "consequences: %s\n for %s\nfrom %s \nand %s \n\n%!" (show_substitution sigma) (show_test new_test)(show_test prun.test)(show_test par.test);*)
+            assert (sigma.binder == new_test.statement.binder) ;
+            assert (prun.test.statement.nbvars = Array.length sigma.master);
+            assert (par.test.statement.nbvars = Array.length sigma.slave);
             if not (List.exists (fun (_,_,t) -> t==new_test) prun.consequences) then
               prun.consequences <- (Master,sigma,new_test) :: prun.consequences;
             if not (List.exists (fun (_,_,t) -> t==new_test) par.consequences) then
@@ -597,6 +627,7 @@ let completion_to_test comp =
     statement = comp.st_c;
     constraints = comp.corresp_back_c;
     constraints_back = comp.corresp_c;
+    choice_constraints = comp.choices_c;
   } in
   let sequence = dag_to_sequence comp.st_c.dag in
   let solution = init_sol comp.root.from_base comp.st_c (proc (other comp.root.from_base )) sequence test in
@@ -643,6 +674,9 @@ let add_to_completion (run : partial_run) (completion : completion) =
     (only_observable run.test.statement.dag)
     (List.fold_left (fun lst l -> try (loc_p_to_q  l run.corresp_back)::lst with LocPtoQ _ -> lst) [] llocs) in 
   (* Printf.printf "restr_set %s\n%!" (show_loc_set set); *)
+  match Inputs.merge_choices completion.choices_c (filter_choices set run.test.statement.choices) with
+  | None -> ()
+  | Some completed_choices -> 
   let corr = { a = Dag.merge (fun locP x y -> 
     match x , y with
     | Some x, Some y -> if x = y then Some x else raise NonBij
@@ -655,7 +689,7 @@ let add_to_completion (run : partial_run) (completion : completion) =
   let _, conjrun = trunconj set run in
   let sts = List.fold_left (fun lst (_,(sigma,st)) -> 
     run.test.statement.binder := Master;
-    if !debug_completion || !debug_xor then Printf.printf "A xor variant: %s\n" (show_raw_statement st);
+    if !debug_xor then Printf.printf "A xor variant: %s\n" (show_raw_statement st);
     let frame = get_xor_variant_frame run st in
     let _, conjrun = trunconj set {run with 
       test = {run.test with statement = {st with head = apply_subst_pred run.test.statement.head sigma}};
@@ -673,6 +707,7 @@ let add_to_completion (run : partial_run) (completion : completion) =
         st_c = (*canonize_statement*) st;
         corresp_c = corr;
         corresp_back_c = corr_back;
+        choices_c = completed_choices;
         missing_actions = missing ;
         selected_action = pick_last_or_null st.dag missing ;
         root = completion.root ;

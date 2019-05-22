@@ -24,18 +24,18 @@ let rec apply_subst_inputs term frame =
   - the (chan,threads) waiting for a silent action, 
   - the updated threads, 
   - the threads which have failed due to a test (* for debug outputs *)*)
-let rec run_until_io reflexive pending final failure (choices_constraints : Inputs.choices) process first frame =
+let rec run_until_io test pending final failure (choices_constraints : Inputs.choices) process first frame =
   (*Printf.printf "run until io %s \n%!" (show_process_start 3 process);*)
   match process with
   | EmptyP -> ()
-  | ParallelP(proclst) -> List.iter (fun p -> run_until_io reflexive pending final failure choices_constraints p first frame ) proclst
+  | ParallelP(proclst) -> List.iter (fun p -> run_until_io test pending final failure choices_constraints p first frame ) proclst
   | ChoiceP(l,proclst) -> begin
       match Inputs.get_choice_opt l choices_constraints with
       | None -> 
-        if not reflexive then 
-          List.iter (fun (i,p) -> run_until_io reflexive pending final failure (Inputs.add_choice l i choices_constraints) p first frame) proclst
+        if not test.reflexive then 
+          List.iter (fun (i,p) -> run_until_io test pending final failure (Inputs.add_choice l i choices_constraints) p first frame) proclst
       | Some i -> try 
-          run_until_io reflexive pending final failure choices_constraints (List.assoc i proclst) first frame 
+          run_until_io test pending final failure choices_constraints (List.assoc i proclst) first frame 
         with Not_found -> ()
       end
   | SeqP(Input({io = Input(chanId); observable= Public}) ,p) 
@@ -49,7 +49,7 @@ let rec run_until_io reflexive pending final failure (choices_constraints : Inpu
       let t = apply_subst_inputs t frame in
       let t' = apply_subst_inputs t' frame in
       if Rewriting.equals_r t t' (! Parser_functions.rewrite_rules) 
-      then run_until_io reflexive pending final failure choices_constraints p first frame 
+      then run_until_io test pending final failure choices_constraints p first frame 
       else begin 
       (*let t'' = Rewriting.normalize t (! Parser_functions.rewrite_rules) in
       let t''' = Rewriting.normalize t' (! Parser_functions.rewrite_rules) in
@@ -59,49 +59,50 @@ let rec run_until_io reflexive pending final failure (choices_constraints : Inpu
     let t = apply_subst_inputs t frame in
     let t' = apply_subst_inputs t' frame in
     if not (Rewriting.equals_r t t' (! Parser_functions.rewrite_rules)) 
-    then run_until_io reflexive pending final failure choices_constraints p first frame 
+    then run_until_io test pending final failure choices_constraints p first frame 
     else failure := { made_choices = choices_constraints; before_locs = first; thread = process} :: !failure
   | CallP(l,n,p,terms,chans) -> 
       for i = 1 to n do
         let pr = expand_call l i p terms chans in
-        run_until_io reflexive pending final failure choices_constraints pr first frame 
+        run_until_io test pending final failure choices_constraints pr first frame 
       done
   | _ -> assert false
   
 (** Given a secret channel communication from a loc_input to a loc_output of a term_output, 
 computes the threads which appears after this reduction *)  
-let reduc_and_run reflexive pending final failure (loc_input : location) (loc_output : location) term_output thread_input thread_output frame =
+let reduc_and_run test choices_constraints pending final failure (loc_input : location) (loc_output : location) term_output thread_input thread_output frame =
   (*Printf.printf "  reduc_and_run %d -> %d\n" loc_output.p loc_input.p;*)
   let process_input = Process.apply_subst_process loc_input term_output thread_input.thread in
-  match 
-    if reflexive 
+  if test.choice_constraints = Inputs.new_choices 
+  then (
+    let first = LocationSet.union thread_input.before_locs thread_output.before_locs  in
+    match Inputs.merge_choices_with_link thread_input.made_choices thread_output.made_choices loc_input loc_output with 
+    Some choices_constraints ->
+      run_until_io test pending final failure choices_constraints process_input first frame; 
+      run_until_io test pending final failure choices_constraints thread_output.thread first frame
+    | None -> ()
+  )
+  else (
+    if Inputs.get_choice_opt loc_input test.choice_constraints = Some loc_output.p 
     then (
-      assert (thread_output.made_choices == thread_input.made_choices);
-      if Inputs.get_choice_opt loc_input thread_output.made_choices = Some loc_output.p 
-      then 
-        Some thread_input.made_choices 
-      else 
-        None
-    )
-    else Inputs.merge_choices_with_link thread_input.made_choices thread_output.made_choices loc_input loc_output 
-  with
-  | Some choices_constraints ->
-    if ! verbose_execution then
+      if ! verbose_execution then
       Printf.printf "    out(%s) -%s[%d]-> in(%s)\n" loc_output.name 
         (match loc_output.io with Input(c) | Output(c,_) -> c.name | _ -> assert false) 
         loc_output.phase loc_input.name;
-    let first = LocationSet.union thread_input.before_locs thread_output.before_locs  in
-    run_until_io reflexive pending final failure choices_constraints process_input first frame; 
-    run_until_io reflexive pending final failure choices_constraints thread_output.thread first frame 
-  | None -> ()
+      let first = LocationSet.union thread_input.before_locs thread_output.before_locs  in
+      let choices_constraints = test.choice_constraints in
+      run_until_io test pending final failure choices_constraints process_input first frame; 
+      run_until_io test pending final failure choices_constraints thread_output.thread first frame
+    )
+  )
   
 
   
-let run_silent_actions old_threads reflexive (choices_constraints : Inputs.choices ) process first frame  =
+let run_silent_actions old_threads test (choices_constraints : Inputs.choices ) process first frame  =
   let new_threads = ref [] in
   let final = ref [] in
   let failure = ref [] in
-  run_until_io reflexive new_threads final failure choices_constraints process first frame ;
+  run_until_io test new_threads final failure choices_constraints process first frame ;
   while !new_threads != [] 
   do
     match !new_threads with
@@ -114,8 +115,8 @@ let run_silent_actions old_threads reflexive (choices_constraints : Inputs.choic
         | None -> ()
         | Some old_chan_lst -> List.iter (fun (old_loc,old_term,old_ext_thread) ->
           match new_term,old_term with
-          | None, Some t -> reduc_and_run reflexive new_threads final failure new_loc old_loc t new_ext_thread old_ext_thread frame
-          | Some t, None -> reduc_and_run reflexive new_threads final failure old_loc new_loc t old_ext_thread new_ext_thread frame
+          | None, Some t -> reduc_and_run test choices_constraints new_threads final failure new_loc old_loc t new_ext_thread old_ext_thread frame
+          | Some t, None -> reduc_and_run test choices_constraints new_threads final failure old_loc new_loc t old_ext_thread new_ext_thread frame
           | _ -> assert false
           ) old_chan_lst 
       );
@@ -150,7 +151,7 @@ let dag_to_sequence dag =
   
 let init_sol process_name (statement : raw_statement) processQ sequence test : solution =
   let old_threads = ref ChanMap.empty in
-  let (final,failure) = run_silent_actions old_threads test.reflexive (choices_constraints test (Inputs.new_choices)) processQ LocationSet.empty Inputs.new_inputs in
+  let (final,failure) = run_silent_actions old_threads test (choices_constraints test test.choice_constraints) processQ LocationSet.empty Inputs.new_inputs in
   (*let sequence = dag_to_sequence statement.dag  in*)
   let rec sol = { null_sol with 
     init_run = run;
@@ -181,7 +182,7 @@ let next_partial_run run (action : location) full_p proc l frame locs choices =
       then (ext_thread :: new_qt,flqt)
       else begin
         (*Printf.printf "start run_silent_actions %s \n" (show_process_start 3 proc);*)
-        let (lqt,fail) = run_silent_actions old_threads run.test.reflexive (choices_constraints run.test choices) proc (LocationSet.add action ext_thread.before_locs) frame in 
+        let (lqt,fail) = run_silent_actions old_threads run.test (choices_constraints run.test choices) proc (LocationSet.add action ext_thread.before_locs) frame in 
         (lqt @ new_qt, fail @ flqt) end
     )
     ([],[]) run.qthreads in
@@ -370,7 +371,7 @@ let rec next_solution solution =
   else
     (
     if not (is_empty_correspondance pr.test.constraints)
-    then  (Printf.printf "error with %s\n" (show_partial_run pr); assert false)
+    then  (Printf.printf "error with test %s \nand %s\n" (show_test pr.test)(show_partial_run pr); assert false)
     (*Printf.printf "%s of %d \n" (show_loc_set pr.restrictions ) pr.test.id;*)
     else
     if !debug_execution || !about_rare

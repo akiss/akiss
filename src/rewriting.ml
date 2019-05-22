@@ -418,6 +418,20 @@ let rec compose sigma tau =
     slave  = slave;
   }
   
+let rec compose_merge sigma1 sigma2 tau =
+  sigma1.binder := Master;
+  sigma2.binder := Slave;
+  let master = Array.make (Array.length(sigma1.master)) zero in
+  let slave = Array.make (Array.length(sigma2.master)) zero in
+  Array.iteri (fun i term -> master.(i)<- apply_subst_term term tau) sigma1.master ;
+  Array.iteri (fun i term -> slave.(i) <- apply_subst_term term tau) sigma2.master ;
+  { 
+    binder = tau.binder; 
+    nbvars = tau.nbvars;
+    master = master;
+    slave  = slave;
+  }
+  
 let rec apply_subst_new_binder binder term (sigma : subst_lst) =
   match term with
   | Var(x) ->

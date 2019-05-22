@@ -110,6 +110,7 @@ module rec Run :
       st_c : Base.raw_statement;
       corresp_c : correspondance;
       corresp_back_c : correspondance;
+      choices_c : Inputs.choices ;
       missing_actions : Dag.LocationSet.t;
       selected_action : Types.location;
       root : complement_root;
@@ -186,6 +187,7 @@ and Test :
       mutable new_actions : int;
       mutable constraints : correspondance;
       mutable constraints_back : correspondance;
+      mutable choice_constraints : Inputs.choices ;
       mutable solutions_todo : Run.solution list;
       mutable solutions_done : Run.solution list;
       mutable xor_class :(Base.hash_body * (Types.substitution * Base.raw_statement)) list;

@@ -12,6 +12,7 @@ val apply_subst_term : Types.term -> Types.substitution -> Types.term
 (*val compose_master :
   Types.substitution -> Types.substitution -> Types.substitution*)
 val compose : Types.substitution -> Types.substitution -> Types.substitution
+val compose_merge : Types.substitution -> Types.substitution -> Types.substitution -> Types.substitution
 val compose_with_subst_lst :
   Types.statement_role ref -> int -> Types.substitution -> (Types.varId * Types.term) list -> Types.substitution
 val identity_subst : int -> Types.substitution

@@ -74,6 +74,7 @@ module rec Run : sig
     st_c : raw_statement ; (* the current completion g u U_i f_i *)
     corresp_c : correspondance ; (* the correspondance of the union of f_i *)
     corresp_back_c : correspondance ; (* the inverse mapping *)
+    choices_c : Inputs.choices ;
     missing_actions :  LocationSet.t; (* all the locations which are present on the initial statement but not on the runs *)
     selected_action : location; (*Among all missing locations the one to complete first *)
     root : complement_root; (* data about the test that origin this completion *)
@@ -149,6 +150,7 @@ struct
     st_c : raw_statement ; (** the current completion g u U_i f_i *)
     corresp_c : correspondance ; (** the correspondance of the union of f_i *)
     corresp_back_c : correspondance ;
+    choices_c : Inputs.choices ;
     (*core_corresp : (location * location) list ;*)
     missing_actions :  LocationSet.t; (** all the locations which are present on the initial statement but not on the runs *)
     selected_action : location; (**Among all missing locations the one to complete first *)
@@ -240,6 +242,7 @@ type test = {
   mutable new_actions : int; (** compared to the base actions, used to order the tests in the database *)
   mutable constraints : correspondance; (** Try to pass the test with these constraints *)
   mutable constraints_back : correspondance; (** Inverse mapping *)
+  mutable choice_constraints : Inputs.choices ;
   mutable solutions_todo : Run.solution list;
   mutable solutions_done : Run.solution list;
   mutable xor_class : (hash_body * ( substitution * raw_statement)) list;
@@ -262,6 +265,7 @@ type test = {
   mutable new_actions : int; (** compared to the base actions, used to order the tests *)
   mutable constraints : correspondance; (** Try to pass the test prioritary satisfying the constraints *)
   mutable constraints_back : correspondance; (** Inverse mapping *)
+  mutable choice_constraints : Inputs.choices ;
   mutable solutions_todo : Run.solution list; (** restricted orders which have not been satisfied *)
   mutable solutions_done : Run.solution list; (** restricted orders with their solution *)
   mutable xor_class : (hash_body * ( substitution * raw_statement)) list;
@@ -510,6 +514,7 @@ let rec null_test = {
   new_actions= 0;
   constraints = empty_correspondance;
   constraints_back= empty_correspondance;
+  choice_constraints = Inputs.new_choices;
   solutions_todo = [];
   solutions_done = [];
   xor_class = [] ;
