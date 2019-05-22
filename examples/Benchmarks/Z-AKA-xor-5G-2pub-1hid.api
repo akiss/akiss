@@ -1,0 +1,214 @@
+(* public communication channel *)
+chan cSN1, cSN2, cMS1, cMS2, cSN3, cMS3.
+private chan read_msa,write_msa,read_msb,write_msb,read_msc,write_msc,read_sna,write_sna,read_snb,write_snb,read_snc,write_snc,c,check.
+
+(* public identity of MS *)
+free macfail, syncfail, true, weak.
+
+
+
+(* UMTS AKA protocol specific mac and key generation functions *)
+
+fun f1/2,f1x/2,f5/2,f5x/2,Challenge/3,SHA256/1,enc/2,dec/2,pk/1,succ/1,less/2,test/1.
+
+reduc less(x,succ(x)) -> true.
+reduc less(x,succ(succ(x))) -> true.
+reduc dec(enc(x,pk(s)),s) -> x.
+reduc test(x + succ(x)) -> weak.
+
+
+let AKA_MS(ch,read_ms,write_ms,K,SUPI,SNname,pkhn) =
+  new r;
+  let SUCI = enc((SUPI,r,pkhn),pkhn) in
+  out(ch,SUCI);
+  in(ch,msg1);
+  let (R,(xCONC,xMAC)) = msg1 in
+  let AK = f5(K,R) in
+  let xSQNhn = AK + xCONC in
+  let MAC = f1(K,(xSQNhn,R)) in
+  if xMAC != MAC
+  then 
+    new fCONC;
+    new fMAC;
+    out(ch, (syncfail,(fCONC,fMAC)))
+  else (
+  in(read_ms,SQNue);
+  if less(SQNue,xSQNhn) = true
+  then (
+    out(write_ms,xSQNhn);
+    let RES = Challenge(K,R,SNname) in
+    out(ch,RES);
+    out(check,0)
+  )
+  else (
+    let MACx = f1x(K,(SQNue,R)) in
+    let AKx = f5x(K,R) in
+    let CONCx = SQNue + AKx in
+    let AUTS = (CONCx,MACx) in
+    out(ch, (syncfail,AUTS))
+  )).
+
+let CELL_MS(read_ms,write_ms,SQNue) =
+  ( out(read_ms,SQNue);
+    CELL_MS(read_ms,write_ms,SQNue))
+  +
+  ( in(write_ms,x);
+    CELL_MS(read_ms,write_ms,x))
+  + phase 2; CELL_MS2(read_ms,write_ms,SQNue)
+  + in(check,z); CELL_MS(read_ms,write_ms,SQNue).
+  
+let CELL_MS2(read_ms,write_ms,SQNue) =
+  ( out(read_ms,SQNue);
+    CELL_MS2(read_ms,write_ms,SQNue))
+  +
+  ( in(write_ms,x);
+    CELL_MS2(read_ms,write_ms,x))
+  + in(check,z); CELL_MS2(read_ms,write_ms,SQNue)
+  + phase 3; CELL_MS3(read_ms,write_ms,SQNue).
+  
+let CELL_MS3(read_ms,write_ms,SQNue) =
+  ( out(read_ms,SQNue);
+    CELL_MS3(read_ms,write_ms,SQNue))
+  +
+  ( in(write_ms,x);
+    CELL_MS3(read_ms,write_ms,x)).
+
+let CCheck_MS(read_ms,write_ms,SQNue) =
+  ( out(read_ms,SQNue);
+    CCheck_MS(read_ms,write_ms,SQNue))
+  +
+  ( in(write_ms,x);
+    CCheck_MS(read_ms,write_ms,x))
+  + phase 2; CCheck_MS2(read_ms,write_ms,SQNue)
+  + in(check,z); CCheck_MS(read_ms,write_ms,SQNue).
+  
+let CCheck_MS2(read_ms,write_ms,SQNue) =
+  ( out(read_ms,SQNue);
+    CCheck_MS2(read_ms,write_ms,SQNue))
+  +
+  ( in(write_ms,x);
+    CCheck_MS2(read_ms,write_ms,x))
+  + in(check,z); phase 3; CCheck_MS3(read_ms,write_ms,SQNue).
+  
+let CCheck_MS3(read_ms,write_ms,SQNue) =
+  ( out(read_ms,SQNue);
+    CCheck_MS3(read_ms,write_ms,SQNue))
+  +
+  ( in(write_ms,x);
+    CCheck_MS3(read_ms,write_ms,x)).
+
+let SN(ch,Ka,SUPIa,SNnamea,Kb,SUPIb,SNnameb,Kc,SUPIc,SNnamec,Khn)=
+  in(ch,xSUCI);
+  ((
+  let (=SUPIa,ra,=pk(Khn)) = dec(xSUCI,Khn) in
+  AKA_SN(ch,read_sna,write_sna,Ka,SUPIa,SNnamea,ra))
+  +
+  (
+  let (=SUPIb,rb,=pk(Khn)) = dec(xSUCI,Khn) in
+  AKA_SN(ch,read_snb,write_snb,Kb,SUPIb,SNnameb,rb)
+  )+
+  (
+  let (=SUPIc,rc,=pk(Khn)) = dec(xSUCI,Khn) in
+  AKA_SN(ch,read_snc,write_snc,Kc,SUPIc,SNnamec,rc)
+  )).
+    
+let AKA_SN(ch,read_sn,write_sn,K,SUPI,SNname,r)=
+    in(read_sn,SQNhn);  
+    new R;
+    let MAC = f1(K,(SQNhn,R)) in
+    let AK = f5(K, R) in
+    let CONC = SQNhn + AK in
+    let AUTN = (CONC, MAC) in
+    let xRES = Challenge(K,R,SNname) in
+    let HXRES = SHA256((R,xRES)) in
+(*    let Kseaf = KeySeed(K,R,SQNhn,SNname) in*)
+    out(write_sn,succ(SQNhn));
+    out(ch, (R,AUTN));
+    in(ch, RES);
+    let (=syncfail,(CONCx,MACx)) = RES in
+    (
+      if MACx = f1x(K,(SQNhn,R))
+      then
+       let AKx = f5x(K,R) in
+       let SQNue = CONCx + AKx in
+       out(write_sn,succ(SQNue))
+    ).
+    
+let CELL_SN(read_sn,write_sn,SQNhn) =
+  ( out(read_sn,SQNhn);
+    CELL_SN(read_sn,write_sn,SQNhn))
+  +
+  ( in(write_sn,x);
+    CELL_SN(read_sn,write_sn,x))
+  + phase 2; CELL_SN2(read_sn,write_sn,SQNhn).
+  
+let CELL_SN2(read_sn,write_sn,SQNhn) =
+  ( out(read_sn,SQNhn);
+    CELL_SN2(read_sn,write_sn,SQNhn))
+  +
+  ( in(write_sn,x);
+    CELL_SN2(read_sn,write_sn,x))
+  + phase 3; CELL_SN3(read_sn,write_sn,SQNhn).
+  
+let CELL_SN3(read_sn,write_sn,SQNhn) =
+  ( out(read_sn,SQNhn);
+    CELL_SN3(read_sn,write_sn,SQNhn))
+  +
+  ( in(write_sn,x);
+    CELL_SN3(read_sn,write_sn,x)).
+
+
+
+let Psame =
+  new Khn ;
+  new Ka;
+  new SUPIa ;
+  new SNnamea ;
+  new SQNa;
+  new Kb;
+  new SUPIb ;
+  new SNnameb ;
+  new SQNb;  
+  new Kc;
+  new SUPIc ;
+  new SNnamec ;
+  new SQNc;  
+  ( SN(cSN1,Ka,SUPIa,SNnamea,Kb,SUPIb,SNnameb,Kc,SUPIc,SNnamec,Khn) 
+  | phase 2 ; SN(c,Ka,SUPIa,SNnamea,Kb,SUPIb,SNnameb,Kc,SUPIc,SNnamec,Khn) 
+  | phase 3 ; SN(cSN3,Ka,SUPIa,SNnamea,Kb,SUPIb,SNnameb,Kc,SUPIc,SNnamec,Khn) 
+  | CELL_SN(read_sna,write_sna,succ(SQNa))
+  | AKA_MS(cMS1,read_msa,write_msa,Ka,SUPIa,SNnamea,pk(Khn)) 
+  | phase 2 ; AKA_MS(c,read_msa,write_msa,Ka,SUPIa,SNnamea,pk(Khn)) 
+  | phase 3 ; AKA_MS(cMS3,read_msa,write_msa,Ka,SUPIa,SNnamea,pk(Khn)) 
+  | CCheck_MS(read_msa,write_msa,SQNa)
+ ).
+  
+let Pdiff =
+  new Khn ;
+  new Ka;
+  new SUPIa ;
+  new SNnamea ;
+  new SQNa;
+  new Kb;
+  new SUPIb ;
+  new SNnameb ;
+  new SQNb;  
+  new Kc;
+  new SUPIc ;
+  new SNnamec ;
+  new SQNc;  
+  ( SN(cSN1,Ka,SUPIa,SNnamea,Kb,SUPIb,SNnameb,Kc,SUPIc,SNnamec,Khn) 
+  | phase 2 ; SN(c,Ka,SUPIa,SNnamea,Kb,SUPIb,SNnameb,Kc,SUPIc,SNnamec,Khn) 
+  | phase 3 ; SN(cSN3,Ka,SUPIa,SNnamea,Kb,SUPIb,SNnameb,Kc,SUPIc,SNnamec,Khn) 
+  | CELL_SN(read_sna,write_sna,succ(SQNa))
+  | CELL_SN(read_snc,write_snc,succ(SQNc))
+  | AKA_MS(cMS1,read_msa,write_msa,Ka,SUPIa,SNnamea,pk(Khn)) 
+  | phase 2 ; AKA_MS(c,read_msa,write_msa,Ka,SUPIa,SNnamea,pk(Khn)) 
+  | phase 3 ; AKA_MS(cMS3,read_msc,write_msc,Kc,SUPIc,SNnamec,pk(Khn)) 
+  | CCheck_MS(read_msa,write_msa,SQNa)
+  | CELL_MS(read_msc,write_msc,SQNc)
+ ).
+  
+
+(*query saturate Psame.*)
+query trace_equiv(Psame,Pdiff).

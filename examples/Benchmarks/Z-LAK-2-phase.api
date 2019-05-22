@@ -1,0 +1,69 @@
+// RFID protocol LAK'06
+
+fun h/1.
+chan C, CR.
+private chan RR1,RW1,TR1,TW1,RR2,RW2,TR2,TW2.
+
+//  Alice-Bob notation
+// R --> T: r0
+// T --> R: <r1, h(r0+r1+k)>
+// R --> T: h(h(r0+r1+k)+k+r0)
+// R and T update their key k with h(k)
+
+
+let Treader(c,kB) = 
+  new r0;
+  out(CR,r0);
+  in(CR,Z);
+  let (Z1,Z2) = Z in ((
+  in(c,kA); 
+  if Z2 = h(r0 + Z1 + kA)
+  then  
+    out(c,h(kA));  
+    out(CR,h(Z2 + kA + r0)))
+  + (
+  if Z2 = h(r0+ Z1 + kB)
+  then 
+    out(CR,h(Z2 + kB + r0)))).
+
+let CELL_Tread(c1,c2,v) =
+    (out(c1,v); CELL_Tread(c1,c2,v))
+  + (phase 2; out(c2,v); CELL_Tread(c1,c2,v))
+  + (in(c1,x); CELL_Tread(c1,c2,x))
+  + (phase 2; in(c2,x); CELL_Tread(c1,c2,x)).
+  
+let Ttag(c) = 
+  in(c,k);   
+  in(C,x0);
+  new r1 ;
+  out(C,(r1,h(x0+r1+k)));
+  in(C,Y);
+  if Y = h(h(x0+r1+k)+k+x0)
+  then
+    out(c,h(k)).
+  
+let CELL_Ttag(c1,c2,v) =
+    (out(c1,v); CELL_Ttag(c1,c2,v))
+  + (phase 2; out(c2,v); CELL_Ttag(c1,c2,v))
+  + (in(c1,x); CELL_Ttag(c1,c2,x))
+  + (phase 2; in(c2,x); CELL_Ttag(c1,c2,x)).
+  
+
+let Psame = 
+  new kA;
+  new kB;
+  ( Ttag(TR1) | (phase 2; Ttag(TR2)) | CELL_Ttag(TR1,TR2,kA)
+  | Treader(RR1,kB) | (phase 2; Treader(RR2,kB)) | CELL_Tread(RR1,RR2,kA) 
+  ).  
+
+let Pdiff = 
+  new kA;
+  new kB;
+  ( Ttag(TR1) | CELL_Ttag(TR1,TR2,kA) 
+  | (phase 2; Ttag(TW2)) | CELL_Ttag(TW1,TW2,kB)  
+  | Treader(RR1,kB) | (phase 2; Treader(RR2,kB)) | CELL_Tread(RR1,RR2,kA) 
+  ).
+
+
+latex lakII.
+query trace_equiv(Psame,Pdiff).
