@@ -63,7 +63,7 @@ type extra_thread = {
   }
   
 let show_extra_thread th =
-  Printf.sprintf "%s <| %s ==> %s " (show_loc_set th.before_locs) (Inputs.show_choices th.made_choices) (Process.show_process_start 2 th.thread)
+  Printf.sprintf "%s <| %s ==> %s " (show_loc_set th.before_locs) (Inputs.show_choices th.made_choices) (Process.show_process_start 1 th.thread)
   
 let show_extra_thread_list lst =
   List.fold_left (fun str e -> (if str = "" then "  " else str ^ "\n  " ) ^ (show_extra_thread e)) "" lst
@@ -453,8 +453,9 @@ let rec show_origin o =
   
 and show_test (t : test) =
   Format.sprintf 
-  (if !use_xml then "<test>{<idtest>%d</idtest>}<origin>%s</origin><infos>%s %d,%d</infos><prname>%s</prname><xor>%d</xor>%s</test>"
-  else "Test[%d]: %s %s {%d,%d} %s <%dvar>\n%s\n") t.id (show_origin t.origin) (show_int_set t.from) t.new_actions t.nb_actions (show_which_process t.process_name) (List.length t.xor_class)(show_raw_statement t.statement)
+  (if !use_xml 
+  then "<test>{<idtest>%d</idtest>}<origin>%s</origin><infos>%s %d,%d</infos><prname>%s</prname><xor>%d</xor>%s<constraints>%s</constraints></test>"
+  else "Test[%d]: %s %s {%d,%d} %s <%dvar>\n%s%s\n") t.id (show_origin t.origin) (show_int_set t.from) t.new_actions t.nb_actions (show_which_process t.process_name) (List.length t.xor_class)(show_raw_statement t.statement)(if t.choice_constraints <> Inputs.new_choices then "\n ch: " ^ (Inputs.show_choices t.choice_constraints) else "")
 
 let show_test_set tests =
   Tests.fold (fun t str -> if str = "" then " :" else str ^ "," ^ (string_of_int t.id)) tests ""
@@ -462,12 +463,13 @@ let show_test_set tests =
 let show_completion completion = 
   Format.sprintf (
     if !use_xml then 
-      "<completion>§<idcomp>%d</idcomp><wp>%s</wp>%s\n%s\n<miss>%s</miss>\n<loc>%d</loc></completion>"
+      "<completion>§<idcomp>%d</idcomp><wp>%s</wp>%s\n%s\n%s\n<miss>%s</miss>\n<loc>%d</loc></completion>"
     else
-      "completion %d[%s] from statement\n %s -corresp: %s \n -missing: %s (%d)\n" )
+      "completion %d[%s] from statement\n %s -choices: %s \n -corresp: %s \n -missing: %s (%d)\n" )
     completion.id_c
     (show_which_process completion.root.from_base)
     (show_raw_statement completion.st_c) 
+    (Inputs.show_choices completion.choices_c)
     (show_correspondance completion.corresp_c) 
     (show_loc_set completion.missing_actions)
     (completion.selected_action.p)

@@ -210,6 +210,7 @@ let actual_test process_name sequence (st : raw_statement) =
     statement = st;
     constraints = corr;
     constraints_back = corr;
+    choice_constraints = st.choices
   } in
   if !debug_execution 
   then Printf.printf "\nChecking actual of %s \nwith dag = %s\n%!" (show_test test)(show_dag st.dag);
@@ -217,7 +218,7 @@ let actual_test process_name sequence (st : raw_statement) =
   let reachable = find_possible_run solution in
   if !debug_tests then (
     match solution.selected_run with
-    | None ->  Printf.printf "No execution for this test\n" 
+    | None ->  Printf.printf "No execution for this test (reachable %b)\n" reachable 
     | Some pr -> ());
   reachable, solution.selected_run
   
@@ -316,23 +317,27 @@ let filter_inputs set (inputs : Inputs.inputs) :Inputs.inputs =
 let filter_choices set (choices : Inputs.choices) : Inputs.choices = 
   (*Printf.printf "loc: %s | %s \n" (show_loc_set set)(Inputs.show_choices choices);*)
   let result = ref LocationSet.empty in
-  let rec parent_set set = 
-    List.iter (fun loc -> 
-    List.iter (fun (l : location) -> 
-      (*Printf.printf "%d-" l.p;*)
-      if not( LocationSet.mem l !result) 
-      then (
-        result := LocationSet.add l !result;
-      match l.io with 
-      | Choice -> ()
-      | _ ->
-          let l' = Inputs.get_output_of_input choices l in
-          result := LocationSet.add l' !result;
-          parent_set l'.parent_choices))
-       loc.parent_choices) set 
-       in
-  parent_set (LocationSet.elements set) ;
-  (*Printf.printf "loc: %s \n" (show_loc_set !result);*)
+  let rec parent_set add_it set = 
+    List.iter (fun (loc : location) -> 
+      (*Printf.printf " %d" loc.p;*)
+      if add_it then 
+        result := LocationSet.add loc !result;
+      List.iter (fun (l : location) -> 
+        if not( LocationSet.mem l !result) 
+        then (
+          result := LocationSet.add l !result;
+          (*Printf.printf "+%d" l.p;*)
+          match l.io with 
+          | Choice -> ()
+          | _ ->
+              let l' = Inputs.get_output_of_input choices l in
+              result := LocationSet.add l' !result;
+              (*Printf.printf "--%d" l'.p;*)
+              parent_set true l'.parent_choices))
+        loc.parent_choices) set 
+        in
+  parent_set false (LocationSet.elements set) ;
+  (*Printf.printf "\nfinal loc: %s \n" (show_loc_set !result);*)
   {c = Dag.filter (fun l _ -> LocationSet.mem l !result) choices.c }
   
 let trunconj set run =
@@ -342,7 +347,9 @@ let trunconj set run =
   stP.binder := Master;
   let st = apply_subst_statement stP identity_sigma in
   let filtered_inputs = filter_inputs set st.recipes in
-  (*Printf.printf ">filtered_input: %s\n%!" (Inputs.show_inputs filtered_inputs);*)
+  let filtered_choices = filter_choices (LocationSet.map (fun l -> loc_p_to_q l run.corresp) set) run.choices in
+  (*Printf.printf ">filtered_input: %s\n%!" (Inputs.show_inputs filtered_inputs);
+  Printf.printf ">filtered_choices: %s\n%!" (Inputs.show_choices filtered_choices);*)
   let r = 
   {
   binder = st.binder ;
@@ -350,7 +357,7 @@ let trunconj set run =
   dag = trunc_map_dag (only_observable run.sol.restricted_dag) set run.corresp;
   inputs =  transpose_inputs identity_sigma filtered_inputs run ;
   recipes = transpose_recipes identity_sigma filtered_inputs run.corresp ; 
-  choices = filter_choices (LocationSet.map (fun l -> loc_p_to_q l run.corresp) set) run.choices; 
+  choices = filtered_choices ; 
   head = Tests({head_binder = st.binder; equalities=EqualitiesSet.empty; disequalities=EqualitiesSet.empty;});
   body = List.map (fun ba -> {
     loc = LocationSet.map (fun l -> loc_p_to_q l run.corresp) ba.loc;
@@ -672,9 +679,11 @@ let add_to_completion (run : partial_run) (completion : completion) =
   let llocs, _ = List.split (Dag.bindings completion.root.initial_statement.dag.rel) in
   let set = restr_set run.sol.restricted_dag 
     (only_observable run.test.statement.dag)
-    (List.fold_left (fun lst l -> try (loc_p_to_q  l run.corresp_back)::lst with LocPtoQ _ -> lst) [] llocs) in 
+    (List.fold_left (fun lst l -> try (loc_p_to_q  l run.corresp_back)::lst with LocPtoQ _ -> lst) [] llocs) in
+  let filtered_choices = filter_choices set run.test.statement.choices in
   (* Printf.printf "restr_set %s\n%!" (show_loc_set set); *)
-  match Inputs.merge_choices completion.choices_c (filter_choices set run.test.statement.choices) with
+  (* Printf.printf "filter_choices_run :%s\n%!" (Inputs.show_choices filtered_choices);*)
+  match Inputs.merge_choices completion.choices_c filtered_choices with
   | None -> ()
   | Some completed_choices -> 
   let corr = { a = Dag.merge (fun locP x y -> 

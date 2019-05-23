@@ -75,17 +75,17 @@ let rec show_process pr =
   | EmptyP -> ""
   | ParallelP(lp) ->( List.fold_left (fun str p -> str ^ "|" ^ (show_process p)) "(" lp ) ^ ")"
   | SeqP(a,p) -> (show_action a) ^ ";" ^ (show_process p)
-  | ChoiceP(l,lp)->( List.fold_left (fun str (i,p) -> str ^ "+" ^ (show_process p)) "(" lp ) ^ ")"
-  | CallP(l,i,procId,args,chans) -> procId.name ^ (if i = 1 then "" else (string_of_int i))
+  | ChoiceP(l,lp)->( List.fold_left (fun str (i,p) -> str ^ "+(" ^ (string_of_int l.p) ^ ")" ^ (show_process p)) "(" lp ) ^ ")"
+  | CallP(l,i,procId,args,chans) -> procId.name ^ (if i = 1 then "" else (string_of_int i)) ^ "[" ^  (string_of_int l.p) ^ "]"
 
 let rec show_process_start i pr = 
-  if i = 0 then "..." else
+  if i <= 0 then "..." else
   match pr with
   | EmptyP -> "0"
   | ParallelP(lp) ->( List.fold_left (fun str p -> str ^ "|" ^ (show_process_start i p)) "(" lp ) ^ ")"
-  | ChoiceP(l,lp)->( List.fold_left (fun str (j,p) -> str ^ "+" ^ (show_process_start i p)) "(" lp ) ^ ")"
-  | SeqP(a,p) -> (show_action a) ^ ";" ^ (show_process_start (match a with Test(_,_) | TestInequal(_,_) -> i | _ -> 0) p)
-  | CallP(l,j,procId,args,chans) -> procId.name ^ (if j = 1 then "" else (string_of_int j))
+  | ChoiceP(l,lp)-> "([" ^  (string_of_int l.p) ^ "]" ^ ( List.fold_left (fun str (j,p) -> str ^ "+(" ^ (string_of_int l.p) ^ ")" ^  (show_process_start i p)) "" lp ) ^ ")"
+  | SeqP(a,p) -> (show_action a) ^ ";" ^ (show_process_start (match a with Test(_,_) | TestInequal(_,_) -> i | _ -> i - 1) p)
+  | CallP(l,j,procId,args,chans) -> procId.name ^ (if j = 1 then "" else (string_of_int j)) ^ "[" ^  (string_of_int l.p) ^ "]"
 
 let rec count_type_nb typ pr i =
   if i = -1 then -1 
@@ -140,8 +140,8 @@ let new_location (pr : procId) p ( io : io ) str parent parent_choices phase =
       match io with 
       | Input(chan) -> Printf.printf "%d : in(%s)  > %d[ph:%d]%d \n" p str par phase (match parent_choices with [] -> 0 | l ::_ -> l.p)
       | Output(chan,_) -> Printf.printf "%d : out(%s) > %d[ph:%d]%d \n" p str par phase (match parent_choices with [] -> 0 | l ::_ -> l.p)
-      | Call -> Printf.printf " %d : %s      > %d[ph:%d] \n" p str par phase
-      | Choice-> Printf.printf " %d: %s       > %d[ph:%d] \n" p str par phase
+      | Call -> Printf.printf " %d : %s      > %d[ph:%d]%d \n" p str par phase (match parent_choices with [] -> 0 | l ::_ -> l.p)
+      | Choice-> Printf.printf " %d: %s       > %d[ph:%d]%d \n" p str par phase (match parent_choices with [] -> 0 | l ::_ -> l.p)
       end ;
     let l = {
       p=p; 

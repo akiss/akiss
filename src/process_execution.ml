@@ -25,18 +25,24 @@ let rec apply_subst_inputs term frame =
   - the updated threads, 
   - the threads which have failed due to a test (* for debug outputs *)*)
 let rec run_until_io test pending final failure (choices_constraints : Inputs.choices) process first frame =
-  (*Printf.printf "run until io %s \n%!" (show_process_start 3 process);*)
+  (*Printf.printf "run until io %s \n%!" (show_process_start 1 process);*)
   match process with
   | EmptyP -> ()
   | ParallelP(proclst) -> List.iter (fun p -> run_until_io test pending final failure choices_constraints p first frame ) proclst
   | ChoiceP(l,proclst) -> begin
+      (*Printf.printf "Choice is done: %d\n %s\n%s\n%!" l.p (Inputs.show_choices test.choice_constraints)(show_process_start 1 process) ;*)
       match Inputs.get_choice_opt l choices_constraints with
-      | None -> 
-        if not test.reflexive then 
+      | None -> (*
+        if (test.choice_constraints <> Inputs.new_choices)
+        then (Printf.printf "Choice constraints are not enough: %d\n %s\n%s\n%!" l.p (show_test test)(show_process_start 1 process) )
+        ;
+        if not test.reflexive then *)
+        if (test.choice_constraints = Inputs.new_choices)
+        then
           List.iter (fun (i,p) -> run_until_io test pending final failure (Inputs.add_choice l i choices_constraints) p first frame) proclst
       | Some i -> try 
           run_until_io test pending final failure choices_constraints (List.assoc i proclst) first frame 
-        with Not_found -> ()
+        with Not_found -> assert false
       end
   | SeqP(Input({io = Input(chanId); observable= Public}) ,p) 
   | SeqP(Output({io = Output(chanId,_); observable= Public},_) ,p) -> 
@@ -230,9 +236,9 @@ let rec apply_frame recipe (prun : partial_run) =
     | Var(x) -> try 
         let ba = List.find (fun ba -> ba.recipe = Var(x) ) prun.test.statement.body in 
         ba.term 
-      with Not_found -> Printf.eprintf "unbound recipe variable %s in %s" (show_term recipe)(show_raw_statement prun.test.statement); exit 2(* Var(x) *)
+      with Not_found -> Printf.printf "unbound recipe variable %s in %s" (show_term recipe)(show_raw_statement prun.test.statement); assert false
      ) with
-      LocPtoQ i -> (Printf.eprintf "apply_frame error %s \ncorresp:%s\n" (show_term recipe)(show_correspondance prun.corresp); raise (LocPtoQ i))
+      LocPtoQ i -> (Printf.printf "apply_frame error %s \ncorresp:%s\n" (show_term recipe)(show_correspondance prun.corresp); raise (LocPtoQ i))
       
 let show_verbose_action (action : location) run  =
     if !verbose_execution then (
@@ -365,8 +371,8 @@ let rec next_solution solution =
           solution.partial_runs_todo <- Solutions.add partial_run solution.partial_runs_todo 
       ) new_runs 
     with
-    | LocPtoQ i -> Printf.eprintf "error loc_p_to_q %d while executing on %d %s \n %s \n constraints %s\n" 
-      i current_loc.p (show_partial_run pr) (show_test pr.test)(show_correspondance pr.test.constraints); exit(5)
+    | LocPtoQ i -> Printf.printf "error loc_p_to_q %d while executing on %d %s \n %s \n constraints %s\n" 
+      i current_loc.p (show_partial_run pr) (show_test pr.test)(show_correspondance pr.test.constraints); assert false
   end
   else
     (
