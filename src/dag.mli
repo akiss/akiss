@@ -102,6 +102,7 @@ val put_at_end : dag -> Dag.key -> dag
 (*exception E*)
 val subset : dag -> dag -> bool
 val strict_subset : dag -> dag -> bool
+val order_from_recipes_and_inputs : LocationSet.t -> LocationSet.t -> dag
 val merge : dag -> dag -> dag
 val is_before_all : dag -> Dag.key -> LocationSet.t -> bool
 val restr_set : dag -> dag -> LocationSet.elt list -> LocationSet.t

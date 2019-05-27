@@ -352,37 +352,47 @@ let rec nb_root_variables r =
 let rec eval_recipe top choices inputs solved_atom term =
   match term with
   | Fun({id=Plus; has_variables = h},[l;r]) when top -> 
-    let v1,t1 = eval_recipe true choices inputs solved_atom l in
-    let v2,t2 = eval_recipe true choices inputs solved_atom r in
-    v1 @ v2, Fun({id=Plus;has_variables = h},[t1;t2])
-  | Fun({id=Frame({io = Output(_,t)})},[]) -> 
-    eval_recipe false choices inputs solved_atom t 
-  | Fun({id=InputVar({observable = Public} as l)},[]) -> [],Inputs.get l inputs
+    let v1,t1,locs1,atoms1 = eval_recipe true choices inputs solved_atom l in
+    let v2,t2,locs2,atoms2 = eval_recipe true choices inputs solved_atom r in
+    v1 @ v2, Fun({id=Plus;has_variables = h},[t1;t2]), LocationSet.union locs1 locs2, atoms1 @ atoms2
+  | Fun({id=Frame({io = Output(_,t)} as loc)},[]) -> 
+    let v,t,l,atoms = eval_recipe false choices inputs solved_atom t in
+    v,t,LocationSet.add loc l,atoms
+  | Fun({id=InputVar({observable = Public} as l)},[]) -> [],Inputs.get l inputs, LocationSet.singleton l,[]
   | Fun({id=InputVar({observable = Hidden} as l)},[]) -> 
     eval_recipe false choices inputs solved_atom (
       match (Inputs.get_output_of_input choices l).io with 
       Output(_,t)-> t 
       | _ -> assert false) 
-  | Fun(f,args) -> [],Fun(f,List.map (fun t -> snd(eval_recipe false choices inputs solved_atom t)) args)
+  | Fun(f,args) -> let eval_args  = List.map (fun t -> eval_recipe false choices inputs solved_atom t) args in
+    [], 
+    Fun(f, List.map (fun (v,t,l,a) -> t) eval_args),
+    List.fold_left (fun locs (v,t,l,a) -> LocationSet.union l locs) LocationSet.empty eval_args,
+    List.fold_left (fun atoms (v,t,l,a) -> a @ atoms ) [] eval_args
   | Var(x) -> (try 
-     [],(List.find (fun a -> a.recipe = term) solved_atom).term 
+    let atom = List.find (fun a -> a.recipe = term) solved_atom in
+     [],atom.term , LocationSet.empty, [atom]
     with Not_found -> 
-      if top then ([term],zero)
+      if top then ([term],zero, LocationSet.empty,[])
       else (
         if !about_rare then Printf.printf "no eval for %s\n" (show_term term); 
         raise No_Eval ))
         
-let clean_no_var_recipes st other_body var_recipe_body =
-  List.fold_left (fun (vrp,ob) b -> 
-    if LocationSet.cardinal b.loc > 1 
+let clean_no_var_recipes st other_body var_recipe_body dag =
+  List.fold_left (fun (vrp,ob,new_dag) b -> 
+    (*if LocationSet.cardinal b.loc > 1 
     then (vrp,b::ob) 
-    else 
+    else *)
       try 
-      let v,t = eval_recipe true st.choices st.inputs vrp b.recipe in
+      let v,t,locs,atoms = eval_recipe true st.choices st.inputs vrp b.recipe in
       match v with
       | [] ->
-        if Rewriting.equals_ac (Rewriting.normalize t (!Parser_functions.rewrite_rules))  b.term then
-          (vrp,ob)
+        if Rewriting.equals_ac (Rewriting.normalize t (!Parser_functions.rewrite_rules))  b.term 
+        then (
+          let new_dag' = merge new_dag (order_from_recipes_and_inputs locs b.loc) in
+          let new_vrp = List.map (fun a -> if List.memq a atoms then {a with loc = LocationSet.union a.loc b.loc} else a) vrp in
+          (*Printf.printf "new dag:%s\n%!" (show_dag new_dag');*)
+          (new_vrp,ob,new_dag'))
         else (
           if !about_canonization then Printf.printf "Unsound statement\n%s > %s = %s \n%!"
             (show_term b.recipe) (show_term t) (show_term b.term);
@@ -390,13 +400,13 @@ let clean_no_var_recipes st other_body var_recipe_body =
       | [v1] -> 
         if !about_canonization then Printf.printf "deduce that %s is %s\n" (show_term v1) (show_term t);
         let b' = {b with recipe= v1;term = (Rewriting.normalize (Fun({id=Plus;has_variables=true}, [t;b.term])) (!Parser_functions.rewrite_rules))} in
-        (b'::vrp,ob)
-      | v1 :: vs -> assert false;
+        (b'::vrp,ob,(merge new_dag (order_from_recipes_and_inputs locs b.loc)))
+      | v1 :: vs -> assert false; (*
         let recip = List.fold_left (fun t v -> Fun({id=Plus;has_variables = true},[v;t])) v1 vs in
         let term = (Rewriting.normalize (Fun({id=Plus;has_variables=true}, [t;b.term])) (!Parser_functions.rewrite_rules)) in
         if !about_canonization then Printf.printf "Deduce that %s is %s\n" (show_term recip) (show_term term);
         let b' = {b with recipe= recip ;term = term} in
-        (vrp,b'::ob)
+        (vrp,b'::ob)*)
         (*
         match term with 
         | Fun({id=Plus},[]) ->
@@ -407,8 +417,8 @@ let clean_no_var_recipes st other_body var_recipe_body =
       with
       No_Eval -> 
         if !about_rare then Printf.printf "No way to check %s\n%!" (show_term b.recipe);
-        (vrp,b::ob)  
-  ) (var_recipe_body, []) other_body
+        (vrp,b::ob,dag)  
+  ) (var_recipe_body, [],dag) other_body
     
 let compare_loc_set recipes l1 l2 =
   let ls1 = LocationSet.elements l1.loc in
@@ -447,8 +457,8 @@ let simplify_statement st =
         ) (vars_of_term term) in
   let body_maker = ref [] in
   let var_recipe_body,other_body = List.partition (fun b -> is_var b.recipe) st.body in
-  let var_recipe_body,other_body = clean_no_var_recipes st other_body var_recipe_body in
-  let var_recipe_body,other_body = clean_no_var_recipes st other_body var_recipe_body in
+  let var_recipe_body,other_body,new_dag = clean_no_var_recipes st other_body var_recipe_body st.dag in
+  let var_recipe_body,other_body,new_dag = clean_no_var_recipes st other_body var_recipe_body new_dag in
   List.iter
       (fun a ->
         update_term a.term;
@@ -485,13 +495,14 @@ let simplify_statement st =
     nbvars = !nbv;
   } in
   let r = apply_subst_statement { st with body = body; } sigma in
+  let r = { r with dag = new_dag; } in
   let r = if !Parser_functions.use_xor then
     { r with 
     body = List.map (fun a -> {a with recipe = Rewriting.normalize_xor_order a.recipe;term=Rewriting.normalize_xor_order a.term}) r.body ;
     inputs = Inputs.map Rewriting.normalize_xor_order r.inputs;
     recipes = Inputs.map Rewriting.normalize_xor_order r.recipes} 
     else r in
-  (* Printf.printf "result: %s\n" (show_raw_statement r); *)
+  (*if new_dag <> st.dag then  Printf.printf "simplify: %s\ninto %s \n%!" (show_raw_statement st) (show_raw_statement r); *)
   (*st.binder := New;*)
   (sigma,r)
   with 

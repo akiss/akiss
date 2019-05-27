@@ -76,6 +76,9 @@ let strict_subset dag1 dag2 =
     | (None,  _) -> None) dag1.rel dag2.rel); true
   with E -> false
 
+let order_from_recipes_and_inputs recipe_locs input_locs =  
+  {rel= LocationSet.fold (fun l dag -> Dag.add l input_locs dag) recipe_locs Dag.empty}
+  
 let merge dag1 dag2 =
    let one_side dag1 dag2 =
    Dag.fold (fun o seti newdag -> 
