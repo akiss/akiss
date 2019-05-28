@@ -140,8 +140,11 @@ let dag_with_one_action_at_end locs action =
   
   
 let first_actions_among dag locs =
-  let first = LocationSet.filter (fun k -> Dag.for_all (fun k' locset -> 
-  not (LocationSet.mem k' locs) || not (LocationSet.mem k locset)) dag.rel) locs in
+  let first = LocationSet.filter 
+    (fun k -> Dag.for_all 
+      (fun k' locset -> 
+           not (LocationSet.mem k' locs) 
+        || not (LocationSet.mem k locset)) dag.rel) locs in
   first
   
 let only_observable dag = dag

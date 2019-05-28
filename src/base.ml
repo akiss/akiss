@@ -236,7 +236,7 @@ let show_raw_statement st =
   else
   Format.sprintf
     "(%d%s) %s <== %s \n       %s %s %s\n       %s\n" st.nbvars (show_binder !(st.binder)) (show_predicate st.head)(show_atom_list st.body)(show_inputs st.inputs)(show_dag st.dag)(show_choices st.choices)(show_inputs st.recipes) in 
-  string ^ if not (check_binder_st st) then (Printf.printf "BINDER ERROR: \n%s\n" string; assert false; st.binder := Rule;  " BINDER ERROR " ) else ""
+  string ^ if not (check_binder_st st) then (Printf.printf "BINDER ERROR: \n%s\n" string; assert false (*; st.binder := Rule;  " BINDER ERROR "*) ) else ""
   
 let show_chan_key chkey =
    if !use_xml then 

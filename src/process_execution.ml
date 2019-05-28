@@ -150,7 +150,7 @@ let rec dag_to_sequence dag set =
     try let loc = LocationSet.choose (first_actions_among dag set) in 
     loc :: (dag_to_sequence dag (LocationSet.remove loc set))
     with
-    Not_found -> assert false 
+    Not_found -> Printf.printf "cyclic dag unexpected: %s (%s) \n%!" (show_dag dag) (show_loc_set set); assert false 
     
 let dag_to_sequence dag = 
   dag_to_sequence dag (Dag.fold (fun l _ remain ->  LocationSet.add l remain) dag.rel LocationSet.empty )

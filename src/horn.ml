@@ -392,6 +392,8 @@ let clean_no_var_recipes st other_body var_recipe_body dag =
           let new_dag' = merge new_dag (order_from_recipes_and_inputs locs b.loc) in
           let new_vrp = List.map (fun a -> if List.memq a atoms then {a with loc = LocationSet.union a.loc b.loc} else a) vrp in
           (*Printf.printf "new dag:%s\n%!" (show_dag new_dag');*)
+          if new_dag' != new_dag && is_cyclic new_dag'
+          then (Printf.printf "cyclic dag for %s%!\n" (show_raw_statement st); raise Unsound_Statement);
           (new_vrp,ob,new_dag'))
         else (
           if !about_canonization then Printf.printf "Unsound statement\n%s > %s = %s \n%!"
