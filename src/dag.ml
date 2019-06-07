@@ -112,6 +112,10 @@ let restr_set dag dag1 locs2 =
     LocationSet.add l1 locset
   else locset 
   ) dag1.rel LocationSet.empty
+  
+(** for recipize *)  
+let before_dag dag locs =
+ { rel=  Dag.filter (fun l after ->  (LocationSet.subset locs after)) dag.rel}
 
 (** for [merge_test] *)
 let is_cyclic dag =

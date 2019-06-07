@@ -19,8 +19,8 @@ let statement_f0 =
        binder = binder; 
        nbvars = 4; 
        head=Knows(Fun({id=Plus;has_variables=true},[rx1;rx2]),Fun({id=Plus;has_variables=true},[tx1;tx2]));
-       body=[ {loc=empty_loc;recipe = rx1; term = tx1; marked = false};
-              {loc=empty_loc;recipe = rx2; term = tx2; marked = false }];
+       body=[ {loc=empty_loc;recipe = rx1; term = tx1; marked = false; recipize = false};
+              {loc=empty_loc;recipe = rx2; term = tx2; marked = false; recipize = false}];
      }
 
 let statement_f1 =
@@ -33,8 +33,8 @@ let statement_f1 =
        binder = binder; 
        nbvars = 4; 
        head=Knows(Fun({id=Plus;has_variables=true},[rx1;rx2]),tx2);
-       body=[ {loc=empty_loc;recipe = rx1; term = tx1; marked=true};
-              {loc=empty_loc;recipe = rx2; term = Fun({id=Plus;has_variables=true},[tx1;tx2]); marked = true }];
+       body=[ {loc=empty_loc;recipe = rx1; term = tx1; marked=true; recipize = false};
+              {loc=empty_loc;recipe = rx2; term = Fun({id=Plus;has_variables=true},[tx1;tx2]); marked = true; recipize = false }];
      }
 
 let statement_f2 =
@@ -48,8 +48,8 @@ let statement_f2 =
        binder = binder; 
        nbvars = 5; 
        head=Knows(Fun({id=Plus;has_variables=true},[rx1;rx2]),Fun({id=Plus;has_variables=true},[tx1;tx2]));
-       body=[ {loc=empty_loc;recipe = rx1; term = Fun({id=Plus;has_variables=true},[tx1;tx3]); marked=true};
-              {loc=empty_loc;recipe = rx2; term = Fun({id=Plus;has_variables=true},[tx3;tx2]); marked =true}];
+       body=[ {loc=empty_loc;recipe = rx1; term = Fun({id=Plus;has_variables=true},[tx1;tx3]); marked=true; recipize = false};
+              {loc=empty_loc;recipe = rx2; term = Fun({id=Plus;has_variables=true},[tx3;tx2]); marked =true; recipize = false}];
      }
  
 let is_deduction_st st = 
@@ -75,6 +75,7 @@ let is_test_st st =
 exception Grr  
   
 let is_solved_atom a =
+  a.recipize || (
   let solved_term =
     if a.marked 
     then (*is_var a.term*) false 
@@ -83,7 +84,7 @@ let is_solved_atom a =
     if is_var a.recipe
     then true
     else false
-  else false
+  else false )
 
 let is_solved st = 
   try
@@ -334,6 +335,124 @@ let consequence st kb rules =
     r
 
 
+(** [first f l e] attempts to call [f] on each element of the list,
+    in order, and returns the result of the first call that succeeds.
+    If all calls fail, re-raise the exception raised by the last call. *)
+let all kb f =
+   let rec all_node st f =
+      (* Printf.printf "T%d " st.id; *)
+     (*if empty <> st.st.dag then raise Bad_World ;*)
+     try f st.st with 
+     Bad_case -> all_list st.children f  
+   and all_list sts f =
+     match sts with 
+     | [] -> raise Bad_World
+     | h::q -> begin 
+        try all_node h f with
+        Bad_World -> all_list q f 
+     end in
+   try
+   all_list kb.children f
+   with
+   | Bad_World -> (
+      try f statement_f0 with
+      Bad_case -> raise Not_a_consequence)
+      
+let rec all_sigma sigma_lst f =
+  match sigma_lst with
+  | [] -> raise Bad_case
+  | s :: ss -> ( try f s with Bad_case | Bad_World -> all_sigma ss f)
+
+
+
+(** Check whether a statement is a consequence of a knowledge base, ie.
+    try to find solved statements deriving the same term from the same
+    assumptions.
+    Raise [Not_a_consequence] if there is no such statement.
+    If there is one, return the associated recipe. An identical statement
+    will be added to indicate that the two recipes have the same result,
+    instead of the new useless deduction statement. *)
+let recipize kb st = 
+  (*if !about_canonization then Printf.printf "Conseq of %s" (show_raw_statement st) ;*)
+  (*st.binder := Rule;*)
+  let rules = ! Parser_functions.rewrite_rules in
+  let apply_subst_list_atom atom sigma  = 
+   Knows(zero, apply_subst atom.term sigma) in
+  assert (is_solved st) ;
+  let rec aux st locs kb =
+    (*Printf.printf "___%s\n" (show_raw_statement st);*)
+    (*st.binder := New;*)
+    let t = get_head_term st.head in
+    try
+          let (var,cst) = explode_term t in
+          if cst != [] then raise Not_a_linear_combination
+          else
+            (* Base case: Axiom rule of conseq *)
+            (match List.find_opt (fun b -> Rewriting.equals_ac b.term t) st.body with
+            | Some b -> `Axiom,b.recipe,st
+            | None -> let r = Var({status=st.binder;n=st.nbvars}) in 
+                `Axiom,r,{st with 
+                  body = { loc=locs; recipe=r; term=t; marked=false; recipize=false }::st.body;
+                  nbvars = st.nbvars + 1;})
+    with
+    | Not_a_linear_combination ->
+      (* Inductive case: Res rule
+        * Find a (solved, well-formed) statement [x]
+        * whose head is matched by [head] and such that
+        * [aux] succeeds on [y<-body] for each [y] in the
+        * body of [x].
+        *
+        * We need to make sure that we are not finding a conseq
+        * derivation involving non-normal clause instantiations,
+        * as they may not be proper redundancies.
+        * So we require, for each conseq step, that the head of the
+        * instantiated clause [x] is normal. *)
+        all kb
+          (fun x ->
+            let sigmas = inst_w_t st x in
+            all_sigma sigmas 
+              (fun sigma ->
+                (*Printf.printf "\nst: %s\n sigma = %s\n" (show_raw_statement x)(show_subst sigma); *)
+                let subresults =
+                  List.fold_left
+                    (fun (tr,sub,st') y ->
+                      let trace, r, st'' = aux {st' with head=(apply_subst_list_atom y sigma) } y.loc kb in
+                      trace :: tr, (unbox_var (y.recipe), r) :: sub,st'') ([],[],st)
+                    (x.body)
+                in
+                (* All variables occurring in the head recipe must occur
+                 * in the body, so there is no need to apply [sigma] to
+                 * [x], it gets done as part of applying the accumulated
+                 * substitution [subst]. *)
+                let traces,subst,st = subresults in
+                let hx_subst = apply_subst (get_head_recipe (x.head)) subst in
+                (** Check that a term is a normal form. *)
+                let is_normal tm rules = Rewriting.equals_ac tm (Rewriting.normalize tm rules) in
+                if not (is_normal hx_subst rules) then raise Bad_case ;
+                `Res (x,traces), hx_subst, st
+              )
+          )
+  in
+  let recipize_body, real_body = List.partition (fun a -> a.recipize) st.body in
+  let subst,st' = List.fold_left  (fun (sub,st') a -> 
+      let st'' = { st' with head = Knows(a.recipe,a.term); dag = before_dag st.dag a.loc } in
+      let trace,r,st' = aux st'' a.loc kb in
+      let ar = unbox_var a.recipe in
+      if !about_canonization then
+        Format.printf "Recipize derivation for #%s:\nrecipe: %s -> %s\ntrace %a\n" 
+          (show_raw_statement st'')(show_varId ar) (show_term r) print_trace trace ;
+      ((ar, r)::sub,{ st' with recipes = {i = Dag.map (fun recip -> apply_subst recip [(ar, r)]) st'.recipes.i }})
+    ) ([],{st with body = real_body}) recipize_body in
+  let st = {st' with head = st.head; dag = st.dag} in
+  match st.head with
+  | Reach | Unreachable | ReachTest(_,_) -> st
+  | Knows(r,t) -> { st with head = Knows(apply_subst r subst,t)}
+  | Identical(r,r') -> { st with head = Identical(apply_subst r subst,apply_subst r' subst)}
+  | Tests(head) -> {st with head = Tests({
+      head_binder = head.head_binder;
+      equalities= EqualitiesSet.map (fun (b,r,r') -> (b,apply_subst r subst,apply_subst r' subst)) head.equalities ;
+      disequalities= EqualitiesSet.map (fun (b,r,r') -> (b,apply_subst r subst,apply_subst r' subst)) head.disequalities})}
+  
 
 (** {2 Knowledge base canonization rules } *)
 
@@ -524,12 +643,12 @@ let rule_no_plus_var st =
         let to_merge_var,not_to_merge = List.partition (fun x -> List.exists (fun b -> b.recipe = x && (not b.marked)) st.body) var in
         if List.length to_merge_var > 1
         then (
-          if !about_canonization then Printf.printf "no plus var rule applied on: %s\n"(show_raw_statement st);
+          if !about_canonization then Printf.printf "no plus var rule applied on %s+%s: %s\n" (show_term (List.nth to_merge_var 0))(show_term (List.nth  to_merge_var 1))(show_raw_statement st);
           let args' = List.map (get_sum_vars loc) cst in
           let new_var = Var({status=st.binder;n=(!nbv)}) in
           incr nbv ;
           let new_term = Rewriting.normalize_xor_order (Rewriting.recompose_term (List.map (fun v -> (List.find (fun b -> b.recipe = v && (not b.marked)) st.body).term) to_merge_var)) in
-          body := {loc = loc ; recipe = new_var; term = new_term; marked = false} :: !body;
+          body := {loc = loc ; recipe = new_var; term = new_term; marked = false; recipize = true} :: !body;
           Rewriting.recompose_term (new_var :: not_to_merge @ args')
         )
         else
@@ -543,9 +662,12 @@ let rule_no_plus_var st =
     recipes = {i = Dag.mapi (fun l r -> get_sum_vars (LocationSet.singleton l) r) st.recipes.i};
     nbvars = !nbv;
     body = !body;
-  } in
+  } 
+  in
   if !nbv = st.nbvars then st
-  else new_st
+  else (
+  if !about_canonization then Printf.printf "no plus applied : %s\n" (show_raw_statement new_st);
+  new_st )
     
 let rule_shift st = 
   match st.head with
@@ -558,7 +680,7 @@ let rule_shift st =
     let recipe = Var({status=st.binder;n=st.nbvars}) in
     let _,stt = simplify_statement {st with 
       nbvars = st.nbvars+1 ;
-      body = {loc= empty_loc; recipe=recipe;term=Rewriting.recompose_term(var);marked=false}:: st.body ;
+      body = {loc= empty_loc; recipe=recipe;term=Rewriting.recompose_term(var);marked=false; recipize = true}:: st.body ;
       head = Knows( Fun({id=Plus;has_variables=true},[r;recipe]), Rewriting.recompose_term cst)} in 
     if !about_canonization then Format.printf "shift + on the statement: %s \n" (show_raw_statement stt); 
      stt end
@@ -574,10 +696,13 @@ let rule_shift st =
     end *)
   | _ -> st 
   
-let canonical_form statement =
-  let _,statement = simplify_statement (rule_no_plus_var statement) in
+let canonical_form kb statement =
+  let solved = is_solved statement in
+  let statement = (rule_no_plus_var statement) in
+  let statement = if solved then recipize kb statement else statement in
+  let _,statement = simplify_statement statement in
   let statement = 
-    if is_deduction_st statement && is_solved statement 
+    if is_deduction_st statement && solved
     then
         rule_shift statement
     else 
@@ -665,29 +790,30 @@ let update kb f =
   let f = normalize_identical f in (* do nothing *)
   try
   (*let f = canonical_form f in *)
-  match normalize_new_statement f
-  with 
-    None -> None 
-  | Some fc -> let fc = canonical_form fc in
-  if is_identity_of_theory fc then None else
-  if is_deduction_st fc && is_solved fc then
-    try
-      let recipe = consequence fc kb.solved_deduction rules in
-      let newhead =
-        Identical(get_head_recipe fc.head, recipe)
-      in
-      let newclause = normalize_identical { fc with head = newhead } in
-        if !about_canonization then Format.printf 
-          "Useless: %s\n Original form: %s\n Replaced by: %s\n\n%!"
-          (show_raw_statement fc)(show_raw_statement f)(show_raw_statement newclause);
-        if not (is_identity_of_theory newclause) then
-          Some newclause
-        else None
-    with Not_a_consequence ->
+  match normalize_new_statement f with 
+  | None ->  if !about_canonization then Printf.printf "Not a normal statement\n"; None 
+  | Some fc -> 
+    if !about_canonization then Printf.printf "Normalized f: %s\n" (show_raw_statement fc);
+    let fc = canonical_form kb.solved_deduction fc in
+    if is_identity_of_theory fc then None else
+    if is_deduction_st fc && is_solved fc then
+      try
+        let recipe = consequence fc kb.solved_deduction rules in
+        let newhead =
+          Identical(get_head_recipe fc.head, recipe)
+        in
+        let newclause = normalize_identical { fc with head = newhead } in
+          if !about_canonization then Format.printf 
+            "Useless: %s\n Original form: %s\n Replaced by: %s\n\n%!"
+            (show_raw_statement fc)(show_raw_statement f)(show_raw_statement newclause);
+          if not (is_identity_of_theory newclause) then
+            Some newclause
+          else None
+      with Not_a_consequence ->
+        Some fc
+    else
       Some fc
-  else
-    Some fc
-  with Unsound_Statement -> None
+    with Unsound_Statement -> None
 
 
     
@@ -794,8 +920,8 @@ let resolution_plus master =
            inputs = Inputs.map (fun t -> Rewriting.apply_subst_term t sigma) master.inputs;
            recipes = Inputs.map (fun t -> Rewriting.apply_subst_term t sigma) master.recipes;
            head = apply_subst_pred master.head sigma ;
-           body = {loc = atom.loc ; marked = t1_rigid ; recipe = Rewriting.apply_subst_term (Var (rx1)) sigma ; term = t1 }
-               :: {loc = atom.loc ; marked = t2_rigid ; recipe = Rewriting.apply_subst_term (Var (rx2)) sigma ; term = t2}
+           body = {loc = atom.loc ; marked = t1_rigid ; recipe = Rewriting.apply_subst_term (Var (rx1)) sigma ; term = t1 ; recipize = false}
+               :: {loc = atom.loc ; marked = t2_rigid ; recipe = Rewriting.apply_subst_term (Var (rx2)) sigma ; term = t2 ; recipize = false}
                :: (List.map (fun x -> { x with recipe = Rewriting.apply_subst_term x.recipe sigma; term = Rewriting.apply_subst_term x.term sigma} )
                  (List.filter (fun x -> (x <> atom)) master.body));
            choices = master.choices;
@@ -852,13 +978,15 @@ let resolution sigma choices dag master slave =
           let result =
              let body =
                List.map (fun x -> {
-               loc = 
-                if empty_loc = x.loc 
-                then atom.loc 
-                else x.loc ; 
-               recipe = Rewriting.apply_subst_term x.recipe sigma;
-               term = Rewriting.apply_subst_term x.term sigma ;
-               marked = x.marked }
+                  loc = 
+                    if empty_loc = x.loc 
+                    then atom.loc 
+                    else x.loc ; 
+                  recipe = Rewriting.apply_subst_term x.recipe sigma;
+                  term = Rewriting.apply_subst_term x.term sigma ;
+                  marked = x.marked ;
+                  recipize = x.recipize
+                }
                  )
                  (slave.body @
                     (List.filter (fun x -> (x <> atom)) master.body))
@@ -903,7 +1031,8 @@ let equation sigma choices dag fa fb =
                loc =  x.loc ; 
                recipe = Rewriting.apply_subst_term x.recipe sigma ;
                term = Rewriting.apply_subst_term x.term sigma ;
-               marked = false }
+               marked = false ;
+               recipize = x.recipize}
                  )
                  (fa.body @ fb.body) 
              in
@@ -982,7 +1111,8 @@ let rec hidden_chan_statement kb  (loc_input , term_input ,ineq_input,st_input,p
         loc =  x.loc ; 
         recipe = Rewriting.apply_subst_term x.recipe sigma ;
         term = Rewriting.apply_subst_term x.term sigma ;
-        marked = false }
+        marked = false;
+        recipize = false;}
           )
           (st_output.body @ st_input.body) 
         in
@@ -1093,7 +1223,8 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
         loc = LocationSet.singleton loc; 
         recipe = Var(new_recipe) ;
         term = Var(new_var); 
-        marked = false} in
+        marked = false;
+        recipize = false} in
       let next_body = premisse :: st.body in
       let st = {
         binder = binder; 
@@ -1247,7 +1378,7 @@ let theory_statements kb fname arity =
        inputs = Inputs.new_inputs; 
        recipes = Inputs.new_inputs; 
        head=Knows(Fun({id=fname;has_variables=true},rv),term_head);
-       body=List.map (function (r,t) -> {loc=empty_loc;recipe = r; term = t; marked=false}) variables;
+       body=List.map (function (r,t) -> {loc=empty_loc;recipe = r; term = t; marked=false;recipize=false}) variables;
        involved_copies = BangSet.empty;
      } in
    let v = Rewriting.variants (2*arity) term_head (! Parser_functions.rewrite_rules) in

@@ -92,7 +92,8 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
                loc = x.loc ; 
                recipe = Rewriting.apply_subst_term x.recipe sigma ;
                term = Rewriting.apply_subst_term x.term sigma ;
-               marked = x.marked }
+               marked = x.marked;
+               recipize = x.recipize}
                  )
                  (fa.body @ fb.body)
              in 
@@ -295,6 +296,7 @@ let conj run =
     recipe = transpose_recipe identity_sigma ba.recipe run.corresp;
     term = apply_frame_2 identity_sigma ba.recipe run;
     marked = false;
+    recipize = false
     }) st.body ;
   recipes = transpose_recipes identity_sigma st.recipes run.corresp ; 
   involved_copies = BangSet.empty ; (* TODO *)
@@ -364,6 +366,7 @@ let trunconj set run =
     recipe = transpose_recipe identity_sigma ba.recipe run.corresp;
     term = apply_frame_2 identity_sigma ba.recipe run;
     marked = false;
+    recipize = false;
     }) (List.filter (filter_atom set) st.body) ;
   involved_copies = BangSet.empty ; (* TODO *)
   } in

@@ -106,6 +106,7 @@ val order_from_recipes_and_inputs : LocationSet.t -> LocationSet.t -> dag
 val merge : dag -> dag -> dag
 val is_before_all : dag -> Dag.key -> LocationSet.t -> bool
 val restr_set : dag -> dag -> LocationSet.elt list -> LocationSet.t
+val before_dag : dag -> LocationSet.t -> dag
 val is_cyclic : dag -> bool
 exception Impossible
 val put_set_at_end : dag -> LocationSet.t -> dag

@@ -238,7 +238,7 @@ let rec apply_frame recipe (prun : partial_run) =
         ba.term 
       with Not_found -> Printf.printf "unbound recipe variable %s in %s" (show_term recipe)(show_raw_statement prun.test.statement); assert false
      ) with
-      LocPtoQ i -> (Printf.printf "apply_frame error %s \ncorresp:%s\n" (show_term recipe)(show_correspondance prun.corresp); raise (LocPtoQ i))
+      LocPtoQ i -> (Printf.printf "apply_frame error %s \nrun:%s\n" (show_term recipe)(show_partial_run prun); raise (LocPtoQ i))
       
 let show_verbose_action (action : location) run  =
     if !verbose_execution then (
@@ -256,17 +256,23 @@ let show_verbose_action (action : location) run  =
 (** Given a partial_run run, try to execute action on one of the available threads of Q *)        
 let try_run run (action : location) ext_thread =
   (*Printf.printf "constraints %s \n" (show_correspondance run.test.constraints );*)
-  let condition = if is_empty_correspondance run.test.constraints 
-    then 
-      fun (action : location) (l : location) -> (
+  let free_cond = fun (action : location) (l : location) -> (
         match action.io , l.io with 
         | Input c1, Input c2 
         | Output (c1, _) ,Output (c2, _) -> c1 == c2
         | _ -> false
         )
-        && action.phase <= l.phase
+        && action.phase <= l.phase in
+  let condition = if is_empty_correspondance run.test.constraints 
+    then 
+      free_cond
     else 
-      fun action l -> try loc_p_to_q action run.test.constraints = l with LocPtoQ i -> (Printf.eprintf "try run error\n"; raise (LocPtoQ i)) in
+      fun action l -> try 
+        loc_p_to_q action run.test.constraints = l 
+        with LocPtoQ i -> (
+          if !about_rare 
+          then Printf.printf "partial constraint (no %d): %s\n%s\n%!" l.p (show_correspondance run.test.constraints)(show_extra_thread ext_thread); 
+          free_cond action l) in
   (* Printf.printf "Testing %d against %s\n" action.p (show_process_start 1 ext_thread.thread);*)
   (*let intern_phase = Dag.fold (fun k _ maxphase -> 
       match k.io with Input(_)| Output(_,_) -> max k.phase maxphase | _ -> maxphase 

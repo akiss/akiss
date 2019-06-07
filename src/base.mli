@@ -3,6 +3,7 @@ type body_atom = {
   recipe : Types.term;
   term : Types.term;
   marked : bool;
+  recipize : bool; 
 }
 module EqualitiesSet :
   sig
