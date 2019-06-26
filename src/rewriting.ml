@@ -543,7 +543,8 @@ and may_match_plus xor hard pattern model pairlst sigma =
 
 let rec csm_both xor be_lazy binder pmlst sigma = 
   (*let p,m = List.split pmlst in
-  Printf.printf "matching (mod %s) %s against pattern %s \n%!" (if xor then "xor" else "ac") (show_term_list m) (show_term_list p);*)
+  Printf.printf "matching (mod %s, lazy %s) %s against pattern %s \n%!" 
+    (if xor then "xor" else "ac") (if be_lazy then "yes" else "no") (show_term_list m) (show_term_list p);*)
   try 
     let (hard,sigma) = match_ac xor [] pmlst sigma in
     if hard = [] then [sigma]

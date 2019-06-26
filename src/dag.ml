@@ -19,6 +19,8 @@ type dag = {
 
 let empty_loc = LocationSet.empty
 
+module SortedDag = Map.Make(struct type t = int * int let compare = compare end)
+
 (**  {2 Printers} *)
 
 let show_loc_set ls =
@@ -79,6 +81,8 @@ let strict_subset dag1 dag2 =
 let order_from_recipes_and_inputs recipe_locs input_locs =  
   {rel= LocationSet.fold (fun l dag -> Dag.add l input_locs dag) recipe_locs Dag.empty}
   
+
+  (*
 let merge dag1 dag2 =
    let one_side dag1 dag2 =
    Dag.fold (fun o seti newdag -> 
@@ -94,8 +98,51 @@ let merge dag1 dag2 =
    {rel= Dag.union (fun loc set1 set2 -> Some (LocationSet.union set1 set2)) map1 map2}
    
 let merge dag1 dag2 =
-  merge dag1 (merge (merge dag1 dag2) dag2)
+  merge dag1 (merge (merge dag1 dag2) dag2)*)
+  
+let memoized_dag : (hash_dag * hash_dag, dag) Hashtbl.t = Hashtbl.create 1000
 
+let clean_memoization () = Hashtbl.reset memoized_dag
+
+let merge dag1 dag2 =
+  if Dag.is_empty dag1.rel then dag2
+  else if Dag.is_empty dag2.rel then dag1
+  else 
+  let hash1 = dag_to_hash dag1 in
+  let hash2 = dag_to_hash dag2 in
+  if hash1 = hash2 then dag1 else (
+  match Hashtbl.find_opt memoized_dag (hash1,hash2) with
+  | None ->
+    let sort dag =
+    Dag.fold (fun l locs imap -> SortedDag.add (LocationSet.cardinal locs,l.p) (l,locs) imap) dag SortedDag.empty in
+    let partial_merge sdag odag old_dag =
+    SortedDag.fold (fun (i,_) (l,locs) new_dag -> 
+      (*Printf.printf "enter %d-> %s\n" l.p (show_loc_set locs);*)
+      let locset_union_dag = LocationSet.fold (fun l'' loc_other_dag ->
+          match Dag.find_opt l'' new_dag with 
+          | Some ls -> LocationSet.union ls loc_other_dag
+          | None -> loc_other_dag ) locs locs in
+      (*Printf.printf "raw union %s \n" (show_loc_set locset_union_dag);*)     
+      Dag.update l (fun exist_locs ->
+        let nlocs = 
+        (LocationSet.fold (fun l' new_loc -> 
+        match Dag.find_opt l' odag with
+        | Some ls -> LocationSet.union new_loc ls
+        | None -> new_loc
+        ) locset_union_dag locset_union_dag
+        ) in
+        match exist_locs with
+        None -> Some nlocs 
+        | Some exist_locs -> Some (LocationSet.union exist_locs nlocs))
+      new_dag
+        ) sdag old_dag in
+    let dag1' = partial_merge (sort dag1.rel) dag2.rel Dag.empty in
+    let dag2' = {rel = partial_merge (sort dag2.rel) dag1' dag1'}  in
+    (*Printf.printf "merge of %s and %s = %s\ndag1' was %s\n" (show_dag dag1)(show_dag dag2)(show_dag dag2')(show_dag {rel=dag1'});*)
+    Hashtbl.add memoized_dag (hash1,hash2) dag2';
+    dag2' 
+  | Some dag -> dag)
+  
 let is_before_all dag l locs =
   try
     LocationSet.is_empty (LocationSet.diff locs (Dag.find l dag.rel))

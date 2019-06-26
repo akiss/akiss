@@ -51,7 +51,7 @@ exception Unsound_Statement
   Inputs.inputs -> Base.body_atom list -> Types.term -> Types.term*)
 val simplify_statement :
   Base.raw_statement -> Types.substitution * Base.raw_statement
-(*val canonical_form : Base.raw_statement -> Base.raw_statement*)
+val canonical_form : Base.statement -> Base.raw_statement -> (Types.substitution * Base.raw_statement) list
 val is_identity_of_theory : Base.raw_statement -> bool
 (*val normalize_identical : 'a -> 'a*)
 val normalize_new_statement : Base.raw_statement -> Base.raw_statement option

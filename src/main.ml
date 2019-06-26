@@ -95,7 +95,8 @@ let reset_global () =
   Hashtbl.clear memoize_call;
   (*records = [];*)
   latex_identifier := "";
-  Maude.clean_maude ()
+  Maude.clean_maude ();
+  Dag.clean_memoization ()
 
 
 

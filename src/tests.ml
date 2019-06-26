@@ -118,80 +118,81 @@ let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
         in
         sigma.binder := Master;
         (*let tau = (Array.make sigma.nbvars None) in*)
-        try 
         if !debug_merge then Printf.printf "The init merged test from subst %s \nis %s\n%!"(show_substitution sigma)(show_raw_statement test_merge_init);
         match Horn.normalize_new_statement test_merge_init with
         | None -> lst
         | Some test_merge_init -> 
           if !debug_merge then Printf.printf "after normalization %s\n%!" (show_raw_statement test_merge_init);
-          let (tau,test_merge_init) = Horn.simplify_statement test_merge_init in
-          let rho = Rewriting.compose sigma tau in
-          if !debug_merge then Printf.printf "The canonized init merged test from subst %s:\n %s \n\n rho = %s\n%!"
-            (show_substitution tau)(show_raw_statement test_merge_init)(show_substitution rho);
-          if Horn.is_solved test_merge_init then 
-            (rho,test_merge_init)::lst
-          else (
           let kb = base_of_name process_name in
-          let st = {
-            id = kb.next_id ; 
-            st = test_merge_init ;
-            children = [] ;
-            process = None ;
-            master_parent = kb.temporary_merge_test;
-            slave_parent = kb.temporary_merge_test;
-            test_parent = kb.temporary_merge_test;
-            } in 
-          kb.temporary_merge_test.children <- [st];
-          kb.temporary_merge_test_result <- [];
-          Queue.add st kb.ns_todo;
-          if !about_rare 
-            then Printf.printf "Saturation triggered for %s \nfrom fa = %s\n and fb = %s\nwith subst %s\n%!" 
-              (show_raw_statement test_merge_init)(show_raw_statement fa)(show_raw_statement fb)(show_substitution rho);
-          Horn.merge_sat kb;
-          if !about_rare 
-          then ( 
-            if List.length kb.temporary_merge_test_result > 1 
-            then 
-              Printf.printf "%d solutions have been found:\n%s\n%!"
-                (List.length kb.temporary_merge_test_result)
-              (List.fold_right (fun st str -> str ^ (show_statement " *" st)) kb.temporary_merge_test_result "")
-            else Printf.printf "No soluTion\n"
-          );
-          let res = (List.fold_left (fun lst st -> 
-            if !debug_merge then Printf.printf "merge result st matched with: \n%s\n%s\n" (show_statement "" st)(show_raw_statement test_merge_init);
-            if st.st.nbvars = 0 then 
-              (rho,st.st)::lst
-            else 
-              if Dag.cardinal st.st.inputs.i <>  Dag.cardinal test_merge_init.inputs.i
-              then (if !about_rare then Printf.printf "The saturation have involved new actions in %s.\n%!" (show_raw_statement st.st); lst)
-              else ( rho.binder := Master;
-                if !about_rare then Printf.printf "Need to merge variables after saturation.\nrho'= %s\n%!"(show_substitution rho);
-                (*st.st.binder := Extra(5);*)
-                let match_terms = Inputs.csm false st.st.binder test_merge_init.inputs st.st.inputs in
-                let match_recipes = Inputs.csm_recipes false st.st.binder test_merge_init.recipes st.st.recipes in
-                match match_terms, match_recipes with
-                | [subst_inputs],[subst_recipes] -> 
-                    rho.binder := Master;
-                    let new_sigma = Rewriting.compose_with_subst_lst st.st.binder st.st.nbvars rho (subst_inputs @ subst_recipes) in
-                    (*st.st.binder := Rule;
-                    Printf.printf "new sub is %s \nfrom %s \n and %s\n%!" (show_substitution new_sigma)(show_substitution rho)(show_subst_lst (subst_inputs @ subst_recipes));
-                    st.st.binder := New;*)
-                    (new_sigma,st.st)::lst
-                | [], _ -> if !about_rare then Printf.printf "No term matcher\n%!"; lst
-                | _, [] -> if !about_rare then Printf.printf "No recipe matcher\n%!"; lst
-                | subst_inputs :: _ , subst_recipes :: _ -> 
-                    if !about_rare then 
-                      Printf.printf "This unification case is problematic.\n"; 
-                    (Rewriting.compose_with_subst_lst st.st.binder st.st.nbvars rho (subst_inputs @ subst_recipes),st.st)::lst
-                )
-            ) lst kb.temporary_merge_test_result
-          ) in
-          (* assert (res != [] || kb.temporary_merge_test_result= []);*) (* assertion is false when doing overapproximation with recipes *)
-          res)
-      with
+          let new_canonical_statements = Horn.canonical_form kb.solved_deduction test_merge_init in
+          List.fold_left (fun lst (tau,test_merge_init)  ->
+            let rho = Rewriting.compose sigma tau in
+            if !debug_merge then Printf.printf "The canonized init merged test from subst %s:\n %s \n\n rho = %s\n%!"
+              (show_substitution tau)(show_raw_statement test_merge_init)(show_substitution rho);
+            if Horn.is_solved test_merge_init then 
+              (rho,test_merge_init)::lst
+            else (
+            let st = {
+              id = kb.next_id ; 
+              st = test_merge_init ;
+              children = [] ;
+              process = None ;
+              master_parent = kb.temporary_merge_test;
+              slave_parent = kb.temporary_merge_test;
+              test_parent = kb.temporary_merge_test;
+              } in 
+            kb.temporary_merge_test.children <- [st];
+            kb.temporary_merge_test_result <- [];
+            Queue.add st kb.ns_todo;
+            if !about_rare 
+              then Printf.printf "Saturation triggered for %s \nfrom fa = %s\n and fb = %s\nwith subst %s\n%!" 
+                (show_raw_statement test_merge_init)(show_raw_statement fa)(show_raw_statement fb)(show_substitution rho);
+            Horn.merge_sat kb;
+            if !about_rare 
+            then ( 
+              if List.length kb.temporary_merge_test_result > 1 
+              then 
+                Printf.printf "%d solutions have been found:\n%s\n%!"
+                  (List.length kb.temporary_merge_test_result)
+                (List.fold_right (fun st str -> str ^ (show_statement " *" st)) kb.temporary_merge_test_result "")
+              else Printf.printf "No soluTion\n"
+            );
+            let res = (List.fold_left (fun lst st -> 
+              if !debug_merge then Printf.printf "merge result st matched with: \n%s\n%s\n" (show_statement "" st)(show_raw_statement test_merge_init);
+              if st.st.nbvars = 0 then 
+                (rho,st.st)::lst
+              else 
+                if Dag.cardinal st.st.inputs.i <>  Dag.cardinal test_merge_init.inputs.i
+                then (if !about_rare then Printf.printf "The saturation have involved new actions in %s.\n%!" (show_raw_statement st.st); lst)
+                else ( rho.binder := Master;
+                  if !about_rare then Printf.printf "Need to merge variables after saturation.\nrho'= %s\n%!"(show_substitution rho);
+                  (*st.st.binder := Extra(5);*)
+                  let match_terms = Inputs.csm false st.st.binder test_merge_init.inputs st.st.inputs in
+                  let match_recipes = Inputs.csm_recipes false st.st.binder test_merge_init.recipes st.st.recipes in
+                  match match_terms, match_recipes with
+                  | [subst_inputs],[subst_recipes] -> 
+                      rho.binder := Master;
+                      let new_sigma = Rewriting.compose_with_subst_lst st.st.binder st.st.nbvars rho (subst_inputs @ subst_recipes) in
+                      (*st.st.binder := Rule;
+                      Printf.printf "new sub is %s \nfrom %s \n and %s\n%!" (show_substitution new_sigma)(show_substitution rho)(show_subst_lst (subst_inputs @ subst_recipes));
+                      st.st.binder := New;*)
+                      (new_sigma,st.st)::lst
+                  | [], _ -> if !about_rare then Printf.printf "No term matcher\n%!"; lst
+                  | _, [] -> if !about_rare then Printf.printf "No recipe matcher\n%!"; lst
+                  | subst_inputs :: _ , subst_recipes :: _ -> 
+                      if !about_rare then 
+                        Printf.printf "This unification case is problematic.\n"; 
+                      (Rewriting.compose_with_subst_lst st.st.binder st.st.nbvars rho (subst_inputs @ subst_recipes),st.st)::lst
+                  )
+              ) lst kb.temporary_merge_test_result
+            ) in
+            (* assert (res != [] || kb.temporary_merge_test_result= []);*) (* assertion is false when doing overapproximation with recipes *)
+            res)
+          ) lst new_canonical_statements
+     (* with
       Horn.Unsound_Statement -> 
         if !debug_merge then Printf.printf "Unsound statement %s\n%!" (show_raw_statement test_merge_init);
-        lst
+        lst *)
       ) [] sigmas
     in
     fa.binder:= New;
@@ -799,7 +800,7 @@ let rec statements_to_tests t c process_name (statement : statement) otherProces
   let raw_statement' = statement.st in
   let sigma = Rewriting.merging_subst raw_statement'.nbvars raw_statement'.binder in
   let eq_vars,body = List.partition (fun b -> LocationSet.is_empty b.loc) raw_statement'.body in
-  if eq_vars <> [] then (Printf.eprintf "To be implemented: presence of free variables in tests"; assert false);
+  if eq_vars <> [] then (Printf.eprintf "To be implemented: presence of free variables in test %s" (show_raw_statement raw_statement'); assert false);
   let equalities = EqualitiesSet.map (fun (b,s,t) -> (b,Rewriting.apply_subst_term s sigma,Rewriting.apply_subst_term t sigma)) equalities in
   let equalities = 
     match raw_statement'.head with

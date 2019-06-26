@@ -117,3 +117,4 @@ val last_actions_among : dag -> LocationSet.t -> LocationSet.t
 val locations_of_dag : dag -> LocationSet.t
 val pick_last_or_null : dag -> LocationSet.t -> LocationSet.elt
 val last_actions : dag -> LocationSet.t
+val clean_memoization : unit -> unit

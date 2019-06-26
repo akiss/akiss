@@ -234,26 +234,13 @@ let rec first_sigma sigma_lst f =
 let inst_w_t my_st kb_st =
   let myt = get_head_term my_st.head in
   let tkb = get_head_term kb_st.head in
-  (* debugOutput "Matching %s against %s\n%!" (show_term t1) (show_term t2); *)
   if not (strict_subset kb_st.dag my_st.dag) 
     || not (Inputs.subset_choices kb_st.choices my_st.choices)
-  then begin (*Printf.printf "@";*) raise Bad_World end 
+  then begin ((*Printf.printf "@%!";*) raise Bad_World) end 
   else
-    let sigmas = Inputs.csm true my_st.binder kb_st.inputs my_st.inputs in
-    if sigmas = [] then raise Bad_World;
-    List.concat (List.map (fun sigma -> Rewriting.csm true my_st.binder [(tkb, myt)] sigma 
-     (* try
-        let (hard,sigma) = Rewriting.match_ac false [] [(tkb, myt)] sigma in
-        (* debugOutput "Result %s\n%!" (show_subst sigma); *)
-        if hard <> [] 
-        then (
-          if be_complete 
-          then Maude.acmatchers my_st.binder hard sigma
-          else raise Bad_case)
-        else
-          [ sigma ]
-      with
-      | Term.Not_matchable -> (*Printf.printf "-";*) raise Bad_case *)
+    let sigmas = Inputs.csm false my_st.binder kb_st.inputs my_st.inputs in
+    if sigmas = [] then ((*Printf.printf "%s == %s %!" (Inputs.show_inputs kb_st.inputs) (Inputs.show_inputs my_st.inputs);*) raise Bad_World);
+    List.concat (List.map (fun sigma -> Rewriting.csm false my_st.binder [(tkb, myt)] sigma 
     ) sigmas)
 
 
@@ -364,6 +351,85 @@ let rec all_sigma sigma_lst f =
   | s :: ss -> ( try f s with Bad_case | Bad_World -> all_sigma ss f)
 
 
+type recipize_record = {
+  parent_record : recipize_record ;
+  result_record : (term * substitution) list;
+}
+
+exception No_Eval
+exception Unsound_Statement (* Statement with a premisse which is unsatisfiable *)
+
+  
+let recipize_step results pending st a shrinked_body solved = 
+  if !about_rare || !about_canonization then Printf.printf "recipize for %s\non %s \n" (show_raw_statement st)(show_body_atom a);
+  if not (subset solved.dag (before_dag st.dag a.loc)) 
+  || not (Inputs.subset_choices solved.choices st.choices)
+  then (raise Bad_World)  
+  else (
+    let substs = Inputs.csm false st.binder solved.inputs st.inputs in
+    let sigma = sigma_maker_init st.nbvars solved.nbvars in
+    solved.binder:= Slave;
+    st.binder:= Master;
+    let sigmas = Inputs.csu_recipes sigma solved.recipes st.recipes in
+    if substs = [] || sigmas = [] then raise Bad_World
+    else (
+      let substs = List.concat (
+      List.map (fun subst -> 
+          Rewriting.csm false st.binder [(get_head_term solved.head, a.term)] subst 
+        ) substs
+      ) in
+      let sigmas = List.concat (
+      List.map (fun sigma -> 
+        Rewriting.csu_xor [(get_head_recipe solved.head, a.recipe)] sigma 
+        ) sigmas) in
+      List.iter (fun sigma ->
+        List.iter (fun subst -> 
+          let sigma = Rewriting.pack sigma in
+          let st' =  {st with 
+            body = (List.map (fun a -> {a with term = apply_subst a.term subst}) solved.body) @ shrinked_body} in
+          let st'' = apply_subst_statement st' sigma in
+          pending := st'' :: !pending
+        ) substs
+      ) sigmas
+    )
+  )
+        
+let rec recipize_explore results pending kb st a body = 
+  try 
+    recipize_step results pending st a body kb.st ;
+    recipize_explore_list results pending kb st a body
+  with Bad_World -> ()
+  
+and recipize_explore_list results pending kb st a body = 
+    List.iter (fun solved -> 
+      recipize_explore results pending solved st a body)
+      kb.children
+      
+let recipize kb st = 
+  (* Printf.printf "Start recipize for:\n%s\n" (show_raw_statement st);*)
+  let results = ref [] in
+  let pending = ref [st] in
+  while !pending != [] do
+    match !pending with
+    | [] -> assert false
+    | st :: pend -> (
+        pending := pend;
+        match List.find_opt (fun a -> a.recipize ) st.body with
+        | None -> results := st :: ! results ;
+        | Some a -> 
+          let shrinked_body = (List.filter (fun a' -> a' != a) st.body) in
+          if is_sum_term a.term then
+            let st' = {st with body = {a with recipize = false } :: shrinked_body } in
+            pending := st' :: !pending
+          else (
+            recipize_step results pending st a shrinked_body statement_f0 ;
+            recipize_explore_list results pending kb st a shrinked_body )
+        )
+  done ;
+  (*
+    Printf.printf "result for recipize:\n";
+    List.iter (fun st-> Printf.printf "%s\n" (show_raw_statement st)) !results; *)
+  !results 
 
 (** Check whether a statement is a consequence of a knowledge base, ie.
     try to find solved statements deriving the same term from the same
@@ -372,6 +438,7 @@ let rec all_sigma sigma_lst f =
     If there is one, return the associated recipe. An identical statement
     will be added to indicate that the two recipes have the same result,
     instead of the new useless deduction statement. *)
+    (*
 let recipize kb st = 
   (*if !about_canonization then Printf.printf "Conseq of %s" (show_raw_statement st) ;*)
   (*st.binder := Rule;*)
@@ -380,7 +447,7 @@ let recipize kb st =
    Knows(zero, apply_subst atom.term sigma) in
   assert (is_solved st) ;
   let rec aux st locs kb =
-    (*Printf.printf "___%s\n" (show_raw_statement st);*)
+    Printf.printf "___%s\n" (show_raw_statement st);
     (*st.binder := New;*)
     let t = get_head_term st.head in
     try
@@ -396,27 +463,19 @@ let recipize kb st =
                   nbvars = st.nbvars + 1;})
     with
     | Not_a_linear_combination ->
-      (* Inductive case: Res rule
-        * Find a (solved, well-formed) statement [x]
-        * whose head is matched by [head] and such that
-        * [aux] succeeds on [y<-body] for each [y] in the
-        * body of [x].
-        *
-        * We need to make sure that we are not finding a conseq
-        * derivation involving non-normal clause instantiations,
-        * as they may not be proper redundancies.
-        * So we require, for each conseq step, that the head of the
-        * instantiated clause [x] is normal. *)
         all kb
           (fun x ->
+            Printf.printf "testing %s\n%!" (show_raw_statement x);
             let sigmas = inst_w_t st x in
             all_sigma sigmas 
               (fun sigma ->
-                (*Printf.printf "\nst: %s\n sigma = %s\n" (show_raw_statement x)(show_subst sigma); *)
+                Printf.printf "\nst: %s\n sigma = %s\n%!" (show_raw_statement x)(show_subst sigma); 
                 let subresults =
                   List.fold_left
                     (fun (tr,sub,st') y ->
-                      let trace, r, st'' = aux {st' with head=(apply_subst_list_atom y sigma) } y.loc kb in
+                      Printf.printf "opening atom %s\n%!" (show_loc_set y.loc);
+                      let new_locs = if LocationSet.is_empty y.loc then locs else y.loc in
+                      let trace, r, st'' = aux {st' with head=(apply_subst_list_atom y sigma); dag = before_dag st'.dag new_locs } new_locs kb in
                       trace :: tr, (unbox_var (y.recipe), r) :: sub,st'') ([],[],st)
                     (x.body)
                 in
@@ -434,13 +493,16 @@ let recipize kb st =
           )
   in
   let recipize_body, real_body = List.partition (fun a -> a.recipize) st.body in
+  try 
   let subst,st' = List.fold_left  (fun (sub,st') a -> 
       let st'' = { st' with head = Knows(a.recipe,a.term); dag = before_dag st.dag a.loc } in
+      if !about_canonization || true then
+        Format.printf "Recipize derivation for %s\n" (show_raw_statement st'');
       let trace,r,st' = aux st'' a.loc kb in
       let ar = unbox_var a.recipe in
-      if !about_canonization then
-        Format.printf "Recipize derivation for #%s:\nrecipe: %s -> %s\ntrace %a\n" 
-          (show_raw_statement st'')(show_varId ar) (show_term r) print_trace trace ;
+      if !about_canonization || true then
+        Format.printf "recipe: %s -> %s\ntrace %a\n" 
+          (show_varId ar) (show_term r) print_trace trace ;
       ((ar, r)::sub,{ st' with recipes = {i = Dag.map (fun recip -> apply_subst recip [(ar, r)]) st'.recipes.i }})
     ) ([],{st with body = real_body}) recipize_body in
   let st = {st' with head = st.head; dag = st.dag} in
@@ -452,15 +514,12 @@ let recipize kb st =
       head_binder = head.head_binder;
       equalities= EqualitiesSet.map (fun (b,r,r') -> (b,apply_subst r subst,apply_subst r' subst)) head.equalities ;
       disequalities= EqualitiesSet.map (fun (b,r,r') -> (b,apply_subst r subst,apply_subst r' subst)) head.disequalities})}
-  
-
+  with Not_a_consequence -> Printf.printf "no recipize for %s\n%!" (show_raw_statement st); raise Unsound_Statement
+*)
 (** {2 Knowledge base canonization rules } *)
 
 
 
-exception No_Eval
-exception Unsound_Statement (* Statement with a premisse which is unsatisfiable *)
-  
 let rec nb_root_variables r =
   match r with
   | Fun({id=Plus},[l;r]) -> (nb_root_variables l) + (nb_root_variables r)
@@ -512,7 +571,9 @@ let clean_no_var_recipes st other_body var_recipe_body dag =
           let new_vrp = List.map (fun a -> if List.memq a atoms then {a with loc = LocationSet.union a.loc b.loc} else a) vrp in
           (*Printf.printf "new dag:%s\n%!" (show_dag new_dag');*)
           if new_dag' != new_dag && is_cyclic new_dag'
-          then (Printf.printf "cyclic dag for %s%!\n" (show_raw_statement st); raise Unsound_Statement);
+          then 
+            (Printf.printf "cyclic dag for %s%!\nafter eval of %s |- %s : %s\n" (show_raw_statement st)(show_term b.recipe)(show_term t)(show_loc_set locs); 
+            raise Unsound_Statement);
           (new_vrp,ob,new_dag'))
         else (
           if !about_canonization then Printf.printf "Unsound statement\n%s > %s = %s \n%!"
@@ -680,7 +741,7 @@ let rule_shift st =
     let recipe = Var({status=st.binder;n=st.nbvars}) in
     let _,stt = simplify_statement {st with 
       nbvars = st.nbvars+1 ;
-      body = {loc= empty_loc; recipe=recipe;term=Rewriting.recompose_term(var);marked=false; recipize = true}:: st.body ;
+      body = {loc= empty_loc; recipe=recipe;term=Rewriting.recompose_term(var);marked=false; recipize = false}:: st.body ;
       head = Knows( Fun({id=Plus;has_variables=true},[r;recipe]), Rewriting.recompose_term cst)} in 
     if !about_canonization then Format.printf "shift + on the statement: %s \n" (show_raw_statement stt); 
      stt end
@@ -696,19 +757,26 @@ let rule_shift st =
     end *)
   | _ -> st 
   
+let filter_map f lst = 
+  List.fold_left (fun l x -> match f x with Some x -> x :: l | None -> l) [] lst
+  
 let canonical_form kb statement =
   let solved = is_solved statement in
   let statement = (rule_no_plus_var statement) in
-  let statement = if solved then recipize kb statement else statement in
-  let _,statement = simplify_statement statement in
-  let statement = 
-    if is_deduction_st statement && solved
-    then
-        rule_shift statement
-    else 
-        statement in
-  (*if !about_canonization then Format.printf "Canonized: %s\n" (show_raw_statement statement) ;*)
-  statement
+  let statements = if solved then recipize kb statement else [ statement ] in
+  filter_map (fun statement -> 
+    try
+      let sigma,statement = simplify_statement statement in
+      let statement = 
+        if is_deduction_st statement && solved
+        then
+            rule_shift statement
+        else 
+            statement in
+      (*if !about_canonization then Format.printf "Canonized: %s\n" (show_raw_statement statement) ;*)
+      Some (sigma,statement)
+    with Unsound_Statement -> None
+    ) statements
 
 
 let is_identity_of_theory st =
@@ -783,37 +851,32 @@ let normalize_new_statement f = (* This opti slow down the algo a bit much*)
   * of the base, and actually inserting the statement or a variant of it. *)
 let update kb f =
   let rules = ! Parser_functions.rewrite_rules in
-  (* Do not use [is_normal], in order to replace [f] by its normalization.
-   * It is equal modulo AC but will additionnally be normalized wrt some
-   * order, which eases reading and gives / may give more power to non-AC
-   * tests, eg. in consequence. *)
-  let f = normalize_identical f in (* do nothing *)
-  try
+  let f = normalize_identical f in
   (*let f = canonical_form f in *)
   match normalize_new_statement f with 
-  | None ->  if !about_canonization then Printf.printf "Not a normal statement\n"; None 
+  | None ->  if !about_canonization then Printf.printf "Not a normal statement\n"; [] 
   | Some fc -> 
     if !about_canonization then Printf.printf "Normalized f: %s\n" (show_raw_statement fc);
-    let fc = canonical_form kb.solved_deduction fc in
-    if is_identity_of_theory fc then None else
-    if is_deduction_st fc && is_solved fc then
-      try
-        let recipe = consequence fc kb.solved_deduction rules in
-        let newhead =
-          Identical(get_head_recipe fc.head, recipe)
-        in
-        let newclause = normalize_identical { fc with head = newhead } in
-          if !about_canonization then Format.printf 
-            "Useless: %s\n Original form: %s\n Replaced by: %s\n\n%!"
-            (show_raw_statement fc)(show_raw_statement f)(show_raw_statement newclause);
-          if not (is_identity_of_theory newclause) then
-            Some newclause
-          else None
-      with Not_a_consequence ->
-        Some fc
-    else
-      Some fc
-    with Unsound_Statement -> None
+    let fcs = canonical_form kb.solved_deduction fc in
+    filter_map (fun (_,fc) ->
+      if is_identity_of_theory fc then None else
+      if is_deduction_st fc && is_solved fc then
+        try
+          let recipe = consequence fc kb.solved_deduction rules in
+          let newhead =
+            Identical(get_head_recipe fc.head, recipe)
+          in
+          let newclause = normalize_identical { fc with head = newhead } in
+            if !about_canonization then Format.printf 
+              "Useless: %s\n Original form: %s\n Replaced by: %s\n\n%!"
+              (show_raw_statement fc)(show_raw_statement f)(show_raw_statement newclause);
+            if not (is_identity_of_theory newclause) then
+              Some newclause
+            else None
+        with Not_a_consequence ->
+          Some fc
+      else
+        Some fc ) fcs
 
 
     
@@ -1303,9 +1366,10 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
 Then trigger the generation of seed statements from [process] *)
 and add_statement kb solved_parent unsolved_parent test_parent process st = 
   if !debug_saturation || ! about_canonization then Format.printf "Adding statement %s \n%!" (show_raw_statement st);
-  match update kb st with
-  | None -> if ! about_canonization then Printf.printf "Statement is dropped\n";()
-  | Some new_st -> begin 
+  let sts = update kb st in
+  if ! about_canonization && sts = [] then Printf.printf "Statement is dropped\n";
+  List.iter (fun new_st -> 
+    begin 
      if ! about_canonization then Printf.printf "Normalized statement: %s\n" (show_raw_statement new_st);
      let is_solved_st = is_solved new_st in
      let hash_st = statement_to_hash new_st in
@@ -1359,6 +1423,7 @@ and add_statement kb solved_parent unsolved_parent test_parent process st =
        unsolved_parent.children <- st :: unsolved_parent.children end
     end
    end
+   ) sts
 
 let theory_statements kb fname arity =
    let binder = ref Master in
