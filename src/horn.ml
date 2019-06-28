@@ -78,7 +78,7 @@ let is_solved_atom a =
   a.recipize || (
   let solved_term =
     if a.marked 
-    then (*is_var a.term*) false 
+    then is_var a.term 
     else is_sum_term a.term in
   if solved_term then 
     if is_var a.recipe
@@ -1552,8 +1552,9 @@ let saturate procId  =
     theory_statements kb (Tuple(i)) i; 
     for j = 0 to i - 1 do theory_statements kb (Projection(j,i)) 1 done ) !Parser_functions.tuple_arity;
   theory_statements kb Zero 0;
-  add_statement kb kb.solved_deduction kb.not_solved kb.rid_solved None statement_f1;
-  add_statement kb kb.solved_deduction kb.not_solved kb.rid_solved None statement_f2;
+  if !Parser_functions.use_xor then (
+    add_statement kb kb.solved_deduction kb.not_solved kb.rid_solved None statement_f1;
+    add_statement kb kb.solved_deduction kb.not_solved kb.rid_solved None statement_f2);
   let ind = processes_infos.next_location in
   processes_infos.next_location <- processes_infos.next_location + 1 ;
   trace_statements kb [] kb.solved_deduction kb.not_solved kb.rid_solved

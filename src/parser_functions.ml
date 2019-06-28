@@ -322,7 +322,10 @@ let rec parse_temp_term procId env = function
       with
         Not_found -> error_message line (Printf.sprintf "The function %s is not declared" s)
       end
-  | FPlus(s,t) -> if not !use_xor then (use_xor := true; rewrite_rules := rewrite_rule_xor_1 :: rewrite_rule_xor_2 :: rewrite_rule_xor_3 :: !rewrite_rules);
+  | FPlus(s,t) -> if not !use_xor then (
+    use_xor := true; 
+    (*Printf.printf "use of Xor theory detected.\n";*)
+    rewrite_rules := rewrite_rule_xor_1 :: rewrite_rule_xor_2 :: rewrite_rule_xor_3 :: !rewrite_rules);
       Xor( (List.map (parse_temp_term procId env) [s;t]))
   | FZero -> Z
   | Tuple(args) ->
