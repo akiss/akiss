@@ -180,17 +180,20 @@ let rec find_xor_sum vars body rows =
     let (v,r,vs), b = find_var x body rows in
     (*Printf.printf "new row : %s" (show_row (v,r,vs)) ;*)
     xor_var r (find_xor_sum (xor_var vars vs) (List.filter (fun b' -> b != b') body) ((v,r,vs)::rows))
+    
+
  
 (** find a recipe which provies sum_var according to st *) 
 let get_recipe_for_sum sum_var st =
   let rec aux x = function y :: l -> if x = y then l else y :: (aux x l) | [] -> [x] in  
   let var = List.fold_left (fun lst x -> let x = unbox_var x in aux x lst ) [] sum_var in
-  try
+  (* try *)
   Rewriting.recompose_term (find_xor_sum var st.body [])
-  with Not_a_linear_combination -> 
+  (* with Not_a_linear_combination -> 
     Printf.printf "No way to get: ";
     List.iter (fun v -> Printf.printf "%s+" (show_varId v)) var;
-    Printf.printf "\nfrom %s\n" (show_raw_statement st); assert false
+    Printf.printf "\nfrom %s\n" (show_raw_statement st); 
+    raise Not_a_linear_combination *)
 
 (** {2 Replacing deduction statements by simpler ones }*)  
   
@@ -268,16 +271,14 @@ let consequence st kb rules =
     (*Printf.printf "___%s\n" (show_raw_statement st);*)
     (*st.binder := New;*)
     let t = get_head_term st.head in
-    try
-          let (var,cst) = explode_term t in
-          if cst != [] then raise Not_a_linear_combination
-          else
+    let (var,cst) = explode_term t in
+    if cst = [] 
+    then 
             (* Base case: Axiom rule of conseq *)
             (match List.find_opt (fun b -> Rewriting.equals_ac b.term t) st.body with
             | Some b -> `Axiom,b.recipe
-            | None -> `Axiom, get_recipe_for_sum var st)
-    with
-    | Not_a_linear_combination ->
+            | None -> `Axiom,  try get_recipe_for_sum var st with Not_a_linear_combination -> raise Bad_case)
+    else
       (* Inductive case: Res rule
         * Find a (solved, well-formed) statement [x]
         * whose head is matched by [head] and such that

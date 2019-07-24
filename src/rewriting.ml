@@ -201,12 +201,19 @@ let rec unify xor hard pairlst sigma =
           match sub.(x.n) with
           | None -> 
                if occurs x t sigma
-               then ( 
+               then (
                 if not (is x t sigma) 
-                then raise Not_unifiable
+                then (
+                  if xor 
+                  then unify xor ((Var(x), t)::hard) q sigma
+                  else raise Not_unifiable
+                )
+                else
+                  unify xor hard q sigma
                )
-               else sub.(x.n)<- Some t; 
-               unify xor hard q sigma
+               else ( 
+                sub.(x.n)<- Some t; 
+                unify xor hard q sigma )
           | Some t' -> unify xor hard ((t',t)::q) sigma
           end
     | (t, (Var(y) as s))::q -> unify xor hard ((s,t)::q) sigma
