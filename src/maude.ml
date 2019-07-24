@@ -88,11 +88,15 @@ let print_maude_pairlst with_rules pairlst sigma=
      str ^ "op frame"^(string_of_int n) ^" : -> Term .\n") "" !Parser_functions.frames) 
   ^ "endm\n\n" ^ terms ^ ".\n"
   
+
+  
 let print_maude_variants term =
+  let rec repeate n = if n = 0 then "" else "Term " ^ (repeate (n-1)) in 
   Parser_functions.nonces := [] ;
   Parser_functions.frames := [] ;
+  let extra = match term with Fun({id=Tuple(0)}, args) -> "op tuple0 : " ^ (repeate (List.length args)) ^ "-> Term .\n" | _ -> "" in
   let term = print_maude_term false term None in
-  "mod Current is\nincluding Theory .\n" ^
+  "mod Current is\nincluding Theory .\n" ^ extra ^
   (List.fold_left (fun str (n,_) -> 
      str ^ "op nonce"^(string_of_int n) ^" : -> Term .\n") "" !Parser_functions.nonces) ^
   (List.fold_left (fun str (n,_) -> 
@@ -132,7 +136,6 @@ let print_maude_xor () =
     "" [Parser_functions.rewrite_rule_xor_1 ; Parser_functions.rewrite_rule_xor_2 ; Parser_functions.rewrite_rule_xor_3 ]
   )
   ^ "endm\n\n"
-  
 
 let print_maude_signature () =
   let print_env_elt _ env str =

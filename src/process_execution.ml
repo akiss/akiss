@@ -432,8 +432,17 @@ let check_recipes partial_run (b,r,r')=
     (show_term r)(show_term r')(Inputs.show_inputs partial_run.frame)(show_term r'')(show_term r''');*)
   Rewriting.equals_r r r' (! Parser_functions.rewrite_rules) 
   
+let check_equalities run head =
+  (EqualitiesSet.for_all (check_recipes run) head.equalities)
+  
+let remove_false_disequalities run head = 
+  head.disequalities <- EqualitiesSet.filter (fun dis -> 
+    let r = not (check_recipes run dis) in
+    if r || not !about_rare then r else  (Printf.printf "A disequality has been removed in %s \n" (show_test_head head); false)
+  ) head.disequalities
+  
 let check_identities run head = 
-  (EqualitiesSet.for_all (check_recipes run) head.equalities) 
+  check_equalities run head
   && (EqualitiesSet.for_all ( fun dis -> not (check_recipes run dis)) head.disequalities)
   
   

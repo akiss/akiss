@@ -1,0 +1,126 @@
+(* New version of Helios *)
+
+free id1.
+free id2.
+free id3.
+
+chan c,cid1,cid2.
+private chan prv_ch.
+
+free replayedBallot.
+
+free yes.
+free no.
+
+(* Randomized asymmetric encryption *)
+
+fun aenc/3,adec/2.
+fun pk/1.
+
+reduc adec(sk, aenc(pk(sk), sr, xm)) -> xm.
+
+(* Signature *)
+
+fun sign/2,checksign/2.
+fun vk/1.
+reduc checksign(vk(sk), sign(sk,m)) -> m.
+
+(* The zero knowledge proof definition. *)
+
+fun zkp/3,checkzkp/2.
+fun zkpok/0.
+reduc checkzkp(zkp(xr, xv, aenc(xpk, xr, xv)), aenc(xpk, xr, xv)) -> zkpok.
+
+(* The natural number model *)
+
+fun zero/0.
+fun s/1.
+
+fun pair/2,fst/1,snd/1.
+reduc fst(pair(x,y))->x.
+reduc snd(pair(x,y))->y.
+reduc pair(fst(x),snd(x))->x.
+
+(* The voting process *)
+
+let Voter(cid,sk,id,v,pkE) =
+    new r;
+    let ballot = aenc(pkE, r, v) in
+    let zk = zkp(r, v, ballot) in
+    out(cid, sign(sk, pair(ballot, zk))).
+
+(* The Tally *)
+
+
+
+
+let SubTally(sk,vk1,vk2,vk3,vote1,vote2,vote3,nb_vote) =
+  (* We check that we have gone through 3 SubTally. *)
+  (*if nb_vote = s(s(s(s(s(s(s(zero))))))) then*)
+  if nb_vote = s(zero) then (
+  out(c,0);
+  if vote1 != zero then if vote2 != zero then
+ ( out(c,adec(sk,vote1)) | 
+   out(c,adec(sk,vote2)) | 
+  out(c,adec(sk,vote3)))) (* The decryption of the vallot of id3 is done at the lvl of the output allowing the attacker NOT to vote. *)
+
+  else
+  in(c, x);
+  let yid = fst(x) in
+  let ysign = snd(x) in
+  let z1 = checksign(vk1,ysign) in
+  let z2 = checksign(vk2,ysign) in
+  let z3 = checksign(vk3,ysign) in
+    if pair(checkzkp(snd(z1),fst(z1)),id1) = pair(zkpok,yid)
+    then SubTally(sk,vk1,vk2,vk3,fst(z1),vote2,vote3,s(nb_vote))
+    else
+    if pair(checkzkp(snd(z2),fst(z2)),id2) = pair(zkpok,yid)
+    then SubTally(sk,vk1,vk2,vk3,vote1,fst(z2),vote3,s(nb_vote))
+    else
+    if pair(checkzkp(snd(z3),fst(z3)),id3) = pair(zkpok,yid)
+    then SubTally(sk,vk1,vk2,vk3,vote1,vote2,fst(z3),s(nb_vote))
+    else
+    SubTally(sk,vk1,vk2,vk3,vote1,vote2,vote3,s(nb_vote)).
+
+let Tally(skE,vk1,vk2,vk3) =
+  (
+    SubTally(skE,vk1,vk2,vk3,zero,zero,zero,zero)
+  ).
+
+let VotingSystem_twice1(vote1,vote2) =
+  new skE;
+  out(c,pk(skE));
+  new sk1;
+  new sk2;
+  new sk3;
+  out(c,sk3);
+  out(c,vk(sk1));
+  out(c,vk(sk2));
+  ( !^2 Voter(cid1,sk1,id1,vote1,pk(skE)) | Voter(cid2,sk2,id2,vote2,pk(skE)) | Tally(skE,vk(sk1),vk(sk2),vk(sk3))).
+
+let VotingSystem(vote1,vote2) =
+  new skE;
+  out(c,pk(skE));
+  new sk1;
+  new sk2;
+  new sk3;
+  out(c,sk3);
+  out(c,vk(sk1));
+  out(c,vk(sk2));
+  (Voter(cid1,sk1,id1,vote1,pk(skE)) | Voter(cid2,sk2,id2,vote2,pk(skE)) | Tally(skE,vk(sk1),vk(sk2),vk(sk3))).
+
+let P = VotingSystem(yes,no).
+
+let Qn = VotingSystem(no,no).
+let Q = VotingSystem(no,yes).
+let P2 = VotingSystem_twice1(yes,no).
+let Q2 = VotingSystem_twice1(no,yes).
+
+(* Should find an attack. *)
+(*query trace_equiv(VotingSystem(yes,no),VotingSystem(no,no)).*)
+
+(* Should find an attack. *)
+query trace_equiv(P2,Q2).
+
+(* Should not find an attack. *)
+(*query trace_equiv(VotingSystem(yes,no),VotingSystem(no,yes)).*)

@@ -25,9 +25,9 @@ module EqualitiesSet :
     val map : (elt -> elt) -> t -> t
     val fold : (elt -> 'a -> 'a) -> t -> 'a -> 'a
     val for_all : (elt -> bool) -> t -> bool
-(*    val exists : (elt -> bool) -> t -> bool
+    val exists : (elt -> bool) -> t -> bool
     val filter : (elt -> bool) -> t -> t
-    val partition : (elt -> bool) -> t -> t * t
+(*    val partition : (elt -> bool) -> t -> t * t
     val cardinal : t -> int
     val elements : t -> elt list
     val min_elt : t -> elt
@@ -173,6 +173,8 @@ val get_test_head : predicate -> test_head
 val apply_subst_test_head : test_head -> Types.substitution -> test_head
 val apply_subst_pred : predicate -> Types.substitution -> predicate
 val apply_subst_statement :
+  raw_statement -> Types.substitution -> raw_statement
+val apply_subst_normalize_statement :
   raw_statement -> Types.substitution -> raw_statement
 val new_statement : unit -> statement
 val new_base : unit -> base

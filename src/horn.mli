@@ -98,3 +98,4 @@ val process_equation : Base.base -> Base.statement -> Base.statement -> unit*)
 val merge_sat : Base.base -> unit
 val saturate : Types.procId -> int * Base.base
 val clean_recipe_variable : Base.raw_statement -> Base.raw_statement
+val filter_map: ('a -> 'b option) -> 'a list -> 'b list

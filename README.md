@@ -1,13 +1,13 @@
 Akiss
 =====
 
-This branch implements Akiss with dag
+This code implements Akiss 2.0
 
 
 Build
 -----
 
-You will need OCaml; version 4.06 or above is required.
+You will need OCaml; version 4.07 or above is required.
 
 
 To build, just run `make` from the src directory.
@@ -41,7 +41,7 @@ Source tree
 Here is a quick guide to the organization of the source code:
 
  * `util.ml`: misc utilities
- * `ast.ml`, `parser.mly`, `lexer.mll`: parsing of API files
+ * `parser.mly`, `lexer.mll`: parsing of API files
  * `types.ml`: the declaration of the main types
  * `rewriting.ml`: unification and variants for non-AC theories
  * `process.ml`: processes and various operations on them

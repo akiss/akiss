@@ -22,50 +22,51 @@ let  set_debug = function
 
 (** all available options *)    
 let command_line_options_list = [
-  ("-d",
-   Arg.Symbol(["progress";"completion";"canon";"seed";"sat";"saturation";"maude";"exec"],set_debug),
-   " Enable additional debug information");
+   ("-progress", Arg.Set(about_progress),
+    "Print messages indicating what Akiss is doing");
+   ("-all", Arg.Set(about_all_attacks),
+    "Find all attacks: does not stop the program when a first attack is found.");
+   ("-loc", Arg.Set(about_location), 
+    "Show the correspondance between indexes and actions");
+   ("-sat", Arg.Set(about_saturation), 
+    "Show the saturated bases"); 
+   ("-tests", Arg.Set(about_tests), 
+    "Show the tests and their solutions");
    ("-comp", Arg.Set(about_completion), 
-    "Show all completions"); 
-   ("-completions", Arg.Set(debug_completion), 
-    "Enable debug output about completions"); 
+    "Show all partial contradictions"); 
+   ("-xml", Arg.Set(use_xml),
+    "Print data in .xml format, works only with -sat, -comp, -tests options, 
+    to be rendered by a web browser make sure the style.css file is in the parent directory");
+   ("-bij", Arg.Set(about_bijection), 
+    "Show tests correspondance (the injections M)");
+   ("-bench", Arg.Set(about_bench),
+    "Show bench and stats about the number of tests, statements in knowledge base etc. . To use with a list of files in arguments.");
+   ("-rare", Arg.Set(about_rare),
+    "Print info in about rare events (where bugs are more likely...)");
    ("-canonization", Arg.Set(about_canonization),
     "Enable debug output about canonization rules");
    ("-seed", Arg.Set(about_seed), 
     "Enable debug output about seed"); 
-   ("-sat", Arg.Set(about_saturation), 
-    "Enable verbose output about saturation"); 
    ("-saturation", Arg.Set(debug_saturation), 
     "Enable debug output about saturation"); 
-   ("-bij", Arg.Set(about_bijection), 
-    "Show tests correspondance");
-   ("-loc", Arg.Set(about_location), 
-    "Show location information");
-   ("-execution", Arg.Set(debug_execution), 
-    "Show tests executions debugging"); 
-   ("-tests", Arg.Set(about_tests), 
-    "Show information about tests");
    ("-tests-info", Arg.Set(debug_tests), 
     "Show information about tests");
+   ("-completions", Arg.Set(debug_completion), 
+    "Enable debug output about completions"); 
+   ("-execution", Arg.Set(debug_execution), 
+    "Show tests executions debugging"); 
    ("-merge", Arg.Set(debug_merge), 
     "Show information about merging tests");
    ("-maude", Arg.Set(about_maude), 
     "Show information about maude interface");
    ("-xor", Arg.Set(debug_xor), 
     "Show information about specific xor process");
-   ("-rare", Arg.Set(about_rare),
-    "Print info in about rare events");
-   ("-progress", Arg.Set(about_progress),
-    "Print info in about progression of Akiss");
-   ("-bench", Arg.Set(about_bench),
-    "Bench compatible output");
-   ("-xml", Arg.Set(use_xml),
-    "Print info in xml format");
-   ("-all", Arg.Set(about_all_attacks),
-    "Find all attacks");
    ("-latex", Arg.Set(do_latex),
     "for the paper benchs");
-  (*"--extra", Arg.Int (fun i -> extra_output := i),
+   ("-d",
+     Arg.Symbol(["progress";"completion";"canon";"seed";"sat";"saturation";"maude";"exec"],set_debug),
+   " Enable additional debug information");
+ (*"--extra", Arg.Int (fun i -> extra_output := i),
    "<n>  Display information <n>"*)
   (*("--output-dot", Arg.String (fun s -> dotfile := Some s),
    "<file>  Output statement graph to <file>");*)

@@ -2,17 +2,6 @@ fun a/0.
 chan c,d,e,f,g.
 
 
-let P  = new n ;
-  in(c,x);
-  if x=a 
-  then out(c,a) 
-  else out(c,n).
+let P  = in(c,x);in(c,y);in(c,z);if x+y+z = 0 then out(c,0).
 
-
-let Q = new m;
-  in(c,x);
-  out(c,m).
-
-let N = 0.
-
-query trace_equiv (P,Q).
+query trace_incl(P,P).

@@ -347,7 +347,26 @@ let apply_subst_statement st (sigma : substitution) =
     Printf.eprintf "Error with substitution on %s \n" (show_raw_statement st); 
     raise (Invalid_argument a)
   
-(**  constructor *)
+let apply_subst_normalize_statement st (sigma : substitution) = 
+  try
+  {
+      binder = sigma.binder;
+      nbvars = sigma.nbvars;
+      dag = st.dag;
+      choices = st.choices;
+      inputs = Inputs.map (fun t -> Rewriting.normalize (Rewriting.apply_subst_term t sigma)!Parser_functions.rewrite_rules) st.inputs;
+      recipes = Inputs.map (fun t -> Rewriting.apply_subst_term t sigma) st.recipes;
+      head = apply_subst_pred st.head sigma ;
+      body = trmap (fun x -> {x with 
+        recipe= Rewriting.apply_subst_term x.recipe sigma; 
+        term= Rewriting.normalize (Rewriting.apply_subst_term x.term sigma)!Parser_functions.rewrite_rules}) st.body ;
+      involved_copies = st.involved_copies ;
+  }
+  with Invalid_argument a -> 
+    Printf.eprintf "Error with substitution on %s \n" (show_raw_statement st); 
+    raise (Invalid_argument a)
+
+    (**  constructor *)
 let new_statement () = {
   id = -1 ; st = null_raw_statement; children = []; process = None;
   master_parent = null_statement; slave_parent = null_statement;test_parent = null_statement

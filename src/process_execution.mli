@@ -85,6 +85,7 @@ val get_all_new_roots :
   Dag.dag -> (Dag.LocationSet.t * Dag.LocationSet.t) list
 val check_recipes :
   Bijection.Run.partial_run -> Types.term * Types.term -> bool*)
+val remove_false_disequalities : Bijection.Run.partial_run -> Base.test_head -> unit
 val check_identities : Bijection.Run.partial_run -> Base.test_head -> bool 
 val next_solution : Bijection.Run.solution -> unit
 val find_possible_run :

@@ -54,8 +54,8 @@ let statement_to_completion process_name (statement : statement) (st : raw_state
   }
   
             
-(** from two statements (ie tests), the function generate the merge of these tests, like equation rule
- The function returns a list of posible merges with the substitution which has been used *)
+(** [merge_tests fa fb] is f_a |X|_K f_b, the merge of test from the theory
+ The function returns the list of resulting statement with the substitution which has been used *)
 let merge_tests process_name (fa : raw_statement) (fb : raw_statement) =
   if ! debug_merge then Printf.printf "Try to merge: %s\n and %s\n%!" (show_raw_statement fa)(show_raw_statement fb);
   match Inputs.merge_choices fa.choices fb.choices with
@@ -209,7 +209,7 @@ let actual_test process_name sequence (st : raw_statement) =
   let test = { null_test with
     process_name = process_name;
     reflexive = true;
-    statement = st;
+    statement = {st with head = Tests({(get_test_head st.head) with disequalities = EqualitiesSet.empty})};
     constraints = corr;
     constraints_back = corr;
     choice_constraints = st.choices
@@ -224,6 +224,7 @@ let actual_test process_name sequence (st : raw_statement) =
     | Some pr -> ());
   reachable, solution.selected_run
   
+(** compute the frame for st (when st is a variant of another statement) *)  
 let get_xor_variant_frame run st =
   let test = { null_test with
     process_name = run.test.process_name;
@@ -242,6 +243,7 @@ let get_xor_variant_frame run st =
     | Some pr -> pr.frame
 
 
+(** {2 trans P->Q and trunc A stuff} *)   
     
 let map_dag dag corresp =
   {rel = Dag.fold (fun key lset ndag -> Dag.add (loc_p_to_q key corresp) (LocationSet.map (fun l -> loc_p_to_q l corresp) lset) ndag) dag.rel (Dag.empty)}
@@ -376,6 +378,8 @@ let trunconj set run =
   stP.binder := New;
   (identity_sigma,r)
   
+(** {2 variants stuff} *)
+  
 let is_complex_xor_statement st = !Parser_functions.use_xor && List.exists (fun a -> match a.term with Fun(_) -> true | _ -> false) st.body
 
 let gen_alt_tests p test1 dag1 test2 dag2 =
@@ -414,7 +418,21 @@ let gen_alt_tests p test1 dag1 test2 dag2 =
   ) test1.xor_class;
   !lst
 
+let get_all_variants_of_test statement =
+    statement.binder := Master ;
+    let tuple = Fun({id=Tuple(0); has_variables=true},List.map (fun b -> b.term) statement.body) in
+    let variants = Rewriting.variants statement.nbvars tuple 
+      [Parser_functions.rewrite_rule_xor_1;
+      Parser_functions.rewrite_rule_xor_2;
+      Parser_functions.rewrite_rule_xor_3] in
+    List.map (fun (_,sigma) ->
+      let st = apply_subst_normalize_statement statement sigma in
+      Printf.printf "_____________ %s\n" (show_raw_statement st);
+      [],(sigma,st))
+      variants 
+      
 
+  
 (*
 let rec add_identities_to_completions head (*process_name*) compl = 
   let h = get_test_head (compl.st_c.head) in
@@ -426,7 +444,8 @@ let rec add_identities_to_completions head (*process_name*) compl =
   | Some (subst,test) -> complete_set_of_identities (transpose_test_head head subst compl.corresp_back_c) (*process_name*) test *)
   
 
-(** [complete_set_of_identities head old_test] add the identities in [head] on [old_test] and its children *)
+(** [complete_set_of_identities head old_test] add the identities in [head] on [old_test] and its children 
+(instead of maintaining two statements where the former is useless)*)
 let rec complete_set_of_identities head old_test =
   let old_eq,old_diseq = recipes_of_head old_test.statement.head in
   let new_eq,new_diseq = head.equalities,head.disequalities in
@@ -465,6 +484,8 @@ let rec complete_set_of_identities head old_test =
     ) old_test.solutions_done
   end
 
+(** [statement_to_tests] takes [statement] check that actual([statement]) e.g. the statement execute on [process_name]
+and add it to [bijection] if it does not already exists or update the head of an existing statement with the same world. *)  
 and statement_to_tests process_name origin (statement : raw_statement) otherProcess =
   (* let statement = match origin with Initial _ -> same_term_same_recipe statement | _-> statement in *)
   (*Printf.printf "st2tests %s\n" (show_raw_statement statement);*)
@@ -495,6 +516,7 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
         if !debug_tests then 
           Printf.printf "Updating an existing test which is \n%s\nwith %s \n"
             (show_test test)(show_predicate statement.head)(*show_substitution sigma*);
+        (*
         let hash_body = Base.body_to_hash statement.body in 
         if hash_body <> test.hash_body_xor 
         then (
@@ -516,11 +538,12 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
                 (* because all elements of a class are created in the same step by init merge or completion except for net rounds... *)
                 (* problem knows_13(x7,x3+x5),knows_12(x6,x2+x5),knows_11(x4,x2+x3) and knows_13(x7,x2+x5),knows_12(x6,x3+x5),knows_11(x4,x2+x3) *)
         );
-        (*let sigma = Rewriting.merging_subst test.statement.nbvars test.statement.binder in*)
+        *)
         let sigma = subst_from_trace_subst vars1 vars2 test.statement.binder test.statement.nbvars in
         let head_t = get_test_head statement.head in
         statement.binder := Master;
         let head' = apply_subst_test_head head_t sigma in
+        remove_false_disequalities test.reflexive_run head';
         if !debug_tests then 
           Printf.printf "Start update of %d with subst %s\n%!" test.id (show_substitution sigma);
         statement.binder := New ;
@@ -528,25 +551,20 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
         if !debug_tests then 
           Printf.printf "End of update of %d\n%!" (test.id);
           Some (Some sigma,test)
-       (* | None -> (
-            match actual_test process_name sequence statement with
-            | Some pr -> 
-              let init = init_sol process_name statement otherProcess sequence in 
-              let new_test = push statement process_name origin init in
-              new_test.reflexive_run <- pr;
-              lst.sts <- (hash_body,(new_test,List.hd new_test.solutions_todo)) :: lst.sts;
-              Some (None,new_test)
-            | None -> assert false
-            )*)
         )
     | None -> (
       match actual_test process_name sequence statement with
       | _, Some pr -> 
+        let head_of_statement = get_test_head statement.head in
+        remove_false_disequalities pr head_of_statement;
         let init = init_sol process_name statement otherProcess sequence in 
         (* init is a partial function to allow cycle reference between test and partial run *)
         let new_test = push statement process_name origin init in
         new_test.reflexive_run <- pr;
         trace_node.node <- TraceNodes.add hash_trace (Possible(nbv1,vars1,new_test)) trace_node.node;
+        if is_complex_xor_statement statement then (
+          let variants = get_all_variants_of_test statement in
+          new_test.xor_class <- variants );
         Some (None,new_test)
       | reachable, None -> 
           if not reachable then
@@ -654,7 +672,7 @@ let completion_to_test comp =
     let origin =
       match comp.root.from_statement.st.head with 
       | Unreachable -> CompletionUnreach(comp.root.from_statement)
-      | Identical(_,_) -> (*Printf.printf "*" ;*) CompletionIdentity(comp.root.from_statement)
+      | Identical(_,_) -> CompletionIdentity(comp.root.from_statement)
       | _ -> assert false in 
     match statement_to_tests (other comp.root.from_base) origin conjrun (proc (comp.root.from_base )) with
     | Some (_,test) -> if !debug_completion || !debug_tests then Printf.printf "Got test from the completion\n %s\n" (show_test test);
@@ -663,7 +681,7 @@ let completion_to_test comp =
     
 let nb_comp = ref 0
 
-(** Perform the rule "New Comp" *)
+(** Perform the rule "New Con" *)
 let add_to_completion (run : partial_run) (completion : completion) = 
   if !debug_completion then 
     Printf.printf "Try completing a completion between \n run %s \n whose test is %s \n and partial completion %s\n" 
@@ -754,16 +772,16 @@ let add_to_completion (run : partial_run) (completion : completion) =
         run.completions <- new_comp :: run.completions;
       if add_test then 
       begin
-        if !debug_completion then Printf.printf "Completion complete, checking test %s\n" (show_raw_statement st)(*todo*);
+        if !debug_completion then Printf.printf "Completion complete, checking test %s\n" (show_raw_statement st);
         completion_to_test new_comp ;
-        if !debug_completion then Printf.printf "Completion complete, end of %s\n" (show_raw_statement st)(*todo*);
+        if !debug_completion then Printf.printf "Completion complete, end of %s\n" (show_raw_statement st);
       end
     | _ , None -> ()
   ) sts)
   with 
   | NonBij -> ()
 
-(** Compute the completions from the base of process_name *)      
+(** [compute_new_completions] applies the rule "New Con" for new solutions and new partial contradiction for [process_name] *)      
 let rec compute_new_completions process_name  =
   match if process_name = P then bijection.runs_for_completions_Q else bijection.runs_for_completions_P with
   (* First match all run with all completions *)
@@ -793,7 +811,7 @@ let rec compute_new_completions process_name  =
       (try Dag.find comp.selected_action (if process_name = P then bijection.indexP else bijection.indexQ) with Not_found -> Dag.empty)
     done
 
-(** From solved statements create tests. 
+(** [statements_to_tests] computes "Tests" and "PartialC" from the saturated knowledge base except "Unreachable" statement.
 Opti: when children are identical with same world merge them with the reach parent to reduce number of tests *)  
 let rec statements_to_tests t c process_name (statement : statement) otherProcess equalities =
   if !debug_tests then Printf.printf "Getting test (%d) %s %s \n%!" statement.id (if t then "yes" else "no") (show_raw_statement statement.st); 
@@ -830,7 +848,7 @@ let rec statements_to_tests t c process_name (statement : statement) otherProces
     List.iter (fun st -> statements_to_tests t c process_name st otherProcess new_eq) statement.children
    
     
-
+(** [unreach_to_completion] initialize "PartialC" with "Unreachable" statement. *)
 let unreach_to_completion process_name base = 
   List.iter (fun st -> 
     let compl = statement_to_completion process_name st (negate_statement st.st) in
