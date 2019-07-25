@@ -466,11 +466,14 @@ let rec complete_set_of_identities head old_test =
         | Some pr -> 
           if not (check_identities pr head) then
           begin
-            if !about_rare || !debug_tests then Printf.printf "Wrong run for %s\n%s\n caused by %s\n%!" (show_test old_test)(show_run pr) (show_test_head head);
+            if !about_rare || !debug_tests 
+            then 
+              Printf.printf "Previous solution for %s\n%s\n not possible anymore due to new identities: %s\n%!"
+                (show_test old_test)(show_run pr) (show_test_head head);
             Bijection.remove_run pr;
             sol.selected_run <- None ;
             old_test.solutions_todo <- sol :: old_test.solutions_todo; 
-            (*todo remove sol from done*)
+            old_test.solutions_done <- List.filter (fun s -> s != sol) old_test.solutions_done;
             find_set_of_runs old_test
           end ;
           let head' = {head with equalities=diff_eq; disequalities=diff_diseq} in
@@ -478,6 +481,7 @@ let rec complete_set_of_identities head old_test =
               (*Printf.printf "apply subt %s\non %s\n%!" (show_substitution sigma)(show_test_head head');*)
               head.head_binder := status;
               let nhead = apply_subst_test_head head' sigma in
+              remove_false_disequalities derived_test.reflexive_run nhead;
               head.head_binder := New;              
               complete_set_of_identities nhead derived_test) 
             pr.consequences
@@ -513,44 +517,19 @@ and statement_to_tests process_name origin (statement : raw_statement) otherProc
     match  TraceNodes.find_opt hash_trace trace_node.node with
     | Some Impossible -> None
     | Some(Possible(nbv2,vars2,test)) -> (
-        if !debug_tests then 
-          Printf.printf "Updating an existing test which is \n%s\nwith %s \n"
-            (show_test test)(show_predicate statement.head)(*show_substitution sigma*);
-        (*
-        let hash_body = Base.body_to_hash statement.body in 
-        if hash_body <> test.hash_body_xor 
-        then (
-          match List.assoc_opt hash_body test.xor_class with
-          | Some (sigma,rawst) -> ()
-          | None -> 
-              if test.solutions_done = [] 
-              then (
-                let sigm = subst_from_trace_subst vars2 vars1 statement.binder statement.nbvars in
-                test.xor_class <- (hash_body,(sigm,statement))::test.xor_class ;
-                if !debug_xor then 
-                Printf.printf "New variation for test %d : %s\n%s\n" test.id (show_raw_statement statement)(show_substitution sigm);
-              )
-              else  
-              ( if !debug_xor then
-                Printf.printf "New xor test while main test already done\n%s\n" (show_test test);
-                List.iter (fun (h,(s,st)) -> Printf.printf ">> %s\n" (show_raw_statement st)) test.xor_class;
-                (*assert false*));
-                (* because all elements of a class are created in the same step by init merge or completion except for net rounds... *)
-                (* problem knows_13(x7,x3+x5),knows_12(x6,x2+x5),knows_11(x4,x2+x3) and knows_13(x7,x2+x5),knows_12(x6,x3+x5),knows_11(x4,x2+x3) *)
-        );
-        *)
         let sigma = subst_from_trace_subst vars1 vars2 test.statement.binder test.statement.nbvars in
         let head_t = get_test_head statement.head in
         statement.binder := Master;
         let head' = apply_subst_test_head head_t sigma in
         remove_false_disequalities test.reflexive_run head';
         if !debug_tests then 
-          Printf.printf "Start update of %d with subst %s\n%!" test.id (show_substitution sigma);
+          Printf.printf "Updating existing test %d which is \n%s\nwith %s \n"
+            test.id (show_test test)(show_test_head head')(*show_substitution sigma*);
         statement.binder := New ;
         complete_set_of_identities head' test ;
         if !debug_tests then 
           Printf.printf "End of update of %d\n%!" (test.id);
-          Some (Some sigma,test)
+        Some (Some sigma,test)
         )
     | None -> (
       match actual_test process_name sequence statement with

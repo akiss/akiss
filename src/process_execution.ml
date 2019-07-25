@@ -8,7 +8,7 @@ open Bijection
 open Bijection.Run
 open Bijection.Test
 
-(** set to true to describe attacks in english *)
+(** set to true to describe the attack at the end of the program *)
 let verbose_execution = ref false
 
 let rec apply_subst_inputs term frame =
@@ -129,15 +129,7 @@ let run_silent_actions old_threads test (choices_constraints : Inputs.choices ) 
       old_threads := ChanMap.add chan_kind ((new_loc,new_term,new_ext_thread)::(try ChanMap.find chan_kind !old_threads with Not_found -> [])) !old_threads 
   done ;
   (!final,!failure)
-      
 
-      
-(*let run_silent_actions choices_constraints process old_pending first frame =
-  (*Printf.printf "run silent actions of %s \n%!" (show_process_start 3 process);*)
-  let pending,final,failure = run_until_io pending final failure choices_constraints process (Inputs.new_choices) first frame in
-  (* Printf.printf "run_silent_actions: %s\n %!" (show_ext_extra_thread_lst (List.map (fun (l,t,c,et) -> (l,t,et)) pending)); *)
-  let res = test_all_internal_communications choices_constraints (merge_pending_lst old_pending pending) pending frame in
-  dispatch [(pending,final,failure);res]*)
   
 let choices_constraints test choice =
   if test.reflexive
@@ -316,37 +308,6 @@ let next_run_with_action current_loc partial_run=
     ) ([],LocationSet.empty) partial_run.qthreads in
   (new_runs, current_loc)
 
-(** Given a partial_run select an action to execute and test this action on available threads of Q *)
-(*let next_run partial_run : (partial_run list * location)= 
-  let first_actions = first_actions_among partial_run.test.statement.dag partial_run.remaining_actions in
-  let current_loc = 
-    try LocationSet.choose first_actions 
-    with
-    Not_found -> 
-      begin Printf.printf "No run on %s [%s] \n" (show_dag partial_run.test.statement.dag) (show_loc_set partial_run.remaining_actions); 
-      assert false end
-  in
-  next_run_with_action current_loc partial_run*)
-(*  let (new_runs,locs) = List.fold_left (fun (new_runs,locs) lp -> 
-    match try_run partial_run current_loc lp with
-    | None -> (new_runs,locs)
-    | Some (npr,l) -> (npr ::  new_runs, LocationSet.add l locs)
-    ) ([],LocationSet.empty) partial_run.qthreads in
-  (new_runs, current_loc)*)
-
-
-
- 
-(*
-let compatible constraints constraints_back locP locQ = 
-  try locQ = Dag.find locP constraints.a
-  with Not_found -> begin 
-    try Dag.find locQ constraints_back.a  =  locP 
-    with Not_found -> true end
-          
-let compatible_prun constraints constraints_back (prun : partial_run)=
-  Dag.for_all (compatible constraints constraints_back) prun.corresp.a
-  *)
     
 let rec get_all_new_roots before after dag =
   if LocationSet.is_empty before then []
@@ -435,10 +396,11 @@ let check_recipes partial_run (b,r,r')=
 let check_equalities run head =
   (EqualitiesSet.for_all (check_recipes run) head.equalities)
   
+(** Perform the removal of false disequalities as actual_P does. *)
 let remove_false_disequalities run head = 
   head.disequalities <- EqualitiesSet.filter (fun dis -> 
     let r = not (check_recipes run dis) in
-    if r || not !about_rare then r else  (Printf.printf "A disequality has been removed in %s \n" (show_test_head head); false)
+    if r || not !debug_tests then r else  (Printf.printf "A disequality has been removed in %s \n" (show_test_head head); false)
   ) head.disequalities
   
 let check_identities run head = 
@@ -463,10 +425,13 @@ let rec find_possible_run reachable solution =
     then (
       if !debug_execution then Printf.printf "\nSelected execution: \n %s \n"(show_run run) ;
       solution.selected_run <- Some run;
-      reachable )
+      true )
     else (
       if !debug_execution then Printf.printf "\nSolution fails the tests: \n %s \n" (show_partial_run run) ;
       find_possible_run true solution )
   end
   
+(** Given a test embedded into a (often empty) [solution], 
+execute the test until [solution] is inhabited by a full set of solution,
+return reachable if it exists an execution but none of them chack all the identities. *)  
 let find_possible_run solution =  find_possible_run false solution 
