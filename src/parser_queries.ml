@@ -17,7 +17,7 @@ let parse_query env line = function
       end
   | Trace_Eq(both,(ident,line),(ident',line')) -> 
       let p = try Env.find ident env with Not_found -> error_message line (Printf.sprintf "The process %s is not declared" ident) in
-      let q = try Env.find ident' env with Not_found -> error_message line (Printf.sprintf "The process %s is not declared" ident') in
+      let q = try Env.find ident' env with Not_found -> error_message line' (Printf.sprintf "The process %s is not declared" ident') in
       begin 
         match (p,q) with
           | (Proc(procId),Proc(procId')) -> Tests.equivalence both procId procId'  
