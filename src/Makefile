@@ -7,7 +7,7 @@ ML =  types.ml parser_functions.ml grammar.ml lexer.ml \
 	 bijection.ml process_execution.ml tests.ml\
 	 parser_queries.ml main.ml
 MLI = $(wildcard $(ML:.ml=.mli)) grammar.mli parsemaude.mli
-OCAMLC = ocamlfind ocamlopt -g -annot -package str,unix
+OCAMLC = ocamlfind ocamlopt -g -bin-annot -package str,unix
 OCAMLDEP = ocamldep -native
 CMA = cmxa
 CMO = cmx
@@ -39,7 +39,7 @@ clean::
 	rm -f parser.ml lexer.ml parser.mli lexer.mli
 	rm -f lexmaude.ml lexmaude.mli parsemaude.ml parsemaude.mli
 	rm -f lwt_compat.ml
-	rm -f *.o *.cmi *.cmx *.cmo *.annot
+	rm -f *.o *.cmi *.cmx *.cmo *.cmt *.cmti
 	rm -f akiss
 	rm -f .depend
 

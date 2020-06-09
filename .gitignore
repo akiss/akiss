@@ -5,7 +5,8 @@
 *.cma
 *.cmxa
 *.cmi
-*.annot
+*.cmt
+*.cmti
 parser.ml
 parser.mli
 lexmaude.ml
