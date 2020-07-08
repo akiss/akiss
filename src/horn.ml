@@ -1202,12 +1202,10 @@ let rec hidden_chan_statement kb  (loc_input , term_input ,ineq_input,st_input,p
  
 (** The seed is computed incrementally: this function compute new statements from the trace ([process]) *) 
 and trace_statements kb ineqs solved_parent unsolved_parent test_parent process st =
-  let rec add_ineqs_statements ineqs idsigma st =
-  match ineqs with
-  | [] -> true
-  | (s,t)::q -> begin
+  let add_ineqs_statements ineqs idsigma st =
     let st = apply_subst_statement {st with head = Unreachable} idsigma in
     st.binder := Master;
+    List.iter (fun (s, t) ->
     let sterm = concretize st.inputs s in
     let tterm = concretize st.inputs t in 
     let unifiers = Rewriting.unifiers st.nbvars sterm tterm (! Parser_functions.rewrite_rules) in 
@@ -1217,8 +1215,9 @@ and trace_statements kb ineqs solved_parent unsolved_parent test_parent process 
         then false (* This reach is unconditionally unreachable: just remove it and don't add unreach predicate *)
         else (add_statement kb solved_parent unsolved_parent test_parent None (apply_subst_statement st subst);true)
     | _ ->*)
-    List.iter (fun subst -> add_statement kb solved_parent unsolved_parent test_parent None (apply_subst_statement st subst)) unifiers; true
-    end
+    List.iter (fun subst -> add_statement kb solved_parent unsolved_parent test_parent None (apply_subst_statement st subst)) unifiers
+      ) ineqs;
+    true
   in
   if !about_seed then 
     Format.printf "\nComputing seed statement for {%s}\n with %s \n%!"  

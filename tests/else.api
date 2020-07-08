@@ -1,0 +1,27 @@
+/*
+Process P outputs its first input or “b”.
+Process Q outputs its first input, unless it is “a”; or it outputs “b”.
+
+As process Q cannot output “a”, P is not trace-included in Q.
+*/
+
+free a, b.
+chan c.
+
+let P =
+in(c, x);
+in(c, y);
+if x = y
+then out(c, b)
+else out(c, x).
+
+let Q =
+in(c, x);
+in(c, y);
+if x = a
+then out(c, b)
+else if x = y
+then out(c, b)
+else out(c, x).
+
+query trace_incl(P, Q).
